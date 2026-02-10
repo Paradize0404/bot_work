@@ -46,12 +46,18 @@ TELEGRAM_BOT_TOKEN: str = _require("TELEGRAM_BOT_TOKEN")
 # На Railway задайте: WEBHOOK_URL=https://<ваш-сервис>.up.railway.app
 _wh = os.getenv("WEBHOOK_URL", "").strip()
 if _wh:
-    # Railway / пользователь может задать URL в любом формате — приводим к https://
+    # Убираем любые ошибочные префиксы протокола
+    for _bad in ("https://", "http://", "ttps://", "tps://"):
+        if _wh.startswith(_bad):
+            _wh = _wh[len(_bad):]
+            break
+    # Убираем trailing slash и WEBHOOK_PATH если пользователь вписал его в URL
     _wh = _wh.rstrip("/")
-    if _wh.startswith("http://"):
-        _wh = _wh.replace("http://", "https://", 1)
-    elif not _wh.startswith("https://"):
-        _wh = f"https://{_wh}"
+    _default_path = os.getenv("WEBHOOK_PATH", "/webhook")
+    if _wh.endswith(_default_path):
+        _wh = _wh[: -len(_default_path)]
+    # Всегда ставим https://
+    _wh = f"https://{_wh}"
 WEBHOOK_URL: str | None = _wh or None                       # None → polling
 WEBHOOK_PATH: str = os.getenv("WEBHOOK_PATH", "/webhook")   # путь, куда Telegram шлёт апдейты
 WEBAPP_HOST: str = os.getenv("WEBAPP_HOST", "0.0.0.0")
