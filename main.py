@@ -61,6 +61,9 @@ async def _cleanup() -> None:
 
 # ─── Webhook mode (Railway) ────────────────────────────────────────
 async def on_startup(bot: Bot) -> None:
+    # Проверка БД в том же event loop, где работает aiohttp
+    await _check_db()
+
     from config import WEBHOOK_URL, WEBHOOK_PATH
     url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
     logger.info("Setting webhook → %s", url)
@@ -86,9 +89,6 @@ def run_webhook() -> None:
     app = web.Application()
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
-
-    # Проверка БД перед стартом
-    asyncio.run(_check_db())
 
     logger.info("Starting webhook server on %s:%s", WEBAPP_HOST, WEBAPP_PORT)
     web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
