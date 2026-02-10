@@ -5,8 +5,15 @@
   • WEBHOOK_URL пуст   → long-polling (локальная разработка)
 """
 
+import os
+import sys
 import asyncio
 import logging
+
+# Отключаем буферизацию stdout/stderr — иначе Railway не покажет логи в реалтайме
+os.environ["PYTHONUNBUFFERED"] = "1"
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
