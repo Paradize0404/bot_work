@@ -320,6 +320,44 @@ async def fetch_stock_balances(
 # 10. Отправка документов (JSON POST)
 # ═════════════════════════════════════════════════════
 
+async def update_product(product_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+    """
+    Обновить поля продукта в iiko.
+
+    POST /resto/api/v2/entities/products/update?key={token}
+    Body: JSON-массив продуктов для обновления (каждый содержит id + обновляемые поля).
+    Возвращает {"ok": True} при успехе, иначе выбрасывает исключение.
+    """
+    key = await _get_key()
+    url = f"{_base()}/resto/api/v2/entities/products/update"
+    params = {"key": key}
+
+    payload = [{**fields, "id": product_id}]
+
+    logger.info(
+        "[API] POST products/update — product=%s, fields=%s",
+        product_id, list(fields.keys()),
+    )
+    t0 = time.monotonic()
+    client = await _get_client()
+    resp = await client.post(url, params=params, json=payload)
+    elapsed = time.monotonic() - t0
+
+    if resp.status_code >= 400:
+        body = resp.text[:500] if resp.text else ""
+        logger.error(
+            "[API] POST products/update FAIL — HTTP %d, %.1f сек, body=%s",
+            resp.status_code, elapsed, body,
+        )
+        resp.raise_for_status()
+
+    logger.info(
+        "[API] POST products/update OK — HTTP %d, %.1f сек",
+        resp.status_code, elapsed,
+    )
+    return {"ok": True}
+
+
 async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
     """
     Отправить акт списания в iiko.

@@ -122,15 +122,25 @@ async def sync_stock_balances(
     logger.info("[%s] Начинаю синхронизацию остатков (timestamp=%s)...", LABEL, timestamp or "now")
 
     try:
-        # 1. Fetch API (timestamp=None → datetime.now() в adapter)
-        items = await iiko_api.fetch_stock_balances(timestamp=timestamp)
-        t_api = time.monotonic() - t0
-        logger.info("[%s] API: %d строк за %.1f сек", LABEL, len(items), t_api)
+        # 1. Параллельно: API + справочники из БД (независимые операции)
+        import asyncio as _aio
 
-        # 2–4. В одной сессии: загрузка имён + map + delete + insert
+        async def _fetch_api():
+            return await iiko_api.fetch_stock_balances(timestamp=timestamp)
+
+        async def _fetch_names():
+            async with async_session_factory() as s:
+                return await _load_name_maps(s)
+
+        items, (store_map, product_map) = await _aio.gather(
+            _fetch_api(), _fetch_names(),
+        )
+        t_api = time.monotonic() - t0
+        logger.info("[%s] API + справочники: %d строк за %.1f сек", LABEL, len(items), t_api)
+
+        # 2–4. В одной сессии: map + delete + insert
         t1 = time.monotonic()
         async with async_session_factory() as session:
-            store_map, product_map = await _load_name_maps(session)
 
             now = datetime.utcnow()
             rows: list[dict] = []

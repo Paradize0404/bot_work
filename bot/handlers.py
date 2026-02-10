@@ -97,6 +97,7 @@ def _reports_keyboard() -> ReplyKeyboardMarkup:
     """Подменю 'Отчёты'."""
     buttons = [
         [KeyboardButton(text="📊 Мин. остатки по складам")],
+        [KeyboardButton(text="✏️ Изменить мин. остаток")],
         [KeyboardButton(text="🚧 Раздел в разработке (отчёты)")],
         # ── Назад ──
         [KeyboardButton(text="◀️ Назад")],
@@ -400,13 +401,12 @@ async def btn_check_min_stock(message: Message) -> None:
 
     await message.answer("⏳ Синхронизирую номенклатуру, остатки и проверяю минимальные уровни...")
     try:
-        # 1) Обновляем номенклатуру — оттуда берутся storeBalanceLevels (min/max)
-        prod_count = await sync_uc.sync_products(triggered_by=triggered)
-        logger.info("[report] Синхронизировано номенклатуры: %d", prod_count)
-
-        # 2) Синхронизируем актуальные остатки
-        count = await stock_uc.sync_stock_balances(triggered_by=triggered)
-        logger.info("[report] Синхронизировано остатков: %d", count)
+        # 1+2) Номенклатура + остатки параллельно (независимые API-вызовы)
+        prod_count, count = await asyncio.gather(
+            sync_uc.sync_products(triggered_by=triggered),
+            stock_uc.sync_stock_balances(triggered_by=triggered),
+        )
+        logger.info("[report] Синхронизировано номенклатуры: %d, остатков: %d", prod_count, count)
 
         # 3) Проверяем лимиты — только для ресторана пользователя
         data = await min_stock_uc.check_min_stock_levels(department_id=ctx.department_id)

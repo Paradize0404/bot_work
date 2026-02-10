@@ -84,20 +84,23 @@ async def check_min_stock_levels(
 
     async with async_session_factory() as session:
 
-        # ── 1. Справочники: store → (name, department_id) ──
-        store_rows = (await session.execute(
+        # ── 1. Справочники: параллельно stores + departments ──
+        import asyncio as _aio
+        store_task = session.execute(
             select(Store.id, Store.name, Store.parent_id)
             .where(Store.deleted == False)  # noqa: E712
-        )).all()
+        )
+        dept_task = session.execute(
+            select(Department.id, Department.name)
+        )
+        store_result, dept_result = await _aio.gather(store_task, dept_task)
+        store_rows = store_result.all()
+        dept_rows = dept_result.all()
 
         store_dept_map: dict[_uuid.UUID, _uuid.UUID] = {}   # store_id → dept_id
         for row in store_rows:
             store_dept_map[row.id] = row.parent_id
 
-        # Имена departments
-        dept_rows = (await session.execute(
-            select(Department.id, Department.name)
-        )).all()
         dept_names: dict[str, str] = {str(d.id): d.name for d in dept_rows}
 
         # ── 2. Продукты с minBalanceLevel > 0 из raw_json ──

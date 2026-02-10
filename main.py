@@ -31,11 +31,13 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.handlers import router
     from bot.writeoff_handlers import router as writeoff_router
     from bot.admin_handlers import router as admin_router
+    from bot.min_stock_handlers import router as min_stock_router
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
     dp.include_router(admin_router)
     dp.include_router(writeoff_router)
+    dp.include_router(min_stock_router)
     dp.include_router(router)
     return bot, dp
 

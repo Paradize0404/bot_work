@@ -54,29 +54,30 @@ async def get_user_context(telegram_id: int) -> UserContext | None:
     if ctx is not None:
         return ctx
 
-    # 2) Промах — идём в БД
+    # 2) Промах — 1 JOIN-запрос вместо 3 последовательных
     t0 = time.monotonic()
     async with async_session_factory() as session:
-        stmt = select(Employee).where(Employee.telegram_id == telegram_id)
-        result = await session.execute(stmt)
-        emp = result.scalar_one_or_none()
-        if not emp:
+        from sqlalchemy.orm import aliased
+        dept_alias = aliased(Department)
+        role_alias = aliased(EmployeeRole)
+        stmt = (
+            select(
+                Employee,
+                dept_alias.name.label("dept_name"),
+                role_alias.name.label("role_name"),
+            )
+            .outerjoin(dept_alias, Employee.department_id == dept_alias.id)
+            .outerjoin(role_alias, Employee.role_id == role_alias.id)
+            .where(Employee.telegram_id == telegram_id)
+        )
+        row = (await session.execute(stmt)).first()
+        if not row:
             logger.debug("[user_ctx] telegram_id=%d не авторизован", telegram_id)
             return None
 
-        # Подтягиваем название ресторана
-        dept_name: str | None = None
-        if emp.department_id:
-            dept_stmt = select(Department.name).where(Department.id == emp.department_id)
-            dept_result = await session.execute(dept_stmt)
-            dept_name = dept_result.scalar_one_or_none()
-
-        # Подтягиваем название должности
-        role_name: str | None = None
-        if emp.role_id:
-            role_stmt = select(EmployeeRole.name).where(EmployeeRole.id == emp.role_id)
-            role_result = await session.execute(role_stmt)
-            role_name = role_result.scalar_one_or_none()
+        emp = row[0]
+        dept_name = row.dept_name
+        role_name = row.role_name
 
     ctx = UserContext(
         employee_id=str(emp.id),
