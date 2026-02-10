@@ -56,8 +56,11 @@ async def _cleanup() -> None:
 async def on_startup(bot: Bot) -> None:
     from config import WEBHOOK_URL, WEBHOOK_PATH
     url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
+    logger.info("Setting webhook → %s", url)
+    if not url.startswith("https://"):
+        raise RuntimeError(f"Webhook URL must start with https://, got: {url}")
     await bot.set_webhook(url, drop_pending_updates=True)
-    logger.info("Webhook set → %s", url)
+    logger.info("Webhook set OK")
 
 
 async def on_shutdown(bot: Bot) -> None:
