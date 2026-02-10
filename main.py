@@ -74,9 +74,11 @@ async def on_startup(bot: Bot) -> None:
 
 
 async def on_shutdown(bot: Bot) -> None:
-    await bot.delete_webhook(drop_pending_updates=False)
+    # НЕ удаляем вебхук при shutdown — иначе при редеплое Railway
+    # старый контейнер удалит вебхук, который новый уже поставил (гонка).
+    # Вебхук будет перезаписан при следующем on_startup.
     await _cleanup()
-    logger.info("Webhook removed")
+    logger.info("Shutdown complete (webhook kept)")
 
 
 def run_webhook() -> None:
