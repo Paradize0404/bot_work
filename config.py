@@ -21,7 +21,13 @@ def _require(name: str) -> str:
 
 
 # ── Database ──
-DATABASE_URL: str = _require("DATABASE_URL")
+_raw_db_url: str = _require("DATABASE_URL")
+# Railway выдаёт URL вида postgresql://… — принудительно ставим asyncpg-драйвер
+if _raw_db_url.startswith("postgresql://"):
+    _raw_db_url = _raw_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif _raw_db_url.startswith("postgres://"):
+    _raw_db_url = _raw_db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+DATABASE_URL: str = _raw_db_url
 
 # ── iiko API ──
 IIKO_BASE_URL: str = _require("IIKO_BASE_URL")
