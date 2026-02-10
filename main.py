@@ -78,7 +78,7 @@ def run_webhook() -> None:
     setup_application(app, dp, bot=bot)
 
     # Проверка БД перед стартом
-    asyncio.get_event_loop().run_until_complete(_check_db())
+    asyncio.run(_check_db())
 
     logger.info("Starting webhook server on %s:%s", WEBAPP_HOST, WEBAPP_PORT)
     web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)

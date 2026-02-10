@@ -44,7 +44,10 @@ TELEGRAM_BOT_TOKEN: str = _require("TELEGRAM_BOT_TOKEN")
 # ── Webhook (Railway) ──
 # Если WEBHOOK_URL задан — бот работает на вебхуке, иначе — polling.
 # На Railway задайте: WEBHOOK_URL=https://<ваш-сервис>.up.railway.app
-WEBHOOK_URL: str | None = os.getenv("WEBHOOK_URL")          # None → polling
+_wh = os.getenv("WEBHOOK_URL")
+if _wh and not _wh.startswith("http"):
+    _wh = f"https://{_wh}"
+WEBHOOK_URL: str | None = _wh                               # None → polling
 WEBHOOK_PATH: str = os.getenv("WEBHOOK_PATH", "/webhook")   # путь, куда Telegram шлёт апдейты
 WEBAPP_HOST: str = os.getenv("WEBAPP_HOST", "0.0.0.0")
 WEBAPP_PORT: int = int(os.getenv("PORT", "8080"))            # Railway пробрасывает PORT
