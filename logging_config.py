@@ -49,7 +49,7 @@ def setup_logging() -> None:
     logging.getLogger("aiogram.event").setLevel(logging.INFO)
     logging.getLogger("aiogram.dispatcher").setLevel(logging.INFO)
     logging.getLogger("aiogram.middlewares").setLevel(logging.WARNING)
-    logging.getLogger("aiogram.session").setLevel(logging.WARNING)
+    logging.getLogger("aiogram.session").setLevel(logging.INFO)   # видим ошибки HTTP к Telegram
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("aiohttp.access").setLevel(logging.INFO)
 
