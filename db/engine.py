@@ -4,6 +4,9 @@ SQLAlchemy async engine + сессия.
 """
 
 import logging
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -37,8 +40,9 @@ async_session_factory = async_sessionmaker(
 )
 
 
-async def get_session() -> AsyncSession:
-    """Удобная фабрика для DI / ручного использования."""
+@asynccontextmanager
+async def get_session() -> AsyncIterator[AsyncSession]:
+    """Async context-manager для DI / ручного использования."""
     async with async_session_factory() as session:
         yield session
 

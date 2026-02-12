@@ -7,11 +7,13 @@ Use-case: создание и отправка акта списания (writeo
   3. Поиск номенклатуры (GOODS / PREPARED)
   4. Получение единицы измерения по UUID
   5. Формирование и отправка документа через адаптер
+  6. Подготовка writeoff, одобрение/отклонение (use-case для admin)
 """
 
 import asyncio
 import logging
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -187,15 +189,88 @@ async def get_writeoff_accounts(store_name: str = "") -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────
-# Поиск номенклатуры
+# Кеш и поиск номенклатуры
 # ─────────────────────────────────────────────────────
+
+async def preload_products() -> None:
+    """
+    Загрузить все GOODS/PREPARED товары + единицы измерения в in-memory кеш.
+    Вызывается фоново при входе в «Документы».
+    ~1942 товара × ~200 байт ≈ 400 КБ RAM. TTL = 10 мин.
+    После загрузки search_products ищет за 0 мс вместо ~2 сек (DB round-trip).
+    """
+    if _cache.get_products() is not None:
+        return  # уже прогрет
+
+    t0 = time.monotonic()
+    async with async_session_factory() as session:
+        stmt = (
+            select(Product.id, Product.name, Product.main_unit, Product.product_type)
+            .where(Product.product_type.in_(["GOODS", "PREPARED"]))
+            .where(Product.deleted == False)
+            .order_by(Product.name)
+        )
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        # Батч-резолв единиц: собираем уникальные UUID → один запрос
+        unit_ids = {r[2] for r in rows if r[2]}
+        # Разделяем: что уже в кеше, что нужно догрузить
+        unit_map: dict[str, str] = {}
+        missing_ids = []
+        for uid in unit_ids:
+            uid_str = str(uid)
+            cached = _cache.get_unit(uid_str)
+            if cached is not None:
+                unit_map[uid_str] = cached
+            else:
+                missing_ids.append(uid)
+
+        if missing_ids:
+            unit_stmt = (
+                select(Entity.id, Entity.name)
+                .where(Entity.id.in_(missing_ids))
+                .where(Entity.root_type == "MeasureUnit")
+            )
+            unit_result = await session.execute(unit_stmt)
+            for row in unit_result.all():
+                uid_str = str(row[0])
+                uname = row[1] or "шт"
+                unit_map[uid_str] = uname
+                _cache.set_unit(uid_str, uname)
+
+    # Формируем список
+    items: list[dict] = []
+    for pid, pname, pmain_unit, ptype in rows:
+        uid_str = str(pmain_unit) if pmain_unit else None
+        uname = unit_map.get(uid_str, "шт") if uid_str else "шт"
+        unorm = normalize_unit(uname)
+        items.append({
+            "id": str(pid),
+            "name": pname,
+            "name_lower": pname.lower() if pname else "",
+            "main_unit": uid_str,
+            "product_type": ptype,
+            "unit_name": uname,
+            "unit_norm": unorm,
+        })
+
+    _cache.set_products(items)
+    logger.info(
+        "[writeoff] Прогрев кеша номенклатуры: %d товаров за %.2f сек",
+        len(items), time.monotonic() - t0,
+    )
+
 
 async def search_products(query: str, limit: int = 15) -> list[dict]:
     """
     Поиск товаров по подстроке названия.
     Только GOODS и PREPARED, не удалённые.
     Возвращает [{id, name, main_unit, product_type, unit_name, unit_norm}, ...].
-    Единицы измерения резолвятся в том же запросе (без доп. round-trip).
+
+    Стратегия:
+      1. Если в кеше есть products → поиск in-memory (0 мс)
+      2. Иначе → запрос в БД (fallback, ~2 сек)
     """
     t0 = time.monotonic()
     pattern = query.strip().lower()
@@ -203,6 +278,23 @@ async def search_products(query: str, limit: int = 15) -> list[dict]:
         return []
 
     logger.info("[writeoff] Поиск товаров по «%s»...", pattern)
+
+    # --- Попытка поиска в кеше ---
+    cached_products = _cache.get_products()
+    if cached_products is not None:
+        results = [
+            {k: v for k, v in p.items() if k != "name_lower"}
+            for p in cached_products
+            if pattern in p["name_lower"]
+        ][:limit]
+        logger.info(
+            "[writeoff] Поиск «%s» → %d результатов за %.4f сек (кеш)",
+            pattern, len(results), time.monotonic() - t0,
+        )
+        return results
+
+    # --- Fallback: запрос в БД ---
+    logger.debug("[writeoff] Кеш номенклатуры пуст, ищу в БД...")
 
     async with async_session_factory() as session:
         stmt = (
@@ -257,7 +349,7 @@ async def search_products(query: str, limit: int = 15) -> list[dict]:
         })
 
     logger.info(
-        "[writeoff] Поиск «%s» → %d результатов за %.2f сек",
+        "[writeoff] Поиск «%s» → %d результатов за %.2f сек (БД)",
         pattern, len(items), time.monotonic() - t0,
     )
     return items
@@ -386,11 +478,12 @@ async def preload_for_user(department_id: str) -> None:
     """
     t0 = time.monotonic()
     try:
-        # Прогрев admin_ids параллельно со складами
+        # Прогрев admin_ids + складов + номенклатуры параллельно
         from use_cases import admin as _admin_uc
-        stores, _ = await asyncio.gather(
+        stores, _, _ = await asyncio.gather(
             get_stores_for_department(department_id),
             _admin_uc.get_admin_ids(),
+            preload_products(),
         )
         # параллельно грузим счета для всех складов
         await asyncio.gather(
@@ -403,3 +496,100 @@ async def preload_for_user(department_id: str) -> None:
         )
     except Exception:
         logger.warning("[writeoff] Ошибка прогрева кеша", exc_info=True)
+
+
+# ═══════════════════════════════════════════════════════
+# Высокоуровневые use-case функции
+# ═══════════════════════════════════════════════════════
+
+@dataclass(slots=True)
+class WriteoffStart:
+    """Результат prepare_writeoff."""
+    stores: list[dict]
+    is_admin: bool
+    role_type: str               # 'bar', 'kitchen', 'admin', 'unknown'
+    auto_store: dict | None      # авто-выбранный склад или None
+    accounts: list[dict] | None  # если авто-склад — счета для него
+
+
+@dataclass(slots=True)
+class ApprovalResult:
+    """Результат approve_writeoff."""
+    success: bool
+    result_text: str
+
+
+async def prepare_writeoff(
+    department_id: str,
+    role_name: str | None,
+    is_bot_admin: bool,
+) -> WriteoffStart:
+    """
+    Подготовка данных для создания акта списания.
+    Вся бизнес-логика авто-выбора склада по роли — здесь.
+    """
+    stores = await get_stores_for_department(department_id)
+
+    if is_bot_admin:
+        role_type = "admin"
+        store_keyword = None
+    else:
+        role_type = classify_role(role_name)
+        store_keyword = get_store_keyword_for_role(role_type)
+
+    auto_store = None
+    accounts = None
+
+    if store_keyword and stores:
+        matched = [s for s in stores if store_keyword in s["name"].lower()]
+        if matched:
+            auto_store = matched[0]
+            accounts = await get_writeoff_accounts(auto_store["name"])
+            if not accounts:
+                accounts = None
+
+    return WriteoffStart(
+        stores=stores,
+        is_admin=is_bot_admin,
+        role_type=role_type,
+        auto_store=auto_store,
+        accounts=accounts,
+    )
+
+
+async def approve_writeoff(doc) -> ApprovalResult:
+    """
+    Одобрить документ: build → send в iiko.
+    doc — PendingWriteoff из pending_writeoffs.
+    """
+    document = build_writeoff_document(
+        store_id=doc.store_id,
+        account_id=doc.account_id,
+        reason=doc.reason,
+        items=doc.items,
+        author_name=doc.author_name,
+    )
+    result_text = await send_writeoff_document(document)
+    success = result_text.startswith("✅")
+    return ApprovalResult(success=success, result_text=result_text)
+
+
+async def finalize_without_admins(
+    store_id: str,
+    account_id: str,
+    reason: str,
+    items: list[dict],
+    author_name: str,
+) -> str:
+    """
+    Отправить акт напрямую (fallback если нет админов).
+    Возвращает текст результата.
+    """
+    document = build_writeoff_document(
+        store_id=store_id,
+        account_id=account_id,
+        reason=reason,
+        items=items,
+        author_name=author_name,
+    )
+    return await send_writeoff_document(document)

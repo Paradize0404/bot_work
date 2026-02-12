@@ -42,6 +42,30 @@ async def create_tables() -> None:
         # iiko_stock_balance — индексы для быстрых выборок по store/product
         "CREATE INDEX IF NOT EXISTS ix_stock_balance_store ON iiko_stock_balance (store_id)",
         "CREATE INDEX IF NOT EXISTS ix_stock_balance_product ON iiko_stock_balance (product_id)",
+        # min_stock_level — мин/макс остатки из Google Таблицы
+        "CREATE INDEX IF NOT EXISTS ix_min_stock_level_product ON min_stock_level (product_id)",
+        "CREATE INDEX IF NOT EXISTS ix_min_stock_level_dept ON min_stock_level (department_id)",
+        # writeoff_history — история списаний
+        "CREATE INDEX IF NOT EXISTS ix_writeoff_history_tg ON writeoff_history (telegram_id)",
+        "CREATE INDEX IF NOT EXISTS ix_writeoff_history_dept ON writeoff_history (department_id)",
+        "CREATE INDEX IF NOT EXISTS ix_writeoff_history_store_type ON writeoff_history (store_type)",
+        "CREATE INDEX IF NOT EXISTS ix_writeoff_history_created ON writeoff_history (created_at)",
+        # invoice_template — шаблоны расходных накладных
+        "CREATE INDEX IF NOT EXISTS ix_invoice_template_created_by ON invoice_template (created_by)",
+        "CREATE INDEX IF NOT EXISTS ix_invoice_template_dept ON invoice_template (department_id)",
+        # price_product — прайс-лист товаров
+        "CREATE INDEX IF NOT EXISTS ix_price_product_product_id ON price_product (product_id)",
+        # price_supplier_column — поставщики-столбцы
+        "CREATE INDEX IF NOT EXISTS ix_price_supplier_column_supplier_id ON price_supplier_column (supplier_id)",
+        # price_supplier_price — цены поставщиков
+        "CREATE INDEX IF NOT EXISTS ix_price_supplier_price_product ON price_supplier_price (product_id)",
+        "CREATE INDEX IF NOT EXISTS ix_price_supplier_price_supplier ON price_supplier_price (supplier_id)",
+        # request_receiver — получатели заявок
+        "CREATE INDEX IF NOT EXISTS ix_request_receiver_telegram_id ON request_receiver (telegram_id)",
+        # product_request — заявки на товары
+        "CREATE INDEX IF NOT EXISTS ix_product_request_requester ON product_request (requester_tg)",
+        "CREATE INDEX IF NOT EXISTS ix_product_request_dept ON product_request (department_id)",
+        "CREATE INDEX IF NOT EXISTS ix_product_request_status ON product_request (status)",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:

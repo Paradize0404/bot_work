@@ -4,6 +4,7 @@
 """
 
 import os
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -41,6 +42,11 @@ FINTABLO_TOKEN: str = _require("FINTABLO_TOKEN")
 # ── Telegram Bot ──
 TELEGRAM_BOT_TOKEN: str = _require("TELEGRAM_BOT_TOKEN")
 
+# ── Webhook security ──
+# Секрет для верификации запросов Telegram → set_webhook(secret_token=...)
+# Если не задан в env — генерируется при каждом старте (безопасно, Telegram пересогласует).
+WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET") or secrets.token_hex(32)
+
 # ── Webhook (Railway) ──
 # Если WEBHOOK_URL задан — бот работает на вебхуке, иначе — polling.
 # На Railway задайте: WEBHOOK_URL=https://<ваш-сервис>.up.railway.app
@@ -62,6 +68,20 @@ WEBHOOK_URL: str | None = _wh or None                       # None → polling
 WEBHOOK_PATH: str = os.getenv("WEBHOOK_PATH", "/webhook")   # путь, куда Telegram шлёт апдейты
 WEBAPP_HOST: str = os.getenv("WEBAPP_HOST", "0.0.0.0")
 WEBAPP_PORT: int = int(os.getenv("PORT", "8080"))            # Railway пробрасывает PORT
+
+# ── Google Sheets (мин. остатки) ──
+GOOGLE_SHEETS_CREDENTIALS: str = os.getenv(
+    "GOOGLE_SHEETS_CREDENTIALS", "pizzayolo-ocr-3898e5dddcff.json"
+)
+MIN_STOCK_SHEET_ID: str = os.getenv(
+    "MIN_STOCK_SHEET_ID", "1cKQAPXDap6sSAmGROYE-kqyNrVzJnf0bPpTjPyRKa_8"
+)
+
+# ── Google Sheets (прайс-лист накладных) ──
+# По умолчанию — тот же spreadsheet, но отдельный таб «Прайс-лист»
+INVOICE_PRICE_SHEET_ID: str = os.getenv(
+    "INVOICE_PRICE_SHEET_ID", "1cKQAPXDap6sSAmGROYE-kqyNrVzJnf0bPpTjPyRKa_8"
+)
 
 # ── Logging ──
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()

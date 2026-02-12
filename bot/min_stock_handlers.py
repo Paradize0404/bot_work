@@ -1,17 +1,18 @@
 """
-Telegram-хэндлеры: редактирование минимальных остатков в iiko.
+Telegram-хэндлеры: редактирование минимальных остатков.
 
 Флоу:
   1. Пользователь нажимает «✏️ Изменить мин. остаток» в меню Отчётов.
   2. Вводит название товара → поиск.
   3. Выбирает товар из inline-кнопок.
   4. Вводит новое значение мин. остатка.
-  5. Бот обновляет на всех складах department в iiko и подтверждает.
+  5. Бот обновляет Google Таблицу + min_stock_level (БД).
 """
 
 import logging
 
 from aiogram import Router, F
+from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import (
@@ -21,6 +22,7 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 
+from bot._utils import escape_md as _escape_md
 from use_cases import edit_min_stock as ems_uc
 from use_cases import user_context as uctx
 
@@ -59,10 +61,15 @@ async def btn_edit_min_stock(message: Message, state: FSMContext) -> None:
 
     await state.set_state(EditMinStockStates.search_product)
     await state.update_data(department_id=ctx.department_id)
-    await message.answer(
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    msg = await message.answer(
         "🔍 Введите название товара для поиска\n"
         "(или часть названия, например: «молоко»):",
     )
+    await state.update_data(_prompt_msg_id=msg.message_id)
 
 
 # ══════════════════════════════════════════════════════
@@ -75,21 +82,35 @@ async def search_product(message: Message, state: FSMContext) -> None:
     query = (message.text or "").strip()
     logger.info("[edit-min] Поиск «%s» tg:%d", query, message.from_user.id)
 
-    if not query or len(query) < 2:
-        await message.answer("⚠️ Введите минимум 2 символа для поиска.")
-        return
-
     try:
         await message.delete()
     except Exception:
         pass
 
+    data = await state.get_data()
+    prompt_id = data.get("_prompt_msg_id")
+
+    if not query or len(query) < 2:
+        if prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "⚠️ Введите минимум 2 символа для поиска.",
+                    chat_id=message.chat.id, message_id=prompt_id)
+            except Exception:
+                pass
+        return
+
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     products = await ems_uc.search_products_for_edit(query, limit=10)
     if not products:
-        await message.answer(
-            f"😔 Ничего не найдено по запросу «{query}».\n"
-            "Попробуйте другое название:"
-        )
+        if prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    f"😔 Ничего не найдено по запросу «{query}».\n"
+                    "Попробуйте другое название:",
+                    chat_id=message.chat.id, message_id=prompt_id)
+            except Exception:
+                pass
         return
 
     # Формируем inline-кнопки
@@ -113,10 +134,21 @@ async def search_product(message: Message, state: FSMContext) -> None:
         _products_cache={p["id"]: p for p in products},
     )
     await state.set_state(EditMinStockStates.choose_product)
-    await message.answer(
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    if prompt_id:
+        try:
+            await message.bot.edit_message_text(
+                f"📦 Найдено {len(products)} товаров. Выберите:",
+                chat_id=message.chat.id, message_id=prompt_id,
+                reply_markup=kb)
+            return
+        except Exception:
+            pass
+    msg = await message.answer(
         f"📦 Найдено {len(products)} товаров. Выберите:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        reply_markup=kb,
     )
+    await state.update_data(_prompt_msg_id=msg.message_id)
 
 
 # ══════════════════════════════════════════════════════
@@ -139,7 +171,8 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
         product_id, callback.from_user.id,
     )
 
-    await state.update_data(product_id=product_id, product_name=product_name)
+    await state.update_data(product_id=product_id, product_name=product_name,
+                             _prompt_msg_id=callback.message.message_id)
     await state.set_state(EditMinStockStates.enter_min_level)
 
     await callback.message.edit_text(
@@ -156,10 +189,9 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(EditMinStockStates.enter_min_level)
 async def enter_min_level(message: Message, state: FSMContext) -> None:
-    """Пользователь ввёл число → обновляем в iiko."""
-    text = (message.text or "").strip().replace(",", ".")
+    """Пользователь ввёл число → валидация → обновление в iiko."""
     logger.info(
-        "[edit-min] Ввод min=%s tg:%d", text, message.from_user.id
+        "[edit-min] Ввод min=%s tg:%d", (message.text or "").strip(), message.from_user.id
     )
 
     try:
@@ -167,25 +199,22 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
     except Exception:
         pass
 
-    # Валидация числа
-    try:
-        new_min = float(text)
-    except ValueError:
-        await message.answer(
-            "⚠️ Введите число (например: 5, 10.5, 0).\n"
-            "Попробуйте ещё раз:"
-        )
-        return
-
-    if new_min < 0:
-        await message.answer("⚠️ Значение не может быть отрицательным. Попробуйте ещё раз:")
-        return
-
-    if new_min > 999999:
-        await message.answer("⚠️ Слишком большое значение. Максимум 999 999. Попробуйте ещё раз:")
-        return
-
     data = await state.get_data()
+    prompt_id = data.get("_prompt_msg_id")
+
+    # Валидация через use-case
+    validated = ems_uc.apply_min_level(message.text or "")
+    if isinstance(validated, ems_uc.EditMinResult):
+        if prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    validated.text,
+                    chat_id=message.chat.id, message_id=prompt_id)
+            except Exception:
+                pass
+        return
+
+    new_min = validated
     product_id = data.get("product_id")
     department_id = data.get("department_id")
     product_name = data.get("product_name", "")
@@ -195,11 +224,15 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
         await state.clear()
         return
 
-    # Отправляем в iiko
-    await message.answer(
-        f"⏳ Обновляю мин. остаток для *{_escape_md(product_name)}*...",
-        parse_mode="Markdown",
-    )
+    # Отправляем в iiko — placeholder → edit
+    if prompt_id:
+        try:
+            await message.bot.edit_message_text(
+                f"⏳ Обновляю мин. остаток для *{_escape_md(product_name)}*...",
+                chat_id=message.chat.id, message_id=prompt_id,
+                parse_mode="Markdown")
+        except Exception:
+            pass
 
     result = await ems_uc.update_min_level(
         product_id=product_id,
@@ -207,7 +240,15 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
         new_min=new_min,
     )
 
-    await message.answer(result, parse_mode="Markdown")
+    if prompt_id:
+        try:
+            await message.bot.edit_message_text(
+                result, chat_id=message.chat.id,
+                message_id=prompt_id, parse_mode="Markdown")
+        except Exception:
+            await message.answer(result, parse_mode="Markdown")
+    else:
+        await message.answer(result, parse_mode="Markdown")
     await state.clear()
 
 
@@ -244,15 +285,6 @@ async def _guard_inline_states(message: Message) -> None:
         await message.delete()
     except Exception:
         pass
-    await message.answer("⚠️ Нажмите одну из кнопок выше.")
 
 
-# ══════════════════════════════════════════════════════
-#  Утилиты
-# ══════════════════════════════════════════════════════
 
-def _escape_md(s: str) -> str:
-    """Экранировать спецсимволы Markdown v1."""
-    for ch in ("*", "_", "`", "["):
-        s = s.replace(ch, f"\\{ch}")
-    return s

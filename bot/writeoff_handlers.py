@@ -18,6 +18,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Router, F
+from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import (
@@ -32,6 +33,7 @@ from use_cases import writeoff as wo_uc
 from use_cases import writeoff_cache as wo_cache
 from use_cases import user_context as uctx
 from use_cases import pending_writeoffs as pending
+from use_cases import writeoff_history as wo_hist
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,18 @@ class AdminEditStates(StatesGroup):
     choose_item_action = State() # наименование или количество
     new_product_search = State() # поиск нового товара
     new_quantity = State()       # ввод нового количества
+
+
+# ══════════════════════════════════════════════════════
+#  FSM States — история списаний
+# ══════════════════════════════════════════════════════
+
+class HistoryStates(StatesGroup):
+    browsing = State()           # просмотр списка
+    viewing = State()            # детальный просмотр одной записи
+    editing_reason = State()     # редактирование причины перед повтором
+    editing_items = State()      # поиск товаров при редактировании
+    editing_quantity = State()   # ввод количества при редактировании
 
 
 # ══════════════════════════════════════════════════════
@@ -199,7 +213,6 @@ async def _ignore_text_store(message: Message) -> None:
     logger.debug("[writeoff] Текст в store-состоянии tg:%d, text='%s'", message.from_user.id, message.text)
     try: await message.delete()
     except Exception: pass
-    await message.answer("👆 Нажмите на кнопку склада выше.")
 
 
 @router.message(WriteoffStates.account)
@@ -207,7 +220,6 @@ async def _ignore_text_account(message: Message) -> None:
     logger.debug("[writeoff] Текст в account-состоянии tg:%d, text='%s'", message.from_user.id, message.text)
     try: await message.delete()
     except Exception: pass
-    await message.answer("👆 Нажмите на кнопку счёта выше.")
 
 
 # ══════════════════════════════════════════════════════
@@ -227,12 +239,18 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
     logger.info("[writeoff] Старт. user=%d, dept=%s (%s), role=%s",
                 message.from_user.id, ctx.department_id, ctx.department_name, ctx.role_name)
 
-    # Параллельно: склады + is_admin (экономим ~400 мс)
-    stores, is_bot_admin = await asyncio.gather(
-        wo_uc.get_stores_for_department(ctx.department_id),
-        admin_uc.is_admin(message.from_user.id),
+    # Фоновый прогрев кеша номенклатуры (если ещё не прогрет)
+    asyncio.create_task(wo_uc.preload_products())
+
+    # Параллельно: is_admin + prepare_writeoff
+    is_bot_admin = await admin_uc.is_admin(message.from_user.id)
+    wo_start = await wo_uc.prepare_writeoff(
+        department_id=ctx.department_id,
+        role_name=ctx.role_name,
+        is_bot_admin=is_bot_admin,
     )
-    if not stores:
+
+    if not wo_start.stores:
         await message.answer("❌ У вашего подразделения нет складов (бар/кухня).")
         return
 
@@ -240,61 +258,50 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
         user_fullname=ctx.employee_name,
         department_id=ctx.department_id,
         items=[],
-        _stores_cache=stores,
+        _stores_cache=wo_start.stores,
     )
 
-    # ── Авто-выбор склада по должности (бот-админы всегда выбирают вручную) ──
-    if is_bot_admin:
-        role_type = "admin"
-        store_keyword = None
-        logger.info("[writeoff] Бот-админ tg:%d — ручной выбор склада", message.from_user.id)
-    else:
-        role_type = wo_uc.classify_role(ctx.role_name)
-        store_keyword = wo_uc.get_store_keyword_for_role(role_type)
+    # Авто-выбор склада по должности
+    if wo_start.auto_store and wo_start.accounts:
+        auto_store = wo_start.auto_store
+        accounts = wo_start.accounts
+        await state.update_data(store_id=auto_store["id"], store_name=auto_store["name"])
+        logger.info("[writeoff] Авто-склад по роли «%s» → %s (%s)",
+                    ctx.role_name, auto_store["name"], auto_store["id"])
 
-    if store_keyword:
-        # Ищем склад, в названии которого есть ключевое слово (бар/кухня)
-        matched = [s for s in stores if store_keyword in s["name"].lower()]
-        if matched:
-            auto_store = matched[0]
-            await state.update_data(store_id=auto_store["id"], store_name=auto_store["name"])
-            logger.info("[writeoff] Авто-склад по роли «%s» → %s (%s)",
-                        ctx.role_name, auto_store["name"], auto_store["id"])
+        summary_msg = await message.answer(_build_summary(await state.get_data()), parse_mode="HTML")
+        await state.update_data(header_msg_id=summary_msg.message_id)
 
-            summary_msg = await message.answer(_build_summary(await state.get_data()), parse_mode="HTML")
-            await state.update_data(header_msg_id=summary_msg.message_id)
+        await state.update_data(_accounts_cache=accounts)
+        await state.set_state(WriteoffStates.account)
+        msg = await message.answer(
+            f"🏬 Склад: <b>{auto_store['name']}</b> (авто)\n"
+            f"📂 Выберите счёт списания ({len(accounts)}):",
+            parse_mode="HTML",
+            reply_markup=_accounts_kb(accounts, page=0),
+        )
+        await state.update_data(prompt_msg_id=msg.message_id)
+        return
 
-            # Переходим сразу к выбору счёта
-            accounts = await wo_uc.get_writeoff_accounts(auto_store["name"])
-            if not accounts:
-                msg = await message.answer(
-                    f"🏬 Склад: <b>{auto_store['name']}</b> (авто)\n"
-                    "⚠️ Нет счетов списания для этого склада.",
-                    parse_mode="HTML",
-                )
-                await state.update_data(prompt_msg_id=msg.message_id)
-                await state.clear()
-                return
+    if wo_start.auto_store and not wo_start.accounts:
+        # Авто-склад найден, но нет счетов
+        auto_store = wo_start.auto_store
+        await state.update_data(store_id=auto_store["id"], store_name=auto_store["name"])
+        summary_msg = await message.answer(_build_summary(await state.get_data()), parse_mode="HTML")
+        await state.update_data(header_msg_id=summary_msg.message_id)
+        msg = await message.answer(
+            f"🏬 Склад: <b>{auto_store['name']}</b> (авто)\n"
+            "⚠️ Нет счетов списания для этого склада.",
+            parse_mode="HTML",
+        )
+        await state.update_data(prompt_msg_id=msg.message_id)
+        await state.clear()
+        return
 
-            await state.update_data(_accounts_cache=accounts)
-            await state.set_state(WriteoffStates.account)
-            msg = await message.answer(
-                f"🏬 Склад: <b>{auto_store['name']}</b> (авто)\n"
-                f"📂 Выберите счёт списания ({len(accounts)}):",
-                parse_mode="HTML",
-                reply_markup=_accounts_kb(accounts, page=0),
-            )
-            await state.update_data(prompt_msg_id=msg.message_id)
-            return
-
-        # Если склад по ключевому слову не найден — показываем выбор
-        logger.warning("[writeoff] Склад «%s» не найден для роли «%s», показываю выбор",
-                       store_keyword, ctx.role_name)
-
-    # ── Ручной выбор склада (для админов / если авто не сработал) ──
+    # Ручной выбор склада
     summary_msg = await message.answer(_build_summary(await state.get_data()), parse_mode="HTML")
     await state.update_data(header_msg_id=summary_msg.message_id)
-    msg = await message.answer("🏬 Выберите склад:", reply_markup=_stores_kb(stores))
+    msg = await message.answer("🏬 Выберите склад:", reply_markup=_stores_kb(wo_start.stores))
     await state.update_data(prompt_msg_id=msg.message_id)
     await state.set_state(WriteoffStates.store)
 
@@ -380,10 +387,12 @@ async def set_reason(message: Message, state: FSMContext) -> None:
     except Exception: pass
 
     if not reason:
-        await message.answer("❌ Причина не может быть пустой.")
+        await _send_prompt(message.bot, message.chat.id, state,
+                           "⚠️ Причина не может быть пустой. Введите причину:")
         return
     if len(reason) > 500:
-        await message.answer("❌ Макс. 500 символов.")
+        await _send_prompt(message.bot, message.chat.id, state,
+                           "⚠️ Макс. 500 символов. Введите причину покороче:")
         return
 
     await state.update_data(reason=reason)
@@ -418,6 +427,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
                            reply_markup=_add_more_kb())
         return
 
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     products = await wo_uc.search_products(query)
     if not products:
         await _send_prompt(message.bot, message.chat.id, state,
@@ -478,9 +488,11 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.edit_text(prompt, parse_mode="HTML")
     except Exception:
         msg = await callback.message.answer(prompt, parse_mode="HTML")
-        await state.update_data(quantity_prompt_id=msg.message_id)
+        await state.update_data(quantity_prompt_id=msg.message_id,
+                                prompt_msg_id=msg.message_id)
         return
-    await state.update_data(quantity_prompt_id=callback.message.message_id)
+    await state.update_data(quantity_prompt_id=callback.message.message_id,
+                            prompt_msg_id=callback.message.message_id)
 
 
 # ── 6. Количество ──
@@ -490,19 +502,24 @@ async def save_quantity(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").replace(",", ".").strip()
     logger.info("[writeoff] Ввод количества tg:%d, raw='%s'", message.from_user.id, raw)
     try:
+        await message.delete()
+    except Exception:
+        pass
+
+    try:
         qty = float(raw)
     except ValueError:
-        await message.answer("❌ Введите число. Пример: 500 или 1.5")
+        await _send_prompt(message.bot, message.chat.id, state,
+                           "⚠️ Введите число. Пример: 500 или 1.5")
         return
     if qty < QTY_MIN:
-        await message.answer(f"❌ Минимум {QTY_MIN}.")
+        await _send_prompt(message.bot, message.chat.id, state,
+                           f"⚠️ Минимум {QTY_MIN}.")
         return
     if qty > QTY_MAX:
-        await message.answer(f"❌ Макс. {QTY_MAX}.")
+        await _send_prompt(message.bot, message.chat.id, state,
+                           f"⚠️ Макс. {QTY_MAX}.")
         return
-
-    try: await message.delete()
-    except Exception: pass
 
     data = await state.get_data()
     item = data.get("current_item")
@@ -551,19 +568,22 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("⏳ Уже отправляется…")
         return
 
+    await callback.answer()
     _sending_lock.add(user_id)
     try:
         data = await state.get_data()
         items = data.get("items", [])
         if not items:
-            await callback.answer("❌ Добавьте хотя бы один товар", show_alert=True)
+            await _send_prompt(callback.bot, callback.message.chat.id, state,
+                               "⚠️ Добавьте хотя бы один товар.",
+                               reply_markup=_add_more_kb())
             return
         non_zero = [i for i in items if i.get("quantity", 0) > 0]
         if not non_zero:
-            await callback.answer("❌ Все позиции с количеством 0.", show_alert=True)
+            await _send_prompt(callback.bot, callback.message.chat.id, state,
+                               "⚠️ Все позиции с количеством 0.",
+                               reply_markup=_add_more_kb())
             return
-
-        await callback.answer()
 
         admin_ids = await admin_uc.get_admin_ids()
 
@@ -571,17 +591,35 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
             # Нет админов — отправляем напрямую (fallback)
             await _send_prompt(callback.bot, callback.message.chat.id, state,
                                f"⏳ Отправляем акт ({len(non_zero)} позиций)...")
-            document = wo_uc.build_writeoff_document(
-                store_id=data["store_id"], account_id=data["account_id"],
-                reason=data.get("reason", ""), items=items,
-                author_name=data.get("user_fullname", ""))
             bot = callback.bot
             chat_id = callback.message.chat.id
+            tg_id = callback.from_user.id
+            _data_snapshot = dict(data)
             await state.clear()
 
             async def _bg():
-                result = await wo_uc.send_writeoff_document(document)
+                result = await wo_uc.finalize_without_admins(
+                    store_id=_data_snapshot["store_id"], account_id=_data_snapshot["account_id"],
+                    reason=_data_snapshot.get("reason", ""), items=items,
+                    author_name=_data_snapshot.get("user_fullname", ""),
+                )
                 await bot.send_message(chat_id, result)
+                # Сохраняем в историю при успехе
+                if result.startswith("✅"):
+                    try:
+                        await wo_hist.save_to_history(
+                            telegram_id=tg_id,
+                            employee_name=_data_snapshot.get("user_fullname", ""),
+                            department_id=_data_snapshot.get("department_id", ""),
+                            store_id=_data_snapshot["store_id"],
+                            store_name=_data_snapshot.get("store_name", ""),
+                            account_id=_data_snapshot["account_id"],
+                            account_name=_data_snapshot.get("account_name", ""),
+                            reason=_data_snapshot.get("reason", ""),
+                            items=items,
+                        )
+                    except Exception:
+                        logger.warning("[writeoff] Ошибка сохранения в историю (no-admin)")
             asyncio.create_task(_bg())
             return
 
@@ -673,17 +711,31 @@ async def admin_approve(callback: CallbackQuery) -> None:
     await _remove_admin_keyboards(bot, doc,
                                    f"✅ Одобрено admin {admin_name}", except_admin=admin_id)
 
-    # Отправляем в iiko
-    document = wo_uc.build_writeoff_document(
-        store_id=doc.store_id, account_id=doc.account_id,
-        reason=doc.reason, items=doc.items,
-        author_name=doc.author_name)
-    result = await wo_uc.send_writeoff_document(document)
+    # Отправляем в iiko через use_case
+    approval = await wo_uc.approve_writeoff(doc)
+
+    # Сохраняем в историю при успешной отправке
+    if approval.success:
+        try:
+            await wo_hist.save_to_history(
+                telegram_id=doc.author_chat_id,
+                employee_name=doc.author_name,
+                department_id=doc.department_id,
+                store_id=doc.store_id,
+                store_name=doc.store_name,
+                account_id=doc.account_id,
+                account_name=doc.account_name,
+                reason=doc.reason,
+                items=doc.items,
+                approved_by_name=admin_name,
+            )
+        except Exception:
+            logger.warning("[writeoff] Ошибка сохранения в историю doc=%s", doc_id, exc_info=True)
 
     # Обновляем сообщение админа
     try:
         await callback.message.edit_text(
-            pending.build_summary_text(doc) + f"\n\n{result}\n👤 {admin_name}",
+            pending.build_summary_text(doc) + f"\n\n{approval.result_text}\n👤 {admin_name}",
             parse_mode="HTML",
         )
     except Exception:
@@ -691,7 +743,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
 
     # Уведомляем автора
     try:
-        await bot.send_message(doc.author_chat_id, f"{result}\n(проверил: {admin_name})")
+        await bot.send_message(doc.author_chat_id, f"{approval.result_text}\n(проверил: {admin_name})")
     except Exception:
         pass
 
@@ -758,10 +810,10 @@ async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
 
     admin_name = callback.from_user.full_name
 
-    # Убираем кнопки у всех (включая текущего)
+    # Убираем кнопки у остальных админов
     await _remove_admin_keyboards(callback.bot, doc,
                                    f"✏️ Редактирует {admin_name}",
-                                   except_admin=0)
+                                   except_admin=callback.from_user.id)
 
     # Сохраняем doc_id в FSM для этого админа
     await state.update_data(edit_doc_id=doc_id)
@@ -773,9 +825,14 @@ async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
         [InlineKeyboardButton(text="❌ Отмена редактирования", callback_data="woe_cancel")],
     ])
     await state.set_state(AdminEditStates.choose_field)
-    await callback.message.answer(
-        pending.build_summary_text(doc) + "\n\n✏️ <b>Что редактируем?</b>",
-        parse_mode="HTML", reply_markup=kb)
+    try:
+        await callback.message.edit_text(
+            pending.build_summary_text(doc) + "\n\n✏️ <b>Что редактируем?</b>",
+            parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        await callback.message.answer(
+            pending.build_summary_text(doc) + "\n\n✏️ <b>Что редактируем?</b>",
+            parse_mode="HTML", reply_markup=kb)
 
 
 # ── Отмена редактирования ──
@@ -826,7 +883,14 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
     if field == "store":
         stores = await wo_uc.get_stores_for_department(doc.department_id)
         if not stores:
-            await callback.message.answer("❌ Нет доступных складов.")
+            try:
+                await callback.message.edit_text(
+                    "❌ Нет доступных складов.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="❌ Отмена", callback_data="woe_cancel")]
+                    ]))
+            except Exception:
+                pass
             return
         await state.update_data(_edit_stores=stores)
         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -839,7 +903,14 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
     elif field == "account":
         accounts = await wo_uc.get_writeoff_accounts(doc.store_name)
         if not accounts:
-            await callback.message.answer("❌ Нет счетов.")
+            try:
+                await callback.message.edit_text(
+                    "❌ Нет счетов.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="❌ Отмена", callback_data="woe_cancel")]
+                    ]))
+            except Exception:
+                pass
             return
         await state.update_data(_edit_accounts=accounts)
         kb = _accounts_kb(accounts, page=0)
@@ -855,7 +926,14 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
     elif field == "items":
         items = doc.items
         if not items:
-            await callback.message.answer("❌ В документе нет позиций.")
+            try:
+                await callback.message.edit_text(
+                    "❌ В документе нет позиций.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="❌ Отмена", callback_data="woe_cancel")]
+                    ]))
+            except Exception:
+                pass
             return
         buttons = [
             [InlineKeyboardButton(
@@ -976,6 +1054,7 @@ async def admin_edit_item_action(callback: CallbackQuery, state: FSMContext) -> 
     if action == "name":
         await state.set_state(AdminEditStates.new_product_search)
         await callback.message.edit_text("🔍 Введите часть названия нового товара:")
+        await state.update_data(_edit_prompt_id=callback.message.message_id)
         return
 
     if action == "qty":
@@ -984,6 +1063,7 @@ async def admin_edit_item_action(callback: CallbackQuery, state: FSMContext) -> 
         await state.set_state(AdminEditStates.new_quantity)
         await callback.message.edit_text(
             f"🔢 Введите новое количество ({unit_label}) для «{item['name']}»:")
+        await state.update_data(_edit_prompt_id=callback.message.message_id)
         return
 
 
@@ -995,13 +1075,41 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
     logger.info("[writeoff-edit] Поиск нового товара tg:%d, query='%s'", message.from_user.id, query)
     try: await message.delete()
     except Exception: pass
+
+    data = await state.get_data()
+    edit_prompt_id = data.get("_edit_prompt_id")
+
     if len(query) < 2:
-        await message.answer("❌ Минимум 2 символа.")
+        if edit_prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "⚠️ Минимум 2 символа. Введите название товара:",
+                    chat_id=message.chat.id, message_id=edit_prompt_id)
+            except Exception:
+                pass
+        return
+
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+    products = await wo_uc.search_products(query)
+    if not products:
+        if edit_prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "🔎 Ничего. Попробуйте другой запрос:",
+                    chat_id=message.chat.id, message_id=edit_prompt_id)
+            except Exception:
+                pass
         return
 
     products = await wo_uc.search_products(query)
     if not products:
-        await message.answer("🔎 Ничего. Попробуйте другой запрос:")
+        if edit_prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "🔎 Ничего. Попробуйте другой запрос:",
+                    chat_id=message.chat.id, message_id=edit_prompt_id)
+            except Exception:
+                pass
         return
 
     cache = {p["id"]: p for p in products}
@@ -1011,7 +1119,17 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
         [InlineKeyboardButton(text=p["name"], callback_data=f"woe_newprod:{p['id']}")]
         for p in products
     ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="woe_cancel")]]
-    await message.answer("Выберите новый товар:", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    if edit_prompt_id:
+        try:
+            await message.bot.edit_message_text(
+                "Выберите новый товар:", chat_id=message.chat.id,
+                message_id=edit_prompt_id, reply_markup=kb)
+            return
+        except Exception:
+            pass
+    msg = await message.answer("Выберите новый товар:", reply_markup=kb)
+    await state.update_data(_edit_prompt_id=msg.message_id)
 
 
 @router.callback_query(AdminEditStates.new_product_search, F.data.startswith("woe_newprod:"))
@@ -1055,18 +1173,33 @@ async def admin_set_new_quantity(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").replace(",", ".").strip()
     logger.info("[writeoff-edit] Новое количество tg:%d, raw='%s'", message.from_user.id, raw)
     try:
-        qty = float(raw)
-    except ValueError:
-        await message.answer("❌ Введите число.")
-        return
-    if qty < QTY_MIN or qty > QTY_MAX:
-        await message.answer(f"❌ Допустимо: {QTY_MIN}–{QTY_MAX}.")
-        return
-
-    try: await message.delete()
-    except Exception: pass
+        await message.delete()
+    except Exception:
+        pass
 
     data = await state.get_data()
+    edit_prompt_id = data.get("_edit_prompt_id")
+
+    try:
+        qty = float(raw)
+    except ValueError:
+        if edit_prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "⚠️ Введите число.",
+                    chat_id=message.chat.id, message_id=edit_prompt_id)
+            except Exception:
+                pass
+        return
+    if qty < QTY_MIN or qty > QTY_MAX:
+        if edit_prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    f"⚠️ Допустимо: {QTY_MIN}–{QTY_MAX}.",
+                    chat_id=message.chat.id, message_id=edit_prompt_id)
+            except Exception:
+                pass
+        return
     doc = pending.get(data.get("edit_doc_id", ""))
     idx = data.get("edit_item_idx", -1)
     if not doc or idx < 0 or idx >= len(doc.items):
@@ -1135,6 +1268,899 @@ async def _finish_edit_msg(message: Message, state: FSMContext,
             doc.admin_msg_ids[admin_id] = msg.message_id
         except Exception:
             pass
+
+
+# ══════════════════════════════════════════════════════
+#  ИСТОРИЯ СПИСАНИЙ
+# ══════════════════════════════════════════════════════
+
+HIST_PAGE_SIZE = wo_hist.HISTORY_PAGE_SIZE
+
+
+def _history_list_kb(entries: list[wo_hist.HistoryEntry], page: int, total: int) -> InlineKeyboardMarkup:
+    """Клавиатура со списком истории + пагинация."""
+    buttons = []
+    for entry in entries:
+        # Краткая строка: дата + склад + кол-во позиций
+        n_items = len(entry.items) if entry.items else 0
+        label = f"{entry.created_at} | {entry.store_name} ({n_items} поз.)"
+        # Обрезаем до 60 символов (ограничение Telegram callback_data label)
+        if len(label) > 60:
+            label = label[:57] + "..."
+        buttons.append([InlineKeyboardButton(
+            text=label, callback_data=f"woh_view:{entry.pk}",
+        )])
+
+    # Пагинация
+    total_pages = max(1, (total + HIST_PAGE_SIZE - 1) // HIST_PAGE_SIZE)
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"woh_page:{page - 1}"))
+    if (page + 1) * HIST_PAGE_SIZE < total:
+        nav.append(InlineKeyboardButton(text="▶️ Далее", callback_data=f"woh_page:{page + 1}"))
+    if nav:
+        nav.insert(len(nav) // 2, InlineKeyboardButton(
+            text=f"{page + 1}/{total_pages}", callback_data="woh_noop",
+        ))
+        buttons.append(nav)
+
+    buttons.append([InlineKeyboardButton(text="❌ Закрыть", callback_data="woh_close")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def _history_detail_kb(pk: int) -> InlineKeyboardMarkup:
+    """Клавиатура при просмотре одной записи из истории."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Повторить как есть", callback_data=f"woh_reuse:{pk}")],
+        [InlineKeyboardButton(text="✏️ Редактировать и отправить", callback_data=f"woh_edit:{pk}")],
+        [InlineKeyboardButton(text="◀️ К списку", callback_data="woh_back")],
+        [InlineKeyboardButton(text="❌ Закрыть", callback_data="woh_close")],
+    ])
+
+
+def _hist_edit_kb() -> InlineKeyboardMarkup:
+    """Клавиатура при редактировании копии из истории."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📝 Изменить причину", callback_data="wohe_reason")],
+        [InlineKeyboardButton(text="📦 Редактировать позиции", callback_data="wohe_items")],
+        [InlineKeyboardButton(text="➕ Добавить товар", callback_data="wohe_add_item")],
+        [InlineKeyboardButton(text="✅ Отправить на проверку", callback_data="wohe_send")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="woh_close")],
+    ])
+
+
+def _hist_items_kb(items: list[dict]) -> InlineKeyboardMarkup:
+    """Клавиатура выбора позиции для редактирования."""
+    buttons = []
+    for i, item in enumerate(items):
+        uq = item.get("user_quantity", item.get("quantity", 0))
+        ul = item.get("unit_label", "шт")
+        label = f"{i+1}. {item.get('name', '?')} — {uq} {ul}"
+        if len(label) > 60:
+            label = label[:57] + "..."
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"wohe_item:{i}")])
+    buttons.append([InlineKeyboardButton(text="◀️ Назад к редактированию", callback_data="wohe_back")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def _hist_item_action_kb(idx: int) -> InlineKeyboardMarkup:
+    """Действия с позицией при редактировании из истории."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔢 Изменить количество", callback_data=f"wohe_qty:{idx}")],
+        [InlineKeyboardButton(text="🗑 Удалить позицию", callback_data=f"wohe_del:{idx}")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="wohe_back")],
+    ])
+
+
+# ── 1. Кнопка «📋 История списаний» ──
+
+@router.message(F.text == "📋 История списаний")
+async def start_history(message: Message, state: FSMContext) -> None:
+    """Открыть историю списаний с фильтрацией по роли."""
+    await state.clear()
+    ctx = await uctx.get_user_context(message.from_user.id)
+    if not ctx or not ctx.department_id:
+        await message.answer("⚠️ Сначала авторизуйтесь (/start) и выберите ресторан.")
+        return
+
+    logger.info("[wo_history] Открытие истории tg:%d, dept=%s, role=%s",
+                message.from_user.id, ctx.department_id, ctx.role_name)
+
+    is_bot_admin = await admin_uc.is_admin(message.from_user.id)
+    role_type = "admin" if is_bot_admin else wo_uc.classify_role(ctx.role_name)
+
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+    entries, total = await wo_hist.get_history(
+        telegram_id=message.from_user.id,
+        department_id=ctx.department_id,
+        role_type=role_type,
+        page=0,
+    )
+
+    if not entries:
+        await message.answer("📋 История списаний пуста.")
+        return
+
+    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "admin": "👑 Все"}.get(role_type, "📋 Все")
+    msg = await message.answer(
+        f"📋 <b>История списаний</b> ({role_label})\n"
+        f"Всего записей: {total}\n\n"
+        "Выберите запись для просмотра:",
+        parse_mode="HTML",
+        reply_markup=_history_list_kb(entries, page=0, total=total),
+    )
+    await state.update_data(
+        hist_page=0,
+        hist_role_type=role_type,
+        hist_department_id=ctx.department_id,
+        hist_msg_id=msg.message_id,
+    )
+    await state.set_state(HistoryStates.browsing)
+
+
+# ── 2. Пагинация ──
+
+@router.callback_query(HistoryStates.browsing, F.data == "woh_noop")
+async def hist_noop(callback: CallbackQuery) -> None:
+    await callback.answer()
+
+
+@router.callback_query(HistoryStates.browsing, F.data.startswith("woh_page:"))
+async def hist_page(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    try:
+        page = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+    logger.debug("[wo_history] Пагинация tg:%d, page=%d", callback.from_user.id, page)
+    data = await state.get_data()
+    role_type = data.get("hist_role_type", "unknown")
+    department_id = data.get("hist_department_id", "")
+
+    entries, total = await wo_hist.get_history(
+        telegram_id=callback.from_user.id,
+        department_id=department_id,
+        role_type=role_type,
+        page=page,
+    )
+
+    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "admin": "👑 Все"}.get(role_type, "📋 Все")
+    try:
+        await callback.message.edit_text(
+            f"📋 <b>История списаний</b> ({role_label})\n"
+            f"Всего записей: {total}\n\n"
+            "Выберите запись:",
+            parse_mode="HTML",
+            reply_markup=_history_list_kb(entries, page=page, total=total),
+        )
+    except Exception:
+        pass
+    await state.update_data(hist_page=page)
+
+
+# ── 3. Просмотр одной записи ──
+
+@router.callback_query(HistoryStates.browsing, F.data.startswith("woh_view:"))
+async def hist_view(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    try:
+        pk = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+    logger.info("[wo_history] Просмотр записи tg:%d, pk=%d", callback.from_user.id, pk)
+    entry = await wo_hist.get_history_entry(pk)
+    if not entry:
+        await callback.answer("⚠️ Запись не найдена.", show_alert=True)
+        return
+
+    text = wo_hist.build_history_summary(entry)
+    try:
+        await callback.message.edit_text(
+            text, parse_mode="HTML",
+            reply_markup=_history_detail_kb(pk),
+        )
+    except Exception:
+        pass
+    await state.update_data(hist_viewing_pk=pk)
+    await state.set_state(HistoryStates.viewing)
+
+
+# ── 4. Назад к списку ──
+
+@router.callback_query(F.data == "woh_back")
+async def hist_back_to_list(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    data = await state.get_data()
+    page = data.get("hist_page", 0)
+    role_type = data.get("hist_role_type", "unknown")
+    department_id = data.get("hist_department_id", "")
+
+    entries, total = await wo_hist.get_history(
+        telegram_id=callback.from_user.id,
+        department_id=department_id,
+        role_type=role_type,
+        page=page,
+    )
+
+    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "admin": "👑 Все"}.get(role_type, "📋 Все")
+    try:
+        await callback.message.edit_text(
+            f"📋 <b>История списаний</b> ({role_label})\n"
+            f"Всего записей: {total}\n\n"
+            "Выберите запись:",
+            parse_mode="HTML",
+            reply_markup=_history_list_kb(entries, page=page, total=total),
+        )
+    except Exception:
+        pass
+    await state.set_state(HistoryStates.browsing)
+
+
+# ── 5. Закрыть историю ──
+
+@router.callback_query(F.data == "woh_close")
+async def hist_close(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    await state.clear()
+    try:
+        await callback.message.edit_text("📋 История закрыта.")
+    except Exception:
+        pass
+
+
+# ── 6. Повторить как есть (отправить копию на проверку) ──
+
+@router.callback_query(HistoryStates.viewing, F.data.startswith("woh_reuse:"))
+async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
+    """Повторить списание из истории как есть → на проверку админам."""
+    user_id = callback.from_user.id
+    if user_id in _sending_lock:
+        await callback.answer("⏳ Уже отправляется…")
+        return
+
+    await callback.answer()
+    try:
+        pk = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+    logger.info("[wo_history] Повтор из истории tg:%d, pk=%d", user_id, pk)
+    entry = await wo_hist.get_history_entry(pk)
+    if not entry:
+        await callback.answer("⚠️ Запись не найдена.", show_alert=True)
+        return
+
+    ctx = await uctx.get_user_context(user_id)
+    if not ctx:
+        await callback.answer("⚠️ Авторизуйтесь заново (/start).", show_alert=True)
+        return
+
+    _sending_lock.add(user_id)
+    try:
+        admin_ids = await admin_uc.get_admin_ids()
+
+        if not admin_ids:
+            # Нет админов — отправляем напрямую
+            try:
+                await callback.message.edit_text("⏳ Отправляем акт напрямую...")
+            except Exception:
+                logger.debug("[wo_history] edit_text fail (reuse no-admin placeholder)")
+            await state.clear()
+
+            result = await wo_uc.finalize_without_admins(
+                store_id=entry.store_id,
+                account_id=entry.account_id,
+                reason=entry.reason,
+                items=entry.items,
+                author_name=ctx.employee_name,
+            )
+            # Сохраняем в историю повторно при успехе
+            if result.startswith("✅") and ctx.department_id:
+                try:
+                    await wo_hist.save_to_history(
+                        telegram_id=user_id,
+                        employee_name=ctx.employee_name,
+                        department_id=ctx.department_id,
+                        store_id=entry.store_id,
+                        store_name=entry.store_name,
+                        account_id=entry.account_id,
+                        account_name=entry.account_name,
+                        reason=entry.reason,
+                        items=entry.items,
+                    )
+                except Exception:
+                    logger.warning("[wo_history] Ошибка сохранения повтора в историю")
+            try:
+                await callback.message.edit_text(result)
+            except Exception:
+                await callback.bot.send_message(callback.message.chat.id, result)
+            return
+
+        # Создаём pending-документ
+        doc = pending.create(
+            author_chat_id=callback.message.chat.id,
+            author_name=ctx.employee_name,
+            store_id=entry.store_id,
+            store_name=entry.store_name,
+            account_id=entry.account_id,
+            account_name=entry.account_name,
+            reason=entry.reason,
+            department_id=ctx.department_id,
+            items=list(entry.items),
+        )
+
+        try:
+            await callback.message.edit_text(
+                "✅ Акт из истории отправлен на проверку администраторам. Ожидайте.")
+        except Exception:
+            pass
+        await state.clear()
+
+        # Рассылаем всем админам
+        text = pending.build_summary_text(doc)
+        kb = pending.admin_keyboard(doc.doc_id)
+        for admin_id in admin_ids:
+            try:
+                msg = await callback.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=kb)
+                doc.admin_msg_ids[admin_id] = msg.message_id
+            except Exception as exc:
+                logger.warning("[wo_history] Не удалось отправить админу %d: %s", admin_id, exc)
+
+        logger.info("[wo_history] Повтор из истории pk=%d → doc %s, %d админов",
+                    pk, doc.doc_id, len(doc.admin_msg_ids))
+    finally:
+        _sending_lock.discard(user_id)
+
+
+# ── 7. Редактировать и отправить ──
+
+@router.callback_query(HistoryStates.viewing, F.data.startswith("woh_edit:"))
+async def hist_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
+    """Загрузить запись из истории для редактирования перед отправкой."""
+    await callback.answer()
+    try:
+        pk = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+    logger.info("[wo_history] Редактирование из истории tg:%d, pk=%d", callback.from_user.id, pk)
+    entry = await wo_hist.get_history_entry(pk)
+    if not entry:
+        await callback.answer("⚠️ Запись не найдена.", show_alert=True)
+        return
+
+    # Сохраняем копию в FSM для редактирования
+    await state.update_data(
+        hist_edit_pk=pk,
+        hist_edit_store_id=entry.store_id,
+        hist_edit_store_name=entry.store_name,
+        hist_edit_account_id=entry.account_id,
+        hist_edit_account_name=entry.account_name,
+        hist_edit_reason=entry.reason,
+        hist_edit_items=list(entry.items),
+    )
+
+    text = wo_hist.build_history_summary(entry)
+    text += "\n\n✏️ <b>Что хотите изменить?</b>"
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_hist_edit_kb())
+    except Exception:
+        pass
+    await state.set_state(HistoryStates.viewing)
+
+
+# ── 7a. Изменить причину ──
+
+@router.callback_query(HistoryStates.viewing, F.data == "wohe_reason")
+async def hist_edit_reason_start(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    try:
+        await callback.message.edit_text("📝 Введите новую причину списания:")
+    except Exception:
+        pass
+    await state.update_data(hist_edit_prompt_id=callback.message.message_id)
+    await state.set_state(HistoryStates.editing_reason)
+
+
+@router.message(HistoryStates.editing_reason)
+async def hist_edit_reason_input(message: Message, state: FSMContext) -> None:
+    reason = (message.text or "").strip()
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    if not reason:
+        return
+    if len(reason) > 500:
+        data = await state.get_data()
+        prompt_id = data.get("hist_edit_prompt_id")
+        if prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "⚠️ Макс. 500 символов. Введите причину покороче:",
+                    chat_id=message.chat.id, message_id=prompt_id)
+            except Exception:
+                pass
+        return
+
+    await state.update_data(hist_edit_reason=reason)
+    logger.info("[wo_history] Новая причина tg:%d: %s", message.from_user.id, reason)
+
+    # Показываем обновлённый summary
+    data = await state.get_data()
+    text = _build_hist_edit_summary(data)
+    text += "\n\n✏️ <b>Что ещё изменить?</b>"
+    prompt_id = data.get("hist_edit_prompt_id")
+    if prompt_id:
+        try:
+            await message.bot.edit_message_text(
+                text, chat_id=message.chat.id, message_id=prompt_id,
+                parse_mode="HTML", reply_markup=_hist_edit_kb())
+        except Exception:
+            msg = await message.answer(text, parse_mode="HTML", reply_markup=_hist_edit_kb())
+            await state.update_data(hist_edit_prompt_id=msg.message_id)
+    else:
+        msg = await message.answer(text, parse_mode="HTML", reply_markup=_hist_edit_kb())
+        await state.update_data(hist_edit_prompt_id=msg.message_id)
+    await state.set_state(HistoryStates.viewing)
+
+
+# ── 7b. Редактировать позиции ──
+
+@router.callback_query(HistoryStates.viewing, F.data == "wohe_items")
+async def hist_edit_items_list(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    data = await state.get_data()
+    items = data.get("hist_edit_items", [])
+    if not items:
+        await callback.answer("Нет позиций для редактирования.", show_alert=True)
+        return
+    try:
+        await callback.message.edit_text(
+            "📦 Выберите позицию для редактирования:",
+            reply_markup=_hist_items_kb(items),
+        )
+    except Exception:
+        pass
+
+
+# ── 7b-1. Выбор позиции ──
+
+@router.callback_query(HistoryStates.viewing, F.data.startswith("wohe_item:"))
+async def hist_edit_item_select(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    try:
+        idx = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+    logger.debug("[wo_history] Выбор позиции tg:%d, idx=%d", callback.from_user.id, idx)
+    data = await state.get_data()
+    items = data.get("hist_edit_items", [])
+    if idx >= len(items):
+        await callback.answer("❌ Позиция не найдена.", show_alert=True)
+        return
+
+    item = items[idx]
+    uq = item.get("user_quantity", item.get("quantity", 0))
+    ul = item.get("unit_label", "шт")
+    try:
+        await callback.message.edit_text(
+            f"📦 Позиция #{idx+1}: <b>{item.get('name', '?')}</b> — {uq} {ul}\n\nЧто сделать?",
+            parse_mode="HTML",
+            reply_markup=_hist_item_action_kb(idx),
+        )
+    except Exception:
+        pass
+    await state.update_data(hist_edit_item_idx=idx)
+
+
+# ── 7b-2. Изменить количество ──
+
+@router.callback_query(HistoryStates.viewing, F.data.startswith("wohe_qty:"))
+async def hist_edit_qty_start(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    try:
+        idx = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+    logger.debug("[wo_history] Редакт. кол-во tg:%d, idx=%d", callback.from_user.id, idx)
+    data = await state.get_data()
+    items = data.get("hist_edit_items", [])
+    if idx >= len(items):
+        return
+    item = items[idx]
+    ul = item.get("unit_label", "шт")
+    try:
+        await callback.message.edit_text(
+            f"🔢 Введите новое количество ({ul}) для «{item.get('name', '?')}»:")
+    except Exception:
+        pass
+    await state.update_data(hist_edit_item_idx=idx, hist_edit_prompt_id=callback.message.message_id)
+    await state.set_state(HistoryStates.editing_quantity)
+
+
+@router.message(HistoryStates.editing_quantity)
+async def hist_edit_qty_input(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").replace(",", ".").strip()
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    data = await state.get_data()
+    prompt_id = data.get("hist_edit_prompt_id")
+
+    try:
+        qty = float(raw)
+    except ValueError:
+        if prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "⚠️ Введите число.", chat_id=message.chat.id, message_id=prompt_id)
+            except Exception:
+                pass
+        return
+    if qty < QTY_MIN or qty > QTY_MAX:
+        if prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    f"⚠️ Допустимо: {QTY_MIN}–{QTY_MAX}.",
+                    chat_id=message.chat.id, message_id=prompt_id)
+            except Exception:
+                pass
+        return
+
+    idx = data.get("hist_edit_item_idx", -1)
+    items = data.get("hist_edit_items", [])
+
+    if idx == -1:
+        # Добавление нового товара
+        product = data.get("hist_edit_new_product")
+        if not product:
+            await state.set_state(HistoryStates.viewing)
+            return
+
+        unit_name = data.get("hist_edit_new_unit_name", "шт")
+        norm = data.get("hist_edit_new_unit_norm", "pcs")
+        unit_label = data.get("hist_edit_new_unit_label", "шт")
+        converted = qty / 1000 if norm in ("kg", "l") else qty
+
+        new_item = {
+            "id": product["id"],
+            "name": product["name"],
+            "main_unit": product.get("main_unit"),
+            "quantity": converted,
+            "user_quantity": qty,
+            "unit_label": unit_label,
+        }
+        items.append(new_item)
+        await state.update_data(hist_edit_items=items)
+        logger.info("[wo_history] Добавлен товар: %s — %s %s", product["name"], qty, unit_label)
+    elif idx < len(items):
+        item = items[idx]
+        unit_name = item.get("unit_label", "шт")
+        norm = wo_uc.normalize_unit(unit_name)
+        converted = qty / 1000 if norm in ("kg", "l") else qty
+
+        item["quantity"] = converted
+        item["user_quantity"] = qty
+        items[idx] = item
+        await state.update_data(hist_edit_items=items)
+        logger.info("[wo_history] Позиция #%d кол-во: %s → %s", idx+1, qty, converted)
+    else:
+        await state.set_state(HistoryStates.viewing)
+        return
+
+    # Вернуться к меню редактирования
+    text = _build_hist_edit_summary(data | {"hist_edit_items": items})
+    text += "\n\n✏️ <b>Что ещё изменить?</b>"
+    if prompt_id:
+        try:
+            await message.bot.edit_message_text(
+                text, chat_id=message.chat.id, message_id=prompt_id,
+                parse_mode="HTML", reply_markup=_hist_edit_kb())
+        except Exception:
+            msg = await message.answer(text, parse_mode="HTML", reply_markup=_hist_edit_kb())
+            await state.update_data(hist_edit_prompt_id=msg.message_id)
+    else:
+        msg = await message.answer(text, parse_mode="HTML", reply_markup=_hist_edit_kb())
+        await state.update_data(hist_edit_prompt_id=msg.message_id)
+    await state.set_state(HistoryStates.viewing)
+
+
+# ── 7b-3. Удалить позицию ──
+
+@router.callback_query(HistoryStates.viewing, F.data.startswith("wohe_del:"))
+async def hist_edit_item_delete(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    try:
+        idx = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+    logger.debug("[wo_history] Удаление позиции tg:%d, idx=%d", callback.from_user.id, idx)
+    data = await state.get_data()
+    items = data.get("hist_edit_items", [])
+    if idx < len(items):
+        removed = items.pop(idx)
+        logger.info("[wo_history] Удалена позиция #%d: %s", idx+1, removed.get("name"))
+        await state.update_data(hist_edit_items=items)
+
+    text = _build_hist_edit_summary(data | {"hist_edit_items": items})
+    text += "\n\n✏️ <b>Что ещё изменить?</b>"
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_hist_edit_kb())
+    except Exception:
+        pass
+
+
+# ── 7c. Добавить товар ──
+
+@router.callback_query(HistoryStates.viewing, F.data == "wohe_add_item")
+async def hist_edit_add_item_start(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    data = await state.get_data()
+    items = data.get("hist_edit_items", [])
+    if len(items) >= MAX_ITEMS:
+        await callback.answer(f"⚠️ Макс. {MAX_ITEMS} позиций.", show_alert=True)
+        return
+    try:
+        await callback.message.edit_text("🔍 Введите часть названия товара:")
+    except Exception:
+        pass
+    await state.update_data(hist_edit_prompt_id=callback.message.message_id)
+    await state.set_state(HistoryStates.editing_items)
+
+
+@router.message(HistoryStates.editing_items)
+async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None:
+    query = (message.text or "").strip()
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    data = await state.get_data()
+    prompt_id = data.get("hist_edit_prompt_id")
+
+    if len(query) < 2:
+        if prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "⚠️ Минимум 2 символа. Введите название товара:",
+                    chat_id=message.chat.id, message_id=prompt_id)
+            except Exception:
+                pass
+        return
+
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+    products = await wo_uc.search_products(query)
+    if not products:
+        if prompt_id:
+            try:
+                await message.bot.edit_message_text(
+                    "🔎 Ничего не найдено. Попробуйте другой запрос:",
+                    chat_id=message.chat.id, message_id=prompt_id)
+            except Exception:
+                pass
+        return
+
+    cache = {p["id"]: p for p in products}
+    await state.update_data(hist_edit_product_cache=cache)
+
+    buttons = [
+        [InlineKeyboardButton(text=p["name"], callback_data=f"wohe_pick:{p['id']}")]
+        for p in products
+    ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="wohe_back")]]
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    if prompt_id:
+        try:
+            await message.bot.edit_message_text(
+                f"Найдено {len(products)}. Выберите товар:",
+                chat_id=message.chat.id, message_id=prompt_id, reply_markup=kb)
+            return
+        except Exception:
+            pass
+    msg = await message.answer(f"Найдено {len(products)}. Выберите товар:", reply_markup=kb)
+    await state.update_data(hist_edit_prompt_id=msg.message_id)
+
+
+@router.callback_query(HistoryStates.editing_items, F.data.startswith("wohe_pick:"))
+async def hist_edit_add_item_pick(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    pid = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    cache = data.get("hist_edit_product_cache", {})
+    product = cache.get(pid)
+    if not product:
+        await callback.answer("❌ Товар не найден.", show_alert=True)
+        return
+
+    unit_name = product.get("unit_name") or await wo_uc.get_unit_name(product.get("main_unit"))
+    norm = product.get("unit_norm") or wo_uc.normalize_unit(unit_name)
+
+    if norm == "kg":
+        prompt = f"📏 Сколько <b>грамм</b> для «{product['name']}»?"
+        unit_label = "г"
+    elif norm == "l":
+        prompt = f"📏 Сколько <b>мл</b> для «{product['name']}»?"
+        unit_label = "мл"
+    else:
+        prompt = f"📏 Сколько <b>{unit_name}</b> для «{product['name']}»?"
+        unit_label = unit_name
+
+    await state.update_data(
+        hist_edit_new_product=product,
+        hist_edit_new_unit_name=unit_name,
+        hist_edit_new_unit_norm=norm,
+        hist_edit_new_unit_label=unit_label,
+    )
+    try:
+        await callback.message.edit_text(prompt, parse_mode="HTML")
+    except Exception:
+        pass
+    await state.update_data(hist_edit_prompt_id=callback.message.message_id)
+    await state.set_state(HistoryStates.editing_quantity)
+    # Помечаем что добавляем новую позицию (не изменяем существующую)
+    await state.update_data(hist_edit_item_idx=-1)
+
+
+# ── Обработка ввода количества при добавлении нового товара ──
+# (используется тот же HistoryStates.editing_quantity handler выше,
+#  но если hist_edit_item_idx == -1, значит добавляем новый)
+
+# Переопределяем handler для editing_quantity чтобы обработать оба случая:
+# Уже зарегистрирован выше, но он проверяет idx.
+# Нужно модифицировать — idx == -1 → добавление нового.
+
+# ── 7d. Назад к меню редактирования ──
+
+@router.callback_query(F.data == "wohe_back")
+async def hist_edit_back(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    data = await state.get_data()
+    text = _build_hist_edit_summary(data)
+    text += "\n\n✏️ <b>Что ещё изменить?</b>"
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_hist_edit_kb())
+    except Exception:
+        pass
+    await state.set_state(HistoryStates.viewing)
+
+
+# ── 8. Отправить отредактированную копию на проверку ──
+
+@router.callback_query(HistoryStates.viewing, F.data == "wohe_send")
+async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
+    """Отправить отредактированную копию из истории на проверку."""
+    user_id = callback.from_user.id
+    if user_id in _sending_lock:
+        await callback.answer("⏳ Уже отправляется…")
+        return
+
+    await callback.answer()
+    data = await state.get_data()
+    items = data.get("hist_edit_items", [])
+    if not items:
+        await callback.answer("⚠️ Добавьте хотя бы одну позицию.", show_alert=True)
+        return
+    non_zero = [i for i in items if i.get("quantity", 0) > 0]
+    if not non_zero:
+        await callback.answer("⚠️ Все позиции с количеством 0.", show_alert=True)
+        return
+
+    ctx = await uctx.get_user_context(user_id)
+    if not ctx:
+        await callback.answer("⚠️ Авторизуйтесь заново (/start).", show_alert=True)
+        return
+
+    _sending_lock.add(user_id)
+    try:
+        store_id = data.get("hist_edit_store_id", "")
+        store_name = data.get("hist_edit_store_name", "—")
+        account_id = data.get("hist_edit_account_id", "")
+        account_name = data.get("hist_edit_account_name", "—")
+        reason = data.get("hist_edit_reason", "")
+
+        admin_ids = await admin_uc.get_admin_ids()
+
+        if not admin_ids:
+            try:
+                await callback.message.edit_text("⏳ Отправляем акт напрямую...")
+            except Exception:
+                pass
+            await state.clear()
+
+            result = await wo_uc.finalize_without_admins(
+                store_id=store_id,
+                account_id=account_id,
+                reason=reason,
+                items=items,
+                author_name=ctx.employee_name,
+            )
+            # Сохраняем в историю при успехе
+            if result.startswith("✅") and ctx.department_id:
+                try:
+                    await wo_hist.save_to_history(
+                        telegram_id=user_id,
+                        employee_name=ctx.employee_name,
+                        department_id=ctx.department_id,
+                        store_id=store_id,
+                        store_name=store_name,
+                        account_id=account_id,
+                        account_name=account_name,
+                        reason=reason,
+                        items=items,
+                    )
+                except Exception:
+                    logger.warning("[wo_history] Ошибка сохранения в историю (edit no-admin)")
+            try:
+                await callback.message.edit_text(result)
+            except Exception:
+                await callback.bot.send_message(callback.message.chat.id, result)
+            return
+
+        doc = pending.create(
+            author_chat_id=callback.message.chat.id,
+            author_name=ctx.employee_name,
+            store_id=store_id,
+            store_name=store_name,
+            account_id=account_id,
+            account_name=account_name,
+            reason=reason,
+            department_id=ctx.department_id,
+            items=items,
+        )
+
+        try:
+            await callback.message.edit_text(
+                "✅ Отредактированный акт отправлен на проверку. Ожидайте.")
+        except Exception:
+            pass
+        await state.clear()
+
+        text = pending.build_summary_text(doc)
+        kb = pending.admin_keyboard(doc.doc_id)
+        for admin_id in admin_ids:
+            try:
+                msg = await callback.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=kb)
+                doc.admin_msg_ids[admin_id] = msg.message_id
+            except Exception as exc:
+                logger.warning("[wo_history] Не удалось отправить админу %d: %s", admin_id, exc)
+
+        logger.info("[wo_history] Отредакт. повтор → doc %s, %d админов",
+                    doc.doc_id, len(doc.admin_msg_ids))
+    finally:
+        _sending_lock.discard(user_id)
+
+
+# ── Хелпер: summary для редактирования копии из истории ──
+
+def _build_hist_edit_summary(data: dict) -> str:
+    """Текст summary при редактировании копии из истории."""
+    store = data.get("hist_edit_store_name", "—")
+    account = data.get("hist_edit_account_name", "—")
+    reason = data.get("hist_edit_reason") or "—"
+    items = data.get("hist_edit_items", [])
+
+    text = (
+        f"📋 <b>Копия из истории (редактирование)</b>\n"
+        f"🏬 <b>Склад:</b> {store}\n"
+        f"📂 <b>Счёт:</b> {account}\n"
+        f"📝 <b>Причина:</b> {reason}\n"
+    )
+    if items:
+        text += "\n<b>Позиции:</b>"
+        for i, item in enumerate(items, 1):
+            uq = item.get("user_quantity", item.get("quantity", 0))
+            unit_label = item.get("unit_label", "шт")
+            text += f"\n  {i}. {item.get('name', '?')} — {uq} {unit_label}"
+    return text
 
 
 # ══════════════════════════════════════════════════════

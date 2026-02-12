@@ -17,10 +17,9 @@ Use-case: синхронизация остатков по складам → Po
 (может быть < 0 — пересорт,  > 0 — обычный остаток).
 """
 
+import asyncio
 import logging
 import time
-import uuid as _uuid
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import delete as sa_delete, select
@@ -28,6 +27,7 @@ from sqlalchemy import delete as sa_delete, select
 from adapters import iiko_api
 from db.engine import async_session_factory
 from db.models import Product, Store, StockBalance, SyncLog
+from use_cases._helpers import safe_float, safe_uuid, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -39,40 +39,28 @@ LABEL = "StockBalance"
 # Helpers
 # ═══════════════════════════════════════════════════════
 
-def _safe_float(v: Any) -> float | None:
-    if v is None:
-        return None
-    try:
-        return float(v)
-    except (ValueError, TypeError):
-        return None
-
-
-def _safe_uuid(v: Any) -> _uuid.UUID | None:
-    if v is None:
-        return None
-    try:
-        return _uuid.UUID(str(v))
-    except (ValueError, AttributeError):
-        return None
-
-
-async def _load_name_maps(session) -> tuple[dict, dict]:
+async def _load_name_maps() -> tuple[dict, dict]:
     """
     Загрузить справочники store_id→name и product_id→name из БД.
-    Один round-trip на каждый справочник.
+    Два запроса параллельно через asyncio.gather.
     """
     t0 = time.monotonic()
 
-    store_rows = await session.execute(
-        select(Store.id, Store.name).where(Store.deleted == False)  # noqa: E712
-    )
-    store_map = {row.id: row.name for row in store_rows.all()}
+    async def _stores():
+        async with async_session_factory() as s:
+            rows = await s.execute(
+                select(Store.id, Store.name).where(Store.deleted == False)  # noqa: E712
+            )
+            return {r.id: r.name for r in rows.all()}
 
-    product_rows = await session.execute(
-        select(Product.id, Product.name).where(Product.deleted == False)  # noqa: E712
-    )
-    product_map = {row.id: row.name for row in product_rows.all()}
+    async def _products():
+        async with async_session_factory() as s:
+            rows = await s.execute(
+                select(Product.id, Product.name).where(Product.deleted == False)  # noqa: E712
+            )
+            return {r.id: r.name for r in rows.all()}
+
+    store_map, product_map = await asyncio.gather(_stores(), _products())
 
     logger.info(
         "[%s] Загружены справочники: %d складов, %d товаров за %.1f сек",
@@ -117,23 +105,15 @@ async def sync_stock_balances(
 
     Returns: количество записанных строк.
     """
-    started = datetime.utcnow()
+    started = utcnow()
     t0 = time.monotonic()
     logger.info("[%s] Начинаю синхронизацию остатков (timestamp=%s)...", LABEL, timestamp or "now")
 
     try:
         # 1. Параллельно: API + справочники из БД (независимые операции)
-        import asyncio as _aio
-
-        async def _fetch_api():
-            return await iiko_api.fetch_stock_balances(timestamp=timestamp)
-
-        async def _fetch_names():
-            async with async_session_factory() as s:
-                return await _load_name_maps(s)
-
-        items, (store_map, product_map) = await _aio.gather(
-            _fetch_api(), _fetch_names(),
+        items, (store_map, product_map) = await asyncio.gather(
+            iiko_api.fetch_stock_balances(timestamp=timestamp),
+            _load_name_maps(),
         )
         t_api = time.monotonic() - t0
         logger.info("[%s] API + справочники: %d строк за %.1f сек", LABEL, len(items), t_api)
@@ -142,19 +122,19 @@ async def sync_stock_balances(
         t1 = time.monotonic()
         async with async_session_factory() as session:
 
-            now = datetime.utcnow()
+            now = utcnow()
             rows: list[dict] = []
             skipped = 0
             no_name = 0
 
             for item in items:
-                amount = _safe_float(item.get("amount"))
+                amount = safe_float(item.get("amount"))
                 if amount is None or amount == 0:
                     skipped += 1
                     continue
 
-                store_id = _safe_uuid(item.get("store"))
-                product_id = _safe_uuid(item.get("product"))
+                store_id = safe_uuid(item.get("store"))
+                product_id = safe_uuid(item.get("product"))
                 if not store_id or not product_id:
                     skipped += 1
                     continue
@@ -173,7 +153,7 @@ async def sync_stock_balances(
                     "product_id": product_id,
                     "product_name": product_name,
                     "amount": amount,
-                    "money": _safe_float(item.get("sum")),
+                    "money": safe_float(item.get("sum")),
                     "synced_at": now,
                     "raw_json": item,
                 })
@@ -195,7 +175,7 @@ async def sync_stock_balances(
             session.add(SyncLog(
                 entity_type=LABEL,
                 started_at=started,
-                finished_at=datetime.utcnow(),
+                finished_at=utcnow(),
                 status="success",
                 records_synced=count,
                 triggered_by=triggered_by,
@@ -216,7 +196,7 @@ async def sync_stock_balances(
                 session.add(SyncLog(
                     entity_type=LABEL,
                     started_at=started,
-                    finished_at=datetime.utcnow(),
+                    finished_at=utcnow(),
                     status="error",
                     error_message=str(exc)[:2000],
                     triggered_by=triggered_by,

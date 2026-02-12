@@ -6,7 +6,7 @@ raw_json — полный оригинальный ответ API (страхо�
 ID в FinTablo — integer (не UUID).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column,
@@ -22,10 +22,14 @@ from sqlalchemy.dialects.postgresql import JSONB
 from db.models import Base
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class FTSyncMixin:
     """Общие поля для всех таблиц FinTablo."""
 
-    synced_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow,
+    synced_at = Column(DateTime, default=_utcnow, onupdate=_utcnow,
                        nullable=False, comment="Время последней синхронизации")
     raw_json = Column(JSONB, nullable=True,
                       comment="Полный JSON ответа из FinTablo (для дебага)")

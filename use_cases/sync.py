@@ -11,7 +11,6 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime
 from typing import Any, Callable, Coroutine
 
 from sqlalchemy import delete as sa_delete
@@ -28,44 +27,23 @@ from db.models import (
     Entity,
     GroupDepartment,
     Product,
+    ProductGroup,
     Store,
     Supplier,
     SyncLog,
 )
+from use_cases._helpers import safe_uuid, safe_bool, safe_decimal, utcnow
 
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 500
 
-RowMapper = Callable[[dict, datetime], dict | None]
+RowMapper = Callable[[dict, Any], dict | None]
 
-
-# ═══════════════════════════════════════════════════════
-# Helpers
-# ═══════════════════════════════════════════════════════
-
-def _safe_uuid(v: Any) -> uuid.UUID | None:
-    if v is None:
-        return None
-    try:
-        return uuid.UUID(str(v))
-    except (ValueError, AttributeError):
-        return None
-
-
-def _safe_bool(v: Any) -> bool:
-    if isinstance(v, bool):
-        return v
-    return str(v).lower() == "true" if isinstance(v, str) else False
-
-
-def _safe_decimal(v: Any):
-    if v is None:
-        return None
-    try:
-        return float(v)
-    except (ValueError, TypeError):
-        return None
+# Backward-compatible aliases (used by sync_fintablo.py etc.)
+_safe_uuid = safe_uuid
+_safe_bool = safe_bool
+_safe_decimal = safe_decimal
 
 
 # ═══════════════════════════════════════════════════════
@@ -131,14 +109,35 @@ async def _mirror_delete(
     DELETE FROM table WHERE id_column NOT IN (valid_ids)
     [AND extra_filter_col = val ...]
 
-    Безопасность: если valid_ids пуст (API вернул 0) — пропускаем,
-    чтобы не удалить всё при сбое API.
+    Безопасность:
+      - если valid_ids пуст (API вернул 0) — пропускаем
+      - если удалить пришлось бы >50% записей — это аномалия, пропускаем
     """
     if not valid_ids:
         logger.warning("[%s] Mirror-delete пропущен: пустой набор ID из API", label)
         return 0
 
+    # Подсчёт текущих записей для sanity-check
+    from sqlalchemy import func as sa_func, select as sa_select
     col = table.c[id_column]
+
+    count_stmt = sa_select(sa_func.count()).select_from(table)
+    if extra_filters:
+        for col_name, val in extra_filters.items():
+            count_stmt = count_stmt.where(table.c[col_name] == val)
+    total_in_db = (await session.execute(count_stmt)).scalar() or 0
+
+    to_stay = len(valid_ids)
+    to_delete = max(0, total_in_db - to_stay)
+
+    if total_in_db > 0 and to_delete > total_in_db * 0.5:
+        logger.error(
+            "[%s] Mirror-delete ЗАБЛОКИРОВАН: удалили бы %d из %d (>50%%). "
+            "Возможен сбой API — пропускаем.",
+            label, to_delete, total_in_db,
+        )
+        return 0
+
     stmt = sa_delete(table).where(col.notin_(list(valid_ids)))
     if extra_filters:
         for col_name, val in extra_filters.items():
@@ -174,7 +173,7 @@ async def _run_sync(
       3. _batch_upsert()       — batch INSERT ON CONFLICT
       4. SyncLog               — в той же сессии (0 лишних round-trip)
     """
-    started = datetime.utcnow()
+    started = utcnow()
     t0 = time.monotonic()
     logger.info("[%s] Начинаю синхронизацию...", label)
 
@@ -183,7 +182,7 @@ async def _run_sync(
         t_api = time.monotonic() - t0
         logger.info("[%s] API: %d записей за %.1f сек", label, len(items), t_api)
 
-        now = datetime.utcnow()
+        now = utcnow()
         rows = [r for item in items if (r := mapper(item, now)) is not None]
         skipped = len(items) - len(rows)
         if skipped:
@@ -201,7 +200,7 @@ async def _run_sync(
             session.add(SyncLog(
                 entity_type=label,
                 started_at=started,
-                finished_at=datetime.utcnow(),
+                finished_at=utcnow(),
                 status="success",
                 records_synced=count,
                 triggered_by=triggered_by,
@@ -219,7 +218,7 @@ async def _run_sync(
                 session.add(SyncLog(
                     entity_type=label,
                     started_at=started,
-                    finished_at=datetime.utcnow(),
+                    finished_at=utcnow(),
                     status="error",
                     error_message=str(exc)[:2000],
                     triggered_by=triggered_by,
@@ -236,26 +235,26 @@ async def _run_sync(
 
 def _entity_mapper(root_type: str) -> RowMapper:
     """Фабрика маппера для конкретного rootType."""
-    def _map(item: dict, now: datetime) -> dict | None:
-        uid = _safe_uuid(item.get("id"))
+    def _map(item: dict, now) -> dict | None:
+        uid = safe_uuid(item.get("id"))
         if not uid:
             return None
         return {
             "id": uid, "root_type": root_type,
             "name": item.get("name"), "code": item.get("code"),
-            "deleted": _safe_bool(item.get("deleted", False)),
+            "deleted": safe_bool(item.get("deleted", False)),
             "synced_at": now, "raw_json": item,
         }
     return _map
 
 
-def _map_supplier(item: dict, now: datetime) -> dict | None:
-    uid = _safe_uuid(item.get("id"))
+def _map_supplier(item: dict, now) -> dict | None:
+    uid = safe_uuid(item.get("id"))
     if not uid:
         return None
     return {
         "id": uid, "name": item.get("name"), "code": item.get("code"),
-        "deleted": _safe_bool(item.get("deleted", False)),
+        "deleted": safe_bool(item.get("deleted", False)),
         "card_number": item.get("cardNumber"),
         "taxpayer_id_number": item.get("taxpayerIdNumber"),
         "snils": item.get("snils"),
@@ -263,42 +262,62 @@ def _map_supplier(item: dict, now: datetime) -> dict | None:
     }
 
 
-def _map_corporate(item: dict, now: datetime) -> dict | None:
-    uid = _safe_uuid(item.get("id"))
+def _map_corporate(item: dict, now) -> dict | None:
+    uid = safe_uuid(item.get("id"))
     if not uid:
         return None
     return {
-        "id": uid, "parent_id": _safe_uuid(item.get("parentId")),
+        "id": uid, "parent_id": safe_uuid(item.get("parentId")),
         "name": item.get("name"), "code": item.get("code"),
         "department_type": item.get("type"),
-        "deleted": _safe_bool(item.get("deleted", False)),
+        "deleted": safe_bool(item.get("deleted", False)),
         "synced_at": now, "raw_json": item,
     }
 
 
-def _map_product(item: dict, now: datetime) -> dict | None:
-    uid = _safe_uuid(item.get("id"))
+def _map_product(item: dict, now) -> dict | None:
+    uid = safe_uuid(item.get("id"))
     if not uid:
         return None
     return {
-        "id": uid, "parent_id": _safe_uuid(item.get("parent")),
+        "id": uid, "parent_id": safe_uuid(item.get("parent")),
         "name": item.get("name"), "code": item.get("code"),
         "num": item.get("num"), "description": item.get("description"),
         "product_type": item.get("type"),
-        "deleted": _safe_bool(item.get("deleted", False)),
-        "main_unit": _safe_uuid(item.get("mainUnit")),
-        "category": _safe_uuid(item.get("category")),
-        "accounting_category": _safe_uuid(item.get("accountingCategory")),
-        "tax_category": _safe_uuid(item.get("taxCategory")),
-        "default_sale_price": _safe_decimal(item.get("defaultSalePrice")),
-        "unit_weight": _safe_decimal(item.get("unitWeight")),
-        "unit_capacity": _safe_decimal(item.get("unitCapacity")),
+        "deleted": safe_bool(item.get("deleted", False)),
+        "main_unit": safe_uuid(item.get("mainUnit")),
+        "category": safe_uuid(item.get("category")),
+        "accounting_category": safe_uuid(item.get("accountingCategory")),
+        "tax_category": safe_uuid(item.get("taxCategory")),
+        "default_sale_price": safe_decimal(item.get("defaultSalePrice")),
+        "unit_weight": safe_decimal(item.get("unitWeight")),
+        "unit_capacity": safe_decimal(item.get("unitCapacity")),
         "synced_at": now, "raw_json": item,
     }
 
 
-def _map_employee(item: dict, now: datetime) -> dict | None:
-    uid = _safe_uuid(item.get("id"))
+def _map_product_group(item: dict, now) -> dict | None:
+    """Маппинг номенклатурной группы из iiko API → БД."""
+    uid = safe_uuid(item.get("id"))
+    if not uid:
+        return None
+    return {
+        "id": uid,
+        "parent_id": safe_uuid(item.get("parent")),
+        "name": item.get("name"),
+        "code": item.get("code"),
+        "num": item.get("num"),
+        "description": item.get("description"),
+        "deleted": safe_bool(item.get("deleted", False)),
+        "category": safe_uuid(item.get("category")),
+        "accounting_category": safe_uuid(item.get("accountingCategory")),
+        "tax_category": safe_uuid(item.get("taxCategory")),
+        "synced_at": now, "raw_json": item,
+    }
+
+
+def _map_employee(item: dict, now) -> dict | None:
+    uid = safe_uuid(item.get("id"))
     if not uid:
         return None
     parts = [item[f] for f in ("lastName", "firstName", "middleName") if item.get(f)]
@@ -306,24 +325,24 @@ def _map_employee(item: dict, now: datetime) -> dict | None:
         "id": uid,
         "name": " ".join(parts) if parts else item.get("name"),
         "code": item.get("code"),
-        "deleted": _safe_bool(item.get("deleted", False)),
+        "deleted": safe_bool(item.get("deleted", False)),
         "first_name": item.get("firstName"),
         "middle_name": item.get("middleName"),
         "last_name": item.get("lastName"),
-        "role_id": _safe_uuid(item.get("mainRoleId")),
+        "role_id": safe_uuid(item.get("mainRoleId")),
         "synced_at": now, "raw_json": item,
     }
 
 
-def _map_role(item: dict, now: datetime) -> dict | None:
-    uid = _safe_uuid(item.get("id"))
+def _map_role(item: dict, now) -> dict | None:
+    uid = safe_uuid(item.get("id"))
     if not uid:
         return None
     return {
         "id": uid, "name": item.get("name"), "code": item.get("code"),
-        "deleted": _safe_bool(item.get("deleted", False)),
-        "payment_per_hour": _safe_decimal(item.get("paymentPerHour")),
-        "steady_salary": _safe_decimal(item.get("steadySalary")),
+        "deleted": safe_bool(item.get("deleted", False)),
+        "payment_per_hour": safe_decimal(item.get("paymentPerHour")),
+        "steady_salary": safe_decimal(item.get("steadySalary")),
         "schedule_type": item.get("scheduleType"),
         "synced_at": now, "raw_json": item,
     }
@@ -347,7 +366,7 @@ async def sync_entity_list(root_type: str, triggered_by: str | None = None) -> i
 async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
     """Fetch all 16 rootTypes in parallel, upsert in one transaction."""
     t0 = time.monotonic()
-    started = datetime.utcnow()
+    started = utcnow()
 
     # 1) Параллельно забираем все 16 типов из API
     logger.info("=== Справочники: загружаю %d типов параллельно ===", len(ENTITY_ROOT_TYPES))
@@ -360,7 +379,7 @@ async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
     logger.info("=== API: все %d типов за %.1f сек ===", len(ENTITY_ROOT_TYPES), t_api)
 
     # 2) Маппим все в строки для БД
-    now = datetime.utcnow()
+    now = utcnow()
     results: dict[str, int] = {}
     all_rows: list[dict] = []
 
@@ -388,7 +407,7 @@ async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
             raw = fetched[rt]
             if isinstance(raw, BaseException):
                 continue
-            rt_ids = {_safe_uuid(item.get("id")) for item in raw} - {None}
+            rt_ids = {safe_uuid(item.get("id")) for item in raw} - {None}
             if rt_ids:
                 total_deleted += await _mirror_delete(
                     Entity.__table__, "id", rt_ids,
@@ -400,7 +419,7 @@ async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
             session.add(SyncLog(
                 entity_type=rt,
                 started_at=started,
-                finished_at=datetime.utcnow(),
+                finished_at=utcnow(),
                 status="success" if cnt >= 0 else "error",
                 records_synced=cnt if cnt >= 0 else None,
                 error_message=str(fetched[rt])[:2000] if cnt < 0 else None,
@@ -445,9 +464,16 @@ async def sync_groups(triggered_by: str | None = None) -> int:
     )
 
 
+async def sync_product_groups(triggered_by: str | None = None) -> int:
+    return await _run_sync(
+        "ProductGroup", iiko_api.fetch_product_groups(),
+        ProductGroup.__table__, _map_product_group, ["id"], triggered_by,
+    )
+
+
 async def sync_products(triggered_by: str | None = None) -> int:
     return await _run_sync(
-        "Product", iiko_api.fetch_products(include_deleted=True),
+        "Product", iiko_api.fetch_products(include_deleted=False),
         Product.__table__, _map_product, ["id"], triggered_by,
     )
 
@@ -464,3 +490,122 @@ async def sync_employee_roles(triggered_by: str | None = None) -> int:
         "EmployeeRole", iiko_api.fetch_employee_roles(),
         EmployeeRole.__table__, _map_role, ["id"], triggered_by,
     )
+
+
+# ═══════════════════════════════════════════════════════
+# Оркестрация для handler'ов (бизнес-логика отчётов)
+# ═══════════════════════════════════════════════════════
+
+async def sync_all_iiko_with_report(
+    triggered_by: str,
+) -> list[str]:
+    """
+    Полная синхронизация iiko — справочники + остальные параллельно.
+    Возвращает список строк отчёта (для отображения в Telegram).
+    """
+    report: list[str] = []
+
+    # 1) Справочники (уже внутри параллельные)
+    try:
+        results = await sync_all_entities(triggered_by=triggered_by)
+        total = sum(v for v in results.values() if v >= 0)
+        errors = sum(1 for v in results.values() if v < 0)
+        report.append(f"📋 Справочники: {total} записей, ошибок: {errors}")
+    except Exception:
+        report.append("📋 Справочники: ❌ ошибка")
+
+    # 2) Остальные 8 — параллельно через asyncio.gather
+    sync_tasks = [
+        ("🏢 Подразделения", sync_departments),
+        ("🏪 Склады", sync_stores),
+        ("👥 Группы", sync_groups),
+        ("📁 Ном.группы", sync_product_groups),
+        ("📦 Номенклатура", sync_products),
+        ("🚚 Поставщики", sync_suppliers),
+        ("👷 Сотрудники", sync_employees),
+        ("🎭 Должности", sync_employee_roles),
+    ]
+    coros = [func(triggered_by=triggered_by) for _, func in sync_tasks]
+    results_list = await asyncio.gather(*coros, return_exceptions=True)
+
+    for (label, _), result in zip(sync_tasks, results_list):
+        if isinstance(result, BaseException):
+            report.append(f"{label}: ❌ {result}")
+        else:
+            report.append(f"{label}: ✅ {result} записей")
+
+    return report
+
+
+async def sync_everything_with_report(
+    triggered_by: str,
+) -> tuple[list[str], list[str]]:
+    """
+    Полная синхронизация iiko + FinTablo параллельно.
+    Возвращает (iiko_lines, ft_lines) для отображения.
+    """
+    from use_cases import sync_fintablo as ft_uc
+
+    async def _iiko_rest():
+        tasks = [
+            sync_departments, sync_stores, sync_groups,
+            sync_product_groups, sync_products, sync_suppliers,
+            sync_employees, sync_employee_roles,
+        ]
+        return await asyncio.gather(
+            *[f(triggered_by=triggered_by) for f in tasks],
+            return_exceptions=True,
+        )
+
+    iiko_entities_r, iiko_rest_r, ft_r = await asyncio.gather(
+        sync_all_entities(triggered_by=triggered_by),
+        _iiko_rest(),
+        ft_uc.sync_all_fintablo(triggered_by=triggered_by),
+        return_exceptions=True,
+    )
+
+    # ── iiko lines ──
+    iiko_lines: list[str] = []
+    if isinstance(iiko_entities_r, BaseException):
+        iiko_lines.append("  📋 Справочники: ❌")
+    else:
+        total = sum(v for v in iiko_entities_r.values() if v >= 0)
+        iiko_lines.append(f"  📋 Справочники: ✅ {total}")
+
+    iiko_labels = [
+        "🏢 Подразд.", "🏪 Склады", "👥 Группы", "📁 Ном.группы",
+        "📦 Номенкл.", "🚚 Поставщ.", "👷 Сотрудн.", "🎭 Должности",
+    ]
+    if isinstance(iiko_rest_r, BaseException):
+        for lb in iiko_labels:
+            iiko_lines.append(f"  {lb}: ❌")
+    else:
+        for lb, r in zip(iiko_labels, iiko_rest_r):
+            iiko_lines.append(f"  {lb}: {'✅ ' + str(r) if isinstance(r, int) else '❌'}")
+
+    # ── FinTablo lines ──
+    ft_lines: list[str] = []
+    if isinstance(ft_r, BaseException):
+        ft_lines.append("  ❌ Ошибка")
+    else:
+        for label, result in ft_r:
+            if isinstance(result, int):
+                ft_lines.append(f"  {label}: ✅ {result}")
+            else:
+                ft_lines.append(f"  {label}: {result}")
+
+    return iiko_lines, ft_lines
+
+
+async def bg_sync_for_documents(triggered_by: str) -> None:
+    """Фоновая синхронизация номенклатуры и справочников при открытии раздела Документы."""
+    logger.info("[bg] Фоновая синхронизация старт (%s)", triggered_by)
+    try:
+        await asyncio.gather(
+            sync_products(triggered_by=triggered_by),
+            sync_all_entities(triggered_by=triggered_by),
+            return_exceptions=True,
+        )
+        logger.info("[documents] Фоновая синхронизация номенклатуры + справочников завершена (%s)", triggered_by)
+    except Exception:
+        logger.warning("[documents] Ошибка фоновой синхронизации", exc_info=True)

@@ -32,15 +32,24 @@ class UserContext:
 
 
 # ─────────────────────────────────────────────────────
-# In-memory cache
+# In-memory cache with TTL
 # ─────────────────────────────────────────────────────
 
-_cache: dict[int, UserContext] = {}
+_CACHE_TTL: float = 30 * 60  # 30 минут
+
+_cache: dict[int, tuple[UserContext, float]] = {}   # {tg_id: (ctx, timestamp)}
 
 
 def get_cached(telegram_id: int) -> UserContext | None:
-    """Получить контекст из кеша (без обращения в БД)."""
-    return _cache.get(telegram_id)
+    """Получить контекст из кеша (без обращения в БД). Уважает TTL."""
+    entry = _cache.get(telegram_id)
+    if entry is None:
+        return None
+    ctx, ts = entry
+    if time.monotonic() - ts > _CACHE_TTL:
+        _cache.pop(telegram_id, None)
+        return None
+    return ctx
 
 
 async def get_user_context(telegram_id: int) -> UserContext | None:
@@ -50,7 +59,7 @@ async def get_user_context(telegram_id: int) -> UserContext | None:
     Возвращает None если пользователь не авторизован.
     """
     # 1) Кеш-хит
-    ctx = _cache.get(telegram_id)
+    ctx = get_cached(telegram_id)
     if ctx is not None:
         return ctx
 
@@ -87,7 +96,7 @@ async def get_user_context(telegram_id: int) -> UserContext | None:
         department_name=dept_name,
         role_name=role_name,
     )
-    _cache[telegram_id] = ctx
+    _cache[telegram_id] = (ctx, time.monotonic())
     logger.info("[user_ctx] Загружен из БД: tg:%d → «%s», ресторан «%s» за %.2f сек",
                 telegram_id, ctx.employee_name, ctx.department_name, time.monotonic() - t0)
     return ctx
@@ -111,7 +120,7 @@ def set_context(
         department_name=department_name,
         role_name=role_name,
     )
-    _cache[telegram_id] = ctx
+    _cache[telegram_id] = (ctx, time.monotonic())
     logger.info("[user_ctx] Кеш обновлён: tg:%d → «%s», ресторан «%s»",
                 telegram_id, employee_name, department_name)
     return ctx
@@ -119,10 +128,12 @@ def set_context(
 
 def update_department(telegram_id: int, department_id: str, department_name: str) -> None:
     """Обновить только ресторан в кеше (при смене ресторана)."""
-    ctx = _cache.get(telegram_id)
-    if ctx:
+    entry = _cache.get(telegram_id)
+    if entry:
+        ctx, _ = entry
         ctx.department_id = department_id
         ctx.department_name = department_name
+        _cache[telegram_id] = (ctx, time.monotonic())  # обновляем TTL
         logger.info("[user_ctx] Ресторан обновлён в кеше: tg:%d → «%s»",
                     telegram_id, department_name)
     else:

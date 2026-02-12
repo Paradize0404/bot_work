@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 logs/
+pizzayolo-ocr-3898e5dddcff.json
 
 # IDE
 .idea/

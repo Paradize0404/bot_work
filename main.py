@@ -7,6 +7,7 @@
 
 import os
 import sys
+import signal
 import asyncio
 import logging
 
@@ -32,12 +33,16 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.writeoff_handlers import router as writeoff_router
     from bot.admin_handlers import router as admin_router
     from bot.min_stock_handlers import router as min_stock_router
+    from bot.invoice_handlers import router as invoice_router
+    from bot.request_handlers import router as request_router
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
     dp.include_router(admin_router)
     dp.include_router(writeoff_router)
     dp.include_router(min_stock_router)
+    dp.include_router(invoice_router)
+    dp.include_router(request_router)
     dp.include_router(router)
     return bot, dp
 
@@ -55,6 +60,8 @@ async def _cleanup() -> None:
     from adapters.iiko_api import close_client as close_iiko
     from adapters.fintablo_api import close_client as close_ft
     from db.engine import dispose_engine
+    from bot.middleware import cancel_tracked_tasks
+    await cancel_tracked_tasks()
     await close_iiko()
     await close_ft()
     await dispose_engine()
@@ -66,13 +73,13 @@ async def on_startup(bot: Bot) -> None:
     # Проверка БД в том же event loop, где работает aiohttp
     await _check_db()
 
-    from config import WEBHOOK_URL, WEBHOOK_PATH
+    from config import WEBHOOK_URL, WEBHOOK_PATH, WEBHOOK_SECRET
     url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
     logger.info("Setting webhook → %s", url)
     if not url.startswith("https://"):
         raise RuntimeError(f"Webhook URL must start with https://, got: {url}")
-    await bot.set_webhook(url, drop_pending_updates=True)
-    logger.info("Webhook set OK")
+    await bot.set_webhook(url, drop_pending_updates=True, secret_token=WEBHOOK_SECRET)
+    logger.info("Webhook set OK (with secret_token)")
 
 
 async def on_shutdown(bot: Bot) -> None:
@@ -84,14 +91,22 @@ async def on_shutdown(bot: Bot) -> None:
 
 
 def run_webhook() -> None:
-    from config import WEBHOOK_PATH, WEBAPP_HOST, WEBAPP_PORT
+    from config import WEBHOOK_PATH, WEBAPP_HOST, WEBAPP_PORT, WEBHOOK_SECRET
 
     bot, dp = _build_bot_and_dp()
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
     app = web.Application()
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+
+    # Health endpoint — Railway / load-balancer проверяет доступность
+    async def health(_request: web.Request) -> web.Response:
+        return web.Response(text="ok")
+    app.router.add_get("/health", health)
+
+    SimpleRequestHandler(
+        dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET,
+    ).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
 
     logger.info("Starting webhook server on %s:%s", WEBAPP_HOST, WEBAPP_PORT)
@@ -107,8 +122,25 @@ async def run_polling() -> None:
     await bot.delete_webhook(drop_pending_updates=True)
     logger.info("Webhook removed, starting polling...")
 
+    # Graceful shutdown по SIGTERM (Docker / Railway)
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
+
+    def _handle_sigterm() -> None:
+        logger.info("SIGTERM received, stopping polling...")
+        stop_event.set()
+
+    if sys.platform != "win32":
+        loop.add_signal_handler(signal.SIGTERM, _handle_sigterm)
+
     try:
-        await dp.start_polling(bot)
+        polling_task = asyncio.create_task(dp.start_polling(bot))
+        stop_task = asyncio.create_task(stop_event.wait())
+        done, pending = await asyncio.wait(
+            {polling_task, stop_task}, return_when=asyncio.FIRST_COMPLETED,
+        )
+        for t in pending:
+            t.cancel()
     finally:
         await _cleanup()
 

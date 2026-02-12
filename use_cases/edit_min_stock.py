@@ -1,36 +1,46 @@
 """
-Use-case: редактирование минимальных остатков продуктов в iiko
-через Telegram-бот.
+Use-case: редактирование минимальных остатков через Telegram-бот.
 
-Логика:
+Флоу:
   1. Пользователь ищет товар по подстроке названия.
   2. Выбирает товар из inline-кнопок.
   3. Вводит новый минимальный остаток.
-  4. Бот находит все склады department пользователя,
-     точечно обновляет storeBalanceLevels (остальные записи не трогает),
-     отправляет в iiko API и обновляет raw_json в локальной БД.
+  4. Бот записывает в Google Таблицу + min_stock_level (БД).
 
 Зависимости:
-  - iiko_product       — raw_json содержит storeBalanceLevels
-  - iiko_store         — склады подразделения (parent_id → department)
-  - adapters/iiko_api  — update_product() для записи в iiko
+  - iiko_product           — поиск товаров
+  - adapters/google_sheets — запись в Google Таблицу
+  - min_stock_level        — кэш в PostgreSQL
 """
 
-import asyncio
 import logging
 import time
+from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import select, func, update
+from sqlalchemy import select, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.engine import async_session_factory
-from db.models import Product, Store
+from db.models import Product, Department, MinStockLevel
 
-from adapters import iiko_api
+from adapters import google_sheets as gsheet
+from bot._utils import escape_md as _escape_md
 
 logger = logging.getLogger(__name__)
 
 LABEL = "EditMinStock"
+
+
+# ═══════════════════════════════════════════════════════
+# Dataclasses для результатов
+# ═══════════════════════════════════════════════════════
+
+@dataclass(slots=True)
+class EditMinResult:
+    """Результат apply_min_level."""
+    success: bool
+    text: str   # Markdown-форматированный текст результата
 
 
 # ═══════════════════════════════════════════════════════
@@ -39,8 +49,8 @@ LABEL = "EditMinStock"
 
 async def search_products_for_edit(query: str, limit: int = 15) -> list[dict]:
     """
-    Поиск товаров по подстроке названия (аналогично акту списания).
-    Только GOODS и PREPARED, не удалённые.
+    Поиск товаров по подстроке названия.
+    Только GOODS, не удалённые.
     Возвращает [{id, name, product_type}, ...].
     """
     pattern = query.strip().lower()
@@ -54,7 +64,7 @@ async def search_products_for_edit(query: str, limit: int = 15) -> list[dict]:
         stmt = (
             select(Product.id, Product.name, Product.product_type)
             .where(func.lower(Product.name).contains(pattern))
-            .where(Product.product_type.in_(["GOODS", "PREPARED"]))
+            .where(Product.product_type == "GOODS")
             .where(Product.deleted == False)  # noqa: E712
             .order_by(Product.name)
             .limit(limit)
@@ -73,124 +83,149 @@ async def search_products_for_edit(query: str, limit: int = 15) -> list[dict]:
 
 
 # ═══════════════════════════════════════════════════════
-# 2. Обновление мин. остатка по всем складам department
+# 2. Обновление мин. остатка → Google Таблица + БД
 # ═══════════════════════════════════════════════════════
 
 async def update_min_level(
     product_id: str,
     department_id: str,
     new_min: float,
+    new_max: float = 0.0,
 ) -> str:
     """
-    Обновить minBalanceLevel для продукта на ВСЕХ складах department.
+    Записать новый minLevel в Google Таблицу и min_stock_level (БД).
 
     Шаги:
-      1. Параллельно: raw_json продукта + ID складов department из БД.
-      2. В storeBalanceLevels точечно обновить/добавить записи для
-         каждого склада department.  Записи других department — без изменений.
-      3. Отправить полный storeBalanceLevels в iiko API.
-      4. Обновить raw_json в локальной БД.
+      1. Получить имя товара и ресторана из БД.
+      2. Получить текущий min из min_stock_level (для отображения «было»).
+      3. Обновить ячейку в Google Таблице.
+      4. Upsert в min_stock_level (БД).
 
     Возвращает текстовый статус ("✅ ..." или "❌ ...").
     """
     t0 = time.monotonic()
     logger.info(
-        "[%s] Обновляю min=%s для product=%s, dept=%s",
-        LABEL, new_min, product_id, department_id,
+        "[%s] Обновляю min=%s, max=%s для product=%s, dept=%s",
+        LABEL, new_min, new_max, product_id, department_id,
     )
 
-    # 1. Параллельно: продукт + склады department
+    # 1. Получить имена
     async with async_session_factory() as session:
-        prod_task = session.execute(
-            select(Product.name, Product.raw_json)
+        prod = (await session.execute(
+            select(Product.name)
             .where(Product.id == UUID(product_id))
-        )
-        stores_task = session.execute(
-            select(Store.id)
-            .where(Store.parent_id == UUID(department_id))
-            .where(Store.deleted == False)  # noqa: E712
-        )
-        prod_result, stores_result = await asyncio.gather(prod_task, stores_task)
+        )).scalar_one_or_none()
 
-    prod_row = prod_result.first()
-    if not prod_row:
-        return "❌ Товар не найден в БД"
+        dept = (await session.execute(
+            select(Department.name)
+            .where(Department.id == UUID(department_id))
+        )).scalar_one_or_none()
 
-    dept_store_ids: set[str] = {str(r.id) for r in stores_result.all()}
-    if not dept_store_ids:
-        return "❌ Не найдены склады для вашего ресторана"
+        if not prod:
+            return "❌ Товар не найден в БД"
+        if not dept:
+            return "❌ Ресторан не найден в БД"
 
-    product_name = prod_row.name
-    raw_json: dict = dict(prod_row.raw_json) if prod_row.raw_json else {}
-    levels: list[dict] = list(raw_json.get("storeBalanceLevels", []))
+        product_name = prod
+        department_name = dept
 
-    # 2. Точечное обновление: пройтись по существующим записям
-    updated_store_ids: set[str] = set()
-    old_mins: dict[str, float | None] = {}
+        # 2. Текущий min из БД
+        old_row = (await session.execute(
+            select(MinStockLevel.min_level)
+            .where(MinStockLevel.product_id == UUID(product_id))
+            .where(MinStockLevel.department_id == UUID(department_id))
+        )).scalar_one_or_none()
+        old_min = float(old_row) if old_row is not None else None
 
-    for item in levels:
-        sid = item.get("storeId")
-        if sid in dept_store_ids:
-            old_mins[sid] = item.get("minBalanceLevel")
-            item["minBalanceLevel"] = new_min
-            updated_store_ids.add(sid)
-
-    # Добавить записи для складов, которых ещё нет в массиве
-    for sid in dept_store_ids - updated_store_ids:
-        levels.append({
-            "storeId": sid,
-            "minBalanceLevel": new_min,
-            "maxBalanceLevel": 0,
-        })
-        old_mins[sid] = None
-
-    # 3. Отправить в iiko
+    # 3. Записать в Google Таблицу
     try:
-        await iiko_api.update_product(
+        ok = await gsheet.update_min_max(
             product_id=product_id,
-            fields={"storeBalanceLevels": levels},
+            department_id=department_id,
+            min_level=new_min,
+            max_level=new_max,
         )
+        if not ok:
+            return (
+                "❌ Товар или ресторан не найден в Google Таблице.\n"
+                "Сначала нажмите «� Номенклатура → GSheet»."
+            )
     except Exception as exc:
         elapsed = time.monotonic() - t0
         logger.exception(
-            "[%s] ❌ Ошибка iiko API за %.2f сек: %s", LABEL, elapsed, exc,
+            "[%s] ❌ Ошибка Google Sheets за %.2f сек: %s", LABEL, elapsed, exc,
         )
-        return f"❌ Ошибка обновления в iiko: {exc}"
+        return f"❌ Ошибка записи в Google Таблицу: {exc}"
 
-    # 4. Обновить raw_json в локальной БД
-    raw_json["storeBalanceLevels"] = levels
+    # 4. Upsert в min_stock_level (БД) — мгновенный кэш
     try:
         async with async_session_factory() as session:
-            await session.execute(
-                update(Product)
-                .where(Product.id == UUID(product_id))
-                .values(raw_json=raw_json)
+            stmt = pg_insert(MinStockLevel).values(
+                product_id=UUID(product_id),
+                product_name=product_name,
+                department_id=UUID(department_id),
+                department_name=department_name,
+                min_level=new_min,
+                max_level=new_max,
             )
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_min_stock_product_dept",
+                set_={
+                    "product_name": stmt.excluded.product_name,
+                    "department_name": stmt.excluded.department_name,
+                    "min_level": stmt.excluded.min_level,
+                    "max_level": stmt.excluded.max_level,
+                },
+            )
+            await session.execute(stmt)
             await session.commit()
     except Exception:
-        logger.warning("[%s] raw_json не обновлён в БД (iiko OK)", LABEL, exc_info=True)
+        logger.warning("[%s] Upsert в БД не удался (GSheet OK)", LABEL, exc_info=True)
 
     elapsed = time.monotonic() - t0
-
-    # Старый min — берём любой из обновлённых (обычно одинаковые)
-    any_old = next(iter(old_mins.values()), None)
-    old_str = f"{any_old:.4g}" if any_old is not None else "—"
+    old_str = f"{old_min:.4g}" if old_min is not None else "—"
 
     logger.info(
-        "[%s] ✅ %s: min %s → %s (%d складов) за %.2f сек",
-        LABEL, product_name, old_str, new_min, len(dept_store_ids), elapsed,
+        "[%s] ✅ %s (%s): min %s → %s за %.2f сек",
+        LABEL, product_name, department_name, old_str, new_min, elapsed,
     )
     return (
         f"✅ *Минимальный остаток обновлён!*\n\n"
         f"📦 {_escape_md(product_name)}\n"
+        f"🏪 {_escape_md(department_name)}\n"
         f"Было: {old_str}\n"
-        f"Стало: *{new_min:.4g}*\n"
-        f"Складов обновлено: {len(dept_store_ids)}"
+        f"Стало: *{new_min:.4g}*"
     )
 
 
-def _escape_md(s: str) -> str:
-    """Экранировать спецсимволы Markdown v1."""
-    for ch in ("*", "_", "`", "["):
-        s = s.replace(ch, f"\\{ch}")
-    return s
+# ═══════════════════════════════════════════════════════
+# 3. Высокоуровневый use-case: валидация + обновление
+# ═══════════════════════════════════════════════════════
+
+def apply_min_level(value_str: str) -> EditMinResult | float:
+    """
+    Валидация введённого значения мин. остатка.
+    Возвращает EditMinResult(error) или float(validated_value).
+    """
+    text = value_str.strip().replace(",", ".")
+    try:
+        new_min = float(text)
+    except ValueError:
+        return EditMinResult(
+            success=False,
+            text="⚠️ Введите число (например: 5, 10.5, 0).\nПопробуйте ещё раз:",
+        )
+
+    if new_min < 0:
+        return EditMinResult(
+            success=False,
+            text="⚠️ Значение не может быть отрицательным. Попробуйте ещё раз:",
+        )
+
+    if new_min > 999999:
+        return EditMinResult(
+            success=False,
+            text="⚠️ Слишком большое значение. Максимум 999 999. Попробуйте ещё раз:",
+        )
+
+    return new_min

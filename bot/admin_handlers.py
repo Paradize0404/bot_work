@@ -145,12 +145,18 @@ async def admin_panel(message: Message, state: FSMContext) -> None:
         await message.answer("⛔ У вас нет прав администратора.")
         return
 
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
     await state.set_state(AdminMgmtStates.menu)
-    await message.answer(
+    msg = await message.answer(
         "👑 <b>Управление администраторами</b>",
         parse_mode="HTML",
         reply_markup=_admin_menu_kb(),
     )
+    await state.update_data(_menu_msg_id=msg.message_id)
 
 
 # ══════════════════════════════════════════════════════
@@ -197,14 +203,8 @@ async def adm_back(callback: CallbackQuery, state: FSMContext) -> None:
 async def adm_list(callback: CallbackQuery) -> None:
     await callback.answer()
     logger.info("[admin] Список админов tg:%d", callback.from_user.id)
-    admins = await admin_uc.list_admins()
-    if not admins:
-        text = "👑 <b>Администраторы</b>\n\n<i>Список пуст.</i>"
-    else:
-        lines = [f"👑 <b>Администраторы ({len(admins)})</b>\n"]
-        for i, a in enumerate(admins, 1):
-            lines.append(f"  {i}. {a['employee_name']}  <code>tg:{a['telegram_id']}</code>  ({a['added_at']})")
-        text = "\n".join(lines)
+    await callback.message.edit_text("⏳ Загрузка...")
+    text = await admin_uc.format_admin_list()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад", callback_data="adm_back")],
@@ -223,27 +223,13 @@ async def adm_list(callback: CallbackQuery) -> None:
 async def adm_add_start(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     logger.info("[admin] Добавление админа — начало tg:%d", callback.from_user.id)
-    employees = await admin_uc.get_employees_with_telegram()
-    if not employees:
-        try:
-            await callback.message.edit_text(
-                "⚠️ Нет сотрудников с привязанным Telegram.\n"
-                "Сначала пусть авторизуются через /start.",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="◀️ Назад", callback_data="adm_back")]
-                ]),
-            )
-        except Exception:
-            pass
-        return
-
-    # Фильтруем тех, кто уже админ
-    admin_ids = await admin_uc.get_admin_ids()
-    available = [e for e in employees if e["telegram_id"] not in admin_ids]
+    await callback.message.edit_text("⏳ Загрузка списка сотрудников...")
+    available = await admin_uc.get_available_for_promotion()
     if not available:
         try:
             await callback.message.edit_text(
-                "✅ Все авторизованные сотрудники уже являются админами.",
+                "ℹ️ Нет кандидатов: все авторизованные сотрудники уже админы\n"
+                "или нет сотрудников с привязанным Telegram.",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="◀️ Назад", callback_data="adm_back")]
                 ]),
@@ -350,7 +336,19 @@ async def adm_do_remove(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     tg_id = int(callback.data.split(":", 1)[1])
     logger.info("[admin] Удаление админа tg:%d, target_tg:%d", callback.from_user.id, tg_id)
-    removed = await admin_uc.remove_admin(tg_id)
+
+    try:
+        removed = await admin_uc.remove_admin(tg_id)
+    except ValueError as exc:
+        # Последний админ — нельзя удалить
+        await state.set_state(AdminMgmtStates.menu)
+        try:
+            await callback.message.edit_text(
+                f"⚠️ {exc}", reply_markup=_admin_menu_kb(),
+            )
+        except Exception:
+            pass
+        return
 
     if removed:
         text = f"✅ Администратор <code>tg:{tg_id}</code> удалён."

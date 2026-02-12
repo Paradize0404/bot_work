@@ -10,6 +10,8 @@ Use-case: авторизация сотрудника через Telegram-бот
 
 import logging
 import time
+from dataclasses import dataclass
+from enum import Enum
 from uuid import UUID
 
 from sqlalchemy import select, func
@@ -19,6 +21,39 @@ from db.models import Employee, Department, EmployeeRole
 from use_cases import user_context as uctx
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════
+# Dataclasses для результатов
+# ═══════════════════════════════════════════════════════
+
+class AuthStatus(Enum):
+    """Статус авторизации пользователя."""
+    AUTHORIZED = "authorized"            # полностью авторизован (есть department)
+    NEEDS_DEPARTMENT = "needs_department"  # привязан, но нет ресторана
+    NOT_AUTHORIZED = "not_authorized"      # не привязан
+
+
+@dataclass(slots=True)
+class AuthResult:
+    """Результат проверки авторизации при /start."""
+    status: AuthStatus
+    first_name: str | None = None
+
+
+@dataclass(slots=True)
+class AuthSearchResult:
+    """Результат поиска сотрудника по фамилии."""
+    employees: list[dict]
+    auto_bound_first_name: str | None = None  # если один сотрудник — уже привязан
+    restaurants: list[dict] | None = None      # рестораны (если авто-привязка прошла)
+
+
+@dataclass(slots=True)
+class SelectionResult:
+    """Результат выбора сотрудника из списка."""
+    first_name: str
+    restaurants: list[dict]
 
 
 async def find_employees_by_last_name(last_name: str) -> list[dict]:
@@ -76,16 +111,17 @@ async def bind_telegram_id(employee_id: str, telegram_id: int) -> str:
         result = await session.execute(stmt)
         emp = result.scalar_one()
         emp.telegram_id = telegram_id
-        await session.commit()
 
-        first_name = emp.first_name or emp.name or "сотрудник"
-
-        # Определяем название должности
+        # Определяем название должности (до commit — меньше round-tripов)
         role_name: str | None = None
         if emp.role_id:
             role_stmt = select(EmployeeRole.name).where(EmployeeRole.id == emp.role_id)
             role_result = await session.execute(role_stmt)
             role_name = role_result.scalar_one_or_none()
+
+        await session.commit()
+
+        first_name = emp.first_name or emp.name or "сотрудник"
 
         # Записываем в кеш (без ресторана — выберут на след. шаге)
         uctx.set_context(
@@ -144,13 +180,13 @@ async def save_department(telegram_id: int, department_id: str) -> str:
             raise ValueError("Сотрудник не найден. Пройдите авторизацию /start")
 
         emp.department_id = UUID(department_id)
-        await session.commit()
 
-        # Получаем название ресторана
-        dept_stmt = select(Department).where(Department.id == UUID(department_id))
+        # Получаем название ресторана (до commit — меньше round-tripов)
+        dept_stmt = select(Department.name).where(Department.id == UUID(department_id))
         dept_result = await session.execute(dept_stmt)
-        dept = dept_result.scalar_one_or_none()
-        dept_name = dept.name if dept else department_id
+        dept_name = dept_result.scalar_one_or_none() or department_id
+
+        await session.commit()
 
         logger.info("[auth] ✅ Сотрудник «%s» (tg:%d) → ресторан «%s» за %.2f сек",
                     emp.name, telegram_id, dept_name, time.monotonic() - t0)
@@ -176,3 +212,75 @@ async def get_employee_by_telegram_id(telegram_id: int) -> dict | None:
             "last_name": emp.last_name,
             "department_id": str(emp.department_id) if emp.department_id else None,
         }
+
+
+# ═══════════════════════════════════════════════════════
+# Высокоуровневые use-case функции (тонкие handlers)
+# ═══════════════════════════════════════════════════════
+
+async def check_auth_status(telegram_id: int) -> AuthResult:
+    """
+    Проверить статус авторизации при /start.
+    Возвращает AuthResult с enum-статусом.
+    """
+    ctx = await uctx.get_user_context(telegram_id)
+    if ctx and ctx.department_id:
+        return AuthResult(status=AuthStatus.AUTHORIZED, first_name=ctx.first_name)
+    if ctx:
+        return AuthResult(status=AuthStatus.NEEDS_DEPARTMENT, first_name=ctx.first_name)
+    return AuthResult(status=AuthStatus.NOT_AUTHORIZED)
+
+
+async def process_auth_by_lastname(
+    telegram_id: int, lastname: str
+) -> AuthSearchResult:
+    """
+    Поиск сотрудника по фамилии + авто-привязка если найден ровно один.
+    Возвращает AuthSearchResult.
+    """
+    employees = await find_employees_by_last_name(lastname)
+
+    if not employees or len(employees) != 1:
+        return AuthSearchResult(employees=employees)
+
+    # Единственный сотрудник — привязываем сразу
+    emp = employees[0]
+    first_name = await bind_telegram_id(emp["id"], telegram_id)
+    restaurants = await get_restaurants()
+    return AuthSearchResult(
+        employees=employees,
+        auto_bound_first_name=first_name,
+        restaurants=restaurants,
+    )
+
+
+async def complete_employee_selection(
+    telegram_id: int, employee_id: str
+) -> SelectionResult:
+    """
+    Привязать telegram_id к выбранному сотруднику и получить рестораны.
+    """
+    first_name = await bind_telegram_id(employee_id, telegram_id)
+    restaurants = await get_restaurants()
+    return SelectionResult(first_name=first_name, restaurants=restaurants)
+
+
+async def complete_department_selection(
+    telegram_id: int, department_id: str, employee_id: str | None = None
+) -> str:
+    """
+    Сохранить выбранный ресторан и обновить кеш.
+    Возвращает название ресторана.
+    """
+    dept_name = await save_department(telegram_id, department_id)
+
+    # Обновляем кеш
+    ctx = uctx.get_cached(telegram_id)
+    if ctx:
+        uctx.update_department(telegram_id, department_id, dept_name)
+    elif employee_id:
+        # Первая авторизация — загрузим полный контекст из БД
+        await uctx.get_user_context(telegram_id)
+        uctx.update_department(telegram_id, department_id, dept_name)
+
+    return dept_name

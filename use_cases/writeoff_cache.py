@@ -71,6 +71,15 @@ def set_unit(unit_id: str, name: str) -> None:
     _set(f"unit:{unit_id}", name)
 
 
+def get_products() -> list[dict] | None:
+    """Все товары (GOODS/PREPARED) из кеша (или None если нет/протухли)."""
+    return _get("products:all")
+
+
+def set_products(products: list[dict]) -> None:
+    _set("products:all", products)
+
+
 def invalidate() -> None:
     """Полный сброс кеша (кроме единиц измерения)."""
     keys_to_drop = [k for k in _store if not k.startswith("unit:")]
