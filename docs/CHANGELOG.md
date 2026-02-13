@@ -4,6 +4,37 @@
 
 ---
 
+### 2026-02-14 — Скрытие Reply-клавиатуры во время dialog-flow'ов
+
+**Цель:** При заполнении документа (списание, накладная, заявка, редактирование мин. остатка) Reply-клавиатура подменю должна скрываться, чтобы пользователь не мог случайно нажать навигационные кнопки. Вместо неё отображается только кнопка «❌ Отмена».
+
+**1. Хелперы** (`bot/middleware.py`)
+- `CANCEL_KB` — `ReplyKeyboardMarkup` с одной кнопкой «❌ Отмена»
+- `set_cancel_kb(bot, chat_id, state)` — при ВХОДЕ в flow: удаляет старое Reply-сообщение подменю (`_menu_msg_id`), отправляет временное сообщение с `CANCEL_KB` (и удаляет его), что меняет Reply-клавиатуру на cancel-only
+- `restore_menu_kb(bot, chat_id, state, menu_text, kb)` — при ВЫХОДЕ из flow: отправляет новое Reply-сообщение с клавиатурой подменю, сохраняет `_menu_msg_id`
+
+**2. Keyboard-функции вынесены в `bot/_utils.py`**
+- `writeoffs_keyboard()`, `invoices_keyboard()`, `requests_keyboard()`, `reports_keyboard()`
+- Используются совместно из `handlers.py` и всех handler-файлов
+
+**3. «❌ Отмена» добавлена в `NAV_BUTTONS`** (`bot/global_commands.py`)
+- `NavResetMiddleware` перехватывает нажатие кнопки «❌ Отмена» и сбрасывает FSM
+
+**4. `set_cancel_kb` добавлен на старт всех 7 flow'ов:**
+- `start_writeoff`, `start_history` (writeoff_handlers)
+- `start_template`, `start_from_template` (invoice_handlers)
+- `start_create_request`, `start_duplicate_request` (request_handlers)
+- `btn_edit_min_stock` (min_stock_handlers)
+
+**5. `restore_menu_kb` добавлен на ВСЕ точки выхода:**
+- **writeoff** (3): finalize no-admin, finalize admin, cancel_writeoff
+- **writeoff history** (5): hist_close, hist_reuse ×2 (admin/no-admin), hist_edit_send ×2
+- **invoice** (3): save_template, confirm_send, cancel_template
+- **request** (5): cancel_request, confirm_send ×2 (no-receiver/normal), confirm_dup_send ×2
+- **min_stock** (2): enter_min_level, cancel_edit
+
+---
+
 ### 2026-02-13 — Глобальная отмена, защита от зависания FSM, edit-first паттерн
 
 **Цель:** Бот мог "зависнуть" в состоянии ввода (поиск товара), где Reply-кнопки навигации перехватывались обработчиком поиска, удалялись, и пользователь не мог выйти.

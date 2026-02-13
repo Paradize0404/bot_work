@@ -253,6 +253,8 @@ async def cancel_request_flow(callback: CallbackQuery, state: FSMContext) -> Non
         await callback.message.edit_text("❌ Заявка отменена.")
     except Exception:
         pass
+    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                          "📋 Заявки:", requests_keyboard())
 
 
 # ══════════════════════════════════════════════════════
@@ -742,6 +744,8 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
             "Попросите администратора добавить получателей заявок."
         )
         await state.clear()
+        await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                              "📋 Заявки:", requests_keyboard())
         return
 
     # Отправляем уведомление каждому получателю
@@ -769,6 +773,8 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
         f"Ожидайте подтверждения."
     )
     await state.clear()
+    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                          "📋 Заявки:", requests_keyboard())
 
 
 # ══════════════════════════════════════════════════════
@@ -1250,6 +1256,7 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
         return
 
     logger.info("[request] Дублирование заявки #%d tg:%d", pk, callback.from_user.id)
+    await set_cancel_kb(callback.bot, callback.message.chat.id, state)
 
     items = req_data.get("items", [])
     if not items:
@@ -1491,6 +1498,8 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
             "Попросите администратора добавить получателей заявок."
         )
         await state.clear()
+        await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                              "📋 Заявки:", requests_keyboard())
         return
 
     sent = 0
@@ -1518,6 +1527,8 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
         f"Ожидайте подтверждения."
     )
     await state.clear()
+    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                          "📋 Заявки:", requests_keyboard())
 
 
 # ══════════════════════════════════════════════════════

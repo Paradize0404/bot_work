@@ -78,6 +78,15 @@ test/
 │
 ├── bot/
 │   ├── __init__.py
+│   ├── _utils.py            # Общие утилиты бота
+│   │                         #   escape_md() — экранирование MarkdownV2
+│   │                         #   writeoffs_keyboard(), invoices_keyboard(), requests_keyboard(), reports_keyboard()
+│   │                         #     — ReplyKeyboardMarkup подменю (shared между handlers.py и *_handlers.py)
+│   ├── middleware.py        # Авторизация, хелперы, cancel-keyboard
+│   │                         #   require_auth, reply_menu, auth_and_sync
+│   │                         #   CANCEL_KB — ReplyKeyboardMarkup с одной кнопкой «❌ Отмена»
+│   │                         #   set_cancel_kb(bot, chat_id, state) — скрыть подменю, показать cancel-only
+│   │                         #   restore_menu_kb(bot, chat_id, state, text, kb) — восстановить подменю
 │   ├── global_commands.py   # Глобальные команды + NavResetMiddleware
 │   │                         #   /cancel — сброс ЛЮБОГО FSM-состояния из любой точки
 │   │                         #   NavResetMiddleware — outer-middleware на dp.message

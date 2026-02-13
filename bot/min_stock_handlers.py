@@ -257,6 +257,8 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
     else:
         await message.answer(result, parse_mode="Markdown")
     await state.clear()
+    await restore_menu_kb(message.bot, message.chat.id, state,
+                          "📊 Отчёты:", reports_keyboard())
 
 
 # ══════════════════════════════════════════════════════
@@ -270,6 +272,8 @@ async def cancel_edit(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[edit-min] Отмена tg:%d", callback.from_user.id)
     await callback.message.edit_text("🚫 Редактирование мин. остатка отменено.")
     await state.clear()
+    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                          "📊 Отчёты:", reports_keyboard())
 
 
 @router.callback_query(F.data == "ems:research")
