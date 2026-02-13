@@ -1552,7 +1552,7 @@ async def view_pending_requests(message: Message) -> None:
 #  C) УПРАВЛЕНИЕ ПОЛУЧАТЕЛЯМИ
 # ══════════════════════════════════════════════════════
 
-@router.message(F.text == "� Управление получателями")
+@router.message(F.text == "👥 Управление получателями")
 async def start_receiver_mgmt(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()

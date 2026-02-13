@@ -186,15 +186,22 @@ async def sync_products_to_sheet(
                 cols=max(needed_cols, ws.col_count),
             )
 
-        ws.clear()
+        # gspread 6.x может вернуть пустой body → JSONDecodeError
+        try:
+            ws.clear()
+        except json.JSONDecodeError:
+            logger.debug("[%s] clear() вернул пустой body (ОК)", LABEL)
 
         if all_rows:
             end_cell = gspread.utils.rowcol_to_a1(len(all_rows), num_cols)
-            ws.update(
-                f"A1:{end_cell}",
-                all_rows,
-                value_input_option="RAW",
-            )
+            try:
+                ws.update(
+                    f"A1:{end_cell}",
+                    all_rows,
+                    value_input_option="RAW",
+                )
+            except json.JSONDecodeError:
+                logger.debug("[%s] update() вернул пустой body (ОК)", LABEL)
 
         # Форматирование
         try:
@@ -650,15 +657,22 @@ async def sync_invoice_prices_to_sheet(
                 cols=max(needed_cols, ws.col_count),
             )
 
-        ws.clear()
+        # gspread 6.x может вернуть пустой body → JSONDecodeError
+        try:
+            ws.clear()
+        except json.JSONDecodeError:
+            logger.debug("[%s] clear() вернул пустой body (ОК)", LABEL)
 
         if all_rows:
             end_cell = gspread.utils.rowcol_to_a1(len(all_rows), num_cols)
-            ws.update(
-                f"A1:{end_cell}",
-                all_rows,
-                value_input_option="RAW",
-            )
+            try:
+                ws.update(
+                    f"A1:{end_cell}",
+                    all_rows,
+                    value_input_option="RAW",
+                )
+            except json.JSONDecodeError:
+                logger.debug("[%s] update() вернул пустой body (ОК)", LABEL)
 
         # ── 7. Dropdown (data validation) для заголовков поставщиков ──
         try:
@@ -1067,15 +1081,22 @@ async def sync_permissions_to_sheet(
                 cols=max(needed_cols, ws.col_count),
             )
 
-        ws.clear()
+        # gspread 6.x может вернуть пустой body → JSONDecodeError
+        try:
+            ws.clear()
+        except json.JSONDecodeError:
+            logger.debug("[%s] clear() вернул пустой body (ОК)", LABEL)
 
         if all_rows:
             end_cell = gspread.utils.rowcol_to_a1(len(all_rows), num_cols)
-            ws.update(
-                f"A1:{end_cell}",
-                all_rows,
-                value_input_option="RAW",
-            )
+            try:
+                ws.update(
+                    f"A1:{end_cell}",
+                    all_rows,
+                    value_input_option="RAW",
+                )
+            except json.JSONDecodeError:
+                logger.debug("[%s] update() вернул пустой body (ОК)", LABEL)
 
         # ── 7. Форматирование ──
         try:

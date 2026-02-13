@@ -137,14 +137,44 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
         "[global] /cancel tg:%d, state=%s — сброс",
         message.from_user.id, current,
     )
-    await _cleanup_state_messages(message.bot, message.chat.id, state)
+
+    cancel_text = "✅ Действие отменено. Вы в главном меню.\nВыберите нужный пункт или нажмите /start."
+
+    # Попробуем отредактировать prompt-сообщение вместо удаления
+    data = await state.get_data()
+    prompt_id = (
+        data.get("prompt_msg_id")
+        or data.get("_bot_msg_id")
+        or data.get("_prompt_msg_id")
+        or data.get("_edit_prompt_id")
+        or data.get("hist_edit_prompt_id")
+    )
+    edited = False
+    if prompt_id:
+        try:
+            await message.bot.edit_message_text(
+                cancel_text, chat_id=message.chat.id, message_id=prompt_id,
+            )
+            edited = True
+        except Exception:
+            pass
+
+    # Удаляем остальные бот-сообщения (header, selection и т.д.),
+    # кроме того, что уже отредактировали
+    skip_ids = {prompt_id} if edited else set()
+    for key in _MSG_ID_KEYS:
+        msg_id = data.get(key)
+        if msg_id and msg_id not in skip_ids:
+            try:
+                await message.bot.delete_message(message.chat.id, msg_id)
+            except Exception:
+                pass
+    await state.clear()
 
     try:
         await message.delete()
     except Exception:
         pass
 
-    await message.answer(
-        "✅ Действие отменено. Вы в главном меню.\n"
-        "Выберите нужный пункт или нажмите /start.",
-    )
+    if not edited:
+        await message.answer(cancel_text)

@@ -574,11 +574,6 @@ async def save_quantity(message: Message, state: FSMContext) -> None:
     items = data.get("items", [])
     items.append(item)
 
-    q_prompt_id = data.get("quantity_prompt_id")
-    if q_prompt_id:
-        try: await message.bot.delete_message(chat_id=message.chat.id, message_id=q_prompt_id)
-        except Exception: pass
-
     await state.update_data(items=items, current_item=None, quantity_prompt_id=None)
     logger.info("[writeoff] Позиция: %s — %s %s (→ %s), всего: %d",
                 item.get("name"), qty, unit_label, converted, len(items))
