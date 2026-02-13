@@ -1118,6 +1118,20 @@ async def admin_edit_item_action(callback: CallbackQuery, state: FSMContext) -> 
 
 # ── Поиск нового товара (замена наименования) ──
 
+# Защита: текст в inline-состояниях редактирования
+@router.message(AdminEditStates.choose_field)
+@router.message(AdminEditStates.choose_store)
+@router.message(AdminEditStates.choose_account)
+@router.message(AdminEditStates.choose_item_idx)
+@router.message(AdminEditStates.choose_item_action)
+async def _ignore_text_admin_edit(message: Message) -> None:
+    logger.debug("[writeoff-edit] Игнор текста в inline-состоянии tg:%d", message.from_user.id)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
 @router.message(AdminEditStates.new_product_search)
 async def admin_search_new_product(message: Message, state: FSMContext) -> None:
     query = (message.text or "").strip()
@@ -1322,6 +1336,17 @@ async def _finish_edit_msg(message: Message, state: FSMContext,
 # ══════════════════════════════════════════════════════
 #  ИСТОРИЯ СПИСАНИЙ
 # ══════════════════════════════════════════════════════
+
+# Защита: текст в inline-состояниях истории
+@router.message(HistoryStates.browsing)
+@router.message(HistoryStates.viewing)
+async def _ignore_text_history_inline(message: Message) -> None:
+    logger.debug("[writeoff-hist] Игнор текста в inline-состоянии tg:%d", message.from_user.id)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
 
 HIST_PAGE_SIZE = wo_hist.HISTORY_PAGE_SIZE
 

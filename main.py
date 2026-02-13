@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from config import TELEGRAM_BOT_TOKEN
+    from bot.global_commands import router as global_router, NavResetMiddleware
     from bot.handlers import router
     from bot.writeoff_handlers import router as writeoff_router
     from bot.admin_handlers import router as admin_router
@@ -38,6 +39,9 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
+    # Outer-middleware: сброс FSM при нажатии Reply-кнопки навигации
+    dp.message.outer_middleware(NavResetMiddleware())
+    dp.include_router(global_router)      # /cancel — первый, перехватывает всегда
     dp.include_router(admin_router)
     dp.include_router(writeoff_router)
     dp.include_router(min_stock_router)

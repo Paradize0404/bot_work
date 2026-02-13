@@ -1716,6 +1716,18 @@ async def confirm_remove_receiver(callback: CallbackQuery, state: FSMContext) ->
 
 # ── Закрыть ──
 
+# Защита: текст в inline-состояниях управления получателями
+@router.message(ReceiverMgmtStates.menu)
+@router.message(ReceiverMgmtStates.choosing_employee)
+@router.message(ReceiverMgmtStates.confirm_remove)
+async def _ignore_text_receiver_mgmt(message: Message) -> None:
+    logger.debug("[request] Игнор текста в ReceiverMgmt tg:%d", message.from_user.id)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
 @router.callback_query(F.data == "rcv_close")
 async def close_receiver_mgmt(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
