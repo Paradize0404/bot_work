@@ -481,28 +481,34 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("⚠️ Этот товар уже добавлен", show_alert=True)
         return
 
-    # Подтягиваем цену из прайс-листа БД
+    # Подтягиваем цену из прайс-листа БД; fallback → себестоимость
     supplier_prices = data.get("_supplier_prices", {})
     sell_price = supplier_prices.get(prod_id, 0.0)
+    cost_price = product.get("cost_price", 0.0)
+    effective_price = sell_price or cost_price
+    used_cost = (not sell_price) and bool(cost_price)
 
     items.append({
         "product_id": prod_id,
         "name": product["name"],
         "unit_name": product.get("unit_name", "шт"),
         "main_unit": product.get("main_unit"),
-        "cost_price": product.get("cost_price", 0.0),
-        "sell_price": sell_price,
+        "cost_price": cost_price,
+        "sell_price": effective_price,
     })
     await state.update_data(items=items)
     await _update_summary(callback.bot, callback.message.chat.id, state)
 
-    price_info = f" (цена: {sell_price:.2f}₽)" if sell_price else " (цена не задана)"
+    if effective_price:
+        price_info = f" (себест.: {effective_price:.2f}₽)" if used_cost else f" (цена: {effective_price:.2f}₽)"
+    else:
+        price_info = " (цена не задана)"
     logger.info(
         "[invoice][template] Добавлен товар #%d: «%s» prod_id=%s, "
-        "unit=%s, main_unit=%s, cost=%.2f, sell=%.2f, tg:%d",
+        "unit=%s, main_unit=%s, cost=%.2f, sell=%.2f, effective=%.2f, used_cost=%s, tg:%d",
         len(items), product["name"], prod_id,
         product.get("unit_name", "шт"), product.get("main_unit"),
-        product.get("cost_price", 0.0), sell_price, callback.from_user.id,
+        cost_price, sell_price, effective_price, used_cost, callback.from_user.id,
     )
 
     await _send_prompt(

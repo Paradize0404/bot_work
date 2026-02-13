@@ -516,8 +516,14 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
     await state.set_state(CreateRequestStates.enter_item_qty)
 
     supplier_prices = data.get("_supplier_prices", {})
-    price = supplier_prices.get(prod_id, 0)
-    price_str = f"\n💰 Цена: {price:.2f}₽/{unit}" if price else ""
+    sup_price = supplier_prices.get(prod_id, 0)
+    cost_price = product.get("cost_price", 0)
+    effective_price = sup_price or cost_price
+    if effective_price:
+        label = "себест." if (not sup_price and cost_price) else "Цена"
+        price_str = f"\n💰 {label}: {effective_price:.2f}₽/{unit}"
+    else:
+        price_str = ""
 
     try:
         await callback.message.edit_text(
@@ -566,7 +572,9 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
         return
 
     supplier_prices = data.get("_supplier_prices", {})
-    price = supplier_prices.get(product["id"], product.get("sell_price", 0))
+    sup_price = supplier_prices.get(product["id"], 0)
+    cost_price = product.get("cost_price", 0)
+    price = sup_price or cost_price or product.get("sell_price", 0)
     unit = product.get("unit_name", "шт")
     norm = normalize_unit(unit)
 
@@ -588,6 +596,7 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
         "name": product["name"],
         "amount": converted,
         "price": price,
+        "cost_price": cost_price,
         "main_unit": product.get("main_unit"),
         "unit_name": unit,
         "sell_price": price,
@@ -1284,7 +1293,7 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
         else:
             hint = unit
             current = it.get("amount", 0)
-        price = supplier_prices.get(it.get("product_id", ""), it.get("price", 0))
+        price = supplier_prices.get(it.get("product_id", ""), 0) or it.get("cost_price", 0) or it.get("price", 0)
         price_str = f" — {price:.2f}₽/{unit}" if price else ""
         text += f"  {i}. {it.get('name', '?')} — было: {current:.4g}{price_str} (в {hint})\n"
 
@@ -1360,7 +1369,7 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
         if qty <= 0:
             continue
 
-        price = supplier_prices.get(it.get("product_id", ""), it.get("price", 0))
+        price = supplier_prices.get(it.get("product_id", ""), 0) or it.get("cost_price", 0) or it.get("price", 0)
         unit = it.get("unit_name", "шт")
         norm = normalize_unit(unit)
 
@@ -1429,7 +1438,7 @@ async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
             hint = "в мл"
         else:
             hint = f"в {unit}"
-        price = supplier_prices.get(it.get("product_id", ""), it.get("price", 0))
+        price = supplier_prices.get(it.get("product_id", ""), 0) or it.get("cost_price", 0) or it.get("price", 0)
         price_str = f" — {price:.2f}₽/{unit}" if price else ""
         text += f"  {i}. {it.get('name', '?')}{price_str} → <i>{hint}</i>\n"
 
