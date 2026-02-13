@@ -4,6 +4,44 @@
 
 ---
 
+### 2026-02-13 — Калининградское время + Ежедневная автосинхронизация
+
+**Цель:** Все даты и время в проекте — по Калининграду (Europe/Kaliningrad, UTC+2). Автоматическая полная синхронизация каждый день в 07:00.
+
+**1. Часовой пояс Europe/Kaliningrad (UTC+2)**
+- `use_cases/_helpers.py`: добавлен `now_kgd()` — единый хелпер, возвращающий naive datetime по Калининграду. `utcnow()` оставлен как deprecated alias.
+- `db/models.py`, `db/ft_models.py`: `_utcnow()` теперь возвращает калининградское время (через `ZoneInfo`).
+- `config.py`: добавлена константа `TIMEZONE = "Europe/Kaliningrad"`.
+- Заменены все `datetime.utcnow()` и `datetime.now()` на `now_kgd()` в:
+  - `use_cases/sync_fintablo.py` (started/finished_at, mapping)
+  - `use_cases/writeoff.py` (dateIncoming в iiko)
+  - `use_cases/pdf_invoice.py` (дата документа, имя файла)
+  - `use_cases/product_request.py` (approve/cancel timestamps)
+  - `use_cases/outgoing_invoice.py` (dateIncoming, расчёт себестоимости, техкарты)
+  - `adapters/iiko_api.py` (timestamp для остатков)
+- Все записи в БД (SyncLog, synced_at, created_at и т.д.) теперь в калининградском времени.
+- PDF-документы (накладные, заявки) — дата по Калининграду.
+- iiko API запросы (остатки, списания, накладные) — калининградский timestamp.
+
+**2. Ежедневная автосинхронизация (APScheduler)**
+- Новый файл: `use_cases/scheduler.py`
+  - `_daily_full_sync()`: iiko + FinTablo + остатки + min/max из GSheet — параллельно.
+  - `start_scheduler(bot)` / `stop_scheduler()` — управление жизненным циклом.
+  - CronTrigger: 07:00 Europe/Kaliningrad, misfire_grace_time=3600с.
+  - После синхронизации — уведомление всех админов в Telegram с отчётом.
+- `main.py`: scheduler запускается в обоих режимах (webhook + polling), останавливается при shutdown.
+- `requirements.txt`: добавлен `apscheduler>=3.10.0`.
+
+**Затронутые файлы:**
+- `config.py`, `use_cases/_helpers.py`, `db/models.py`, `db/ft_models.py`
+- `use_cases/sync_fintablo.py`, `use_cases/writeoff.py`, `use_cases/pdf_invoice.py`
+- `use_cases/product_request.py`, `use_cases/outgoing_invoice.py`
+- `adapters/iiko_api.py`, `main.py`, `requirements.txt`
+- Новый: `use_cases/scheduler.py`
+- Документация: `PROJECT_MAP.md`, `docs/FILE_STRUCTURE.md`, `docs/CHANGELOG.md`
+
+---
+
 ### 2026-02-15 — Security Hardening: аудит и исправление уязвимостей
 
 **Цель:** Полный аудит проекта по PROJECT_MAP.md (раздел 7–8: Валидация входных данных, Безопасность).

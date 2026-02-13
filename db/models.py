@@ -6,7 +6,7 @@
 raw_json — полный оригинальный ответ API (страховка).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import (

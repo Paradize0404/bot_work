@@ -486,7 +486,7 @@ async def calculate_goods_cost_prices(days_back: int = 90) -> dict[str, float]:
 
     Возвращает {product_id: cost_price}.
     """
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     from adapters import iiko_api
     from use_cases._helpers import now_kgd
 
@@ -545,7 +545,6 @@ async def calculate_dish_cost_prices(
 
     Возвращает {product_id: cost_price}.
     """
-    from datetime import datetime
     from adapters import iiko_api
     from use_cases._helpers import now_kgd
 
@@ -949,7 +948,6 @@ def build_outgoing_invoice_document(
     containers: {product_id: container_id} — тара из iiko_product.raw_json
     Фильтрует позиции с amount == 0.
     """
-    from datetime import datetime
     from use_cases._helpers import now_kgd
 
     containers = containers or {}

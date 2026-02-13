@@ -13,7 +13,6 @@ import asyncio
 import logging
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime as _datetime
 from use_cases._helpers import now_kgd as _now_kgd
 from typing import Any
 

@@ -13,7 +13,6 @@ Use-case: заявки на товары (product requests).
 
 import logging
 import time
-from datetime import datetime, timezone
 from use_cases._helpers import now_kgd
 from uuid import UUID
 

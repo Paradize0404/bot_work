@@ -14,6 +14,7 @@ test/
 │                             #   _require(name) — обязат. переменная, иначе RuntimeError
 │                             #   DATABASE_URL, IIKO_BASE_URL, IIKO_LOGIN, IIKO_SHA1_PASSWORD
 │                             #   FINTABLO_BASE_URL (дефолт), FINTABLO_TOKEN, TELEGRAM_BOT_TOKEN
+│                             #   TIMEZONE = "Europe/Kaliningrad" — единая TZ проекта
 │                             #   LOG_LEVEL (дефолт INFO)
 ├── iiko_auth.py             # Авторизация iiko API (токен, кеш 10 мин, retry×4)
 │                             #   get_auth_token() → str — async, кеширует в _token_cache
@@ -280,11 +281,18 @@ test/
 │   │                         #   _map_product_group() — маппер для ProductGroup
 │   │                         #   sync_all_entities() — параллельный asyncio.gather
 │   │                         #   sync_product_groups() — синхр. номенклатурных групп
-│   └── sync_fintablo.py     # Бизнес-логика синхронизации FinTablo
-│                             #   _run_ft_sync() — единый шаблон
-│                             #   _batch_upsert(), _mirror_delete(), _safe_decimal() из sync.py (DRY)
-│                             #   13 sync_ft_*() — по одной на каждый справочник
-│                             #   sync_all_fintablo() — параллельный asyncio.gather ×13
+│   ├── sync_fintablo.py     # Бизнес-логика синхронизации FinTablo
+│   │                         #   _run_ft_sync() — единый шаблон
+│   │                         #   _batch_upsert(), _mirror_delete(), _safe_decimal() из sync.py (DRY)
+│   │                         #   13 sync_ft_*() — по одной на каждый справочник
+│   │                         #   sync_all_fintablo() — параллельный asyncio.gather ×13
+│   └── scheduler.py         # Ежедневная авто-синхронизация по расписанию
+│                             #   APScheduler AsyncIOScheduler + CronTrigger
+│                             #   _daily_full_sync() — iiko + FinTablo + остатки + min/max
+│                             #   start_scheduler(bot) — вызывается из main.py
+│                             #   stop_scheduler() — graceful shutdown
+│                             #   Расписание: 07:00 Europe/Kaliningrad
+│                             #   Уведомление админов в Telegram после синхронизации
 │
 └── logs/
     └── app.log              # Лог-файл (ротация)

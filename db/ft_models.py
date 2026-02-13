@@ -6,7 +6,7 @@ raw_json — полный оригинальный ответ API (страхо�
 ID в FinTablo — integer (не UUID).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import (

@@ -1081,7 +1081,11 @@ async def sync_permissions_to_sheet(
             row = [name, tg_str]
             for key in merged_keys:
                 cell_val = old_perms.get(tg_str, {}).get(key, "")
-                row.append(cell_val)
+                # Чекбоксы работают с TRUE/FALSE
+                if cell_val.strip().lower() in {"✅", "true", "1", "да", "yes", "+"}:
+                    row.append(True)
+                else:
+                    row.append(False)
             data_rows.append(row)
 
         # ── 6. Записываем ──
@@ -1138,20 +1142,27 @@ async def sync_permissions_to_sheet(
                 })
             ws.freeze(rows=2, cols=1)
 
-            # Data validation: ✅ или пусто для столбцов прав
-            from gspread.worksheet import ValidationConditionType
-            for ci in range(len(merged_keys)):
-                col_1based = 3 + ci  # C=3, D=4, ...
-                col_letter = gspread.utils.rowcol_to_a1(1, col_1based)
-                col_letter = re.sub(r'\d+', '', col_letter)
-                cell_range = f"{col_letter}3:{col_letter}{len(all_rows)}"
-                ws.add_validation(
-                    cell_range,
-                    ValidationConditionType.one_of_list,
-                    ["✅", ""],
-                    showCustomUi=True,
-                    strict=False,
-                )
+            # Чекбоксы (Boolean data validation) для столбцов прав
+            if merged_keys:
+                checkbox_requests = []
+                for ci in range(len(merged_keys)):
+                    checkbox_requests.append({
+                        "setDataValidation": {
+                            "range": {
+                                "sheetId": ws.id,
+                                "startRowIndex": 2,  # строка 3 (0-based)
+                                "endRowIndex": len(all_rows),
+                                "startColumnIndex": 2 + ci,
+                                "endColumnIndex": 3 + ci,
+                            },
+                            "rule": {
+                                "condition": {"type": "BOOLEAN"},
+                                "strict": True,
+                                "showCustomUi": True,
+                            },
+                        }
+                    })
+                ws.spreadsheet.batch_update({"requests": checkbox_requests})
 
         except Exception:
             logger.warning("[%s] Ошибка форматирования прав", LABEL, exc_info=True)

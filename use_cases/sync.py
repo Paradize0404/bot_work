@@ -40,9 +40,7 @@ BATCH_SIZE = 500
 
 RowMapper = Callable[[dict, Any], dict | None]
 
-# Backward-compatible aliases (used by sync_fintablo.py etc.)
-_safe_uuid = safe_uuid
-_safe_bool = safe_bool
+# Backward-compatible alias (used by sync_fintablo.py)
 _safe_decimal = safe_decimal
 
 

@@ -14,7 +14,6 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
 from use_cases._helpers import now_kgd
 from uuid import UUID
 

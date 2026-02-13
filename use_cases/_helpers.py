@@ -7,7 +7,7 @@ Shared helpers for use_cases — DRY вместо дублей в каждом s
 """
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
 
