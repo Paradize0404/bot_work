@@ -717,7 +717,7 @@ class ProductRequest(Base):
     )
     account_name = Column(String(500), nullable=True)
     items = Column(
-        JSONB, nullable=False, default=[],
+        JSONB, nullable=False, default=list,
         comment=("Позиции: [{product_id, name, amount, price, "
                  "unit_name, main_unit, sell_price}, ...]"),
     )

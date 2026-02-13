@@ -590,9 +590,9 @@ async def calculate_dish_cost_prices(
         if total_cost > 0:
             dish_costs[dish_id] = round(total_cost, 2)
 
-    # Debug: подробная статистика для диагностики
-    logger.info(
-        "[invoice] DISH debug: %d техкарт, %d с items, %d позиций просмотрено, "
+    # Статистика расчёта себестоимости блюд
+    logger.debug(
+        "[invoice] DISH stats: %d техкарт, %d с items, %d позиций просмотрено, "
         "%d уник. ингр. найдены, %d уник. ингр. отсутствуют",
         len(prepared), charts_with_items, total_items_scanned,
         len(found_ingredients), len(missing_ingredients),
@@ -607,7 +607,7 @@ async def calculate_dish_cost_prices(
             ao = it.get("amountOut", "?")
             in_gc = pid in goods_costs
             s_detail.append(f"pid={pid[:12]}.. ao={ao} found={in_gc}")
-        logger.warning(
+        logger.debug(
             "[invoice] DISH=0 диагностика первой техкарты: dish=%s, items=%d, details=[%s]",
             sample.get("assembledProductId", "?")[:12],
             len(s_items),

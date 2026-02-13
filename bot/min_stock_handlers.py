@@ -175,11 +175,15 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
                              _prompt_msg_id=callback.message.message_id)
     await state.set_state(EditMinStockStates.enter_min_level)
 
+    _cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_CANCEL)],
+    ])
     await callback.message.edit_text(
         f"📦 *{_escape_md(product_name)}*\n\n"
         f"Введите новый минимальный остаток (число):\n"
         f"_(0 = убрать минимум)_",
         parse_mode="Markdown",
+        reply_markup=_cancel_kb,
     )
 
 

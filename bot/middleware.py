@@ -17,6 +17,7 @@ from aiogram.fsm.context import FSMContext
 
 from use_cases import admin as admin_uc
 from use_cases import user_context as uctx
+from use_cases import permissions as perm_uc
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,30 @@ def admin_required(handler):
             return
         return await handler(event, *args, **kwargs)
     return wrapper
+
+
+def permission_required(perm_key: str):
+    """
+    Декоратор: требует конкретного права из Google Таблицы.
+    Админы имеют все права (bypass внутри has_permission).
+    """
+    def decorator(handler):
+        @wraps(handler)
+        async def wrapper(event, *args, **kwargs):
+            tg_id = event.from_user.id
+            if not await perm_uc.has_permission(tg_id, perm_key):
+                if isinstance(event, CallbackQuery):
+                    await event.answer("⛔ У вас нет доступа к этому разделу")
+                else:
+                    await event.answer("⛔ У вас нет доступа к этому разделу")
+                logger.warning(
+                    "[perm] Доступ запрещён tg:%d → %s (требуется '%s')",
+                    tg_id, handler.__name__, perm_key,
+                )
+                return
+            return await handler(event, *args, **kwargs)
+        return wrapper
+    return decorator
 
 
 # ═══════════════════════════════════════════════════════

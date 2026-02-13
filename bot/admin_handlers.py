@@ -212,7 +212,7 @@ async def adm_list(callback: CallbackQuery) -> None:
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception:
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
+        pass
 
 
 # ══════════════════════════════════════════════════════
@@ -358,5 +358,33 @@ async def adm_do_remove(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminMgmtStates.menu)
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_admin_menu_kb())
+    except Exception:
+        pass
+
+
+# ══════════════════════════════════════════════════════
+#  Защита: текст в inline-состояниях
+# ══════════════════════════════════════════════════════
+
+@router.message(AdminMgmtStates.menu)
+async def _guard_admin_menu(message: Message) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(AdminMgmtStates.choosing_employee)
+async def _guard_admin_choosing(message: Message) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(AdminMgmtStates.confirm_remove)
+async def _guard_admin_remove(message: Message) -> None:
+    try:
+        await message.delete()
     except Exception:
         pass

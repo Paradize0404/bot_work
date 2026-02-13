@@ -14,4 +14,7 @@ aiohttp>=3.9.0
 gspread>=6.0.0
 google-auth>=2.20.0
 
+# PDF generation
+reportlab>=4.0.0
+
 # XML parsing (stdlib, no extra dep)

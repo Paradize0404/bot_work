@@ -1,4 +1,4 @@
-"""
+﻿"""
 Telegram-бот: тонкие хэндлеры.
 Вся бизнес-логика — в use_cases/.
 Хэндлеры только:
@@ -34,9 +34,12 @@ from use_cases import auth as auth_uc
 from use_cases.auth import AuthStatus
 from use_cases import user_context as uctx
 from use_cases import writeoff as wo_uc
+from use_cases import admin as admin_uc
 from use_cases import reports as reports_uc
+from use_cases import permissions as perm_uc
 from bot.middleware import (
-    admin_required, auth_required, sync_with_progress, track_task,
+    admin_required, auth_required, permission_required,
+    sync_with_progress, track_task,
     parse_callback_uuid, reply_menu,
 )
 
@@ -63,34 +66,66 @@ class ChangeDeptStates(StatesGroup):
 # Keyboard
 # ─────────────────────────────────────────────────────
 
-def _main_keyboard() -> ReplyKeyboardMarkup:
-    """Главное меню: 4 раздела."""
+def _main_keyboard(allowed: set[str] | None = None) -> ReplyKeyboardMarkup:
+    """
+    Главное меню: документы по типам + отчёты + настройки.
+    Показываются только кнопки, на которые у пользователя есть права.
+    allowed = None → показать все (для обратной совместимости).
+    """
+    # Определяем кнопки с привязкой к perm_key
+    perm_buttons: list[tuple[str, str]] = [
+        ("📝 Списания", "📝 Списания"),
+        ("📦 Накладные", "📦 Накладные"),
+        ("📋 Заявки", "📋 Заявки"),
+        ("📊 Отчёты", "📊 Отчёты"),
+    ]
+    # Фильтруем по правам
+    visible = []
+    for text, key in perm_buttons:
+        if allowed is None or key in allowed:
+            visible.append(KeyboardButton(text=text))
+
+    # Собираем строки по 2 кнопки
+    rows: list[list[KeyboardButton]] = []
+    for i in range(0, len(visible), 2):
+        rows.append(visible[i:i + 2])
+
+    # «Сменить ресторан» — всегда видна
+    rows.append([KeyboardButton(text="🏠 Сменить ресторан")])
+
+    # «Настройки» — только если есть право
+    if allowed is None or "⚙️ Настройки" in allowed:
+        rows.append([KeyboardButton(text="⚙️ Настройки")])
+
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def _writeoffs_keyboard() -> ReplyKeyboardMarkup:
+    """Подменю 'Списания'."""
     buttons = [
-        [KeyboardButton(text="🏠 Сменить ресторан")],
-        [KeyboardButton(text="📂 Команды")],
-        [KeyboardButton(text="📊 Отчёты"), KeyboardButton(text="📄 Документы")],
+        [KeyboardButton(text="📝 Создать списание")],
+        [KeyboardButton(text="🗂 История списаний")],
+        [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
-def _commands_keyboard() -> ReplyKeyboardMarkup:
-    """Подменю 'Команды': синхронизация и администрирование."""
+def _invoices_keyboard() -> ReplyKeyboardMarkup:
+    """Подменю 'Накладные'."""
     buttons = [
-        # ── Синхронизация iiko ──
-        [KeyboardButton(text="🔄 Синхр. ВСЁ iiko")],
-        [KeyboardButton(text="📋 Синхр. справочники"), KeyboardButton(text="📦 Синхр. номенклатуру")],
-        # ── FinTablo ──
-        [KeyboardButton(text="💹 FT: Синхр. ВСЁ")],
-        # ── Полная синхронизация ──
-        [KeyboardButton(text="⚡ Синхр. ВСЁ (iiko + FT)")],
-        # ── Мин. остатки (Google Sheets) ──
-        [KeyboardButton(text="📤 Номенклатура → GSheet"), KeyboardButton(text="📥 Мин. остатки GSheet → БД")],
-        # ── Прайс-лист накладных ──
-        [KeyboardButton(text="💰 Прайс-лист → GSheet")],
-        # ── Администрирование ──
-        [KeyboardButton(text="👑 Управление админами")],
-        [KeyboardButton(text="📬 Управление получателями")],
-        # ── Назад ──
+        [KeyboardButton(text="📑 Создать шаблон накладной")],
+        [KeyboardButton(text="📦 Создать по шаблону")],
+        [KeyboardButton(text="◀️ Назад")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
+def _requests_keyboard() -> ReplyKeyboardMarkup:
+    """Подменю 'Заявки'."""
+    buttons = [
+        [KeyboardButton(text="✏️ Создать заявку")],
+        [KeyboardButton(text="📒 История заявок")],
+        [KeyboardButton(text="📬 Входящие заявки")],
         [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -101,26 +136,51 @@ def _reports_keyboard() -> ReplyKeyboardMarkup:
     buttons = [
         [KeyboardButton(text="📊 Мин. остатки по складам")],
         [KeyboardButton(text="✏️ Изменить мин. остаток")],
-
-        # ── Назад ──
         [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
-def _documents_keyboard() -> ReplyKeyboardMarkup:
-    """Подменю 'Документы'."""
+def _settings_keyboard() -> ReplyKeyboardMarkup:
+    """Подменю 'Настройки' (только для админов)."""
     buttons = [
-        [KeyboardButton(text="📝 Создать списание")],
-        [KeyboardButton(text="📋 История списаний")],
-        [KeyboardButton(text="📋 Создать шаблон накладной")],
-        [KeyboardButton(text="📦 Создать по шаблону")],
-        [KeyboardButton(text="📝 Создать заявку")],
-        [KeyboardButton(text="📬 Входящие заявки")],
-        # ── Назад ──
+        [KeyboardButton(text="🔄 Синхронизация")],
+        [KeyboardButton(text="📤 Google Таблицы")],
+        [KeyboardButton(text="� Права доступа → GSheet")],
+        [KeyboardButton(text="👑 Управление админами")],
+        [KeyboardButton(text="👥 Управление получателями")],
         [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
+async def _get_main_kb(tg_id: int) -> ReplyKeyboardMarkup:
+    """Получить главную клавиатуру с учётом прав пользователя."""
+    allowed = await perm_uc.get_allowed_keys(tg_id)
+    return _main_keyboard(allowed)
+
+
+def _sync_keyboard() -> ReplyKeyboardMarkup:
+    """Подменю 'Синхронизация'."""
+    buttons = [
+        [KeyboardButton(text="⚡ Синхр. ВСЁ (iiko + FT)")],
+        [KeyboardButton(text="🔄 Синхр. ВСЁ iiko"), KeyboardButton(text="💹 FT: Синхр. ВСЁ")],
+        [KeyboardButton(text="📋 Синхр. справочники"), KeyboardButton(text="📦 Синхр. номенклатуру")],
+        [KeyboardButton(text="🔙 К настройкам")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
+def _gsheet_keyboard() -> ReplyKeyboardMarkup:
+    """Подменю 'Google Таблицы'."""
+    buttons = [
+        [KeyboardButton(text="📤 Номенклатура → GSheet")],
+        [KeyboardButton(text="📥 Мин. остатки GSheet → БД")],
+        [KeyboardButton(text="💰 Прайс-лист → GSheet")],
+        [KeyboardButton(text="🔙 К настройкам")],
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
 
 
 # ─────────────────────────────────────────────────────
@@ -136,6 +196,7 @@ def _employees_inline_kb(employees: list[dict]) -> InlineKeyboardMarkup:
         )]
         for emp in employees
     ]
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -145,6 +206,8 @@ def _departments_inline_kb(departments: list[dict], prefix: str = "auth_dept") -
         [InlineKeyboardButton(text=d["name"], callback_data=f"{prefix}:{d['id']}")]
         for d in departments
     ]
+    cancel_cb = "auth_cancel" if prefix == "auth_dept" else "change_dept_cancel"
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=cancel_cb)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -159,10 +222,11 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     result = await auth_uc.check_auth_status(message.from_user.id)
 
     if result.status == AuthStatus.AUTHORIZED:
+        kb = await _get_main_kb(message.from_user.id)
         await message.answer(
             f"👋 С возвращением, {result.first_name}!\n"
             "Выберите действие:",
-            reply_markup=_main_keyboard(),
+            reply_markup=kb,
         )
         return
 
@@ -208,10 +272,11 @@ async def process_last_name(message: Message, state: FSMContext) -> None:
         await state.update_data(employee_id=result.employees[0]["id"])
         if not result.restaurants:
             await state.clear()
+            kb = await _get_main_kb(message.from_user.id)
             await message.answer(
                 f"👋 Привет, {result.auto_bound_first_name}!\n"
                 "⚠️ Рестораны пока не загружены. Сначала синхронизируйте подразделения.",
-                reply_markup=_main_keyboard(),
+                reply_markup=kb,
             )
             return
 
@@ -284,10 +349,37 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
         "Авторизация завершена!",
         parse_mode="Markdown",
     )
+    kb = await _get_main_kb(callback.from_user.id)
     await callback.message.answer(
         "Выберите действие:",
-        reply_markup=_main_keyboard(),
+        reply_markup=kb,
     )
+
+
+# ─────────────────────────────────────────────────────
+# Отмена авторизации / смены ресторана
+# ─────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "auth_cancel")
+async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    """Отмена на любом шаге авторизации."""
+    await callback.answer("Отменено")
+    await state.clear()
+    try:
+        await callback.message.edit_text("❌ Авторизация отменена.\nНажмите /start чтобы начать заново.")
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "change_dept_cancel")
+async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    """Отмена смены ресторана."""
+    await callback.answer("Отменено")
+    await state.clear()
+    try:
+        await callback.message.edit_text("❌ Смена ресторана отменена.")
+    except Exception:
+        pass
 
 
 # ─────────────────────────────────────────────────────
@@ -303,6 +395,7 @@ async def btn_change_department(message: Message, state: FSMContext) -> None:
         await message.answer("⚠️ Вы не авторизованы. Нажмите /start")
         return
 
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     restaurants = await auth_uc.get_restaurants()
     if not restaurants:
         await message.answer("⚠️ Рестораны не загружены. Сначала синхронизируйте подразделения.")
@@ -328,46 +421,122 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
 
 
 # ─────────────────────────────────────────────────────
+# Защита: текст в inline-состояниях авторизации
+# ─────────────────────────────────────────────────────
+
+@router.message(AuthStates.choosing_employee)
+async def _guard_auth_employee(message: Message) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(AuthStates.choosing_department)
+async def _guard_auth_department(message: Message) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(ChangeDeptStates.choosing_department)
+async def _guard_change_dept(message: Message) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+# ─────────────────────────────────────────────────────
 # Навигация: подменю
 # ─────────────────────────────────────────────────────
 
-@router.message(F.text == "📂 Команды")
-async def btn_commands_menu(message: Message, state: FSMContext) -> None:
-    """Открыть подменю 'Команды' (синхронизация)."""
-    logger.info("[nav] Меню Команды tg:%d", message.from_user.id)
-    await reply_menu(message, state, "📂 Команды — выберите действие:", _commands_keyboard())
+@router.message(F.text == "📝 Списания")
+@permission_required("📝 Списания")
+async def btn_writeoffs_menu(message: Message, state: FSMContext) -> None:
+    """Подменю 'Списания' + фоновый прогрев кеша."""
+    logger.info("[nav] Меню Списания tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📝 Списания:", _writeoffs_keyboard())
+
+    tg_id = message.from_user.id
+    track_task(sync_uc.bg_sync_for_documents(f"bg:writeoffs:{tg_id}"))
+    ctx = await uctx.get_user_context(tg_id)
+    if ctx and ctx.department_id:
+        track_task(wo_uc.preload_for_user(ctx.department_id))
+
+
+@router.message(F.text == "📦 Накладные")
+@permission_required("📦 Накладные")
+async def btn_invoices_menu(message: Message, state: FSMContext) -> None:
+    """Подменю 'Накладные' + фоновый прогрев кеша."""
+    logger.info("[nav] Меню Накладные tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📦 Накладные:", _invoices_keyboard())
+
+    tg_id = message.from_user.id
+    track_task(sync_uc.bg_sync_for_documents(f"bg:invoices:{tg_id}"))
+    ctx = await uctx.get_user_context(tg_id)
+    if ctx and ctx.department_id:
+        from use_cases import outgoing_invoice as inv_uc
+        track_task(inv_uc.preload_for_invoice(ctx.department_id))
+
+
+@router.message(F.text == "📋 Заявки")
+@permission_required("📋 Заявки")
+async def btn_requests_menu(message: Message, state: FSMContext) -> None:
+    """Подменю 'Заявки'."""
+    logger.info("[nav] Меню Заявки tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📋 Заявки:", _requests_keyboard())
+
+    tg_id = message.from_user.id
+    track_task(sync_uc.bg_sync_for_documents(f"bg:requests:{tg_id}"))
 
 
 @router.message(F.text == "📊 Отчёты")
+@permission_required("📊 Отчёты")
 async def btn_reports_menu(message: Message, state: FSMContext) -> None:
-    """Открыть подменю 'Отчёты'."""
+    """Подменю 'Отчёты'."""
     logger.info("[nav] Меню Отчёты tg:%d", message.from_user.id)
     await reply_menu(message, state, "📊 Отчёты:", _reports_keyboard())
 
 
-@router.message(F.text == "📄 Документы")
-async def btn_documents_menu(message: Message, state: FSMContext) -> None:
-    """Открыть подменю 'Документы' + фоновая синхронизация и прогрев кеша."""
-    logger.info("[nav] Меню Документы tg:%d", message.from_user.id)
-    await reply_menu(message, state, "📄 Документы — выберите действие:", _documents_keyboard())
+@router.message(F.text == "⚙️ Настройки")
+@permission_required("⚙️ Настройки")
+async def btn_settings_menu(message: Message, state: FSMContext) -> None:
+    """Подменю 'Настройки' (только для админов)."""
+    logger.info("[nav] Меню Настройки tg:%d", message.from_user.id)
+    await reply_menu(message, state, "⚙️ Настройки:", _settings_keyboard())
 
-    tg_id = message.from_user.id
-    triggered_by = f"bg:documents:{tg_id}"
 
-    track_task(sync_uc.bg_sync_for_documents(triggered_by))
+@router.message(F.text == "🔄 Синхронизация")
+@admin_required
+async def btn_sync_menu(message: Message, state: FSMContext) -> None:
+    """Подменю 'Синхронизация'."""
+    logger.info("[nav] Меню Синхронизация tg:%d", message.from_user.id)
+    await reply_menu(message, state, "🔄 Синхронизация:", _sync_keyboard())
 
-    ctx = await uctx.get_user_context(tg_id)
-    if ctx and ctx.department_id:
-        track_task(wo_uc.preload_for_user(ctx.department_id))
-        from use_cases import outgoing_invoice as inv_uc
-        track_task(inv_uc.preload_for_invoice(ctx.department_id))
+
+@router.message(F.text == "📤 Google Таблицы")
+@admin_required
+async def btn_gsheet_menu(message: Message, state: FSMContext) -> None:
+    """Подменю 'Google Таблицы'."""
+    logger.info("[nav] Меню Google Таблицы tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📤 Google Таблицы:", _gsheet_keyboard())
+
+
+@router.message(F.text == "🔙 К настройкам")
+async def btn_back_to_settings(message: Message, state: FSMContext) -> None:
+    """Возврат в меню настроек."""
+    logger.info("[nav] Назад к настройкам tg:%d", message.from_user.id)
+    await reply_menu(message, state, "⚙️ Настройки:", _settings_keyboard())
 
 
 @router.message(F.text == "◀️ Назад")
 async def btn_back_to_main(message: Message, state: FSMContext) -> None:
     """Возврат в главное меню."""
     logger.info("[nav] Назад (главное меню) tg:%d", message.from_user.id)
-    await reply_menu(message, state, "🏠 Главное меню:", _main_keyboard())
+    kb = await _get_main_kb(message.from_user.id)
+    await reply_menu(message, state, "🏠 Главное меню:", kb)
 
 
 @router.message(F.text == "📊 Мин. остатки по складам")
@@ -420,6 +589,18 @@ async def btn_sync_price_sheet(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Прайс-лист → GSheet tg:%d", message.from_user.id)
     await sync_with_progress(message, "Прайс-лист → GSheet", sync_price_sheet, triggered_by=triggered)
+
+
+@router.message(F.text == "🔑 Права доступа → GSheet")
+@admin_required
+async def btn_sync_permissions_gsheet(message: Message) -> None:
+    """Выгрузить авторизованных сотрудников + столбцы прав в Google Таблицу."""
+    triggered = f"tg:{message.from_user.id}"
+    logger.info("[sync] Права доступа → GSheet tg:%d", message.from_user.id)
+    await sync_with_progress(
+        message, "Права доступа → GSheet",
+        perm_uc.sync_permissions_to_gsheet, triggered_by=triggered,
+    )
 
 
 # ─────────────────────────────────────────────────────

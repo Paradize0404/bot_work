@@ -35,10 +35,12 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
+    BufferedInputFile,
 )
 
 from use_cases import outgoing_invoice as inv_uc
 from use_cases import user_context as uctx
+from use_cases import pdf_invoice as pdf_uc
 from use_cases.writeoff import normalize_unit
 
 logger = logging.getLogger(__name__)
@@ -96,6 +98,7 @@ def _products_kb(products: list[dict]) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=p["name"], callback_data=f"inv_prod:{p['id']}")]
         for p in products
     ]
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -240,10 +243,14 @@ async def _ignore_text_confirm(message: Message) -> None:
 #  A) СОЗДАНИЕ ШАБЛОНА — шаги
 # ══════════════════════════════════════════════════════
 
-# ── 1. Старт — «📋 Создать шаблон накладной» ──
+# ── 1. Старт — «� Создать шаблон накладной» ──
 
-@router.message(F.text == "📋 Создать шаблон накладной")
+@router.message(F.text == "📑 Создать шаблон накладной")
 async def start_template(message: Message, state: FSMContext) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
@@ -255,6 +262,7 @@ async def start_template(message: Message, state: FSMContext) -> None:
         message.from_user.id, ctx.department_id, ctx.department_name,
     )
 
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     # Параллельно: склады + счёт реализации + поставщики из прайс-листа
     stores, account, price_suppliers = await asyncio.gather(
         inv_uc.get_stores_for_department(ctx.department_id),
@@ -591,6 +599,10 @@ async def save_template(message: Message, state: FSMContext) -> None:
 
 @router.message(F.text == "📦 Создать по шаблону")
 async def start_from_template(message: Message, state: FSMContext) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
@@ -602,6 +614,7 @@ async def start_from_template(message: Message, state: FSMContext) -> None:
         message.from_user.id, ctx.department_id,
     )
 
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     templates = await inv_uc.get_templates_for_department(ctx.department_id)
     if not templates:
         await message.answer("❌ Нет сохранённых шаблонов.\nСначала создайте шаблон.")
@@ -680,8 +693,11 @@ async def choose_template_cb(callback: CallbackQuery, state: FSMContext) -> None
     )
     await state.set_state(InvoiceFromTemplateStates.enter_quantities)
 
+    _cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
+    ])
     # Новое сообщение (может быть длинным)
-    msg = await callback.message.answer(text, parse_mode="HTML")
+    msg = await callback.message.answer(text, parse_mode="HTML", reply_markup=_cancel_kb)
     await state.update_data(prompt_msg_id=msg.message_id)
 
 
@@ -860,7 +876,48 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
         result_text,
     )
 
+    # Генерация и отправка PDF-документа
+    if result_text.startswith("✅"):
+        try:
+            department_name = ""
+            if ctx and ctx.department_name:
+                department_name = ctx.department_name
+
+            pdf_bytes = pdf_uc.generate_invoice_pdf(
+                items=items_with_qty,
+                store_name=template.get("store_name", ""),
+                counteragent_name=template.get("counteragent_name", ""),
+                account_name=template.get("account_name", ""),
+                department_name=department_name,
+                author_name=author_name,
+                comment=comment,
+                total_sum=data.get("_total_sum"),
+                doc_title="Расходная накладная",
+            )
+            filename = pdf_uc.generate_invoice_filename(
+                counteragent_name=template.get("counteragent_name", ""),
+                store_name=template.get("store_name", ""),
+            )
+            await callback.bot.send_document(
+                callback.message.chat.id,
+                BufferedInputFile(pdf_bytes, filename=filename),
+                caption="📄 Расходная накладная (2 копии)",
+            )
+            logger.info("[invoice][from_tpl] PDF отправлен: %s (%.1f КБ)",
+                        filename, len(pdf_bytes) / 1024)
+        except Exception:
+            logger.exception("[invoice][from_tpl] Ошибка генерации PDF")
+
     logger.info("[invoice][from_tpl] ◀ Результат отправки: %s", result_text[:100])
+
+    # Удаляем старые сообщения (header с шаблонами и т.д.)
+    header_id = data.get("header_msg_id")
+    if header_id and header_id != callback.message.message_id:
+        try:
+            await callback.bot.delete_message(callback.message.chat.id, header_id)
+        except Exception:
+            pass
+
     await state.clear()
 
 
@@ -905,13 +962,16 @@ async def cancel_template(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[invoice] Отмена tg:%d", callback.from_user.id)
 
     data = await state.get_data()
-    for key in ("header_msg_id", "prompt_msg_id"):
-        msg_id = data.get(key)
-        if msg_id:
-            try:
-                await callback.bot.delete_message(callback.message.chat.id, msg_id)
-            except Exception:
-                pass
+    # Удаляем header (summary), а prompt (текущее сообщение) редактируем
+    header_id = data.get("header_msg_id")
+    if header_id and header_id != callback.message.message_id:
+        try:
+            await callback.bot.delete_message(callback.message.chat.id, header_id)
+        except Exception:
+            pass
 
     await state.clear()
-    await callback.message.answer("❌ Действие отменено.")
+    try:
+        await callback.message.edit_text("❌ Действие отменено.")
+    except Exception:
+        pass

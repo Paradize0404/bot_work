@@ -17,6 +17,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -862,3 +863,330 @@ async def read_invoice_prices() -> list[dict[str, Any]]:
     elapsed = time.monotonic() - t0
     logger.info("[%s] Прочитано %d записей из прайс-листа за %.1f сек", LABEL, len(result), elapsed)
     return result
+
+
+# ═══════════════════════════════════════════════════════
+# Права доступа (лист «Права доступа»)
+# ═══════════════════════════════════════════════════════
+
+PERMS_TAB = "Права доступа"
+
+# Значения в ячейке, которые означают «разрешено»
+_TRUTHY = {"✅", "1", "да", "yes", "true", "+"}
+
+
+def _get_permissions_worksheet() -> gspread.Worksheet:
+    """Получить лист «Права доступа» из таблицы (создать если нет)."""
+    client = _get_client()
+    spreadsheet = client.open_by_key(MIN_STOCK_SHEET_ID)
+    try:
+        ws = spreadsheet.worksheet(PERMS_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=PERMS_TAB, rows=200, cols=20)
+        logger.info("[%s] Лист «%s» создан", LABEL, PERMS_TAB)
+    return ws
+
+
+async def read_permissions_sheet() -> list[dict[str, Any]]:
+    """
+    Прочитать матрицу прав из Google Таблицы.
+
+    Формат листа:
+      Строка 1 (мета, скрытая):  "", "telegram_id", "perm_key_1", "perm_key_2", ...
+      Строка 2 (заголовки):      "Сотрудник", "Telegram ID", "📝 Списания", ...
+      Строка 3+:                 "Иванов", "123456789", "✅", "", ...
+
+    Возвращает:
+      [{telegram_id: int, perms: {perm_key: bool, ...}}, ...]
+    """
+    t0 = time.monotonic()
+
+    def _sync_read() -> list[dict[str, Any]]:
+        ws = _get_permissions_worksheet()
+        all_values = ws.get_all_values()
+
+        if len(all_values) < 3:
+            return []
+
+        # Мета-строка (строка 1) — ключи прав (начиная со столбца C)
+        meta_row = all_values[0]
+        perm_keys: list[str] = []
+        for ci in range(2, len(meta_row)):
+            perm_keys.append(meta_row[ci].strip())
+
+        # Заголовки (строка 2) — для отображения, не используем в логике
+        # Данные — со строки 3
+        result: list[dict[str, Any]] = []
+        for row in all_values[2:]:
+            if len(row) < 2:
+                continue
+            tg_id_str = row[1].strip()
+            if not tg_id_str:
+                continue
+            try:
+                tg_id = int(tg_id_str)
+            except ValueError:
+                continue
+
+            perms: dict[str, bool] = {}
+            for ci, key in enumerate(perm_keys):
+                if not key:
+                    continue
+                cell_val = row[2 + ci].strip().lower() if (2 + ci) < len(row) else ""
+                perms[key] = cell_val in _TRUTHY or cell_val in {v.lower() for v in _TRUTHY}
+            result.append({"telegram_id": tg_id, "perms": perms})
+
+        return result
+
+    result = await asyncio.to_thread(_sync_read)
+    elapsed = time.monotonic() - t0
+    logger.info("[%s] Прочитано %d записей прав за %.1f сек", LABEL, len(result), elapsed)
+    return result
+
+
+async def sync_permissions_to_sheet(
+    employees: list[dict[str, Any]],
+    permission_keys: list[str],
+) -> int:
+    """
+    Синхронизировать авторизованных сотрудников и кнопки → Google Таблицу.
+
+    employees:       [{name, telegram_id}, ...] — авторизованные сотрудники
+    permission_keys: ["📝 Списания", "📦 Накладные", ...] — столбцы прав
+
+    Защита от «дурака»:
+      - Новые сотрудники добавляются с пустыми правами
+      - Новые столбцы добавляются пустыми
+      - Существующие ✅/❌ НЕ перезаписываются
+      - Строки уволенных НЕ удаляются (но и не добавляются новые)
+      - НЕ стирает лист целиком (в отличие от номенклатуры)
+
+    Возвращает кол-во строк сотрудников.
+    """
+    t0 = time.monotonic()
+    logger.info(
+        "[%s] Синхронизация прав → GSheet: %d сотрудников, %d ключей прав",
+        LABEL, len(employees), len(permission_keys),
+    )
+
+    def _sync_write() -> int:
+        ws = _get_permissions_worksheet()
+
+        # ── 1. Читаем текущие данные ──
+        existing_data = ws.get_all_values()
+
+        # ── 2. Извлекаем существующие права {tg_id_str: {perm_key: cell_value}} ──
+        old_perms: dict[str, dict[str, str]] = {}
+        old_names: dict[str, str] = {}  # tg_id_str → name (для сохранения)
+        old_perm_keys: list[str] = []
+        old_tg_ids_order: list[str] = []  # порядок telegram_id в таблице
+
+        if len(existing_data) >= 3:
+            meta_row = existing_data[0]
+            old_perm_keys = [meta_row[ci].strip() for ci in range(2, len(meta_row))]
+
+            for row in existing_data[2:]:
+                if len(row) < 2 or not row[1].strip():
+                    continue
+                tg_id_str = row[1].strip()
+                name = row[0].strip()
+                old_names[tg_id_str] = name
+                old_tg_ids_order.append(tg_id_str)
+
+                perms: dict[str, str] = {}
+                for ci, key in enumerate(old_perm_keys):
+                    if not key:
+                        continue
+                    cell_val = row[2 + ci].strip() if (2 + ci) < len(row) else ""
+                    if cell_val:
+                        perms[key] = cell_val
+                old_perms[tg_id_str] = perms
+
+        logger.info(
+            "[%s] Из таблицы: %d существующих сотрудников, %d столбцов прав",
+            LABEL, len(old_perms), len(old_perm_keys),
+        )
+
+        # ── 3. Объединяем ключи прав (старые + новые, сохраняя порядок) ──
+        merged_keys: list[str] = list(old_perm_keys)
+        for key in permission_keys:
+            if key not in merged_keys:
+                merged_keys.append(key)
+
+        # ── 4. Объединяем сотрудников (старые + новые) ──
+        # Сохраняем порядок старых, добавляем новых в конец (отсортированных по имени)
+        existing_tg_ids = set(old_tg_ids_order)
+        new_employees = [
+            e for e in employees
+            if str(e["telegram_id"]) not in existing_tg_ids
+        ]
+        # Сортируем новых по имени
+        new_employees.sort(key=lambda e: e.get("name", ""))
+
+        # Полный список: старые (в старом порядке) + новые
+        all_tg_ids: list[str] = list(old_tg_ids_order)
+        # Обновляем имена для существующих
+        emp_name_map = {str(e["telegram_id"]): e["name"] for e in employees}
+        for tg_str in all_tg_ids:
+            if tg_str in emp_name_map:
+                old_names[tg_str] = emp_name_map[tg_str]
+
+        for e in new_employees:
+            tg_str = str(e["telegram_id"])
+            all_tg_ids.append(tg_str)
+            old_names[tg_str] = e.get("name", "")
+            old_perms[tg_str] = {}  # пустые права для новых
+
+        # ── 5. Строим таблицу ──
+        num_cols = 2 + len(merged_keys)
+
+        # Строка 1 (мета): "", "telegram_id", key1, key2, ...
+        meta = ["", "telegram_id"] + merged_keys
+
+        # Строка 2 (заголовки): "Сотрудник", "Telegram ID", key1, key2, ...
+        headers = ["Сотрудник", "Telegram ID"] + merged_keys
+
+        # Строки 3+ (данные)
+        data_rows = []
+        for tg_str in all_tg_ids:
+            name = old_names.get(tg_str, "")
+            row = [name, tg_str]
+            for key in merged_keys:
+                cell_val = old_perms.get(tg_str, {}).get(key, "")
+                row.append(cell_val)
+            data_rows.append(row)
+
+        # ── 6. Записываем ──
+        all_rows = [meta, headers] + data_rows
+        needed_rows = len(all_rows) + 10
+        needed_cols = max(num_cols, 2)
+
+        if ws.row_count < needed_rows or ws.col_count < needed_cols:
+            ws.resize(
+                rows=max(needed_rows, ws.row_count),
+                cols=max(needed_cols, ws.col_count),
+            )
+
+        ws.clear()
+
+        if all_rows:
+            end_cell = gspread.utils.rowcol_to_a1(len(all_rows), num_cols)
+            ws.update(
+                f"A1:{end_cell}",
+                all_rows,
+                value_input_option="RAW",
+            )
+
+        # ── 7. Форматирование ──
+        try:
+            last_col = gspread.utils.rowcol_to_a1(1, num_cols)[-1] if num_cols <= 26 else "Z"
+            # Мета-строка — мелкий серый шрифт
+            ws.format(f"A1:{last_col}1", {
+                "textFormat": {
+                    "fontSize": 8,
+                    "foregroundColor": {"red": 0.6, "green": 0.6, "blue": 0.6},
+                },
+            })
+            # Заголовки — жирные, по центру
+            ws.format(f"A2:{last_col}2", {
+                "textFormat": {"bold": True},
+                "horizontalAlignment": "CENTER",
+            })
+            # Столбцы прав — по центру
+            if len(merged_keys) > 0:
+                perm_start = gspread.utils.rowcol_to_a1(3, 3)[:1]  # "C"
+                perm_end_col = gspread.utils.rowcol_to_a1(1, num_cols)
+                # Удалим цифры — оставим букву
+                perm_end_letter = re.sub(r'\d+', '', perm_end_col)
+                ws.format(f"{perm_start}3:{perm_end_letter}{len(all_rows)}", {
+                    "horizontalAlignment": "CENTER",
+                })
+            ws.freeze(rows=2, cols=1)
+
+            # Data validation: ✅ или пусто для столбцов прав
+            from gspread.worksheet import ValidationConditionType
+            for ci in range(len(merged_keys)):
+                col_1based = 3 + ci  # C=3, D=4, ...
+                col_letter = gspread.utils.rowcol_to_a1(1, col_1based)
+                col_letter = re.sub(r'\d+', '', col_letter)
+                cell_range = f"{col_letter}3:{col_letter}{len(all_rows)}"
+                ws.add_validation(
+                    cell_range,
+                    ValidationConditionType.one_of_list,
+                    ["✅", ""],
+                    showCustomUi=True,
+                    strict=False,
+                )
+
+        except Exception:
+            logger.warning("[%s] Ошибка форматирования прав", LABEL, exc_info=True)
+
+        # ── 8. batch_update: скрыть строку 1 (мета) ──
+        try:
+            spreadsheet = ws.spreadsheet
+            requests: list[dict] = [
+                # Скрыть строку 1 (index 0) — мета
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "ROWS",
+                            "startIndex": 0,
+                            "endIndex": 1,
+                        },
+                        "properties": {"hiddenByUser": True},
+                        "fields": "hiddenByUser",
+                    }
+                },
+                # Авто-ширина колонки A (имя)
+                {
+                    "autoResizeDimensions": {
+                        "dimensions": {
+                            "sheetId": ws.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 0,
+                            "endIndex": 1,
+                        }
+                    }
+                },
+                # Ширина колонки B (Telegram ID) — 130px
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 1,
+                            "endIndex": 2,
+                        },
+                        "properties": {"pixelSize": 130},
+                        "fields": "pixelSize",
+                    }
+                },
+                # Ширина столбцов прав — 140px
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 2,
+                            "endIndex": num_cols,
+                        },
+                        "properties": {"pixelSize": 140},
+                        "fields": "pixelSize",
+                    }
+                },
+            ]
+            spreadsheet.batch_update({"requests": requests})
+            logger.info("[%s] batch_update прав: скрыта строка 1, ширины столбцов", LABEL)
+        except Exception:
+            logger.warning("[%s] Ошибка batch_update прав", LABEL, exc_info=True)
+
+        return len(data_rows)
+
+    count = await asyncio.to_thread(_sync_write)
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "[%s] Синхронизация прав → GSheet: %d сотрудников за %.1f сек",
+        LABEL, count, elapsed,
+    )
+    return count

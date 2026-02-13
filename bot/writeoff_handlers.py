@@ -100,6 +100,18 @@ def _stores_kb(stores: list[dict]) -> InlineKeyboardMarkup:
 
 ACC_PAGE_SIZE = 10
 
+_ACC_PREFIXES = ("списание кухня", "списание бар", "списание")
+
+
+def _short_acc_name(full_name: str) -> str:
+    """Strip 'Списание кухня/бар' prefix and capitalise the remainder."""
+    low = full_name.lower().strip()
+    for prefix in _ACC_PREFIXES:
+        if low.startswith(prefix):
+            tail = full_name[len(prefix):].strip()
+            return tail[:1].upper() + tail[1:] if tail else full_name
+    return full_name
+
 
 def _accounts_kb(accounts: list[dict], page: int = 0) -> InlineKeyboardMarkup:
     total = len(accounts)
@@ -108,7 +120,7 @@ def _accounts_kb(accounts: list[dict], page: int = 0) -> InlineKeyboardMarkup:
     page_items = accounts[start:end]
 
     buttons = [
-        [InlineKeyboardButton(text=a["name"], callback_data=f"wo_acc:{a['id']}")]
+        [InlineKeyboardButton(text=_short_acc_name(a["name"]), callback_data=f"wo_acc:{a['id']}")]
         for a in page_items
     ]
     nav = []
@@ -131,6 +143,7 @@ def _products_kb(products: list[dict]) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=p["name"], callback_data=f"wo_prod:{p['id']}")]
         for p in products
     ]
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="wo_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -230,6 +243,10 @@ async def _ignore_text_account(message: Message) -> None:
 
 @router.message(F.text == "📝 Создать списание")
 async def start_writeoff(message: Message, state: FSMContext) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
@@ -242,6 +259,7 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
     # Фоновый прогрев кеша номенклатуры (если ещё не прогрет)
     asyncio.create_task(wo_uc.preload_products())
 
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     # Параллельно: is_admin + prepare_writeoff
     is_bot_admin = await admin_uc.is_admin(message.from_user.id)
     wo_start = await wo_uc.prepare_writeoff(
@@ -374,7 +392,10 @@ async def choose_account(callback: CallbackQuery, state: FSMContext) -> None:
     await _update_summary(callback.bot, callback.message.chat.id, state)
     await state.set_state(WriteoffStates.reason)
     await _send_prompt(callback.bot, callback.message.chat.id, state,
-                       "📝 Введите причину списания:")
+                       "📝 Введите причину списания:",
+                       reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                           [InlineKeyboardButton(text="❌ Отмена", callback_data="wo_cancel")],
+                       ]))
 
 
 # ── 4. Причина ──
@@ -478,6 +499,19 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
         prompt = f"📏 Сколько <b>{unit_name}</b> для «{product['name']}»?"
         unit_label = unit_name
 
+    _qty_cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="wo_cancel")],
+    ])
+
+    # Удаляем старый prompt (поиск товара), чтобы не задваивалось
+    old_prompt_id = data.get("prompt_msg_id")
+    if old_prompt_id and old_prompt_id != callback.message.message_id:
+        try:
+            await callback.bot.delete_message(chat_id=callback.message.chat.id,
+                                              message_id=old_prompt_id)
+        except Exception:
+            pass
+
     await state.update_data(
         current_item=product, current_unit_name=unit_name,
         current_unit_norm=norm, current_unit_label=unit_label,
@@ -485,9 +519,9 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
     )
     await state.set_state(WriteoffStates.quantity)
     try:
-        await callback.message.edit_text(prompt, parse_mode="HTML")
+        await callback.message.edit_text(prompt, parse_mode="HTML", reply_markup=_qty_cancel_kb)
     except Exception:
-        msg = await callback.message.answer(prompt, parse_mode="HTML")
+        msg = await callback.message.answer(prompt, parse_mode="HTML", reply_markup=_qty_cancel_kb)
         await state.update_data(quantity_prompt_id=msg.message_id,
                                 prompt_msg_id=msg.message_id)
         return
@@ -712,7 +746,22 @@ async def admin_approve(callback: CallbackQuery) -> None:
                                    f"✅ Одобрено admin {admin_name}", except_admin=admin_id)
 
     # Отправляем в iiko через use_case
-    approval = await wo_uc.approve_writeoff(doc)
+    try:
+        approval = await wo_uc.approve_writeoff(doc)
+    except Exception as exc:
+        logger.exception("[writeoff] Ошибка одобрения doc=%s", doc_id)
+        try:
+            await callback.message.edit_text(
+                pending.build_summary_text(doc)
+                + f"\n\n❌ Ошибка отправки в iiko: {exc}\n👤 {admin_name}\n"
+                "Попробуйте ещё раз.",
+                parse_mode="HTML",
+                reply_markup=pending.admin_keyboard(doc_id),
+            )
+        except Exception:
+            pass
+        pending.unlock(doc_id)
+        return
 
     # Сохраняем в историю при успешной отправке
     if approval.success:
@@ -1352,11 +1401,15 @@ def _hist_item_action_kb(idx: int) -> InlineKeyboardMarkup:
     ])
 
 
-# ── 1. Кнопка «📋 История списаний» ──
+# ── 1. Кнопка «� История списаний» ──
 
-@router.message(F.text == "📋 История списаний")
+@router.message(F.text == "🗂 История списаний")
 async def start_history(message: Message, state: FSMContext) -> None:
     """Открыть историю списаний с фильтрацией по роли."""
+    try:
+        await message.delete()
+    except Exception:
+        pass
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
@@ -2171,7 +2224,19 @@ def _build_hist_edit_summary(data: dict) -> str:
 async def cancel_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     logger.info("[writeoff] Отменено user %d", callback.from_user.id)
+
+    data = await state.get_data()
+    # Удаляем header (summary), но НЕ prompt — его мы редактируем
+    header_id = data.get("header_msg_id")
+    if header_id and header_id != callback.message.message_id:
+        try:
+            await callback.bot.delete_message(callback.message.chat.id, header_id)
+        except Exception:
+            pass
+
     await state.clear()
     wo_cache.invalidate()
-    try: await callback.message.edit_text("❌ Создание акта списания отменено.")
-    except Exception: await callback.message.answer("❌ Создание акта списания отменено.")
+    try:
+        await callback.message.edit_text("❌ Создание акта списания отменено.")
+    except Exception:
+        pass

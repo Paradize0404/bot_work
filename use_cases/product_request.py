@@ -280,6 +280,76 @@ async def get_pending_requests() -> list[dict]:
     ]
 
 
+async def get_pending_requests_full() -> list[dict]:
+    """Все заявки pending с полными данными (без N+1)."""
+    async with async_session_factory() as session:
+        stmt = (
+            select(ProductRequest)
+            .where(ProductRequest.status == "pending")
+            .order_by(ProductRequest.created_at.desc())
+            .limit(10)
+        )
+        result = await session.execute(stmt)
+        rows = result.scalars().all()
+
+    return [
+        {
+            "pk": r.pk,
+            "status": r.status,
+            "requester_tg": r.requester_tg,
+            "requester_name": r.requester_name,
+            "department_id": str(r.department_id),
+            "department_name": r.department_name,
+            "store_id": str(r.store_id),
+            "store_name": r.store_name,
+            "counteragent_id": str(r.counteragent_id),
+            "counteragent_name": r.counteragent_name,
+            "account_id": str(r.account_id),
+            "account_name": r.account_name,
+            "items": r.items or [],
+            "total_sum": float(r.total_sum) if r.total_sum else 0.0,
+            "comment": r.comment,
+            "approved_by": r.approved_by,
+            "created_at": r.created_at,
+            "approved_at": r.approved_at,
+        }
+        for r in rows
+    ]
+
+
+async def get_user_requests(telegram_id: int, limit: int = 10) -> list[dict]:
+    """Последние заявки пользователя (approved/pending/cancelled), для истории."""
+    async with async_session_factory() as session:
+        stmt = (
+            select(ProductRequest)
+            .where(ProductRequest.requester_tg == telegram_id)
+            .order_by(ProductRequest.created_at.desc())
+            .limit(limit)
+        )
+        result = await session.execute(stmt)
+        rows = result.scalars().all()
+
+    return [
+        {
+            "pk": r.pk,
+            "status": r.status,
+            "requester_name": r.requester_name,
+            "department_id": str(r.department_id),
+            "department_name": r.department_name,
+            "store_id": str(r.store_id),
+            "store_name": r.store_name,
+            "counteragent_id": str(r.counteragent_id),
+            "counteragent_name": r.counteragent_name,
+            "account_id": str(r.account_id),
+            "account_name": r.account_name,
+            "items": r.items or [],
+            "total_sum": float(r.total_sum) if r.total_sum else 0.0,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]
+
+
 async def approve_request(pk: int, approved_by: int) -> bool:
     """Пометить заявку как approved."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)

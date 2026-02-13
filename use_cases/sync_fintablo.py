@@ -17,6 +17,7 @@ from adapters import fintablo_api
 from db.engine import async_session_factory
 from db.models import SyncLog
 from use_cases.sync import _batch_upsert, _mirror_delete, _safe_decimal  # DRY: shared helpers
+from use_cases._helpers import safe_int as _safe_int  # DRY: вместо локального дубликата
 from db.ft_models import (
     FTCategory,
     FTMoneybag,
@@ -36,19 +37,6 @@ from db.ft_models import (
 logger = logging.getLogger(__name__)
 
 FTRowMapper = Callable[[dict, datetime], dict | None]
-
-
-# ═══════════════════════════════════════════════════════
-# Helpers
-# ═══════════════════════════════════════════════════════
-
-def _safe_int(v: Any) -> int | None:
-    if v is None:
-        return None
-    try:
-        return int(v)
-    except (ValueError, TypeError):
-        return None
 
 
 # ═══════════════════════════════════════════════════════
