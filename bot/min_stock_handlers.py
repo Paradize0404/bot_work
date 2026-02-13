@@ -23,7 +23,10 @@ from aiogram.types import (
 )
 
 from bot._utils import escape_md as _escape_md, reports_keyboard
-from bot.middleware import set_cancel_kb, restore_menu_kb
+from bot.middleware import (
+    set_cancel_kb, restore_menu_kb,
+    parse_uuid, validate_callback_uuid, truncate_input, MAX_TEXT_SEARCH,
+)
 from use_cases import edit_min_stock as ems_uc
 from use_cases import user_context as uctx
 
@@ -82,7 +85,7 @@ async def btn_edit_min_stock(message: Message, state: FSMContext) -> None:
 @router.message(EditMinStockStates.search_product)
 async def search_product(message: Message, state: FSMContext) -> None:
     """Пользователь ввёл текст → ищем товары."""
-    query = (message.text or "").strip()
+    query = truncate_input((message.text or "").strip(), MAX_TEXT_SEARCH)
     logger.info("[edit-min] Поиск «%s» tg:%d", query, message.from_user.id)
 
     try:
@@ -164,6 +167,10 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
     product_id = callback.data[len(CB_PROD):]
+    if parse_uuid(product_id) is None:
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        logger.warning("[security] Невалидный UUID product_id=%r tg:%d", product_id, callback.from_user.id)
+        return
     data = await state.get_data()
     products_cache = data.get("_products_cache", {})
     product_info = products_cache.get(product_id, {})

@@ -60,6 +60,59 @@ def parse_callback_int(callback_data: str) -> tuple[str, int | None]:
     return prefix, parse_int(parts[1])
 
 
+def extract_callback_value(callback_data: str) -> str | None:
+    """Извлечь значение после ':' из callback_data. None если нет разделителя."""
+    parts = callback_data.split(":", 1)
+    if len(parts) < 2 or not parts[1].strip():
+        return None
+    return parts[1]
+
+
+async def validate_callback_uuid(callback: "CallbackQuery", callback_data: str) -> str | None:
+    """
+    Извлечь и валидировать UUID из callback_data.
+    При ошибке — callback.answer + warning лог. Возвращает str UUID или None.
+    """
+    raw = extract_callback_value(callback_data)
+    if raw is None or parse_uuid(raw) is None:
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        logger.warning("[security] Невалидный UUID в callback_data: %r tg:%d", callback_data, callback.from_user.id)
+        return None
+    return raw
+
+
+async def validate_callback_int(callback: "CallbackQuery", callback_data: str) -> int | None:
+    """
+    Извлечь и валидировать int из callback_data.
+    При ошибке — callback.answer + warning лог. Возвращает int или None.
+    """
+    raw = extract_callback_value(callback_data)
+    if raw is None:
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        logger.warning("[security] Невалидный int в callback_data: %r tg:%d", callback_data, callback.from_user.id)
+        return None
+    val = parse_int(raw)
+    if val is None:
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        logger.warning("[security] Невалидный int в callback_data: %r tg:%d", callback_data, callback.from_user.id)
+        return None
+    return val
+
+
+# Максимальная длина текстовых вводов
+MAX_TEXT_SEARCH = 200       # поисковый запрос
+MAX_TEXT_REASON = 500       # причина списания
+MAX_TEXT_GENERAL = 2000     # общий текст
+MAX_TEXT_NAME = 100         # имя / фамилия
+
+
+def truncate_input(text: str, max_len: int = MAX_TEXT_GENERAL) -> str:
+    """Обрезать пользовательский ввод до допустимой длины."""
+    if len(text) > max_len:
+        return text[:max_len]
+    return text
+
+
 # ═══════════════════════════════════════════════════════
 # 2. Декораторы авторизации
 # ═══════════════════════════════════════════════════════
@@ -139,22 +192,37 @@ def get_sync_lock(entity: str) -> asyncio.Lock:
 # 4. Хелпер sync с прогрессом (placeholder → edit)
 # ═══════════════════════════════════════════════════════
 
-async def sync_with_progress(message: Message, label: str, sync_fn, **kwargs) -> None:
+async def sync_with_progress(message: Message, label: str, sync_fn, *, lock_key: str | None = None, **kwargs) -> None:
     """
     Единый паттерн для sync-кнопок:
-      1. Отправить «⏳ ...» placeholder
-      2. Выполнить sync
-      3. Edit placeholder → «✅ результат»
+      1. Проверить sync-lock (если lock_key задан)
+      2. Отправить «⏳ ...» placeholder
+      3. Выполнить sync
+      4. Edit placeholder → «✅ результат»
 
     Исключает дублирование кода в десятках sync-handler'ов.
     """
+    if lock_key:
+        lock = get_sync_lock(lock_key)
+        if lock.locked():
+            await message.answer(f"⏳ {label} уже выполняется. Подождите завершения.")
+            return
+
     loading = await message.answer(f"⏳ {label}...")
-    try:
-        count = await sync_fn(**kwargs)
-        await loading.edit_text(f"✅ {label}: {count} записей")
-    except Exception as exc:
-        logger.exception("[sync] %s failed", label)
-        await loading.edit_text(f"❌ {label}: {exc}")
+
+    async def _do_sync():
+        try:
+            count = await sync_fn(**kwargs)
+            await loading.edit_text(f"✅ {label}: {count} записей")
+        except Exception as exc:
+            logger.exception("[sync] %s failed", label)
+            await loading.edit_text(f"❌ {label}: {exc}")
+
+    if lock_key:
+        async with get_sync_lock(lock_key):
+            await _do_sync()
+    else:
+        await _do_sync()
 
 
 # ═══════════════════════════════════════════════════════

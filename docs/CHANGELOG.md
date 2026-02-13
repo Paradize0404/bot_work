@@ -4,6 +4,39 @@
 
 ---
 
+### 2026-02-15 — Security Hardening: аудит и исправление уязвимостей
+
+**Цель:** Полный аудит проекта по PROJECT_MAP.md (раздел 7–8: Валидация входных данных, Безопасность).
+Найдены и исправлены уязвимости во всех handler-файлах.
+
+**1. Валидация callback_data** (`bot/writeoff_handlers.py`, `bot/handlers.py`, `bot/min_stock_handlers.py`)
+- Добавлены утилиты в `bot/middleware.py`: `extract_callback_value()`, `validate_callback_uuid()`, `validate_callback_int()`, `truncate_input()`, константы `MAX_TEXT_SEARCH=200`, `MAX_TEXT_REASON=500`, `MAX_TEXT_GENERAL=2000`, `MAX_TEXT_NAME=100`
+- **writeoff_handlers.py**: 12+ callback_data UUID/int теперь валидируются через `validate_callback_uuid()`/`validate_callback_int()` (store_id, account_id, product_id, page, item_idx и др.)
+- **handlers.py**: UUID-валидация для auth-колбэков (`process_choose_employee`, `process_choose_department`, `process_change_department`)
+- **min_stock_handlers.py**: UUID-валидация для `select_product`
+
+**2. КРИТИЧЕСКИЕ фиксы: admin permission checks** (`bot/writeoff_handlers.py`)
+- `admin_approve`, `admin_reject`, `admin_edit_start` — **ранее не проверяли admin-права!** Любой пользователь мог одобрить/отклонить списание, зная callback_data. Добавлена проверка `admin_uc.is_admin()`.
+
+**3. Sync-блокировки конкурентности** (`bot/handlers.py`)
+- Все 14 sync-обработчиков теперь используют `asyncio.Lock` per entity type через `get_sync_lock()` в `sync_with_progress()`
+- Агрегаторы (`sync_entities`, `sync_all_iiko`, `ft_sync_all`, `sync_everything`) проверяют `.locked()` перед запуском
+
+**4. Ограничение длины текстового ввода**
+- `writeoff_handlers.py`: search_product, admin_search_new_product, hist_edit_add_item_search → `truncate_input(query, MAX_TEXT_SEARCH)`
+- `handlers.py`: process_last_name → `truncate_input(text, MAX_TEXT_NAME)`
+- `min_stock_handlers.py`: search_product → `truncate_input(query, MAX_TEXT_SEARCH)`
+- `invoice_handlers.py`: enter_quantities → `raw[:2000]`
+
+**5. logging_config.py** — Исправлен FileHandler(mode="w") → `RotatingFileHandler(maxBytes=5MB, backupCount=3)` (как заявлено в docstring)
+
+**6. SSL-верификация iiko** — Введена переменная `IIKO_VERIFY_SSL` в `config.py`:
+- `adapters/iiko_api.py` и `iiko_auth.py` теперь используют настраиваемый параметр вместо хардкод `verify=False`
+- По умолчанию `false` (обратная совместимость с self-signed сертами iiko on-premise)
+- Можно задать `true` или путь к CA-bundle
+
+---
+
 ### 2026-02-14 — Скрытие Reply-клавиатуры во время dialog-flow'ов
 
 **Цель:** При заполнении документа (списание, накладная, заявка, редактирование мин. остатка) Reply-клавиатура подменю должна скрываться, чтобы пользователь не мог случайно нажать навигационные кнопки. Вместо неё отображается только кнопка «❌ Отмена».

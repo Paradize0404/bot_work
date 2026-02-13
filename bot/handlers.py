@@ -39,8 +39,9 @@ from use_cases import reports as reports_uc
 from use_cases import permissions as perm_uc
 from bot.middleware import (
     admin_required, auth_required, permission_required,
-    sync_with_progress, track_task,
+    sync_with_progress, track_task, get_sync_lock,
     parse_callback_uuid, reply_menu,
+    validate_callback_uuid, truncate_input, MAX_TEXT_NAME,
 )
 
 logger = logging.getLogger(__name__)
@@ -212,7 +213,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 @router.message(AuthStates.waiting_last_name)
 async def process_last_name(message: Message, state: FSMContext) -> None:
     """Поиск сотрудника по фамилии."""
-    last_name = message.text.strip()
+    last_name = truncate_input(message.text.strip(), MAX_TEXT_NAME)
     logger.info("[auth] Ввод фамилии tg:%d, text='%s'", message.from_user.id, last_name)
     try:
         await message.delete()
@@ -270,7 +271,9 @@ async def process_last_name(message: Message, state: FSMContext) -> None:
 async def process_choose_employee(callback: CallbackQuery, state: FSMContext) -> None:
     """Пользователь выбрал сотрудника из списка."""
     await callback.answer()
-    employee_id = callback.data.split(":", 1)[1]
+    employee_id = await validate_callback_uuid(callback, callback.data)
+    if not employee_id:
+        return
     logger.info("[auth] Выбран сотрудник tg:%d, emp_id=%s", callback.from_user.id, employee_id)
     await callback.message.edit_text("⏳ Загрузка...")
 
@@ -301,7 +304,9 @@ async def process_choose_employee(callback: CallbackQuery, state: FSMContext) ->
 async def process_choose_department(callback: CallbackQuery, state: FSMContext) -> None:
     """Пользователь выбрал ресторан при авторизации."""
     await callback.answer()
-    department_id = callback.data.split(":", 1)[1]
+    department_id = await validate_callback_uuid(callback, callback.data)
+    if not department_id:
+        return
     logger.info("[auth] Выбран ресторан tg:%d, dept_id=%s", callback.from_user.id, department_id)
 
     data = await state.get_data()
@@ -378,7 +383,9 @@ async def btn_change_department(message: Message, state: FSMContext) -> None:
 async def process_change_department(callback: CallbackQuery, state: FSMContext) -> None:
     """Сохранить новый ресторан."""
     await callback.answer()
-    department_id = callback.data.split(":", 1)[1]
+    department_id = await validate_callback_uuid(callback, callback.data)
+    if not department_id:
+        return
     logger.info("[nav] Ресторан изменён tg:%d, dept_id=%s", callback.from_user.id, department_id)
     dept_name = await auth_uc.complete_department_selection(callback.from_user.id, department_id)
 
@@ -534,7 +541,7 @@ async def btn_sync_nomenclature_gsheet(message: Message) -> None:
     from use_cases.sync_min_stock import sync_nomenclature_to_gsheet
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Номенклатура → GSheet tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Номенклатура → GSheet", sync_nomenclature_to_gsheet, triggered_by=triggered)
+    await sync_with_progress(message, "Номенклатура → GSheet", sync_nomenclature_to_gsheet, lock_key="gsheet_nomenclature", triggered_by=triggered)
 
 
 @router.message(F.text == "📥 Мин. остатки GSheet → БД")
@@ -544,7 +551,7 @@ async def btn_sync_min_stock_gsheet(message: Message) -> None:
     from use_cases.sync_min_stock import sync_min_stock_from_gsheet
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Мин. остатки GSheet → БД tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Мин. остатки GSheet → БД", sync_min_stock_from_gsheet, triggered_by=triggered)
+    await sync_with_progress(message, "Мін. остатки GSheet → БД", sync_min_stock_from_gsheet, lock_key="gsheet_min_stock", triggered_by=triggered)
 
 
 @router.message(F.text == "💰 Прайс-лист → GSheet")
@@ -554,7 +561,7 @@ async def btn_sync_price_sheet(message: Message) -> None:
     from use_cases.outgoing_invoice import sync_price_sheet
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Прайс-лист → GSheet tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Прайс-лист → GSheet", sync_price_sheet, triggered_by=triggered)
+    await sync_with_progress(message, "Прайс-лист → GSheet", sync_price_sheet, lock_key="gsheet_price", triggered_by=triggered)
 
 
 @router.message(F.text == "🔑 Права доступа → GSheet")
@@ -565,7 +572,7 @@ async def btn_sync_permissions_gsheet(message: Message) -> None:
     logger.info("[sync] Права доступа → GSheet tg:%d", message.from_user.id)
     await sync_with_progress(
         message, "Права доступа → GSheet",
-        perm_uc.sync_permissions_to_gsheet, triggered_by=triggered,
+        perm_uc.sync_permissions_to_gsheet, lock_key="gsheet_permissions", triggered_by=triggered,
     )
 
 
@@ -579,10 +586,15 @@ async def btn_sync_entities(message: Message) -> None:
     """Синхронизировать все rootType (entities/list)."""
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Справочники tg:%d", message.from_user.id)
+    lock = get_sync_lock("sync_entities")
+    if lock.locked():
+        await message.answer("⏳ Синхронизация справочников уже выполняется. Подождите.")
+        return
     placeholder = await message.answer("⏳ Синхронизирую справочники (16 типов)...")
 
     try:
-        results = await sync_uc.sync_all_entities(triggered_by=triggered)
+        async with lock:
+            results = await sync_uc.sync_all_entities(triggered_by=triggered)
         lines = []
         for rt, cnt in results.items():
             status = f"✅ {cnt}" if cnt >= 0 else "❌ ошибка"
@@ -598,7 +610,7 @@ async def btn_sync_entities(message: Message) -> None:
 async def btn_sync_departments(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Подразделения tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Подразделения", sync_uc.sync_departments, triggered_by=triggered)
+    await sync_with_progress(message, "Подразделения", sync_uc.sync_departments, lock_key="sync_departments", triggered_by=triggered)
 
 
 @router.message(F.text == "🏪 Синхр. склады")
@@ -606,7 +618,7 @@ async def btn_sync_departments(message: Message) -> None:
 async def btn_sync_stores(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Склады tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Склады", sync_uc.sync_stores, triggered_by=triggered)
+    await sync_with_progress(message, "Склады", sync_uc.sync_stores, lock_key="sync_stores", triggered_by=triggered)
 
 
 @router.message(F.text == "👥 Синхр. группы")
@@ -614,7 +626,7 @@ async def btn_sync_stores(message: Message) -> None:
 async def btn_sync_groups(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Группы tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Группы", sync_uc.sync_groups, triggered_by=triggered)
+    await sync_with_progress(message, "Группы", sync_uc.sync_groups, lock_key="sync_groups", triggered_by=triggered)
 
 
 @router.message(F.text == "📦 Синхр. номенклатуру")
@@ -622,7 +634,7 @@ async def btn_sync_groups(message: Message) -> None:
 async def btn_sync_products(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Номенклатура tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Номенклатура", sync_uc.sync_products, triggered_by=triggered)
+    await sync_with_progress(message, "Номенклатура", sync_uc.sync_products, lock_key="sync_products", triggered_by=triggered)
 
 
 @router.message(F.text == "🚚 Синхр. поставщиков")
@@ -630,7 +642,7 @@ async def btn_sync_products(message: Message) -> None:
 async def btn_sync_suppliers(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Поставщики tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Поставщики", sync_uc.sync_suppliers, triggered_by=triggered)
+    await sync_with_progress(message, "Поставщики", sync_uc.sync_suppliers, lock_key="sync_suppliers", triggered_by=triggered)
 
 
 @router.message(F.text == "👷 Синхр. сотрудников")
@@ -638,7 +650,7 @@ async def btn_sync_suppliers(message: Message) -> None:
 async def btn_sync_employees(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Сотрудники tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Сотрудники", sync_uc.sync_employees, triggered_by=triggered)
+    await sync_with_progress(message, "Сотрудники", sync_uc.sync_employees, lock_key="sync_employees", triggered_by=triggered)
 
 
 @router.message(F.text == "🎭 Синхр. должности")
@@ -646,7 +658,7 @@ async def btn_sync_employees(message: Message) -> None:
 async def btn_sync_roles(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Должности tg:%d", message.from_user.id)
-    await sync_with_progress(message, "Должности", sync_uc.sync_employee_roles, triggered_by=triggered)
+    await sync_with_progress(message, "Должности", sync_uc.sync_employee_roles, lock_key="sync_roles", triggered_by=triggered)
 
 
 @router.message(F.text == "🔄 Синхр. ВСЁ iiko")
@@ -655,9 +667,13 @@ async def btn_sync_all_iiko(message: Message) -> None:
     """Полная синхронизация iiko — справочники + остальные параллельно."""
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ВСЁ iiko tg:%d", message.from_user.id)
+    lock = get_sync_lock("sync_all_iiko")
+    if lock.locked():
+        await message.answer("⏳ Полная синхронизация iiko уже выполняется. Подождите.")
+        return
     placeholder = await message.answer("⏳ Запускаю полную синхронизацию iiko (параллельно)...")
-
-    report = await sync_uc.sync_all_iiko_with_report(triggered)
+    async with lock:
+        report = await sync_uc.sync_all_iiko_with_report(triggered)
     await placeholder.edit_text("📊 iiko — результат:\n\n" + "\n".join(report))
 
 
@@ -726,10 +742,15 @@ async def btn_ft_sync_all(message: Message) -> None:
     """Полная синхронизация всех 13 справочников FinTablo параллельно."""
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync-ft] ВСЁ FT tg:%d", message.from_user.id)
+    lock = get_sync_lock("sync_all_ft")
+    if lock.locked():
+        await message.answer("⏳ Полная синхронизация FinTablo уже выполняется. Подождите.")
+        return
     placeholder = await message.answer("⏳ FinTablo: синхронизирую все 13 справочников параллельно...")
 
     try:
-        results = await ft_uc.sync_all_fintablo(triggered_by=triggered)
+        async with lock:
+            results = await ft_uc.sync_all_fintablo(triggered_by=triggered)
         lines = ft_uc.format_ft_report(results)
         await placeholder.edit_text("💹 FinTablo — результат:\n\n" + "\n".join(lines))
     except Exception as exc:
@@ -743,9 +764,14 @@ async def btn_sync_everything(message: Message) -> None:
     """Полная синхронизация iiko + FinTablo параллельно."""
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ВСЁ iiko+FT tg:%d", message.from_user.id)
+    lock = get_sync_lock("sync_everything")
+    if lock.locked():
+        await message.answer("⏳ Полная синхронизация уже выполняется. Подождите.")
+        return
     placeholder = await message.answer("⚡ Запускаю полную синхронизацию iiko + FinTablo...")
 
-    iiko_lines, ft_lines = await sync_uc.sync_everything_with_report(triggered)
+    async with lock:
+        iiko_lines, ft_lines = await sync_uc.sync_everything_with_report(triggered)
 
     lines = ["── iiko ──"] + iiko_lines + ["\n── FinTablo ──"] + ft_lines
     await placeholder.edit_text("⚡ Результат полной синхронизации:\n\n" + "\n".join(lines))

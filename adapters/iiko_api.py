@@ -34,8 +34,9 @@ async def _get_client() -> httpx.AsyncClient:
     """Lazy-init persistent httpx client."""
     global _client
     if _client is None or _client.is_closed:
+        from config import IIKO_VERIFY_SSL
         _client = httpx.AsyncClient(
-            verify=False,
+            verify=IIKO_VERIFY_SSL,
             timeout=_TIMEOUT,
             limits=_LIMITS,
             http2=False,      # iiko не поддерживает h2

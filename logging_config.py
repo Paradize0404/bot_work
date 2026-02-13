@@ -27,10 +27,11 @@ def setup_logging() -> None:
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(fmt)
 
-    # ── File handler (перезаписывается при каждом запуске) ──
-    file_handler = logging.FileHandler(
+    # ── File handler (ротация 5 МБ × 3 файла) ──
+    file_handler = RotatingFileHandler(
         log_dir / "app.log",
-        mode="w",
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
         encoding="utf-8",
     )
     file_handler.setFormatter(fmt)

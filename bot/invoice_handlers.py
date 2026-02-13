@@ -719,7 +719,7 @@ async def choose_template_cb(callback: CallbackQuery, state: FSMContext) -> None
 
 @router.message(InvoiceFromTemplateStates.enter_quantities)
 async def enter_quantities(message: Message, state: FSMContext) -> None:
-    raw = (message.text or "").strip()
+    raw = (message.text or "").strip()[:2000]
     logger.info("[invoice][from_tpl] Ввод количества tg:%d, raw='%s'", message.from_user.id, raw[:100])
     try:
         await message.delete()

@@ -34,7 +34,12 @@ from use_cases import writeoff_cache as wo_cache
 from use_cases import user_context as uctx
 from use_cases import pending_writeoffs as pending
 from use_cases import writeoff_history as wo_hist
-from bot.middleware import set_cancel_kb, restore_menu_kb
+from bot.middleware import (
+    set_cancel_kb, restore_menu_kb,
+    validate_callback_uuid, validate_callback_int, extract_callback_value,
+    parse_uuid, parse_int,
+    MAX_TEXT_SEARCH, MAX_TEXT_REASON, truncate_input,
+)
 from bot._utils import writeoffs_keyboard
 
 logger = logging.getLogger(__name__)
@@ -333,7 +338,9 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
 @router.callback_query(WriteoffStates.store, F.data.startswith("wo_store:"))
 async def choose_store(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    store_id = callback.data.split(":", 1)[1]
+    store_id = await validate_callback_uuid(callback, callback.data)
+    if not store_id:
+        return
     logger.info("[writeoff] Выбор склада tg:%d, store_id=%s", callback.from_user.id, store_id)
     data = await state.get_data()
     stores = data.get("_stores_cache") or await wo_uc.get_stores_for_department(data["department_id"])
@@ -370,7 +377,9 @@ async def noop_callback(callback: CallbackQuery) -> None:
 @router.callback_query(WriteoffStates.account, F.data.startswith("wo_acc_page:"))
 async def accounts_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    page = int(callback.data.split(":", 1)[1])
+    page = await validate_callback_int(callback, callback.data)
+    if page is None:
+        return
     logger.debug("[writeoff] Пагинация счетов tg:%d, page=%d", callback.from_user.id, page)
     data = await state.get_data()
     accounts = data.get("_accounts_cache") or await wo_uc.get_writeoff_accounts(data.get("store_name", ""))
@@ -382,7 +391,9 @@ async def accounts_page(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(WriteoffStates.account, F.data.startswith("wo_acc:"))
 async def choose_account(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    account_id = callback.data.split(":", 1)[1]
+    account_id = await validate_callback_uuid(callback, callback.data)
+    if not account_id:
+        return
     logger.info("[writeoff] Выбор счёта tg:%d, acc_id=%s", callback.from_user.id, account_id)
     data = await state.get_data()
     accounts = data.get("_accounts_cache") or await wo_uc.get_writeoff_accounts(data.get("store_name", ""))
@@ -432,7 +443,7 @@ async def set_reason(message: Message, state: FSMContext) -> None:
 
 @router.message(WriteoffStates.add_items)
 async def search_product(message: Message, state: FSMContext) -> None:
-    query = (message.text or "").strip()
+    query = truncate_input((message.text or "").strip(), MAX_TEXT_SEARCH)
     logger.info("[writeoff] Поиск товара tg:%d, query='%s'", message.from_user.id, query)
     try: await message.delete()
     except Exception: pass
@@ -479,7 +490,9 @@ async def search_product(message: Message, state: FSMContext) -> None:
 @router.callback_query(WriteoffStates.add_items, F.data.startswith("wo_prod:"))
 async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    product_id = callback.data.split(":", 1)[1]
+    product_id = await validate_callback_uuid(callback, callback.data)
+    if not product_id:
+        return
     logger.info("[writeoff] Выбор товара tg:%d, prod_id=%s", callback.from_user.id, product_id)
     data = await state.get_data()
     product = data.get("product_cache", {}).get(product_id)
@@ -719,7 +732,14 @@ async def _remove_admin_keyboards(bot: Bot, doc: pending.PendingWriteoff,
 @router.callback_query(F.data.startswith("woa_approve:"))
 async def admin_approve(callback: CallbackQuery) -> None:
     await callback.answer()
-    doc_id = callback.data.split(":", 1)[1]
+    if not await admin_uc.is_admin(callback.from_user.id):
+        await callback.answer("⛔ Только для администраторов", show_alert=True)
+        logger.warning("[security] Попытка одобрения без admin-прав tg:%d", callback.from_user.id)
+        return
+    doc_id = extract_callback_value(callback.data)
+    if not doc_id:
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        return
     logger.info("[writeoff] Одобрение tg:%d, doc=%s", callback.from_user.id, doc_id)
     doc = pending.get(doc_id)
     if not doc:
@@ -807,7 +827,14 @@ async def admin_approve(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("woa_reject:"))
 async def admin_reject(callback: CallbackQuery) -> None:
     await callback.answer()
-    doc_id = callback.data.split(":", 1)[1]
+    if not await admin_uc.is_admin(callback.from_user.id):
+        await callback.answer("⛔ Только для администраторов", show_alert=True)
+        logger.warning("[security] Попытка отклонения без admin-прав tg:%d", callback.from_user.id)
+        return
+    doc_id = extract_callback_value(callback.data)
+    if not doc_id:
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        return
     logger.info("[writeoff] Отклонение tg:%d, doc=%s", callback.from_user.id, doc_id)
     doc = pending.get(doc_id)
     if not doc:
@@ -849,7 +876,14 @@ async def admin_reject(callback: CallbackQuery) -> None:
 async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
     """Админ решил отредактировать документ."""
     await callback.answer()
-    doc_id = callback.data.split(":", 1)[1]
+    if not await admin_uc.is_admin(callback.from_user.id):
+        await callback.answer("⛔ Только для администраторов", show_alert=True)
+        logger.warning("[security] Попытка редактирования без admin-прав tg:%d", callback.from_user.id)
+        return
+    doc_id = extract_callback_value(callback.data)
+    if not doc_id:
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        return
     logger.info("[writeoff-edit] Начало редактирования tg:%d, doc=%s", callback.from_user.id, doc_id)
     doc = pending.get(doc_id)
     if not doc:
@@ -1002,7 +1036,9 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(AdminEditStates.choose_store, F.data.startswith("woe_store:"))
 async def admin_edit_store(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    store_id = callback.data.split(":", 1)[1]
+    store_id = await validate_callback_uuid(callback, callback.data)
+    if not store_id:
+        return
     logger.info("[writeoff-edit] Новый склад tg:%d, store_id=%s", callback.from_user.id, store_id)
     data = await state.get_data()
     doc_id = data.get("edit_doc_id")
@@ -1029,7 +1065,9 @@ async def admin_edit_store(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(AdminEditStates.choose_account, F.data.startswith("woe_acc:"))
 async def admin_edit_account(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    account_id = callback.data.split(":", 1)[1]
+    account_id = await validate_callback_uuid(callback, callback.data)
+    if not account_id:
+        return
     logger.info("[writeoff-edit] Новый счёт tg:%d, acc_id=%s", callback.from_user.id, account_id)
     data = await state.get_data()
     doc_id = data.get("edit_doc_id")
@@ -1056,7 +1094,9 @@ async def admin_edit_account(callback: CallbackQuery, state: FSMContext) -> None
 @router.callback_query(AdminEditStates.choose_item_idx, F.data.startswith("woe_item:"))
 async def admin_edit_item_idx(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    idx = int(callback.data.split(":", 1)[1])
+    idx = await validate_callback_int(callback, callback.data)
+    if idx is None:
+        return
     logger.info("[writeoff-edit] Выбор позиции tg:%d, idx=%d", callback.from_user.id, idx)
     data = await state.get_data()
     doc = pending.get(data.get("edit_doc_id", ""))
@@ -1136,7 +1176,7 @@ async def _ignore_text_admin_edit(message: Message) -> None:
 
 @router.message(AdminEditStates.new_product_search)
 async def admin_search_new_product(message: Message, state: FSMContext) -> None:
-    query = (message.text or "").strip()
+    query = truncate_input((message.text or "").strip(), MAX_TEXT_SEARCH)
     logger.info("[writeoff-edit] Поиск нового товара tg:%d, query='%s'", message.from_user.id, query)
     try: await message.delete()
     except Exception: pass
@@ -1200,7 +1240,9 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
 @router.callback_query(AdminEditStates.new_product_search, F.data.startswith("woe_newprod:"))
 async def admin_pick_new_product(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    pid = callback.data.split(":", 1)[1]
+    pid = await validate_callback_uuid(callback, callback.data)
+    if not pid:
+        return
     logger.info("[writeoff-edit] Выбран новый товар tg:%d, prod_id=%s", callback.from_user.id, pid)
     data = await state.get_data()
     doc = pending.get(data.get("edit_doc_id", ""))
@@ -2007,7 +2049,7 @@ async def hist_edit_add_item_start(callback: CallbackQuery, state: FSMContext) -
 
 @router.message(HistoryStates.editing_items)
 async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None:
-    query = (message.text or "").strip()
+    query = truncate_input((message.text or "").strip(), MAX_TEXT_SEARCH)
     try:
         await message.delete()
     except Exception:
@@ -2061,7 +2103,9 @@ async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None
 @router.callback_query(HistoryStates.editing_items, F.data.startswith("wohe_pick:"))
 async def hist_edit_add_item_pick(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    pid = callback.data.split(":", 1)[1]
+    pid = await validate_callback_uuid(callback, callback.data)
+    if not pid:
+        return
     data = await state.get_data()
     cache = data.get("hist_edit_product_cache", {})
     product = cache.get(pid)

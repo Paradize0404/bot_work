@@ -34,6 +34,13 @@ DATABASE_URL: str = _raw_db_url
 IIKO_BASE_URL: str = _require("IIKO_BASE_URL")
 IIKO_LOGIN: str = _require("IIKO_LOGIN")
 IIKO_SHA1_PASSWORD: str = _require("IIKO_SHA1_PASSWORD")
+# SSL-верификация: iiko on-premise часто использует self-signed сертификаты.
+# Установите IIKO_VERIFY_SSL=true если сервер имеет валидный SSL-сертификат,
+# или укажите путь к CA-bundle: IIKO_VERIFY_SSL=/path/to/ca-bundle.crt
+IIKO_VERIFY_SSL: bool | str = (
+    lambda v: True if v.lower() == "true"
+    else (False if v.lower() in ("false", "0", "") else v)
+)(os.getenv("IIKO_VERIFY_SSL", "false"))
 
 # ── FinTablo API ──
 FINTABLO_BASE_URL: str = os.getenv("FINTABLO_BASE_URL", "https://api.fintablo.ru")

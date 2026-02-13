@@ -50,7 +50,8 @@ async def get_auth_token() -> str:
                 client = await _get_client()
                 response = await client.post(auth_url, headers=headers, data=data)
             except ImportError:
-                async with httpx.AsyncClient(verify=False, timeout=AUTH_TIMEOUT) as client:
+                from config import IIKO_VERIFY_SSL
+                async with httpx.AsyncClient(verify=IIKO_VERIFY_SSL, timeout=AUTH_TIMEOUT) as client:
                     response = await client.post(auth_url, headers=headers, data=data)
 
             response.raise_for_status()
