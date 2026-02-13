@@ -127,6 +127,12 @@ async def get_admin_ids() -> list[int]:
     return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_ADMIN, False)]
 
 
+async def has_any_admin() -> bool:
+    """Есть ли хотя бы один админ в GSheet? Нужно для bootstrap-проверки."""
+    ids = await get_admin_ids()
+    return len(ids) > 0
+
+
 async def is_receiver(telegram_id: int) -> bool:
     """Проверить, является ли пользователь получателем заявок (по GSheet столбцу «📬 Получатель»)."""
     cache = await _ensure_cache()
@@ -151,12 +157,18 @@ async def has_permission(telegram_id: int, perm_key: str) -> bool:
     Проверить, есть ли у пользователя право на кнопку.
 
     Админы (👑 в GSheet) имеют ВСЕ права (bypass).
+    Bootstrap: если нет ни одного админа — все авторизованные получают все права
+    (иначе невозможно назначить первого админа).
     Если пользователя нет в таблице → нет прав.
     """
     cache = await _ensure_cache()
     user_perms = cache.get(telegram_id)
     if user_perms is None:
         return False
+
+    # Bootstrap: нет ни одного админа — разрешаем всем
+    if not any(p.get(ROLE_ADMIN, False) for p in cache.values()):
+        return True
 
     # Админ = всё разрешено
     if user_perms.get(ROLE_ADMIN, False):
@@ -169,11 +181,16 @@ async def get_allowed_keys(telegram_id: int) -> set[str]:
     """
     Получить множество разрешённых perm_key для пользователя.
     Админы → все ключи.
+    Bootstrap (нет админов) → все ключи для любого авторизованного.
     """
     cache = await _ensure_cache()
     user_perms = cache.get(telegram_id)
     if user_perms is None:
         return set()
+
+    # Bootstrap: нет ни одного админа — показываем все кнопки
+    if not any(p.get(ROLE_ADMIN, False) for p in cache.values()):
+        return set(PERMISSION_KEYS)
 
     if user_perms.get(ROLE_ADMIN, False):
         return set(PERMISSION_KEYS)

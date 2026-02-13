@@ -15,6 +15,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from use_cases._helpers import now_kgd
 from uuid import UUID
 
 from sqlalchemy import select, func, or_
@@ -425,7 +426,7 @@ def build_writeoff_document(
         comment_parts.append(f"(Автор: {author_name})")
     comment = " ".join(comment_parts)
     return {
-        "dateIncoming": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "dateIncoming": now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
         "status": "PROCESSED",
         "comment": comment,
         "storeId": store_id,

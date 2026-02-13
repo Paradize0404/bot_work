@@ -17,4 +17,7 @@ google-auth>=2.20.0
 # PDF generation
 reportlab>=4.0.0
 
+# Scheduler (ежедневная автосинхронизация)
+apscheduler>=3.10.0
+
 # XML parsing (stdlib, no extra dep)

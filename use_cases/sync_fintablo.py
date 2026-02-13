@@ -18,6 +18,7 @@ from db.engine import async_session_factory
 from db.models import SyncLog
 from use_cases.sync import _batch_upsert, _mirror_delete, _safe_decimal  # DRY: shared helpers
 from use_cases._helpers import safe_int as _safe_int  # DRY: вместо локального дубликата
+from use_cases._helpers import now_kgd
 from db.ft_models import (
     FTCategory,
     FTMoneybag,
@@ -58,7 +59,7 @@ async def _run_ft_sync(
       3. _batch_upsert()       — batch INSERT ON CONFLICT
       4. SyncLog               — аудит
     """
-    started = datetime.utcnow()
+    started = now_kgd()
     t0 = time.monotonic()
     logger.info("[FT:%s] Начинаю синхронизацию...", label)
 
@@ -67,7 +68,7 @@ async def _run_ft_sync(
         t_api = time.monotonic() - t0
         logger.info("[FT:%s] API: %d записей за %.1f сек", label, len(items), t_api)
 
-        now = datetime.utcnow()
+        now = now_kgd()
         rows = [r for item in items if (r := mapper(item, now)) is not None]
         skipped = len(items) - len(rows)
         if skipped:
@@ -82,7 +83,7 @@ async def _run_ft_sync(
             session.add(SyncLog(
                 entity_type=f"ft_{label}",
                 started_at=started,
-                finished_at=datetime.utcnow(),
+                finished_at=now_kgd(),
                 status="success",
                 records_synced=count,
                 triggered_by=triggered_by,
@@ -100,7 +101,7 @@ async def _run_ft_sync(
                 session.add(SyncLog(
                     entity_type=f"ft_{label}",
                     started_at=started,
-                    finished_at=datetime.utcnow(),
+                    finished_at=now_kgd(),
                     status="error",
                     error_message=str(exc)[:2000],
                     triggered_by=triggered_by,

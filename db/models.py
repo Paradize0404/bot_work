@@ -7,6 +7,7 @@ raw_json — полный оригинальный ответ API (страхо�
 """
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
     Boolean,
@@ -22,6 +23,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import DeclarativeBase
 
+# Калининградское время (UTC+2) — единая TZ проекта
+_KGD_TZ = ZoneInfo("Europe/Kaliningrad")
+
 
 # ── Base ──
 class Base(DeclarativeBase):
@@ -29,7 +33,8 @@ class Base(DeclarativeBase):
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Текущее время по Калининграду (naive, без tzinfo)."""
+    return datetime.now(_KGD_TZ).replace(tzinfo=None)
 
 
 class SyncMixin:

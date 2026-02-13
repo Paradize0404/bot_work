@@ -15,6 +15,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from use_cases._helpers import now_kgd
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -127,7 +128,7 @@ def generate_invoice_pdf(
     _ensure_fonts()
 
     if doc_date is None:
-        doc_date = datetime.now()
+        doc_date = now_kgd()
 
     date_str = doc_date.strftime("%d.%m.%Y %H:%M")
 
@@ -395,7 +396,7 @@ def generate_invoice_filename(
 ) -> str:
     """Сгенерировать имя файла PDF (транслит для совместимости)."""
     if doc_date is None:
-        doc_date = datetime.now()
+        doc_date = now_kgd()
 
     date_part = doc_date.strftime("%Y%m%d_%H%M")
 

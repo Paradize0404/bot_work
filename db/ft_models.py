@@ -7,6 +7,7 @@ ID в FinTablo — integer (не UUID).
 """
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
     Column,
@@ -21,9 +22,13 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from db.models import Base
 
+# Калининградское время (UTC+2) — единая TZ проекта
+_KGD_TZ = ZoneInfo("Europe/Kaliningrad")
+
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Текущее время по Калининграду (naive, без tzinfo)."""
+    return datetime.now(_KGD_TZ).replace(tzinfo=None)
 
 
 class FTSyncMixin:

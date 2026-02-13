@@ -488,8 +488,9 @@ async def calculate_goods_cost_prices(days_back: int = 90) -> dict[str, float]:
     """
     from datetime import datetime, timedelta
     from adapters import iiko_api
+    from use_cases._helpers import now_kgd
 
-    today = datetime.now()
+    today = now_kgd()
     date_to = today.strftime("%Y-%m-%d")
     date_from = (today - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
@@ -546,8 +547,9 @@ async def calculate_dish_cost_prices(
     """
     from datetime import datetime
     from adapters import iiko_api
+    from use_cases._helpers import now_kgd
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_kgd().strftime("%Y-%m-%d")
     t0 = time.monotonic()
     logger.info("[invoice] Расчёт себестоимости DISH по техкартам (дата=%s)...", today)
 
@@ -948,6 +950,7 @@ def build_outgoing_invoice_document(
     Фильтрует позиции с amount == 0.
     """
     from datetime import datetime
+    from use_cases._helpers import now_kgd
 
     containers = containers or {}
     non_zero = [i for i in items if i.get("amount", 0) > 0]
@@ -956,7 +959,7 @@ def build_outgoing_invoice_document(
         logger.info("[invoice][build] Пропущено позиций с amount=0: %d", skipped)
 
     doc = {
-        "dateIncoming": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "dateIncoming": now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
         "status": "PROCESSED",
         "comment": comment,
         "storeId": store_id,

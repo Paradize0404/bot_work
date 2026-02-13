@@ -14,6 +14,7 @@ Use-case: заявки на товары (product requests).
 import logging
 import time
 from datetime import datetime, timezone
+from use_cases._helpers import now_kgd
 from uuid import UUID
 
 from sqlalchemy import select, func
@@ -221,7 +222,7 @@ async def get_user_requests(telegram_id: int, limit: int = 10) -> list[dict]:
 
 async def approve_request(pk: int, approved_by: int) -> bool:
     """Пометить заявку как approved."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = now_kgd()
     async with async_session_factory() as session:
         stmt = select(ProductRequest).where(ProductRequest.pk == pk)
         result = await session.execute(stmt)

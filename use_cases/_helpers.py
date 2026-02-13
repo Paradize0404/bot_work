@@ -2,12 +2,32 @@
 Shared helpers for use_cases — DRY вместо дублей в каждом sync-модуле.
 
 Конвертеры: _safe_uuid, _safe_bool, _safe_decimal, _safe_int, _safe_float.
+Время: now_kgd() — текущее время по Калининграду (Europe/Kaliningrad, UTC+2).
 Используются в sync.py, sync_fintablo.py, sync_stock_balances.py и т.д.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any
+
+# Калининградское время (UTC+2) — используется ВЕЗДЕ в проекте
+KGD_TZ = ZoneInfo("Europe/Kaliningrad")
+
+
+def now_kgd() -> datetime:
+    """
+    Текущее время по Калининграду (naive, без tzinfo).
+    Совместимо с TIMESTAMP WITHOUT TIME ZONE в asyncpg.
+    Используется ВЕЗДЕ вместо utcnow().
+    """
+    return datetime.now(KGD_TZ).replace(tzinfo=None)
+
+
+# Backward-compatible alias
+def utcnow() -> datetime:
+    """DEPRECATED: используй now_kgd(). Оставлен для совместимости."""
+    return now_kgd()
 
 
 def safe_uuid(v: Any) -> uuid.UUID | None:
@@ -52,9 +72,4 @@ def safe_float(v: Any) -> float | None:
     return safe_decimal(v)
 
 
-def utcnow() -> datetime:
-    """
-    Naive UTC now (без tzinfo) — совместимо с TIMESTAMP WITHOUT TIME ZONE в asyncpg.
-    Замена deprecated datetime.utcnow() (Python 3.12+).
-    """
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+

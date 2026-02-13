@@ -85,8 +85,15 @@ async def on_startup(bot: Bot) -> None:
     await bot.set_webhook(url, drop_pending_updates=True, secret_token=WEBHOOK_SECRET)
     logger.info("Webhook set OK (with secret_token)")
 
+    # Запускаем планировщик ежедневной синхронизации (07:00 Калининград)
+    from use_cases.scheduler import start_scheduler
+    start_scheduler(bot)
+
 
 async def on_shutdown(bot: Bot) -> None:
+    # Останавливаем планировщик
+    from use_cases.scheduler import stop_scheduler
+    stop_scheduler()
     # НЕ удаляем вебхук при shutdown — иначе при редеплое Railway
     # старый контейнер удалит вебхук, который новый уже поставил (гонка).
     # Вебхук будет перезаписан при следующем on_startup.
@@ -126,6 +133,10 @@ async def run_polling() -> None:
     await bot.delete_webhook(drop_pending_updates=True)
     logger.info("Webhook removed, starting polling...")
 
+    # Запускаем планировщик ежедневной синхронизации (07:00 Калининград)
+    from use_cases.scheduler import start_scheduler
+    start_scheduler(bot)
+
     # Graceful shutdown по SIGTERM (Docker / Railway)
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
@@ -146,6 +157,8 @@ async def run_polling() -> None:
         for t in pending:
             t.cancel()
     finally:
+        from use_cases.scheduler import stop_scheduler
+        stop_scheduler()
         await _cleanup()
 
 

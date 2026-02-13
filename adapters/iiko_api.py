@@ -14,6 +14,7 @@ import logging
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime as _datetime
+from use_cases._helpers import now_kgd as _now_kgd
 from typing import Any
 
 import httpx
@@ -357,7 +358,7 @@ async def fetch_stock_balances(
     Ответ — JSON: [{"store": UUID, "product": UUID, "amount": float, "sum": float}, ...]
     """
     if not timestamp:
-        timestamp = _datetime.now().strftime("%Y-%m-%dT%H:%M:%S")  # yyyy-MM-ddTHH:mm:ss
+        timestamp = _now_kgd().strftime("%Y-%m-%dT%H:%M:%S")  # yyyy-MM-ddTHH:mm:ss (Калининград)
 
     key = await _get_key()
     url = f"{_base()}/resto/api/v2/reports/balance/stores"

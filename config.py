@@ -90,5 +90,9 @@ INVOICE_PRICE_SHEET_ID: str = os.getenv(
     "INVOICE_PRICE_SHEET_ID", "1cKQAPXDap6sSAmGROYE-kqyNrVzJnf0bPpTjPyRKa_8"
 )
 
+# ── Timezone ──
+# Все даты в проекте — по Калининграду (UTC+2, Europe/Kaliningrad)
+TIMEZONE: str = "Europe/Kaliningrad"
+
 # ── Logging ──
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()

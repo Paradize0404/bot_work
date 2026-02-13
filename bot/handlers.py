@@ -565,11 +565,23 @@ async def btn_sync_price_sheet(message: Message) -> None:
 
 
 @router.message(F.text == "🔑 Права доступа → GSheet")
-@admin_required
 async def btn_sync_permissions_gsheet(message: Message) -> None:
-    """Выгрузить авторизованных сотрудников + столбцы прав в Google Таблицу."""
-    triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] Права доступа → GSheet tg:%d", message.from_user.id)
+    """Выгрузить авторизованных сотрудников + столбцы прав в Google Таблицу.
+
+    Bootstrap: если в GSheet ещё нет ни одного админа — кнопка доступна
+    любому авторизованному сотруднику (иначе невозможно назначить первого админа).
+    Как только хотя бы один админ появится — требуется admin-доступ.
+    """
+    tg_id = message.from_user.id
+    any_admin = await perm_uc.has_any_admin()
+    if any_admin and not await admin_uc.is_admin(tg_id):
+        await message.answer("⛔ У вас нет прав администратора")
+        logger.warning("[auth] Попытка admin-доступа без прав tg:%d → btn_sync_permissions_gsheet", tg_id)
+        return
+    if not any_admin:
+        logger.warning("[auth] BOOTSTRAP: нет ни одного админа → разрешаем sync прав для tg:%d", tg_id)
+    triggered = f"tg:{tg_id}"
+    logger.info("[sync] Права доступа → GSheet tg:%d", tg_id)
     await sync_with_progress(
         message, "Права доступа → GSheet",
         perm_uc.sync_permissions_to_gsheet, lock_key="gsheet_permissions", triggered_by=triggered,
