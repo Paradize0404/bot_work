@@ -7,9 +7,8 @@ Use-case: заявки на товары (product requests).
   3. Получатель видит заявку, нажимает «Отправить» →
      создаётся расходная накладная в iiko (через outgoing_invoice)
 
-Управление получателями:
-  - add_receiver / remove_receiver / list_receivers / is_receiver
-  - Аналогично admin.py (кеш + БД)
+Получатели определяются через Google Таблицу (столбец «📬 Получатель»
+на листе «Права доступа»).
 """
 
 import logging
@@ -26,149 +25,19 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════
-# Кеш receiver_ids (аналог admin_ids)
+# Получатели заявок — делегируем в permissions (GSheet)
 # ═══════════════════════════════════════════════════════
 
-_receiver_ids_cache: list[int] | None = None
-
-
 async def get_receiver_ids() -> list[int]:
-    """Список telegram_id всех получателей заявок. Кешируется."""
-    global _receiver_ids_cache
-    if _receiver_ids_cache is not None:
-        return _receiver_ids_cache
-
-    async with async_session_factory() as session:
-        stmt = select(RequestReceiver.telegram_id)
-        result = await session.execute(stmt)
-        ids = [row[0] for row in result.all()]
-
-    _receiver_ids_cache = ids
-    logger.info("[request] Загружено %d получателей заявок из БД", len(ids))
-    return ids
-
-
-def _invalidate_cache() -> None:
-    global _receiver_ids_cache
-    _receiver_ids_cache = None
+    """Список telegram_id всех получателей заявок (из GSheet кеша)."""
+    from use_cases import permissions as perm_uc
+    return await perm_uc.get_receiver_ids()
 
 
 async def is_receiver(telegram_id: int) -> bool:
-    """Проверить, является ли пользователь получателем заявок."""
-    ids = await get_receiver_ids()
-    return telegram_id in ids
-
-
-# ═══════════════════════════════════════════════════════
-# CRUD получателей
-# ═══════════════════════════════════════════════════════
-
-async def get_employees_with_telegram() -> list[dict]:
-    """Все сотрудники с telegram_id (авторизованные)."""
-    async with async_session_factory() as session:
-        stmt = (
-            select(Employee)
-            .where(Employee.telegram_id.isnot(None))
-            .where(Employee.deleted == False)  # noqa: E712
-            .order_by(Employee.last_name, Employee.first_name)
-        )
-        result = await session.execute(stmt)
-        employees = result.scalars().all()
-
-    return [
-        {
-            "id": str(emp.id),
-            "name": emp.name or f"{emp.last_name} {emp.first_name}",
-            "last_name": emp.last_name or "",
-            "first_name": emp.first_name or "",
-            "telegram_id": emp.telegram_id,
-        }
-        for emp in employees
-    ]
-
-
-async def list_receivers() -> list[dict]:
-    """Текущие получатели заявок."""
-    async with async_session_factory() as session:
-        stmt = select(RequestReceiver).order_by(RequestReceiver.added_at)
-        result = await session.execute(stmt)
-        receivers = result.scalars().all()
-
-    return [
-        {
-            "telegram_id": r.telegram_id,
-            "employee_id": str(r.employee_id),
-            "employee_name": r.employee_name or "—",
-            "added_at": r.added_at.strftime("%d.%m.%Y %H:%M") if r.added_at else "—",
-        }
-        for r in receivers
-    ]
-
-
-async def add_receiver(
-    telegram_id: int,
-    employee_id: str,
-    employee_name: str,
-    added_by: int | None = None,
-) -> bool:
-    """Добавить получателя. True = добавлен, False = уже есть."""
-    async with async_session_factory() as session:
-        exists = await session.execute(
-            select(RequestReceiver).where(RequestReceiver.telegram_id == telegram_id)
-        )
-        if exists.scalar_one_or_none():
-            logger.info("[request] tg:%d уже получатель", telegram_id)
-            return False
-
-        rec = RequestReceiver(
-            telegram_id=telegram_id,
-            employee_id=UUID(employee_id),
-            employee_name=employee_name,
-            added_by=added_by,
-        )
-        session.add(rec)
-        await session.commit()
-
-    _invalidate_cache()
-    logger.info("[request] ✅ Добавлен получатель: %s (tg:%d), добавил tg:%s",
-                employee_name, telegram_id, added_by)
-    return True
-
-
-async def remove_receiver(telegram_id: int) -> bool:
-    """Удалить получателя. True = удалён, False = не был."""
-    async with async_session_factory() as session:
-        stmt = delete(RequestReceiver).where(RequestReceiver.telegram_id == telegram_id)
-        result = await session.execute(stmt)
-        await session.commit()
-        removed = result.rowcount > 0
-
-    if removed:
-        _invalidate_cache()
-        logger.info("[request] ❌ Удалён получатель tg:%d", telegram_id)
-    return removed
-
-
-async def get_available_for_receiver() -> list[dict]:
-    """Сотрудники с telegram_id, которые ещё НЕ являются получателями."""
-    employees = await get_employees_with_telegram()
-    receiver_ids = await get_receiver_ids()
-    return [e for e in employees if e["telegram_id"] not in receiver_ids]
-
-
-async def format_receiver_list() -> str:
-    """HTML-текст со списком получателей заявок."""
-    receivers = await list_receivers()
-    if not receivers:
-        return "📬 <b>Получатели заявок</b>\n\n<i>Список пуст.</i>"
-
-    lines = [f"📬 <b>Получатели заявок ({len(receivers)})</b>\n"]
-    for i, r in enumerate(receivers, 1):
-        lines.append(
-            f"  {i}. {r['employee_name']}  "
-            f"<code>tg:{r['telegram_id']}</code>  ({r['added_at']})"
-        )
-    return "\n".join(lines)
+    """Проверить, является ли пользователь получателем заявок (из GSheet кеша)."""
+    from use_cases import permissions as perm_uc
+    return await perm_uc.is_receiver(telegram_id)
 
 
 # ═══════════════════════════════════════════════════════

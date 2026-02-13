@@ -115,8 +115,6 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="🔄 Синхронизация")],
         [KeyboardButton(text="📤 Google Таблицы")],
         [KeyboardButton(text="🔑 Права доступа → GSheet")],
-        [KeyboardButton(text="👑 Управление админами")],
-        [KeyboardButton(text="👥 Управление получателями")],
         [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
