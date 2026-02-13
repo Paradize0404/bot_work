@@ -56,14 +56,28 @@ def _get_client() -> gspread.Client:
     if not MIN_STOCK_SHEET_ID:
         raise RuntimeError("MIN_STOCK_SHEET_ID не задан в .env")
 
-    creds_path = Path(GOOGLE_SHEETS_CREDENTIALS)
-    if not creds_path.is_absolute():
-        creds_path = Path(__file__).resolve().parent.parent / creds_path
+    raw = GOOGLE_SHEETS_CREDENTIALS.strip()
 
-    if creds_path.is_file():
-        creds_info = json.loads(creds_path.read_text(encoding="utf-8"))
+    # 1) Если значение начинается с '{' — это inline JSON (env-переменная на Railway)
+    if raw.startswith("{"):
+        try:
+            creds_info = json.loads(raw)
+        except json.JSONDecodeError:
+            raise RuntimeError(
+                "GOOGLE_SHEETS_CREDENTIALS начинается с '{', но не является валидным JSON."
+            )
     else:
-        creds_info = json.loads(GOOGLE_SHEETS_CREDENTIALS)
+        # 2) Иначе — считаем путём к файлу
+        creds_path = Path(raw)
+        if not creds_path.is_absolute():
+            creds_path = Path(__file__).resolve().parent.parent / creds_path
+        if creds_path.is_file():
+            creds_info = json.loads(creds_path.read_text(encoding="utf-8"))
+        else:
+            raise RuntimeError(
+                f"Google Sheets credentials: файл '{creds_path}' не найден. "
+                f"Задайте GOOGLE_SHEETS_CREDENTIALS как путь к файлу или inline JSON."
+            )
 
     creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
     _client = gspread.authorize(creds)

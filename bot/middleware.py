@@ -187,6 +187,47 @@ async def cancel_tracked_tasks(timeout: float = 10.0) -> None:
 # 6. Reply-меню «одно окно» (UX паттерн 5)
 # ═══════════════════════════════════════════════════════
 
+# Клавиатура «❌ Отмена» — показывается вместо основного меню
+# во время заполнения документа (FSM-flow).
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+
+CANCEL_KB = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="❌ Отмена")]],
+    resize_keyboard=True,
+)
+
+
+async def set_cancel_kb(bot, chat_id: int, state: FSMContext) -> None:
+    """
+    Скрыть навигационную клавиатуру и показать только «❌ Отмена».
+    Вызывать при СТАРТЕ любого document-filling flow.
+    """
+    data = await state.get_data()
+    old_id = data.get("_menu_msg_id")
+    if old_id:
+        try:
+            await bot.delete_message(chat_id, old_id)
+        except Exception:
+            pass
+        await state.update_data(_menu_msg_id=None)
+
+    msg = await bot.send_message(chat_id, "⌨️", reply_markup=CANCEL_KB)
+    try:
+        await bot.delete_message(chat_id, msg.message_id)
+    except Exception:
+        pass
+
+
+async def restore_menu_kb(bot, chat_id: int, state: FSMContext, menu_text: str, kb) -> None:
+    """
+    Восстановить Reply-клавиатуру подменю при ВЫХОДЕ из flow.
+    menu_text — заголовок подменю (напр. «📝 Списания:»).
+    kb — ReplyKeyboardMarkup подменю.
+    """
+    msg = await bot.send_message(chat_id, menu_text, reply_markup=kb)
+    await state.update_data(_menu_msg_id=msg.message_id)
+
+
 async def reply_menu(message: Message, state: FSMContext, text: str, kb) -> None:
     """
     Отправить reply-меню, удалив предыдущее (паттерн «одно окно»).

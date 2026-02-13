@@ -28,6 +28,8 @@ from uuid import UUID
 
 from aiogram import Bot, Router, F
 from aiogram.enums import ChatAction
+from bot.middleware import set_cancel_kb, restore_menu_kb
+from bot._utils import invoices_keyboard
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import (
@@ -256,6 +258,8 @@ async def start_template(message: Message, state: FSMContext) -> None:
     if not ctx or not ctx.department_id:
         await message.answer("⚠️ Сначала авторизуйтесь (/start) и выберите ресторан.")
         return
+
+    await set_cancel_kb(message.bot, message.chat.id, state)
 
     logger.info(
         "[invoice] Старт создания шаблона tg:%d, dept=%s (%s)",
@@ -595,6 +599,8 @@ async def save_template(message: Message, state: FSMContext) -> None:
         pk, name, message.from_user.id,
     )
     await state.clear()
+    await restore_menu_kb(message.bot, message.chat.id, state,
+                          "📦 Накладные:", invoices_keyboard())
 
 
 # ══════════════════════════════════════════════════════
@@ -614,6 +620,8 @@ async def start_from_template(message: Message, state: FSMContext) -> None:
     if not ctx or not ctx.department_id:
         await message.answer("⚠️ Сначала авторизуйтесь (/start) и выберите ресторан.")
         return
+
+    await set_cancel_kb(message.bot, message.chat.id, state)
 
     logger.info(
         "[invoice] Старт создания по шаблону tg:%d, dept=%s",
@@ -925,6 +933,8 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
             pass
 
     await state.clear()
+    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                          "📦 Накладные:", invoices_keyboard())
 
 
 # ── Ввести заново (кол-во) ──
@@ -981,3 +991,5 @@ async def cancel_template(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.edit_text("❌ Действие отменено.")
     except Exception:
         pass
+    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                          "📦 Накладные:", invoices_keyboard())

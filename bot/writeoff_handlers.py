@@ -34,6 +34,8 @@ from use_cases import writeoff_cache as wo_cache
 from use_cases import user_context as uctx
 from use_cases import pending_writeoffs as pending
 from use_cases import writeoff_history as wo_hist
+from bot.middleware import set_cancel_kb, restore_menu_kb
+from bot._utils import writeoffs_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -252,6 +254,8 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
     if not ctx or not ctx.department_id:
         await message.answer("⚠️ Сначала авторизуйтесь (/start) и выберите ресторан.")
         return
+
+    await set_cancel_kb(message.bot, message.chat.id, state)
 
     logger.info("[writeoff] Старт. user=%d, dept=%s (%s), role=%s",
                 message.from_user.id, ctx.department_id, ctx.department_name, ctx.role_name)
@@ -625,6 +629,7 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
             tg_id = callback.from_user.id
             _data_snapshot = dict(data)
             await state.clear()
+            await restore_menu_kb(bot, chat_id, state, "📝 Списания:", writeoffs_keyboard())
 
             async def _bg():
                 result = await wo_uc.finalize_without_admins(
@@ -668,6 +673,8 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
         await _send_prompt(callback.bot, callback.message.chat.id, state,
                            "✅ Акт отправлен на проверку администраторам. Ожидайте.")
         await state.clear()
+        await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                              "📝 Списания:", writeoffs_keyboard())
 
         # Рассылаем всем админам
         bot = callback.bot
@@ -1436,6 +1443,8 @@ async def start_history(message: Message, state: FSMContext) -> None:
         await message.answer("⚠️ Сначала авторизуйтесь (/start) и выберите ресторан.")
         return
 
+    await set_cancel_kb(message.bot, message.chat.id, state)
+
     logger.info("[wo_history] Открытие истории tg:%d, dept=%s, role=%s",
                 message.from_user.id, ctx.department_id, ctx.role_name)
 
@@ -1581,6 +1590,8 @@ async def hist_close(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.edit_text("📋 История закрыта.")
     except Exception:
         pass
+    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                          "📝 Списания:", writeoffs_keyboard())
 
 
 # ── 6. Повторить как есть (отправить копию на проверку) ──
@@ -1649,6 +1660,8 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
                 await callback.message.edit_text(result)
             except Exception:
                 await callback.bot.send_message(callback.message.chat.id, result)
+            await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                                  "📝 Списания:", writeoffs_keyboard())
             return
 
         # Создаём pending-документ
@@ -1683,6 +1696,8 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
 
         logger.info("[wo_history] Повтор из истории pk=%d → doc %s, %d админов",
                     pk, doc.doc_id, len(doc.admin_msg_ids))
+        await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                              "📝 Списания:", writeoffs_keyboard())
     finally:
         _sending_lock.discard(user_id)
 
@@ -2176,6 +2191,8 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
                 await callback.message.edit_text(result)
             except Exception:
                 await callback.bot.send_message(callback.message.chat.id, result)
+            await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                                  "📝 Списания:", writeoffs_keyboard())
             return
 
         doc = pending.create(
@@ -2208,6 +2225,8 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
 
         logger.info("[wo_history] Отредакт. повтор → doc %s, %d админов",
                     doc.doc_id, len(doc.admin_msg_ids))
+        await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                              "📝 Списания:", writeoffs_keyboard())
     finally:
         _sending_lock.discard(user_id)
 
@@ -2260,3 +2279,5 @@ async def cancel_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.edit_text("❌ Создание акта списания отменено.")
     except Exception:
         pass
+    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                          "📝 Списания:", writeoffs_keyboard())

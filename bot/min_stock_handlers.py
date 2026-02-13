@@ -22,7 +22,8 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 
-from bot._utils import escape_md as _escape_md
+from bot._utils import escape_md as _escape_md, reports_keyboard
+from bot.middleware import set_cancel_kb, restore_menu_kb
 from use_cases import edit_min_stock as ems_uc
 from use_cases import user_context as uctx
 
@@ -58,6 +59,8 @@ async def btn_edit_min_stock(message: Message, state: FSMContext) -> None:
     if not ctx or not ctx.department_id:
         await message.answer("❌ Сначала авторизуйтесь и выберите ресторан (/start).")
         return
+
+    await set_cancel_kb(message.bot, message.chat.id, state)
 
     await state.set_state(EditMinStockStates.search_product)
     await state.update_data(department_id=ctx.department_id)

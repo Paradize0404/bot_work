@@ -100,45 +100,13 @@ def _main_keyboard(allowed: set[str] | None = None) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
-def _writeoffs_keyboard() -> ReplyKeyboardMarkup:
-    """Подменю 'Списания'."""
-    buttons = [
-        [KeyboardButton(text="📝 Создать списание")],
-        [KeyboardButton(text="🗂 История списаний")],
-        [KeyboardButton(text="◀️ Назад")],
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-
-def _invoices_keyboard() -> ReplyKeyboardMarkup:
-    """Подменю 'Накладные'."""
-    buttons = [
-        [KeyboardButton(text="📑 Создать шаблон накладной")],
-        [KeyboardButton(text="📦 Создать по шаблону")],
-        [KeyboardButton(text="◀️ Назад")],
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-
-def _requests_keyboard() -> ReplyKeyboardMarkup:
-    """Подменю 'Заявки'."""
-    buttons = [
-        [KeyboardButton(text="✏️ Создать заявку")],
-        [KeyboardButton(text="📒 История заявок")],
-        [KeyboardButton(text="📬 Входящие заявки")],
-        [KeyboardButton(text="◀️ Назад")],
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-
-def _reports_keyboard() -> ReplyKeyboardMarkup:
-    """Подменю 'Отчёты'."""
-    buttons = [
-        [KeyboardButton(text="📊 Мин. остатки по складам")],
-        [KeyboardButton(text="✏️ Изменить мин. остаток")],
-        [KeyboardButton(text="◀️ Назад")],
-    ]
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+# Подменю — импорт из _utils (используются и в других handler-файлах)
+from bot._utils import (
+    writeoffs_keyboard as _writeoffs_keyboard,
+    invoices_keyboard as _invoices_keyboard,
+    requests_keyboard as _requests_keyboard,
+    reports_keyboard as _reports_keyboard,
+)
 
 
 def _settings_keyboard() -> ReplyKeyboardMarkup:
