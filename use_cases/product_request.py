@@ -16,10 +16,10 @@ import time
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, func
 
 from db.engine import async_session_factory
-from db.models import Employee, RequestReceiver, ProductRequest
+from db.models import ProductRequest
 
 logger = logging.getLogger(__name__)
 
