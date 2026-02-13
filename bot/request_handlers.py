@@ -1134,7 +1134,7 @@ async def reject_request(callback: CallbackQuery) -> None:
 #  D) ИСТОРИЯ ЗАЯВОК + ДУБЛИРОВАНИЕ
 # ══════════════════════════════════════════════════════
 
-@router.message(F.text == "� История заявок")
+@router.message(F.text == "📒 История заявок")
 async def view_request_history(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
