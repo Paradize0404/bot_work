@@ -67,7 +67,7 @@ class ChangeDeptStates(StatesGroup):
 # Keyboard
 # ─────────────────────────────────────────────────────
 
-def _main_keyboard(allowed: set[str] | None = None) -> ReplyKeyboardMarkup:
+def _main_keyboard(allowed: set[str] | None = None, dept_name: str | None = None) -> ReplyKeyboardMarkup:
     """
     Главное меню: документы по типам + отчёты + настройки.
     Показываются только кнопки, на которые у пользователя есть права.
@@ -91,8 +91,9 @@ def _main_keyboard(allowed: set[str] | None = None) -> ReplyKeyboardMarkup:
     for i in range(0, len(visible), 2):
         rows.append(visible[i:i + 2])
 
-    # «Сменить ресторан» — всегда видна
-    rows.append([KeyboardButton(text="🏠 Сменить ресторан")])
+    # «Сменить ресторан» — всегда видна, показываем текущий ресторан
+    dept_label = f"🏠 Сменить ресторан ({dept_name})" if dept_name else "🏠 Сменить ресторан"
+    rows.append([KeyboardButton(text=dept_label)])
 
     # «Настройки» — только если есть право
     if allowed is None or "⚙️ Настройки" in allowed:
@@ -124,7 +125,9 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
 async def _get_main_kb(tg_id: int) -> ReplyKeyboardMarkup:
     """Получить главную клавиатуру с учётом прав пользователя."""
     allowed = await perm_uc.get_allowed_keys(tg_id)
-    return _main_keyboard(allowed)
+    ctx = await uctx.get_user_context(tg_id)
+    dept_name = ctx.department_name if ctx else None
+    return _main_keyboard(allowed, dept_name=dept_name)
 
 
 def _sync_keyboard() -> ReplyKeyboardMarkup:
@@ -357,7 +360,7 @@ async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None
 # Смена ресторана (из главного меню)
 # ─────────────────────────────────────────────────────
 
-@router.message(F.text == "🏠 Сменить ресторан")
+@router.message(F.text.startswith("🏠 Сменить ресторан"))
 async def btn_change_department(message: Message, state: FSMContext) -> None:
     """Сменить привязанный ресторан."""
     logger.info("[nav] Сменить ресторан tg:%d", message.from_user.id)
