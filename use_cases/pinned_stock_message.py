@@ -236,6 +236,11 @@ async def send_stock_alert_for_user(
         result = await check_min_stock_levels(department_id=department_id)
 
         dept_name = result.get("department_name") or ""
+        logger.info(
+            "[%s] check_min_stock_levels вернул: dept_name=%s, total=%d, below=%d, запрошен dept_id=%s",
+            LABEL, dept_name, result.get("total_products", 0),
+            result.get("below_min_count", 0), department_id,
+        )
         text = format_stock_alert(result, department_name=dept_name)
         text_hash = _compute_hash(text)
 
