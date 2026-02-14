@@ -62,11 +62,13 @@ async def _check_db() -> None:
 
 async def _cleanup() -> None:
     from adapters.iiko_api import close_client as close_iiko
+    from adapters.iiko_cloud_api import close_client as close_iiko_cloud
     from adapters.fintablo_api import close_client as close_ft
     from db.engine import dispose_engine
     from bot.middleware import cancel_tracked_tasks
     await cancel_tracked_tasks()
     await close_iiko()
+    await close_iiko_cloud()
     await close_ft()
     await dispose_engine()
     logger.info("Shutdown complete")
@@ -101,6 +103,16 @@ async def on_shutdown(bot: Bot) -> None:
     logger.info("Shutdown complete (webhook kept)")
 
 
+async def _process_iiko_webhook(body: list[dict], bot: "Bot") -> None:
+    """Фоновая обработка вебхука от iikoCloud (не блокирует HTTP-ответ)."""
+    try:
+        from use_cases.iiko_webhook_handler import handle_webhook
+        result = await handle_webhook(body, bot)
+        logger.info("[iiko-webhook] Обработано: %s", result)
+    except Exception:
+        logger.exception("[iiko-webhook] Ошибка обработки вебхука")
+
+
 def run_webhook() -> None:
     from config import WEBHOOK_PATH, WEBAPP_HOST, WEBAPP_PORT, WEBHOOK_SECRET
 
@@ -114,6 +126,47 @@ def run_webhook() -> None:
     async def health(_request: web.Request) -> web.Response:
         return web.Response(text="ok")
     app.router.add_get("/health", health)
+
+    # iikoCloud webhook endpoint — принимает события от iikoCloud
+    async def iiko_webhook(request: web.Request) -> web.Response:
+        from adapters.iiko_cloud_api import verify_webhook_auth
+
+        # Верификация authToken (iikoCloud шлёт его в Authorization header)
+        auth = request.headers.get("Authorization", "")
+        if not verify_webhook_auth(auth):
+            logger.warning(
+                "[iiko-webhook] Невалидный auth: %s (headers: %s)",
+                repr(auth[:30]) if auth else "empty",
+                {k: v[:20] for k, v in request.headers.items()
+                 if k.lower() not in ("cookie",)},
+            )
+            return web.Response(status=401, text="Unauthorized")
+
+        try:
+            body = await request.json()
+        except Exception:
+            logger.warning("[iiko-webhook] Невалидный JSON в теле запроса")
+            return web.Response(status=400, text="Invalid JSON")
+
+        # Логируем сырое тело для диагностики (первые 500 символов)
+        import json as _json
+        logger.info(
+            "[iiko-webhook] Получен вебхук: %d событий, body[:500]=%s",
+            len(body) if isinstance(body, list) else 1,
+            _json.dumps(body, ensure_ascii=False, default=str)[:500],
+        )
+
+        # iikoCloud шлёт массив событий
+        if not isinstance(body, list):
+            body = [body]
+
+        # Обрабатываем фоновой задачей чтобы быстро вернуть 200
+        # (iikoCloud ожидает быстрый ответ, иначе может отключить вебхук)
+        asyncio.create_task(_process_iiko_webhook(body, bot))
+
+        return web.Response(status=200, text="ok")
+
+    app.router.add_post("/iiko-webhook", iiko_webhook)
 
     SimpleRequestHandler(
         dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET,

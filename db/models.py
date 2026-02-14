@@ -740,7 +740,46 @@ class ProductRequest(Base):
 
 
 # ─────────────────────────────────────────────────────
-# Итого 21 таблица:
+# 22. Закреплённые сообщения с остатками (в личках пользователей)
+# ─────────────────────────────────────────────────────
+
+class StockAlertMessage(Base):
+    """
+    Трекинг сообщений с остатками ниже минимума в личных чатах.
+
+    Для каждого авторизованного пользователя хранится message_id
+    последнего отправленного/закреплённого сообщения.
+    При обновлении остатков — edit_message_text (не новое сообщение).
+
+    snapshot_hash: SHA-256 от сортированного JSON {product_id: amount}.
+    Если hash не изменился — edit не нужен.
+    """
+    __tablename__ = "stock_alert_message"
+    __table_args__ = (
+        UniqueConstraint("chat_id", name="uq_stock_alert_chat"),
+    )
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    chat_id = Column(
+        BigInteger, nullable=False, index=True,
+        comment="Telegram chat_id (= user_id для личных чатов)",
+    )
+    message_id = Column(
+        BigInteger, nullable=False,
+        comment="ID закреплённого сообщения с остатками",
+    )
+    snapshot_hash = Column(
+        String(64), nullable=True,
+        comment="SHA-256 хеш последних данных (для дельта-сравнения)",
+    )
+    updated_at = Column(
+        DateTime, default=_utcnow, onupdate=_utcnow, nullable=False,
+        comment="Время последнего обновления",
+    )
+
+
+# ─────────────────────────────────────────────────────
+# Итого 22 таблицы:
 #   iiko_entity        — все справочники (1 кнопка)
 #   iiko_department    — подразделения
 #   iiko_store         — склады
@@ -762,4 +801,5 @@ class ProductRequest(Base):
 #   price_supplier_price  — прайс-лист: цены поставщиков
 #   request_receiver   — получатели заявок
 #   product_request    — заявки на товары
+#   stock_alert_message — закреплённые сообщения с остатками
 # ─────────────────────────────────────────────────────

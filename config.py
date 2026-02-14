@@ -90,6 +90,29 @@ INVOICE_PRICE_SHEET_ID: str = os.getenv(
     "INVOICE_PRICE_SHEET_ID", "1cKQAPXDap6sSAmGROYE-kqyNrVzJnf0bPpTjPyRKa_8"
 )
 
+# ── iikoCloud Webhooks ──
+# Organization ID в iikoCloud — если не задан, нужно получить через API
+IIKO_CLOUD_ORG_ID: str | None = os.getenv("IIKO_CLOUD_ORG_ID") or None
+# Базовый URL iikoCloud API
+IIKO_CLOUD_BASE_URL: str = os.getenv("IIKO_CLOUD_BASE_URL", "https://api-ru.iiko.services")
+# Каждые N закрытых заказов → проверка остатков
+STOCK_CHECK_ORDER_INTERVAL: int = int(os.getenv("STOCK_CHECK_ORDER_INTERVAL", "5"))
+# Порог изменения суммарных остатков (%) при котором отправляется обновление
+STOCK_CHANGE_THRESHOLD_PCT: float = float(os.getenv("STOCK_CHANGE_THRESHOLD_PCT", "5.0"))
+# authToken для верификации входящих вебхуков от iikoCloud
+# ⚠️ ОБЯЗАТЕЛЬНО задайте в env! При auto-generation каждый рестарт — новый секрет,
+# и зарегистрированный вебхук перестанет проходить проверку.
+_IIKO_CLOUD_WEBHOOK_SECRET_RAW = os.getenv("IIKO_CLOUD_WEBHOOK_SECRET")
+if not _IIKO_CLOUD_WEBHOOK_SECRET_RAW:
+    import warnings
+    warnings.warn(
+        "IIKO_CLOUD_WEBHOOK_SECRET не задан — сгенерирован случайный. "
+        "При рестарте зарегистрированный вебхук перестанет работать! "
+        "Задайте фиксированное значение в переменных окружения.",
+        stacklevel=1,
+    )
+IIKO_CLOUD_WEBHOOK_SECRET: str = _IIKO_CLOUD_WEBHOOK_SECRET_RAW or secrets.token_hex(32)
+
 # ── Timezone ──
 # Все даты в проекте — по Калининграду (UTC+2, Europe/Kaliningrad)
 TIMEZONE: str = "Europe/Kaliningrad"

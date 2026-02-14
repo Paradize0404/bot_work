@@ -18,6 +18,7 @@ from aiogram.enums import ChatAction
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from use_cases.pinned_stock_message import send_stock_alert_for_user
 from aiogram.types import (
     Message,
     CallbackQuery,
@@ -117,6 +118,7 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="🔄 Синхронизация")],
         [KeyboardButton(text="📤 Google Таблицы")],
         [KeyboardButton(text="🔑 Права доступа → GSheet")],
+        [KeyboardButton(text="☁️ iikoCloud вебхук")],
         [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -329,6 +331,12 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
         reply_markup=kb,
     )
 
+    # Фоновая отправка остатков подразделения
+    asyncio.create_task(
+        send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
+        name=f"stock_alert_auth_{callback.from_user.id}",
+    )
+
 
 # ─────────────────────────────────────────────────────
 # Отмена авторизации / смены ресторана
@@ -394,6 +402,12 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
 
     await state.clear()
     await callback.message.edit_text(f"✅ Ресторан изменён на: **{dept_name}**", parse_mode="Markdown")
+
+    # Фоновая отправка остатков нового подразделения
+    asyncio.create_task(
+        send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
+        name=f"stock_alert_switch_{callback.from_user.id}",
+    )
 
 
 # ─────────────────────────────────────────────────────
@@ -790,3 +804,141 @@ async def btn_sync_everything(message: Message) -> None:
 
     lines = ["── iiko ──"] + iiko_lines + ["\n── FinTablo ──"] + ft_lines
     await placeholder.edit_text("⚡ Результат полной синхронизации:\n\n" + "\n".join(lines))
+
+
+# ─────────────────────────────────────────────────────
+# iikoCloud вебхук: настройка + принудительная проверка остатков
+# ─────────────────────────────────────────────────────
+
+@router.message(F.text == "☁️ iikoCloud вебхук")
+@admin_required
+async def btn_iiko_cloud_menu(message: Message, state: FSMContext) -> None:
+    """Подменю настройки iikoCloud вебхука."""
+    logger.info("[nav] iikoCloud вебхук tg:%d", message.from_user.id)
+    buttons = [
+        [KeyboardButton(text="📋 Получить организации")],
+        [KeyboardButton(text="🔗 Зарегистрировать вебхук")],
+        [KeyboardButton(text="ℹ️ Статус вебхука")],
+        [KeyboardButton(text="🔄 Обновить остатки сейчас")],
+        [KeyboardButton(text="🔙 К настройкам")],
+    ]
+    kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    await reply_menu(message, state, "☁️ iikoCloud вебхук:", kb)
+
+
+@router.message(F.text == "📋 Получить организации")
+@admin_required
+async def btn_cloud_get_orgs(message: Message) -> None:
+    """Получить список организаций из iikoCloud (для определения org_id)."""
+    logger.info("[cloud] Получить организации tg:%d", message.from_user.id)
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+
+    try:
+        from adapters.iiko_cloud_api import get_organizations
+        orgs = await get_organizations()
+        if not orgs:
+            await message.answer("❌ Организации не найдены. Проверь apiLogin.")
+            return
+        lines = ["☁️ *Организации iikoCloud:*\n"]
+        for org in orgs:
+            name = org.get("name", "—")
+            org_id = org.get("id", "—")
+            lines.append(f"📌 *{name}*\n`{org_id}`\n")
+        lines.append("Скопируй нужный ID и задай в env: `IIKO_CLOUD_ORG_ID`")
+        await message.answer("\n".join(lines), parse_mode="Markdown")
+    except Exception as exc:
+        logger.exception("[cloud] Ошибка получения организаций")
+        await message.answer(f"❌ Ошибка: {exc}")
+
+
+@router.message(F.text == "🔗 Зарегистрировать вебхук")
+@admin_required
+async def btn_cloud_register_webhook(message: Message) -> None:
+    """Зарегистрировать/обновить вебхук в iikoCloud."""
+    from config import IIKO_CLOUD_ORG_ID, WEBHOOK_URL
+    logger.info("[cloud] Регистрация вебхука tg:%d", message.from_user.id)
+
+    if not IIKO_CLOUD_ORG_ID:
+        await message.answer(
+            "❌ Не задан `IIKO_CLOUD_ORG_ID`.\n"
+            "Сначала нажми «📋 Получить организации» и добавь ID в env."
+        )
+        return
+
+    if not WEBHOOK_URL:
+        await message.answer("❌ Бот работает в polling-режиме. Вебхук доступен только на Railway (webhook-режим).")
+        return
+
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+
+    try:
+        from adapters.iiko_cloud_api import register_webhook
+        from config import IIKO_CLOUD_WEBHOOK_SECRET
+        webhook_url = f"{WEBHOOK_URL}/iiko-webhook"
+        result = await register_webhook(
+            organization_id=IIKO_CLOUD_ORG_ID,
+            webhook_url=webhook_url,
+            auth_token=IIKO_CLOUD_WEBHOOK_SECRET,
+        )
+        await message.answer(
+            f"✅ Вебхук зарегистрирован!\n\n"
+            f"URL: `{webhook_url}`\n"
+            f"Фильтр: Closed заказы (delivery + table)\n"
+            f"correlationId: `{result.get('correlationId', '—')}`",
+            parse_mode="Markdown",
+        )
+    except Exception as exc:
+        logger.exception("[cloud] Ошибка регистрации вебхука")
+        await message.answer(f"❌ Ошибка регистрации: {exc}")
+
+
+@router.message(F.text == "ℹ️ Статус вебхука")
+@admin_required
+async def btn_cloud_webhook_status(message: Message) -> None:
+    """Показать текущие настройки вебхука в iikoCloud."""
+    from config import IIKO_CLOUD_ORG_ID
+    logger.info("[cloud] Статус вебхука tg:%d", message.from_user.id)
+
+    if not IIKO_CLOUD_ORG_ID:
+        await message.answer("❌ Не задан `IIKO_CLOUD_ORG_ID`.")
+        return
+
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+
+    try:
+        from adapters.iiko_cloud_api import get_webhook_settings
+        settings = await get_webhook_settings(IIKO_CLOUD_ORG_ID)
+        uri = settings.get("webHooksUri") or "не задан"
+        login = settings.get("apiLoginName") or "—"
+        has_filter = "✅" if settings.get("webHooksFilter") else "❌"
+        await message.answer(
+            f"☁️ *Настройки вебхука:*\n\n"
+            f"API Login: `{login}`\n"
+            f"URL: `{uri}`\n"
+            f"Фильтр: {has_filter}",
+            parse_mode="Markdown",
+        )
+    except Exception as exc:
+        logger.exception("[cloud] Ошибка получения статуса вебхука")
+        await message.answer(f"❌ Ошибка: {exc}")
+
+
+@router.message(F.text == "🔄 Обновить остатки сейчас")
+@admin_required
+async def btn_force_stock_check(message: Message) -> None:
+    """Принудительная проверка остатков + обновление сообщений у всех пользователей."""
+    logger.info("[cloud] Принудительная проверка остатков tg:%d", message.from_user.id)
+    placeholder = await message.answer("⏳ Синхронизирую остатки и обновляю сообщения...")
+
+    try:
+        from use_cases.iiko_webhook_handler import force_stock_check
+        result = await force_stock_check(message.bot)
+        await placeholder.edit_text(
+            f"✅ Остатки обновлены!\n\n"
+            f"Ниже минимума: {result['below_min_count']} поз.\n"
+            f"Проверено: {result['total_products']} позиций\n"
+            f"Время: {result['elapsed']} сек"
+        )
+    except Exception as exc:
+        logger.exception("[cloud] Ошибка принудительной проверки остатков")
+        await placeholder.edit_text(f"❌ Ошибка: {exc}")

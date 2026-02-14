@@ -20,4 +20,7 @@ reportlab>=4.0.0
 # Scheduler (ежедневная автосинхронизация)
 apscheduler>=3.10.0
 
+# Timezone data (нужен на Windows / Alpine для ZoneInfo)
+tzdata>=2024.1
+
 # XML parsing (stdlib, no extra dep)
