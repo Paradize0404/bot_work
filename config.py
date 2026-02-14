@@ -92,7 +92,8 @@ INVOICE_PRICE_SHEET_ID: str = os.getenv(
 
 # ── iikoCloud Webhooks ──
 # Organization ID в iikoCloud — если не задан, нужно получить через API
-IIKO_CLOUD_ORG_ID: str | None = os.getenv("IIKO_CLOUD_ORG_ID") or None
+# Поддерживаем оба имени: IIKO_CLOUD_ORG_ID (основное) и ORG_ID (совместимость со старым скриптом)
+IIKO_CLOUD_ORG_ID: str | None = os.getenv("IIKO_CLOUD_ORG_ID") or os.getenv("ORG_ID") or None
 # Базовый URL iikoCloud API
 IIKO_CLOUD_BASE_URL: str = os.getenv("IIKO_CLOUD_BASE_URL", "https://api-ru.iiko.services")
 # Каждые N закрытых заказов → проверка остатков

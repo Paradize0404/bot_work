@@ -835,8 +835,7 @@ async def btn_iiko_cloud_menu(message: Message, state: FSMContext) -> None:
         [KeyboardButton(text="🔗 Зарегистрировать вебхук")],
         [KeyboardButton(text="ℹ️ Статус вебхука")],
         [KeyboardButton(text="🔄 Обновить остатки сейчас")],
-        [KeyboardButton(text="� Тест стоп-листа")],
-        [KeyboardButton(text="�🔙 К настройкам")],
+        [KeyboardButton(text="🔙 К настройкам")],
     ]
     kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
     await reply_menu(message, state, "☁️ iikoCloud вебхук:", kb)
@@ -938,99 +937,6 @@ async def btn_cloud_webhook_status(message: Message) -> None:
         logger.exception("[cloud] Ошибка получения статуса вебхука")
         await message.answer(f"❌ Ошибка: {exc}")
 
-
-@router.message(F.text == "� Тест стоп-листа")
-@admin_required
-async def btn_debug_stoplist(message: Message) -> None:
-    """Диагностика стоп-листа: пошаговый отчёт."""
-    import json as _json
-    logger.info("[cloud] Тест стоп-листа tg:%d", message.from_user.id)
-    placeholder = await message.answer("⏳ Запускаю диагностику стоп-листа...")
-    lines: list[str] = ["🔍 <b>Диагностика стоп-листа</b>\n"]
-
-    try:
-        from config import IIKO_CLOUD_ORG_ID, IIKO_CLOUD_BASE_URL
-        lines.append(f"1️⃣ IIKO_CLOUD_ORG_ID = <code>{IIKO_CLOUD_ORG_ID}</code>")
-        lines.append(f"   BASE_URL = {IIKO_CLOUD_BASE_URL}")
-
-        if not IIKO_CLOUD_ORG_ID:
-            lines.append("\n❌ ORG_ID не задан — стоп-лист невозможен")
-            await placeholder.edit_text("\n".join(lines), parse_mode="HTML")
-            return
-
-        # 2. Токен
-        from adapters.iiko_cloud_api import get_cloud_token
-        token = await get_cloud_token()
-        lines.append(f"\n2️⃣ Токен: ...{token[-8:]} (длина {len(token)})")
-
-        # 3. Терминальные группы
-        from adapters.iiko_cloud_api import fetch_terminal_groups
-        tg_items = await fetch_terminal_groups(IIKO_CLOUD_ORG_ID)
-        tg_ids = [g["id"] for g in tg_items]
-        lines.append(f"\n3️⃣ Терминальные группы: {len(tg_items)} шт.")
-        for g in tg_items[:5]:
-            lines.append(f"   • {g.get('name', '?')} — <code>{g['id']}</code>")
-
-        if not tg_ids:
-            lines.append("\n❌ Нет терминальных групп")
-            await placeholder.edit_text("\n".join(lines), parse_mode="HTML")
-            return
-
-        # 4. Сырой запрос стоп-листа
-        from adapters.iiko_cloud_api import _get_client, _headers
-        client = await _get_client()
-        headers = await _headers()
-        payload = {"organizationIds": [IIKO_CLOUD_ORG_ID], "terminalGroupsIds": tg_ids}
-        resp = await client.post(
-            f"{IIKO_CLOUD_BASE_URL}/api/1/stop_lists",
-            headers=headers,
-            json=payload,
-        )
-        lines.append(f"\n4️⃣ API /stop_lists: status={resp.status_code}")
-        raw_data = resp.json()
-        raw_str = _json.dumps(raw_data, ensure_ascii=False, default=str)
-        lines.append(f"   response length: {len(raw_str)} chars")
-        lines.append(f"   keys: {list(raw_data.keys()) if isinstance(raw_data, dict) else type(raw_data).__name__}")
-
-        tg_stop_lists = raw_data.get("terminalGroupStopLists", []) if isinstance(raw_data, dict) else []
-        lines.append(f"   terminalGroupStopLists: {len(tg_stop_lists)} элементов")
-
-        # 5. Разбор структуры
-        total_items = 0
-        for i, org_g in enumerate(tg_stop_lists):
-            items_arr = org_g.get("items", [])
-            lines.append(f"\n5️⃣ org_group[{i}]: orgId={org_g.get('organizationId', '?')}, items={len(items_arr)}")
-            for j, tg_sl in enumerate(items_arr):
-                sl_items = tg_sl.get("items", [])
-                total_items += len(sl_items)
-                tg_id_val = tg_sl.get("terminalGroupId", "?")
-                lines.append(f"   tg_stoplist[{j}]: tgId=...{str(tg_id_val)[-8:]}, items={len(sl_items)}")
-                if sl_items:
-                    sample = sl_items[0]
-                    lines.append(f"     sample: productId={sample.get('productId', '?')}, balance={sample.get('balance', '?')}")
-
-        lines.append(f"\n📊 Итого позиций в стоп-листе: {total_items}")
-
-        # 6. Тест через use_case
-        from use_cases.stoplist import fetch_stoplist_items
-        uc_items = await fetch_stoplist_items()
-        lines.append(f"\n6️⃣ fetch_stoplist_items() → {len(uc_items)} позиций")
-        for it in uc_items[:5]:
-            lines.append(f"   • {it.get('name', '?')} (balance={it.get('balance', '?')})")
-
-        # 7. Первые 500 символов raw
-        raw_preview = raw_str[:500]
-        lines.append(f"\n7️⃣ Raw response[:500]:\n<code>{raw_preview}</code>")
-
-    except Exception as exc:
-        import traceback
-        lines.append(f"\n❌ Ошибка: {exc}")
-        lines.append(f"<code>{traceback.format_exc()[-500:]}</code>")
-
-    result_text = "\n".join(lines)
-    if len(result_text) > 4000:
-        result_text = result_text[:3950] + "\n\n...обрезано"
-    await placeholder.edit_text(result_text, parse_mode="HTML")
 
 
 @router.message(F.text == "�🔄 Обновить остатки сейчас")

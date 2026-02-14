@@ -70,6 +70,14 @@ test/
 │   │                         #     Защита: не стирает существующие ✅/❌, добавляет новых с пустыми правами
 │   │                         #     Формат: строка 1=мета (ключи прав), строка 2=заголовки, строка 3+=данные
 │   │                         #     Data validation: dropdown «✅» или пусто в столбцах прав
+│   ├── iiko_cloud_api.py    # HTTP-клиент iikoCloud (persistent httpx)
+│   │                         #   get_cloud_token() — токен из БД (iiko_access_tokens)
+│   │                         #   get_organizations() — список организаций
+│   │                         #   register_webhook() — регистрация вебхука (Closed заказы + StopListUpdate)
+│   │                         #   get_webhook_settings() — текущие настройки вебхука
+│   │                         #   verify_webhook_auth() — верификация authToken входящих вебхуков
+│   │                         #   fetch_terminal_groups(org_id) — терминальные группы организации
+│   │                         #   fetch_stop_lists(org_id, tg_ids) — стоп-лист по терминальным группам
 │   └── fintablo_api.py      # HTTP-клиент FinTablo (persistent httpx, Bearer token)
 │                             #   _get_client() — lazy-init с base_url + Authorization header
 │                             #   close_client() — закрыть при остановке
@@ -286,13 +294,26 @@ test/
 │   │                         #   _batch_upsert(), _mirror_delete(), _safe_decimal() из sync.py (DRY)
 │   │                         #   13 sync_ft_*() — по одной на каждый справочник
 │   │                         #   sync_all_fintablo() — параллельный asyncio.gather ×13
-│   └── scheduler.py         # Ежедневная авто-синхронизация по расписанию
-│                             #   APScheduler AsyncIOScheduler + CronTrigger
-│                             #   _daily_full_sync() — iiko + FinTablo + остатки + min/max
-│                             #   start_scheduler(bot) — вызывается из main.py
-│                             #   stop_scheduler() — graceful shutdown
-│                             #   Расписание: 07:00 Europe/Kaliningrad
-│                             #   Уведомление админов в Telegram после синхронизации
+│   ├── scheduler.py         # Ежедневная авто-синхронизация по расписанию
+│   │                         #   APScheduler AsyncIOScheduler + CronTrigger
+│   │                         #   _daily_full_sync() — iiko + FinTablo + остатки + min/max
+│   │                         #   _daily_stoplist_report() — вечерний отчёт стоп-листа (22:00)
+│   │                         #   start_scheduler(bot) — вызывается из main.py
+│   │                         #   stop_scheduler() — graceful shutdown
+│   │                         #   Расписание: 07:00 sync, 22:00 стоп-лист отчёт
+│   │                         #   Уведомление админов в Telegram после синхронизации
+│   ├── stoplist.py           # Бизнес-логика стоп-листа iikoCloud
+│   │                         #   fetch_stoplist_items() — получить стоп-лист через iikoCloud API
+│   │                         #   diff_and_update(items) — сравнить с active_stoplist, обновить БД
+│   │                         #   _enrich_names(items) — подтянуть названия из iiko_product
+│   │                         #   Запись истории: StoplistHistory (started_at / ended_at)
+│   ├── pinned_stoplist_message.py  # Закреплённые сообщения со стоп-листом
+│   │                         #   send_stoplist_for_user(bot, chat_id) — создать/обновить pinned msg
+│   │                         #   update_all_stoplist_messages(bot) — обновить у всех авториз. пользователей
+│   │                         #   snapshot_hash для дедупликации (не обновлять если ничего не изменилось)
+│   └── stoplist_report.py   # Ежевечерний отчёт стоп-листа (22:00)
+│                             #   send_daily_stoplist_report(bot) — отчёт за день всем авториз. пользователям
+│                             #   StoplistHistory: суммарное время в стопе за день по каждому товару
 │
 └── logs/
     └── app.log              # Лог-файл (ротация)
