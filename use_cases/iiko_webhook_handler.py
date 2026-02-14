@@ -57,7 +57,7 @@ def parse_webhook_events(body: list[dict]) -> list[dict[str, Any]]:
         event_type = event.get("eventType", "")
 
         # Логируем каждое событие для диагностики
-        logger.debug(
+        logger.info(
             "[%s] event: type=%s, org=%s, time=%s",
             LABEL, event_type,
             event.get("organizationId", "?"),
@@ -72,7 +72,7 @@ def parse_webhook_events(body: list[dict]) -> list[dict[str, Any]]:
         order = event_info.get("order") or {}
         status = order.get("status", "")
 
-        logger.debug(
+        logger.info(
             "[%s] → order.status=%s, creationStatus=%s",
             LABEL, status, event_info.get("creationStatus", "?"),
         )
