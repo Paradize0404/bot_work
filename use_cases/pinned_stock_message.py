@@ -232,10 +232,14 @@ async def send_stock_alert_for_user(
     logger.info("[%s] Отправка остатков tg:%d, dept=%s", LABEL, telegram_id, department_id)
 
     try:
-        # Удаляем старое сообщение чтобы отправить НОВОЕ (видимое в чате).
-        # Без этого edit_message_text молча редактирует закреплённое —
-        # пользователь не получает уведомление.
-        await _delete_alert_message(telegram_id)
+        # Удаляем старое сообщение ИЗ ЧАТА + из БД, чтобы не засорять чат.
+        existing = await _get_alert_message(telegram_id)
+        if existing:
+            try:
+                await bot.delete_message(chat_id=telegram_id, message_id=existing.message_id)
+            except Exception:
+                logger.debug("[%s] Не удалось удалить старое сообщение msg=%d", LABEL, existing.message_id)
+            await _delete_alert_message(telegram_id)
 
         from use_cases.check_min_stock import check_min_stock_levels
         result = await check_min_stock_levels(department_id=department_id)
