@@ -1261,15 +1261,11 @@ async def read_cloud_org_mapping() -> dict[str, str]:
     """
     Прочитать маппинг department_id → cloud_org_id из листа «Настройки».
 
-    Формат листа:
-      Строка 1 (мета, скрытая):  "department_id", "cloud_org_id"
-      Строка 2 (заголовки):      "Подразделение", "Организация iikoCloud"
-      Строка 3+:                 dept_name / cloud_org_name (для человека)
-                                  dept_uuid / cloud_org_uuid (скрытые)
-
     Раздел начинается с маркера «## Организации iikoCloud» в ячейке A.
-    Формат строк после маркера:
-      A = dept_name, B = dept_uuid (скрытый), C = cloud_org_name, D = cloud_org_uuid (скрытый)
+    Формат строк данных:
+      A = dept_name, B = dept_uuid (скрытый),
+      C = cloud_org_name (выпадающий список),
+      D = cloud_org_uuid (VLOOKUP-формула, скрытый)
 
     Возвращает: {department_uuid: cloud_org_uuid}
     """
@@ -1322,8 +1318,13 @@ async def sync_cloud_org_mapping_to_sheet(
     cloud_orgs:  [{id, name}, ...] — из iikoCloud /api/1/organizations
 
     Формат листа «Настройки» (раздел «## Организации iikoCloud»):
-      A = Подразделение (name), B = dept_uuid, C = Организация Cloud (name), D = cloud_org_uuid
-      Строка B и D — скрытые, для машинного чтения.
+      A = Подразделение (name)
+      B = dept_uuid  (скрытый)
+      C = Организация Cloud (выпадающий список с Cloud-организациями)
+      D = cloud_org_uuid (формула VLOOKUP, скрытый)
+
+    Справочник Cloud-организаций хранится в скрытых строках ниже данных
+    (A = name, B = uuid) — используется формулой VLOOKUP для авто-подстановки UUID.
 
     Сохраняет уже привязанные значения по dept_uuid.
 
@@ -1336,10 +1337,10 @@ async def sync_cloud_org_mapping_to_sheet(
         all_values = ws.get_all_values()
 
         # ── Найти существующий маппинг (для сохранения ручных привязок) ──
-        old_mapping: dict[str, str] = {}  # dept_uuid → cloud_org_uuid
+        # Сохраняем имя из колонки C (то, что выбрал пользователь в dropdown)
+        old_binding: dict[str, str] = {}  # dept_uuid → cloud_org_name
         in_section = False
         section_start_row: int | None = None
-        section_end_row: int | None = None
 
         for ri, row in enumerate(all_values):
             cell_a = (row[0] if row else "").strip()
@@ -1348,107 +1349,307 @@ async def sync_cloud_org_mapping_to_sheet(
                 section_start_row = ri
                 continue
             if in_section and cell_a.startswith("##"):
-                section_end_row = ri
                 break
             if not in_section:
                 continue
             if cell_a in ("Подразделение", ""):
                 continue
             dept_id = (row[1] if len(row) > 1 else "").strip()
-            cloud_id = (row[3] if len(row) > 3 else "").strip()
-            if dept_id and cloud_id:
-                old_mapping[dept_id] = cloud_id
+            cloud_name = (row[2] if len(row) > 2 else "").strip()
+            cloud_uuid = (row[3] if len(row) > 3 else "").strip()
+            if dept_id and cloud_name:
+                old_binding[dept_id] = cloud_name
+            elif dept_id and cloud_uuid:
+                # Legacy: прямой UUID без имени — ищем имя по UUID
+                for o in cloud_orgs:
+                    if str(o["id"]) == cloud_uuid:
+                        old_binding[dept_id] = o.get("name", "")
+                        break
 
-        # ── Построить cloud_org lookup ──
-        cloud_org_names: dict[str, str] = {o["id"]: o.get("name", "—") for o in cloud_orgs}
+        # ── Cloud org lookup ──
+        cloud_org_name_list: list[str] = [o.get("name", "—") for o in cloud_orgs]
 
-        # ── Сформировать новые строки данных ──
+        # ── Позиция записи (1-based) ──
+        if section_start_row is None:
+            start_row = (len(all_values) + 2) if all_values else 2
+        else:
+            start_row = section_start_row + 1  # 1-based
+
+        # Раскладка строк (все 1-based):
+        #   start_row     : «## Организации iikoCloud» (маркер секции)
+        #   start_row + 1 : заголовки
+        #   start_row + 2 : первая строка данных
+        #   ...
+        #   last_data_row : последняя строка данных
+        #   last_data_row + 1 : пустая строка
+        #   ref_start     : «## Cloud-справочник» (скрытый)
+        #   ref_start + 1 : первая строка справочника (name, uuid)
+        #   ...
+
+        header_row = start_row + 1
+        first_data = start_row + 2
+
+        # ── Сформировать строки данных ──
         data_rows: list[list[str]] = []
         for dept in sorted(departments, key=lambda d: d.get("name", "")):
             dept_id = str(dept["id"])
             dept_name = dept.get("name", "—")
-            # Попытка найти существующую привязку
-            cloud_id = old_mapping.get(dept_id, "")
-            cloud_name = cloud_org_names.get(cloud_id, "") if cloud_id else ""
-            data_rows.append([dept_name, dept_id, cloud_name, cloud_id])
+            cloud_name = old_binding.get(dept_id, "")
+            data_rows.append([dept_name, dept_id, cloud_name])
 
-        # ── Дописать строку-валидатор (dropdown из cloud_orgs) ──
-        # Это для удобства — ниже данных добавим справочник cloud_orgs
-        # Формат: «## Cloud-организации» → name, uuid
-        cloud_ref_rows: list[list[str]] = [
-            ["## Cloud-организации", "", "", ""],
-            ["Название", "UUID", "", ""],
-        ]
+        last_data = first_data + len(data_rows) - 1
+        ref_marker = last_data + 2
+        ref_first = ref_marker + 1
+
+        # ── Справочник Cloud-организаций (для VLOOKUP) ──
+        ref_rows: list[list[str]] = []
         for org in cloud_orgs:
-            cloud_ref_rows.append([org.get("name", "—"), str(org["id"]), "", ""])
+            ref_rows.append([org.get("name", "—"), str(org["id"])])
+        ref_last = ref_first + len(ref_rows) - 1
 
-        # ── Записать раздел ──
-        # Очищаем всё если раздела не было — пишем с начала листа
-        if section_start_row is None:
-            # Первая запись — сначала проверяем нет ли чего на листе
-            start_row = len(all_values) + 1 if all_values else 1
-        else:
-            start_row = section_start_row + 1  # 1-based
-
-        # Полный блок: маркер + заголовок + данные + пустая + справочник
+        # ── Собрать блок для записи ──
         block: list[list[str]] = [
             ["## Организации iikoCloud", "", "", ""],
-            ["Подразделение", "dept_uuid", "Организация Cloud", "cloud_org_uuid"],
+            ["Подразделение", "", "Организация Cloud  ▼", ""],
         ]
-        block.extend(data_rows)
-        block.append(["", "", "", ""])  # пустая строка-разделитель
-        block.extend(cloud_ref_rows)
+        for i, dr in enumerate(data_rows):
+            row_num = first_data + i
+            vlookup = (
+                f'=IFERROR(VLOOKUP(C{row_num},'
+                f'$A${ref_first}:$B${ref_last},'
+                f'2,FALSE),"")'
+            )
+            block.append([dr[0], dr[1], dr[2], vlookup])
 
-        # Очищаем старую секцию (если была)
+        block.append(["", "", "", ""])  # разделитель
+
+        block.append(["## Cloud-справочник", "", "", ""])
+        for rr in ref_rows:
+            block.append([rr[0], rr[1], "", ""])
+
+        # ── Очистить старую секцию ──
         if section_start_row is not None:
-            # Очистить от start до конца листа (безопасно — мы перезапишем)
-            end_clear = max(len(all_values), section_start_row + len(block) + 5)
+            end_clear = max(len(all_values), section_start_row + len(block) + 10)
             try:
                 ws.batch_clear([f"A{section_start_row + 1}:Z{end_clear}"])
             except Exception:
                 pass
 
-        # Записываем
+        # ── Записать (USER_ENTERED чтобы формулы работали) ──
         ws.update(
             f"A{start_row}",
             block,
-            value_input_option="RAW",
+            value_input_option="USER_ENTERED",
         )
 
-        # ── Форматирование: скрыть столбцы B и D ──
-        try:
-            spreadsheet = _get_client().open_by_key(MIN_STOCK_SHEET_ID)
-            requests = [
-                # Скрыть столбец B (dept_uuid)
-                {
-                    "updateDimensionProperties": {
-                        "range": {
-                            "sheetId": ws.id,
-                            "dimension": "COLUMNS",
-                            "startIndex": 1,
-                            "endIndex": 2,
-                        },
-                        "properties": {"hiddenByUser": True},
-                        "fields": "hiddenByUser",
+        # ════════════════════════════════════════════════
+        #  Форматирование через Sheets API (batch_update)
+        # ════════════════════════════════════════════════
+        spreadsheet = _get_client().open_by_key(MIN_STOCK_SHEET_ID)
+        requests: list[dict] = []
+
+        # ---- 1. Скрыть столбец B (dept_uuid) ----
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 1, "endIndex": 2,
+                },
+                "properties": {"hiddenByUser": True},
+                "fields": "hiddenByUser",
+            }
+        })
+        # ---- 2. Скрыть столбец D (cloud_org_uuid) ----
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 3, "endIndex": 4,
+                },
+                "properties": {"hiddenByUser": True},
+                "fields": "hiddenByUser",
+            }
+        })
+
+        # ---- 3. Ширина колонки A = 280px, C = 320px ----
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 0, "endIndex": 1,
+                },
+                "properties": {"pixelSize": 280},
+                "fields": "pixelSize",
+            }
+        })
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 2, "endIndex": 3,
+                },
+                "properties": {"pixelSize": 320},
+                "fields": "pixelSize",
+            }
+        })
+
+        # ---- 4. Маркер секции — жирный, 12pt ----
+        marker_0 = start_row - 1  # 0-based
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": marker_0,
+                    "endRowIndex": marker_0 + 1,
+                    "startColumnIndex": 0, "endColumnIndex": 1,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "textFormat": {"bold": True, "fontSize": 12},
                     }
                 },
-                # Скрыть столбец D (cloud_org_uuid)
-                {
-                    "updateDimensionProperties": {
-                        "range": {
-                            "sheetId": ws.id,
-                            "dimension": "COLUMNS",
-                            "startIndex": 3,
-                            "endIndex": 4,
+                "fields": "userEnteredFormat(textFormat)",
+            }
+        })
+
+        # ---- 5. Заголовок — жирный, фон, центр ----
+        hdr_0 = header_row - 1  # 0-based
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": hdr_0,
+                    "endRowIndex": hdr_0 + 1,
+                    "startColumnIndex": 0, "endColumnIndex": 4,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": {
+                            "red": 0.82, "green": 0.88, "blue": 0.97,
                         },
-                        "properties": {"hiddenByUser": True},
-                        "fields": "hiddenByUser",
+                        "textFormat": {"bold": True, "fontSize": 10},
+                        "horizontalAlignment": "CENTER",
+                        "verticalAlignment": "MIDDLE",
                     }
                 },
+                "fields": (
+                    "userEnteredFormat("
+                    "backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+                ),
+            }
+        })
+
+        # ---- 6. Данные — вертикальное выравнивание по центру ----
+        fd_0 = first_data - 1
+        ld_0 = last_data  # endRowIndex exclusive
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": fd_0,
+                    "endRowIndex": ld_0,
+                    "startColumnIndex": 0, "endColumnIndex": 4,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "verticalAlignment": "MIDDLE",
+                    }
+                },
+                "fields": "userEnteredFormat(verticalAlignment)",
+            }
+        })
+
+        # ---- 7. Границы для таблицы (заголовок + данные) ----
+        thin_border = {
+            "style": "SOLID",
+            "width": 1,
+            "color": {"red": 0.75, "green": 0.75, "blue": 0.75},
+        }
+        requests.append({
+            "updateBorders": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": hdr_0,
+                    "endRowIndex": ld_0,
+                    "startColumnIndex": 0, "endColumnIndex": 1,
+                },
+                "top": thin_border,
+                "bottom": thin_border,
+                "left": thin_border,
+                "right": thin_border,
+                "innerHorizontal": thin_border,
+            }
+        })
+        requests.append({
+            "updateBorders": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": hdr_0,
+                    "endRowIndex": ld_0,
+                    "startColumnIndex": 2, "endColumnIndex": 3,
+                },
+                "top": thin_border,
+                "bottom": thin_border,
+                "left": thin_border,
+                "right": thin_border,
+                "innerHorizontal": thin_border,
+            }
+        })
+
+        # ---- 8. Dropdown (выпадающий список) в колонке C ----
+        if cloud_org_name_list and data_rows:
+            dropdown_values = [
+                {"userEnteredValue": n} for n in cloud_org_name_list
             ]
+            requests.append({
+                "setDataValidation": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": fd_0,
+                        "endRowIndex": ld_0,
+                        "startColumnIndex": 2,
+                        "endColumnIndex": 3,
+                    },
+                    "rule": {
+                        "condition": {
+                            "type": "ONE_OF_LIST",
+                            "values": dropdown_values,
+                        },
+                        "showCustomUi": True,
+                        "strict": False,
+                    },
+                }
+            })
+
+        # ---- 9. Скрыть строки справочника ----
+        if ref_rows:
+            # Скрыть от пустой строки-разделителя до конца справочника
+            hide_from_0 = ref_marker - 2  # пустая строка (0-based)
+            hide_to_0 = ref_last  # exclusive
+            requests.append({
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "ROWS",
+                        "startIndex": hide_from_0,
+                        "endIndex": hide_to_0,
+                    },
+                    "properties": {"hiddenByUser": True},
+                    "fields": "hiddenByUser",
+                }
+            })
+
+        try:
             spreadsheet.batch_update({"requests": requests})
         except Exception:
-            logger.warning("[%s] Ошибка форматирования листа Настройки", LABEL, exc_info=True)
+            logger.warning(
+                "[%s] Ошибка форматирования листа Настройки",
+                LABEL, exc_info=True,
+            )
 
         return len(data_rows)
 
