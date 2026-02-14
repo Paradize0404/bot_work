@@ -403,6 +403,10 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
     await state.clear()
     await callback.message.edit_text(f"✅ Ресторан изменён на: **{dept_name}**", parse_mode="Markdown")
 
+    # Обновляем reply-клавиатуру (название ресторана в кнопке)
+    kb = await _get_main_kb(callback.from_user.id)
+    await callback.message.answer("Выберите действие:", reply_markup=kb)
+
     # Фоновая отправка остатков нового подразделения
     asyncio.create_task(
         send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
