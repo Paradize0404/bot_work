@@ -12,7 +12,8 @@ Use-case: стоп-лист iikoCloud — получение, диффинг, и
 Зависимости:
   - adapters/iiko_cloud_api.py  — fetch_terminal_groups, fetch_stop_lists
   - db/models.py                — ActiveStoplist, StoplistHistory, Product
-  - config.py                   — IIKO_CLOUD_ORG_ID
+  - use_cases/cloud_org_mapping — resolve_cloud_org_id (per-user org_id)
+  - config.py                   — IIKO_CLOUD_ORG_ID (fallback)
 """
 
 import logging
@@ -34,40 +35,49 @@ LABEL = "Stoplist"
 # Получение стоп-листа из iikoCloud
 # ═══════════════════════════════════════════════════════
 
-async def fetch_stoplist_items() -> list[dict[str, Any]]:
+async def fetch_stoplist_items(
+    org_id: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Получить плоский список товаров в стоп-листе из iikoCloud.
 
+    Args:
+        org_id: UUID организации iikoCloud. Если None — fallback на env.
+
     Шаги:
-      1. GET terminal groups для IIKO_CLOUD_ORG_ID
+      1. GET terminal groups для org_id
       2. GET stop_lists для всех terminal groups
       3. MAP productId → name из iiko_product
       4. Вернуть [{product_id, name, balance, terminal_group_id, org_id}, ...]
     """
-    from config import IIKO_CLOUD_ORG_ID
     from adapters.iiko_cloud_api import fetch_terminal_groups, fetch_stop_lists
 
-    if not IIKO_CLOUD_ORG_ID:
-        logger.warning("[%s] IIKO_CLOUD_ORG_ID не задан — стоп-лист недоступен", LABEL)
+    # Fallback на env для обратной совместимости (вебхуки, CLI)
+    if not org_id:
+        from config import IIKO_CLOUD_ORG_ID
+        org_id = IIKO_CLOUD_ORG_ID
+
+    if not org_id:
+        logger.warning("[%s] org_id не задан — стоп-лист недоступен", LABEL)
         return []
 
     t0 = time.monotonic()
 
     # 1. Получаем терминальные группы
-    tg_items = await fetch_terminal_groups(IIKO_CLOUD_ORG_ID)
+    tg_items = await fetch_terminal_groups(org_id)
     tg_ids = [g["id"] for g in tg_items]
 
     if not tg_ids:
-        logger.warning("[%s] Нет терминальных групп для org=%s", LABEL, IIKO_CLOUD_ORG_ID)
+        logger.warning("[%s] Нет терминальных групп для org=%s", LABEL, org_id)
         return []
 
     # 2. Получаем стоп-лист
-    raw_groups = await fetch_stop_lists(IIKO_CLOUD_ORG_ID, tg_ids)
+    raw_groups = await fetch_stop_lists(org_id, tg_ids)
 
     # Распаковываем: raw_groups = [{organizationId, items: [{terminalGroupId, items: [...]}]}]
     flat_items: list[dict[str, Any]] = []
     for org_group in raw_groups:
-        org_id = org_group.get("organizationId", IIKO_CLOUD_ORG_ID)
+        org_id_val = org_group.get("organizationId", org_id)
         for tg_stoplist in org_group.get("items", []):
             tg_id = tg_stoplist.get("terminalGroupId", "")
             for item in tg_stoplist.get("items", []):
@@ -75,7 +85,7 @@ async def fetch_stoplist_items() -> list[dict[str, Any]]:
                     "product_id": item.get("productId", ""),
                     "balance": float(item.get("balance", 0)),
                     "terminal_group_id": tg_id,
-                    "organization_id": org_id,
+                    "organization_id": org_id_val,
                     "sku": item.get("sku"),
                     "date_add": item.get("dateAdd"),
                 })
@@ -360,7 +370,9 @@ def format_full_stoplist(items: list[dict]) -> str:
 # Полный цикл: fetch → diff → format
 # ═══════════════════════════════════════════════════════
 
-async def run_stoplist_cycle() -> tuple[str | None, bool]:
+async def run_stoplist_cycle(
+    org_id: str | None = None,
+) -> tuple[str | None, bool]:
     """
     Полный цикл стоп-листа:
       1. Получить данные из iikoCloud
@@ -368,11 +380,14 @@ async def run_stoplist_cycle() -> tuple[str | None, bool]:
       3. Обновить БД
       4. Вернуть текст сообщения + флаг «есть изменения»
 
+    Args:
+        org_id: UUID организации iikoCloud (если None — fallback на env)
+
     Returns:
         (message_text, has_changes) — text=None если ошибка
     """
     try:
-        items = await fetch_stoplist_items()
+        items = await fetch_stoplist_items(org_id=org_id)
         added, removed, existing = await sync_and_diff(items)
         has_changes = bool(added or removed)
 

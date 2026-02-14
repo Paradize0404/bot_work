@@ -150,8 +150,12 @@ async def send_stoplist_for_user(bot: Any, telegram_id: int) -> bool:
                 logger.debug("[%s] Не удалось удалить старое сообщение msg=%d", LABEL, existing.message_id)
             await _delete_msg(telegram_id)
 
+        # Определяем cloud_org_id для пользователя (по его подразделению)
+        from use_cases.cloud_org_mapping import resolve_cloud_org_id_for_user
+        user_org_id = await resolve_cloud_org_id_for_user(telegram_id)
+
         from use_cases.stoplist import fetch_stoplist_items, format_full_stoplist
-        items = await fetch_stoplist_items()
+        items = await fetch_stoplist_items(org_id=user_org_id)
         text = format_full_stoplist(items)
         text_hash = _compute_hash(text)
 

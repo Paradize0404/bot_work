@@ -832,6 +832,7 @@ async def btn_iiko_cloud_menu(message: Message, state: FSMContext) -> None:
     logger.info("[nav] iikoCloud вебхук tg:%d", message.from_user.id)
     buttons = [
         [KeyboardButton(text="📋 Получить организации")],
+        [KeyboardButton(text="🔗 Привязать организации")],
         [KeyboardButton(text="🔗 Зарегистрировать вебхук")],
         [KeyboardButton(text="ℹ️ Статус вебхука")],
         [KeyboardButton(text="🔄 Обновить остатки сейчас")],
@@ -844,7 +845,7 @@ async def btn_iiko_cloud_menu(message: Message, state: FSMContext) -> None:
 @router.message(F.text == "📋 Получить организации")
 @admin_required
 async def btn_cloud_get_orgs(message: Message) -> None:
-    """Получить список организаций из iikoCloud (для определения org_id)."""
+    """Получить список организаций из iikoCloud."""
     logger.info("[cloud] Получить организации tg:%d", message.from_user.id)
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
@@ -859,11 +860,60 @@ async def btn_cloud_get_orgs(message: Message) -> None:
             name = org.get("name", "—")
             org_id = org.get("id", "—")
             lines.append(f"📌 *{name}*\n`{org_id}`\n")
-        lines.append("Скопируй нужный ID и задай в env: `IIKO_CLOUD_ORG_ID`")
+        lines.append("Чтобы привязать организации к подразделениям, нажми \xab🔗 Привязать организации\xbb")
         await message.answer("\n".join(lines), parse_mode="Markdown")
     except Exception as exc:
         logger.exception("[cloud] Ошибка получения организаций")
         await message.answer(f"❌ Ошибка: {exc}")
+
+
+@router.message(F.text == "🔗 Привязать организации")
+@admin_required
+async def btn_cloud_sync_org_mapping(message: Message) -> None:
+    """Выгрузить подразделения + Cloud-организации в GSheet для привязки."""
+    logger.info("[cloud] Привязка организаций tg:%d", message.from_user.id)
+    placeholder = await message.answer("⏳ Выгружаю подразделения и организации в Google Таблицу...")
+
+    try:
+        from sqlalchemy import select
+        from db.engine import async_session_factory
+        from db.models import Department
+        from adapters.iiko_cloud_api import get_organizations
+        from adapters.google_sheets import sync_cloud_org_mapping_to_sheet
+        from use_cases.cloud_org_mapping import invalidate_cache
+
+        # 1. Подразделения из БД (тип DEPARTMENT / STORE)
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Department).where(
+                    Department.deleted.is_(False),
+                    Department.department_type.in_(["DEPARTMENT", "STORE"]),
+                )
+            )
+            depts = result.scalars().all()
+
+        dept_list = [{"id": str(d.id), "name": d.name or "—"} for d in depts]
+
+        # 2. Организации из iikoCloud
+        cloud_orgs = await get_organizations()
+
+        # 3. Записать в GSheet
+        count = await sync_cloud_org_mapping_to_sheet(dept_list, cloud_orgs)
+
+        # 4. Сбросить кеш
+        invalidate_cache()
+
+        await placeholder.edit_text(
+            f"✅ Выгружено!\n\n"
+            f"🏢 Подразделений: {count}\n"
+            f"☁️ Cloud-организаций: {len(cloud_orgs)}\n\n"
+            f"Открой лист \xabНастройки\xbb в Google Таблице и заполни "
+            f"столбец \xabОрганизация Cloud\xbb для каждого подразделения.\n"
+            f"Справочник Cloud-организаций — ниже на листе."
+        )
+    except Exception as exc:
+        logger.exception("[cloud] Ошибка привязки организаций")
+        await placeholder.edit_text(f"❌ Ошибка: {exc}")
 
 
 @router.message(F.text == "🔗 Зарегистрировать вебхук")
@@ -911,18 +961,25 @@ async def btn_cloud_register_webhook(message: Message) -> None:
 @admin_required
 async def btn_cloud_webhook_status(message: Message) -> None:
     """Показать текущие настройки вебхука в iikoCloud."""
-    from config import IIKO_CLOUD_ORG_ID
     logger.info("[cloud] Статус вебхука tg:%d", message.from_user.id)
 
-    if not IIKO_CLOUD_ORG_ID:
-        await message.answer("❌ Не задан `IIKO_CLOUD_ORG_ID`.")
+    from use_cases.cloud_org_mapping import get_all_cloud_org_ids
+    all_org_ids = await get_all_cloud_org_ids()
+    org_id = all_org_ids[0] if all_org_ids else None
+
+    if not org_id:
+        from config import IIKO_CLOUD_ORG_ID
+        org_id = IIKO_CLOUD_ORG_ID
+
+    if not org_id:
+        await message.answer("❌ Нет привязанных организаций.")
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
     try:
         from adapters.iiko_cloud_api import get_webhook_settings
-        settings = await get_webhook_settings(IIKO_CLOUD_ORG_ID)
+        settings = await get_webhook_settings(org_id)
         uri = settings.get("webHooksUri") or "не задан"
         login = settings.get("apiLoginName") or "—"
         has_filter = "✅" if settings.get("webHooksFilter") else "❌"

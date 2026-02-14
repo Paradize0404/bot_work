@@ -176,16 +176,31 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         try:
             from use_cases.stoplist import run_stoplist_cycle
             from use_cases.pinned_stoplist_message import update_all_stoplist_messages
+            from use_cases.cloud_org_mapping import get_all_cloud_org_ids
 
-            text, has_changes = await run_stoplist_cycle()
-            if text and has_changes:
-                await update_all_stoplist_messages(bot, text)
+            # Определяем org_id из самого события (или из маппинга)
+            event_org_ids = {
+                e.get("organizationId") for e in body
+                if e.get("eventType") == "StopListUpdate" and e.get("organizationId")
+            }
+            if not event_org_ids:
+                # Fallback: все привязанные org_id
+                event_org_ids = set(await get_all_cloud_org_ids())
+
+            any_changes = False
+            last_text: str | None = None
+            for oid in event_org_ids:
+                text, has_changes = await run_stoplist_cycle(org_id=oid)
+                if text and has_changes:
+                    any_changes = True
+                    last_text = text
+
+            if any_changes and last_text:
+                await update_all_stoplist_messages(bot, last_text)
                 result["stoplist_updated"] = True
-                logger.info("[%s] Стоп-лист обновлён и разослан", LABEL)
-            elif text:
-                logger.info("[%s] Стоп-лист без изменений", LABEL)
+                logger.info("[%s] Стоп-лист обновлён и разослан (orgs: %s)", LABEL, event_org_ids)
             else:
-                logger.warning("[%s] Ошибка получения стоп-листа", LABEL)
+                logger.info("[%s] Стоп-лист без изменений", LABEL)
         except Exception:
             logger.exception("[%s] Ошибка обработки StopListUpdate", LABEL)
 

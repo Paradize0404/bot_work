@@ -311,9 +311,14 @@ test/
 │   │                         #   send_stoplist_for_user(bot, chat_id) — создать/обновить pinned msg
 │   │                         #   update_all_stoplist_messages(bot) — обновить у всех авториз. пользователей
 │   │                         #   snapshot_hash для дедупликации (не обновлять если ничего не изменилось)
-│   └── stoplist_report.py   # Ежевечерний отчёт стоп-листа (22:00)
-│                             #   send_daily_stoplist_report(bot) — отчёт за день всем авториз. пользователям
-│                             #   StoplistHistory: суммарное время в стопе за день по каждому товару
+│   ├── stoplist_report.py   # Ежевечерний отчёт стоп-листа (22:00)
+│   │                         #   send_daily_stoplist_report(bot) — отчёт за день всем авториз. пользователям
+│   │                         #   StoplistHistory: суммарное время в стопе за день по каждому товару
+│   └── cloud_org_mapping.py # Маппинг department_id → cloud_org_id
+│                             #   resolve_cloud_org_id(dept_id) — dept → org UUID
+│                             #   resolve_cloud_org_id_for_user(tg_id) — per-user org
+│                             #   get_all_cloud_org_ids() — все привязанные org_id
+│                             #   In-memory кеш (TTL 5 мин) из GSheet «Настройки»
 │
 └── logs/
     └── app.log              # Лог-файл (ротация)

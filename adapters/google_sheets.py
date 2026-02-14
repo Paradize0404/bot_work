@@ -1236,3 +1236,226 @@ async def sync_permissions_to_sheet(
         LABEL, count, elapsed,
     )
     return count
+
+
+# ═══════════════════════════════════════════════════════
+# Настройки (лист «Настройки»)
+# ═══════════════════════════════════════════════════════
+
+SETTINGS_TAB = "Настройки"
+
+
+def _get_settings_worksheet() -> gspread.Worksheet:
+    """Получить лист «Настройки» из таблицы (создать если нет)."""
+    client = _get_client()
+    spreadsheet = client.open_by_key(MIN_STOCK_SHEET_ID)
+    try:
+        ws = spreadsheet.worksheet(SETTINGS_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=SETTINGS_TAB, rows=100, cols=10)
+        logger.info("[%s] Лист «%s» создан", LABEL, SETTINGS_TAB)
+    return ws
+
+
+async def read_cloud_org_mapping() -> dict[str, str]:
+    """
+    Прочитать маппинг department_id → cloud_org_id из листа «Настройки».
+
+    Формат листа:
+      Строка 1 (мета, скрытая):  "department_id", "cloud_org_id"
+      Строка 2 (заголовки):      "Подразделение", "Организация iikoCloud"
+      Строка 3+:                 dept_name / cloud_org_name (для человека)
+                                  dept_uuid / cloud_org_uuid (скрытые)
+
+    Раздел начинается с маркера «## Организации iikoCloud» в ячейке A.
+    Формат строк после маркера:
+      A = dept_name, B = dept_uuid (скрытый), C = cloud_org_name, D = cloud_org_uuid (скрытый)
+
+    Возвращает: {department_uuid: cloud_org_uuid}
+    """
+    t0 = time.monotonic()
+
+    def _sync_read() -> dict[str, str]:
+        ws = _get_settings_worksheet()
+        all_values = ws.get_all_values()
+
+        mapping: dict[str, str] = {}
+        in_section = False
+        for row in all_values:
+            cell_a = (row[0] if row else "").strip()
+            # Маркер начала раздела
+            if cell_a == "## Организации iikoCloud":
+                in_section = True
+                continue
+            # Конец раздела — новый маркер или пустая строка
+            if in_section and cell_a.startswith("##"):
+                break
+            if not in_section:
+                continue
+            # Заголовок — пропустить
+            if cell_a in ("Подразделение", ""):
+                continue
+
+            dept_id = (row[1] if len(row) > 1 else "").strip()
+            cloud_org_id = (row[3] if len(row) > 3 else "").strip()
+            if dept_id and cloud_org_id:
+                mapping[dept_id] = cloud_org_id
+
+        return mapping
+
+    result = await asyncio.to_thread(_sync_read)
+    logger.info(
+        "[%s] cloud_org_mapping: %d привязок за %.1f сек",
+        LABEL, len(result), time.monotonic() - t0,
+    )
+    return result
+
+
+async def sync_cloud_org_mapping_to_sheet(
+    departments: list[dict[str, Any]],
+    cloud_orgs: list[dict[str, Any]],
+) -> int:
+    """
+    Записать/обновить маппинг подразделений → организаций iikoCloud.
+
+    departments: [{id, name}, ...] — из iiko_department (type=DEPARTMENT/STORE)
+    cloud_orgs:  [{id, name}, ...] — из iikoCloud /api/1/organizations
+
+    Формат листа «Настройки» (раздел «## Организации iikoCloud»):
+      A = Подразделение (name), B = dept_uuid, C = Организация Cloud (name), D = cloud_org_uuid
+      Строка B и D — скрытые, для машинного чтения.
+
+    Сохраняет уже привязанные значения по dept_uuid.
+
+    Returns: количество строк данных.
+    """
+    t0 = time.monotonic()
+
+    def _sync_write() -> int:
+        ws = _get_settings_worksheet()
+        all_values = ws.get_all_values()
+
+        # ── Найти существующий маппинг (для сохранения ручных привязок) ──
+        old_mapping: dict[str, str] = {}  # dept_uuid → cloud_org_uuid
+        in_section = False
+        section_start_row: int | None = None
+        section_end_row: int | None = None
+
+        for ri, row in enumerate(all_values):
+            cell_a = (row[0] if row else "").strip()
+            if cell_a == "## Организации iikoCloud":
+                in_section = True
+                section_start_row = ri
+                continue
+            if in_section and cell_a.startswith("##"):
+                section_end_row = ri
+                break
+            if not in_section:
+                continue
+            if cell_a in ("Подразделение", ""):
+                continue
+            dept_id = (row[1] if len(row) > 1 else "").strip()
+            cloud_id = (row[3] if len(row) > 3 else "").strip()
+            if dept_id and cloud_id:
+                old_mapping[dept_id] = cloud_id
+
+        # ── Построить cloud_org lookup ──
+        cloud_org_names: dict[str, str] = {o["id"]: o.get("name", "—") for o in cloud_orgs}
+
+        # ── Сформировать новые строки данных ──
+        data_rows: list[list[str]] = []
+        for dept in sorted(departments, key=lambda d: d.get("name", "")):
+            dept_id = str(dept["id"])
+            dept_name = dept.get("name", "—")
+            # Попытка найти существующую привязку
+            cloud_id = old_mapping.get(dept_id, "")
+            cloud_name = cloud_org_names.get(cloud_id, "") if cloud_id else ""
+            data_rows.append([dept_name, dept_id, cloud_name, cloud_id])
+
+        # ── Дописать строку-валидатор (dropdown из cloud_orgs) ──
+        # Это для удобства — ниже данных добавим справочник cloud_orgs
+        # Формат: «## Cloud-организации» → name, uuid
+        cloud_ref_rows: list[list[str]] = [
+            ["## Cloud-организации", "", "", ""],
+            ["Название", "UUID", "", ""],
+        ]
+        for org in cloud_orgs:
+            cloud_ref_rows.append([org.get("name", "—"), str(org["id"]), "", ""])
+
+        # ── Записать раздел ──
+        # Очищаем всё если раздела не было — пишем с начала листа
+        if section_start_row is None:
+            # Первая запись — сначала проверяем нет ли чего на листе
+            start_row = len(all_values) + 1 if all_values else 1
+        else:
+            start_row = section_start_row + 1  # 1-based
+
+        # Полный блок: маркер + заголовок + данные + пустая + справочник
+        block: list[list[str]] = [
+            ["## Организации iikoCloud", "", "", ""],
+            ["Подразделение", "dept_uuid", "Организация Cloud", "cloud_org_uuid"],
+        ]
+        block.extend(data_rows)
+        block.append(["", "", "", ""])  # пустая строка-разделитель
+        block.extend(cloud_ref_rows)
+
+        # Очищаем старую секцию (если была)
+        if section_start_row is not None:
+            # Очистить от start до конца листа (безопасно — мы перезапишем)
+            end_clear = max(len(all_values), section_start_row + len(block) + 5)
+            try:
+                ws.batch_clear([f"A{section_start_row + 1}:Z{end_clear}"])
+            except Exception:
+                pass
+
+        # Записываем
+        ws.update(
+            f"A{start_row}",
+            block,
+            value_input_option="RAW",
+        )
+
+        # ── Форматирование: скрыть столбцы B и D ──
+        try:
+            spreadsheet = _get_client().open_by_key(MIN_STOCK_SHEET_ID)
+            requests = [
+                # Скрыть столбец B (dept_uuid)
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 1,
+                            "endIndex": 2,
+                        },
+                        "properties": {"hiddenByUser": True},
+                        "fields": "hiddenByUser",
+                    }
+                },
+                # Скрыть столбец D (cloud_org_uuid)
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 3,
+                            "endIndex": 4,
+                        },
+                        "properties": {"hiddenByUser": True},
+                        "fields": "hiddenByUser",
+                    }
+                },
+            ]
+            spreadsheet.batch_update({"requests": requests})
+        except Exception:
+            logger.warning("[%s] Ошибка форматирования листа Настройки", LABEL, exc_info=True)
+
+        return len(data_rows)
+
+    count = await asyncio.to_thread(_sync_write)
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "[%s] Синхронизация cloud_org_mapping → GSheet: %d подразделений за %.1f сек",
+        LABEL, count, elapsed,
+    )
+    return count
