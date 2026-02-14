@@ -779,7 +779,111 @@ class StockAlertMessage(Base):
 
 
 # ─────────────────────────────────────────────────────
-# Итого 22 таблицы:
+# 23. Стоп-лист: текущее состояние (зеркало iikoCloud)
+# ─────────────────────────────────────────────────────
+
+class ActiveStoplist(Base):
+    """
+    Текущий стоп-лист — товары, находящиеся в стопе прямо сейчас.
+    Обновляется при получении StopListUpdate-вебхука или при ручном опросе.
+    """
+    __tablename__ = "active_stoplist"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    product_id = Column(
+        String(36), nullable=False, index=True,
+        comment="UUID товара из iikoCloud",
+    )
+    name = Column(String(500), nullable=True, comment="Название (из nomenclature)")
+    balance = Column(Numeric(15, 4), nullable=False, default=0, comment="Остаток (0 = стоп)")
+    terminal_group_id = Column(
+        String(36), nullable=True, index=True,
+        comment="UUID терминальной группы",
+    )
+    organization_id = Column(
+        String(36), nullable=True,
+        comment="UUID организации iikoCloud",
+    )
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("product_id", "terminal_group_id", name="uq_active_stoplist_product_tg"),
+    )
+
+
+# ─────────────────────────────────────────────────────
+# 24. Стоп-лист: закреплённые сообщения в чатах
+# ─────────────────────────────────────────────────────
+
+class StoplistMessage(Base):
+    """
+    Трекинг закреплённых сообщений со стоп-листом в личных чатах.
+    Аналогично StockAlertMessage, но для стоп-листа.
+    """
+    __tablename__ = "stoplist_message"
+    __table_args__ = (
+        UniqueConstraint("chat_id", name="uq_stoplist_message_chat"),
+    )
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    chat_id = Column(
+        BigInteger, nullable=False, index=True,
+        comment="Telegram chat_id (= user_id)",
+    )
+    message_id = Column(
+        BigInteger, nullable=False,
+        comment="ID закреплённого сообщения со стоп-листом",
+    )
+    snapshot_hash = Column(
+        String(64), nullable=True,
+        comment="SHA-256 хеш последних данных",
+    )
+    updated_at = Column(
+        DateTime, default=_utcnow, onupdate=_utcnow, nullable=False,
+    )
+
+
+# ─────────────────────────────────────────────────────
+# 25. Стоп-лист: история (вход / выход из стопа)
+# ─────────────────────────────────────────────────────
+
+class StoplistHistory(Base):
+    """
+    История стоп-листа: фиксирует моменты входа и выхода товара из стопа.
+    Используется для вечернего отчёта (суммарное время в стопе за день).
+    """
+    __tablename__ = "stoplist_history"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    product_id = Column(
+        String(36), nullable=False, index=True,
+        comment="UUID товара",
+    )
+    name = Column(String(500), nullable=True, comment="Название товара (денормализовано)")
+    terminal_group_id = Column(
+        String(36), nullable=True, index=True,
+        comment="UUID терминальной группы",
+    )
+    started_at = Column(
+        DateTime, nullable=False, default=_utcnow,
+        comment="Время входа в стоп",
+    )
+    ended_at = Column(
+        DateTime, nullable=True,
+        comment="Время выхода из стопа (NULL = ещё в стопе)",
+    )
+    duration_seconds = Column(
+        Integer, nullable=True,
+        comment="Время в стопе (сек), заполняется при ended_at",
+    )
+    date = Column(
+        DateTime, nullable=True, index=True,
+        comment="Дата (для быстрой фильтрации отчётов)",
+    )
+
+
+# ─────────────────────────────────────────────────────
+# Итого 25 таблиц:
 #   iiko_entity        — все справочники (1 кнопка)
 #   iiko_department    — подразделения
 #   iiko_store         — склады
@@ -802,4 +906,7 @@ class StockAlertMessage(Base):
 #   request_receiver   — получатели заявок
 #   product_request    — заявки на товары
 #   stock_alert_message — закреплённые сообщения с остатками
+#   active_stoplist    — стоп-лист: текущее состояние
+#   stoplist_message   — стоп-лист: закреплённые сообщения
+#   stoplist_history   — стоп-лист: история (вход/выход)
 # ─────────────────────────────────────────────────────

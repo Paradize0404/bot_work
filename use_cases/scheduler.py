@@ -95,6 +95,28 @@ async def _daily_full_sync() -> None:
         logger.exception("[scheduler] Ошибка отправки уведомления админам")
 
 
+# ═══════════════════════════════════════════════════════
+# Вечерний отчёт по стоп-листу (22:00)
+# ═══════════════════════════════════════════════════════
+
+async def _daily_stoplist_report() -> None:
+    """
+    Ежедневный отчёт по стоп-листу: отправляется всем авторизованным пользователям.
+    Вызывается APScheduler в 22:00 по Калининграду.
+    """
+    bot = _bot_ref
+    if not bot:
+        logger.warning("[scheduler] Bot reference not set, cannot send stoplist report")
+        return
+
+    try:
+        from use_cases.stoplist_report import send_daily_stoplist_report
+        sent = await send_daily_stoplist_report(bot)
+        logger.info("[scheduler] Отчёт по стоп-листу отправлен: %d сообщений", sent)
+    except Exception:
+        logger.exception("[scheduler] Ошибка отправки отчёта по стоп-листу")
+
+
 async def _notify_admins_about_sync(report_lines: list[str]) -> None:
     """Отправить результат синхронизации всем админам в Telegram."""
     from use_cases.permissions import get_admin_ids
@@ -132,27 +154,44 @@ _bot_ref = None  # Ссылка на Bot-инстанс для отправки 
 
 def start_scheduler(bot) -> None:
     """
-    Запустить APScheduler с ежедневной задачей в 07:00 по Калининграду.
+    Запустить APScheduler:
+      - 07:00 — ежедневная синхронизация iiko + FinTablo + остатки + min/max
+      - 22:00 — ежедневный отчёт по стоп-листу
     Вызывается из main.py при старте бота.
     """
     global _scheduler, _bot_ref
     _bot_ref = bot
 
     _scheduler = AsyncIOScheduler()
+
+    # ── 07:00 — полная синхронизация ──
     _scheduler.add_job(
         _daily_full_sync,
         trigger=CronTrigger(hour=7, minute=0, timezone=_KGD_TZ),
         id="daily_full_sync",
         name="Ежедневная синхронизация iiko+FinTablo (07:00 Калининград)",
         replace_existing=True,
-        misfire_grace_time=3600,  # Допуск 1 час на случай задержки старта
+        misfire_grace_time=3600,
     )
+
+    # ── 22:00 — отчёт по стоп-листу ──
+    _scheduler.add_job(
+        _daily_stoplist_report,
+        trigger=CronTrigger(hour=22, minute=0, timezone=_KGD_TZ),
+        id="daily_stoplist_report",
+        name="Ежедневный отчёт по стоп-листу (22:00 Калининград)",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     _scheduler.start()
 
-    next_run = _scheduler.get_job("daily_full_sync").next_run_time
+    next_sync = _scheduler.get_job("daily_full_sync").next_run_time
+    next_stoplist = _scheduler.get_job("daily_stoplist_report").next_run_time
     logger.info(
-        "[scheduler] ✅ Планировщик запущен. Следующая синхронизация: %s",
-        next_run.strftime("%Y-%m-%d %H:%M %Z") if next_run else "не определено",
+        "[scheduler] ✅ Планировщик запущен. Синхронизация: %s | Стоп-лист отчёт: %s",
+        next_sync.strftime("%Y-%m-%d %H:%M %Z") if next_sync else "?",
+        next_stoplist.strftime("%Y-%m-%d %H:%M %Z") if next_stoplist else "?",
     )
 
 

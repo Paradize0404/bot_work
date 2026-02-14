@@ -2,14 +2,12 @@
 Use-case: обработка входящих вебхуков от iikoCloud.
 
 Логика:
-  1. iikoCloud шлёт POST на /iiko-webhook при закрытии заказа
-  2. Мы инкрементируем in-memory счётчик закрытых заказов
-  3. Каждые N заказов (STOCK_CHECK_ORDER_INTERVAL):
-     a) sync_stock_balances() — обновляем остатки из iiko REST API
-     b) check_min_stock_levels() — проверяем ниже минимума
-     c) Считаем hash от результата
-     d) Если hash изменился (дельта > STOCK_CHANGE_THRESHOLD_PCT) →
-        обновляем закреплённые сообщения у всех авторизованных пользователей
+  1. iikoCloud шлёт POST на /iiko-webhook при закрытии заказа или изменении стоп-листа
+  2. Для закрытых заказов (DeliveryOrderUpdate / TableOrderUpdate):
+     - Инкрементируем in-memory счётчик
+     - Каждые N заказов (STOCK_CHECK_ORDER_INTERVAL) → sync + delta → обновить pinned
+  3. Для StopListUpdate:
+     - Запускаем цикл стоп-листа: fetch → diff → обновить pinned
 
 Счётчик хранится in-memory — при рестарте сбрасывается. Это OK:
   - Мы не теряем данные, просто отложим проверку на N заказов
@@ -87,6 +85,11 @@ def parse_webhook_events(body: list[dict]) -> list[dict[str, Any]]:
     return closed_events
 
 
+def has_stoplist_update(body: list[dict]) -> bool:
+    """Проверить, есть ли среди событий StopListUpdate."""
+    return any(e.get("eventType") == "StopListUpdate" for e in body)
+
+
 # ═══════════════════════════════════════════════════════
 # Хеширование снэпшота остатков
 # ═══════════════════════════════════════════════════════
@@ -155,13 +158,43 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
     Обработать входящий вебхук от iikoCloud.
 
     Returns:
-        {"processed": int, "triggered_check": bool, "updated_messages": bool}
+        {"processed": int, "triggered_check": bool, "updated_messages": bool,
+         "stoplist_updated": bool}
     """
     global _order_counter, _last_snapshot_hash, _last_total_sum
 
+    result = {
+        "processed": 0,
+        "triggered_check": False,
+        "updated_messages": False,
+        "stoplist_updated": False,
+    }
+
+    # ── StopListUpdate ──
+    if has_stoplist_update(body):
+        logger.info("[%s] Обнаружен StopListUpdate, запускаю цикл стоп-листа...", LABEL)
+        try:
+            from use_cases.stoplist import run_stoplist_cycle
+            from use_cases.pinned_stoplist_message import update_all_stoplist_messages
+
+            text, has_changes = await run_stoplist_cycle()
+            if text and has_changes:
+                await update_all_stoplist_messages(bot, text)
+                result["stoplist_updated"] = True
+                logger.info("[%s] Стоп-лист обновлён и разослан", LABEL)
+            elif text:
+                logger.info("[%s] Стоп-лист без изменений", LABEL)
+            else:
+                logger.warning("[%s] Ошибка получения стоп-листа", LABEL)
+        except Exception:
+            logger.exception("[%s] Ошибка обработки StopListUpdate", LABEL)
+
+    # ── Закрытые заказы ──
     closed = parse_webhook_events(body)
     if not closed:
-        return {"processed": 0, "triggered_check": False, "updated_messages": False}
+        return result
+
+    result["processed"] = len(closed)
 
     logger.info(
         "[%s] Получено %d закрытых заказов (типы: %s)",
@@ -177,7 +210,7 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
     logger.info("[%s] Счётчик: %d / %d", LABEL, current, STOCK_CHECK_ORDER_INTERVAL)
 
     if current < STOCK_CHECK_ORDER_INTERVAL:
-        return {"processed": len(closed), "triggered_check": False, "updated_messages": False}
+        return result
 
     # Порог достигнут → сбрасываем счётчик и проверяем остатки
     async with _counter_lock:
@@ -193,9 +226,9 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
 
         # 2. Проверяем минимальные остатки
         from use_cases.check_min_stock import check_min_stock_levels
-        result = await check_min_stock_levels()
+        stock_result = await check_min_stock_levels()
 
-        items = result.get("items", [])
+        items = stock_result.get("items", [])
         new_hash = _compute_snapshot_hash(items)
         new_total = _compute_total_sum(items)
 
@@ -213,17 +246,20 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
                 "[%s] Остатки обновлены и разосланы за %.1f сек (items=%d)",
                 LABEL, time.monotonic() - t0, len(items),
             )
-            return {"processed": len(closed), "triggered_check": True, "updated_messages": True}
+            result["triggered_check"] = True
+            result["updated_messages"] = True
         else:
             logger.info(
                 "[%s] Остатки без значимых изменений, пропускаем обновление (%.1f сек)",
                 LABEL, time.monotonic() - t0,
             )
-            return {"processed": len(closed), "triggered_check": True, "updated_messages": False}
+            result["triggered_check"] = True
 
     except Exception:
         logger.exception("[%s] Ошибка при проверке остатков после вебхука", LABEL)
-        return {"processed": len(closed), "triggered_check": True, "updated_messages": False}
+        result["triggered_check"] = True
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════

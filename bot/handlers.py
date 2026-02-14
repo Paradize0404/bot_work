@@ -19,6 +19,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from use_cases.pinned_stock_message import send_stock_alert_for_user
+from use_cases.pinned_stoplist_message import send_stoplist_for_user
 from aiogram.types import (
     Message,
     CallbackQuery,
@@ -336,6 +337,11 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
         send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
         name=f"stock_alert_auth_{callback.from_user.id}",
     )
+    # Фоновая отправка стоп-листа
+    asyncio.create_task(
+        send_stoplist_for_user(callback.bot, callback.from_user.id),
+        name=f"stoplist_auth_{callback.from_user.id}",
+    )
 
 
 # ─────────────────────────────────────────────────────
@@ -411,6 +417,11 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
     asyncio.create_task(
         send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
         name=f"stock_alert_switch_{callback.from_user.id}",
+    )
+    # Фоновая отправка стоп-листа
+    asyncio.create_task(
+        send_stoplist_for_user(callback.bot, callback.from_user.id),
+        name=f"stoplist_switch_{callback.from_user.id}",
     )
 
 

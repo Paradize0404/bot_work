@@ -157,6 +157,9 @@ async def register_webhook(
                 "orderStatuses": ["Closed"],
                 "errors": False,
             },
+            "stopListUpdateFilter": {
+                "updates": True,
+            },
         },
     }
 
@@ -191,3 +194,81 @@ def verify_webhook_auth(auth_header: str | None) -> bool:
     if token.startswith("Bearer "):
         token = token[7:]
     return token == IIKO_CLOUD_WEBHOOK_SECRET
+
+
+# ═══════════════════════════════════════════════════════
+# Терминальные группы
+# ═══════════════════════════════════════════════════════
+
+async def fetch_terminal_groups(organization_id: str) -> list[dict[str, Any]]:
+    """
+    POST /api/1/terminal_groups — получить список терминальных групп.
+    Возвращает список объектов {id, name, organizationId, ...}.
+    """
+    t0 = time.monotonic()
+    client = await _get_client()
+    headers = await _headers()
+
+    resp = await client.post(
+        f"{IIKO_CLOUD_BASE_URL}/api/1/terminal_groups",
+        headers=headers,
+        json={"organizationIds": [organization_id]},
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    # Ответ: {terminalGroups: [{organizationId, items: [...]}], terminalGroupsInSleep: [...]}
+    all_items: list[dict] = []
+    for group in data.get("terminalGroups", []):
+        all_items.extend(group.get("items", []))
+
+    logger.info(
+        "[%s] Получено %d терминальных групп (org=%s) за %.1f сек",
+        LABEL, len(all_items), organization_id, time.monotonic() - t0,
+    )
+    return all_items
+
+
+# ═══════════════════════════════════════════════════════
+# Стоп-листы
+# ═══════════════════════════════════════════════════════
+
+async def fetch_stop_lists(
+    organization_id: str,
+    terminal_group_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    POST /api/1/stop_lists — получить стоп-лист по организации.
+
+    Возвращает список terminalGroupStopLists:
+      [{organizationId, items: [{terminalGroupId, items: [{productId, balance, sku, dateAdd}]}]}]
+
+    Если terminal_group_ids не указаны — возвращаются все терминальные группы.
+    """
+    t0 = time.monotonic()
+    client = await _get_client()
+    headers = await _headers()
+
+    payload: dict[str, Any] = {"organizationIds": [organization_id]}
+    if terminal_group_ids:
+        payload["terminalGroupsIds"] = terminal_group_ids
+
+    resp = await client.post(
+        f"{IIKO_CLOUD_BASE_URL}/api/1/stop_lists",
+        headers=headers,
+        json=payload,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    result = data.get("terminalGroupStopLists", [])
+    total_items = sum(
+        len(item.get("items", []))
+        for group in result
+        for item in group.get("items", [])
+    )
+    logger.info(
+        "[%s] Стоп-лист: %d групп, %d позиций (org=%s) за %.1f сек",
+        LABEL, len(result), total_items, organization_id, time.monotonic() - t0,
+    )
+    return result

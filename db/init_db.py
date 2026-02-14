@@ -68,6 +68,15 @@ async def create_tables() -> None:
         "CREATE INDEX IF NOT EXISTS ix_product_request_status ON product_request (status)",
         # stock_alert_message — закреплённые сообщения с остатками
         "CREATE INDEX IF NOT EXISTS ix_stock_alert_message_chat ON stock_alert_message (chat_id)",
+        # active_stoplist — стоп-лист текущее состояние
+        "CREATE INDEX IF NOT EXISTS ix_active_stoplist_product ON active_stoplist (product_id)",
+        "CREATE INDEX IF NOT EXISTS ix_active_stoplist_tg ON active_stoplist (terminal_group_id)",
+        # stoplist_message — закреплённые сообщения со стоп-листом
+        "CREATE INDEX IF NOT EXISTS ix_stoplist_message_chat ON stoplist_message (chat_id)",
+        # stoplist_history — история стоп-листа
+        "CREATE INDEX IF NOT EXISTS ix_stoplist_history_product ON stoplist_history (product_id)",
+        "CREATE INDEX IF NOT EXISTS ix_stoplist_history_tg ON stoplist_history (terminal_group_id)",
+        "CREATE INDEX IF NOT EXISTS ix_stoplist_history_date ON stoplist_history (date)",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:
