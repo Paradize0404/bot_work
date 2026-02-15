@@ -7,10 +7,12 @@ Use-case: обработка входящих вебхуков от iikoCloud.
      - Синхронизируем остатки из iiko REST API
      - Сравниваем с последним отправленным снэпшотом
      - Если изменение ≥ STOCK_CHANGE_THRESHOLD_PCT (5%) → обновляем сообщения
-  3. Для StopListUpdate:
-     - Запускаем цикл стоп-листа: fetch → diff → всегда удаляем старое и шлём новое
+  3. Для StopListUpdate (debounce = 60 сек):
+     - Накапливаем org_id в буфер, сбрасываем таймер при каждом вебхуке
+     - Через 60 сек тишины: fetch → diff → если есть изменения → send
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -26,6 +28,15 @@ LABEL = "iikoWebhook"
 # Последний снэпшот остатков (для дельта-сравнения)
 _last_snapshot_hash: str | None = None
 _last_total_sum: float = 0.0
+
+# ═══════════════════════════════════════════════════════
+# Debounce для StopListUpdate
+# ═══════════════════════════════════════════════════════
+_STOPLIST_DEBOUNCE_SEC = 60  # ждём 60 сек тишины перед обработкой
+
+_pending_stoplist_org_ids: set[str] = set()  # буфер org_id между вебхуками
+_stoplist_timer: asyncio.TimerHandle | None = None  # текущий таймер
+_stoplist_bot_ref: Any = None  # ссылка на bot для отложенного вызова
 
 
 # ═══════════════════════════════════════════════════════
@@ -80,6 +91,83 @@ def parse_webhook_events(body: list[dict]) -> list[dict[str, Any]]:
 def has_stoplist_update(body: list[dict]) -> bool:
     """Проверить, есть ли среди событий StopListUpdate."""
     return any(e.get("eventType") == "StopListUpdate" for e in body)
+
+
+# ═══════════════════════════════════════════════════════
+# Debounce: накопление и отложенный flush
+# ═══════════════════════════════════════════════════════
+
+def _schedule_stoplist_flush(org_ids: set[str], bot: Any) -> None:
+    """
+    Добавить org_ids в буфер и (пере)запустить таймер на 60 сек.
+    Если за 60 сек придёт ещё один StopListUpdate — таймер сбросится.
+    """
+    global _stoplist_timer, _stoplist_bot_ref
+
+    _pending_stoplist_org_ids.update(org_ids)
+    _stoplist_bot_ref = bot
+
+    # Отменяем предыдущий таймер
+    if _stoplist_timer is not None:
+        _stoplist_timer.cancel()
+
+    loop = asyncio.get_event_loop()
+    _stoplist_timer = loop.call_later(
+        _STOPLIST_DEBOUNCE_SEC,
+        lambda: asyncio.ensure_future(_flush_stoplist()),
+    )
+
+    logger.info(
+        "[%s] StopListUpdate debounce: +%d org(s), буфер=%d, flush через %d сек",
+        LABEL, len(org_ids), len(_pending_stoplist_org_ids), _STOPLIST_DEBOUNCE_SEC,
+    )
+
+
+async def _flush_stoplist() -> None:
+    """
+    Вызывается через 60 сек тишины.
+    Забираем накопленные org_ids, запускаем цикл стоп-листа, рассылаем.
+    """
+    global _stoplist_timer
+
+    _stoplist_timer = None
+    bot = _stoplist_bot_ref
+
+    # Забираем и очищаем буфер
+    org_ids = _pending_stoplist_org_ids.copy()
+    _pending_stoplist_org_ids.clear()
+
+    if not org_ids:
+        return
+
+    logger.info("[%s] Debounce flush: обрабатываю StopListUpdate для %d org(s): %s",
+                LABEL, len(org_ids), org_ids)
+    t0 = time.monotonic()
+
+    try:
+        from use_cases.stoplist import run_stoplist_cycle
+        from use_cases.pinned_stoplist_message import update_all_stoplist_messages
+        from use_cases.cloud_org_mapping import get_all_cloud_org_ids
+
+        if not org_ids:
+            org_ids = set(await get_all_cloud_org_ids())
+
+        last_text: str | None = None
+        for oid in org_ids:
+            text, has_changes = await run_stoplist_cycle(org_id=oid)
+            if text:
+                last_text = text
+
+        if last_text:
+            await update_all_stoplist_messages(bot, last_text)
+            logger.info(
+                "[%s] Стоп-лист обновлён и разослан (orgs: %s) за %.1f сек",
+                LABEL, org_ids, time.monotonic() - t0,
+            )
+        else:
+            logger.warning("[%s] Не удалось получить текст стоп-листа", LABEL)
+    except Exception:
+        logger.exception("[%s] Ошибка при flush стоп-листа", LABEL)
 
 
 # ═══════════════════════════════════════════════════════
@@ -149,7 +237,7 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
     """
     Обработать входящий вебхук от iikoCloud.
 
-    - StopListUpdate: всегда удаляем старое сообщение и шлём новое (delete → send → pin).
+    - StopListUpdate: debounce 60 сек — накапливаем org_ids, после тишины flush.
     - Закрытые заказы: синхронизируем остатки, при расхождении ≥ 5% → обновляем.
 
     Returns:
@@ -165,37 +253,14 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         "stoplist_updated": False,
     }
 
-    # ── StopListUpdate → всегда обновляем ──
+    # ── StopListUpdate → debounce (60 сек) ──
     if has_stoplist_update(body):
-        logger.info("[%s] Обнаружен StopListUpdate, запускаю цикл стоп-листа...", LABEL)
-        try:
-            from use_cases.stoplist import run_stoplist_cycle
-            from use_cases.pinned_stoplist_message import update_all_stoplist_messages
-            from use_cases.cloud_org_mapping import get_all_cloud_org_ids
-
-            # Определяем org_id из самого события (или из маппинга)
-            event_org_ids = {
-                e.get("organizationId") for e in body
-                if e.get("eventType") == "StopListUpdate" and e.get("organizationId")
-            }
-            if not event_org_ids:
-                event_org_ids = set(await get_all_cloud_org_ids())
-
-            last_text: str | None = None
-            for oid in event_org_ids:
-                text, _ = await run_stoplist_cycle(org_id=oid)
-                if text:
-                    last_text = text
-
-            # Всегда шлём, даже если нет изменений — пользователь видит актуальное
-            if last_text:
-                await update_all_stoplist_messages(bot, last_text)
-                result["stoplist_updated"] = True
-                logger.info("[%s] Стоп-лист обновлён и разослан (orgs: %s)", LABEL, event_org_ids)
-            else:
-                logger.warning("[%s] Не удалось получить текст стоп-листа", LABEL)
-        except Exception:
-            logger.exception("[%s] Ошибка обработки StopListUpdate", LABEL)
+        event_org_ids = {
+            e.get("organizationId") for e in body
+            if e.get("eventType") == "StopListUpdate" and e.get("organizationId")
+        }
+        _schedule_stoplist_flush(event_org_ids, bot)
+        result["stoplist_updated"] = True  # запланировано
 
     # ── Закрытые заказы → проверка остатков на каждый вебхук ──
     closed = parse_webhook_events(body)

@@ -292,8 +292,9 @@ python main.py
 
 ```
 iikoCloud POST /iiko-webhook
-  ├─ StopListUpdate → fetch → diff (added/removed/existing) → delete old msg → send new → pin
+  ├─ StopListUpdate → debounce 60 сек → fetch → diff → delete old msg → send new → pin
   │   └─ Получатели: пользователи с флагом «🚫 Стоп-лист» в GSheet (или все, если никто не отмечен)
+  │   └─ Debounce: при серии вебхуков (10 позиций = 10 вебхуков) — ждём 60 сек тишины, потом один flush
   └─ DeliveryOrderUpdate / TableOrderUpdate (status=Closed)
       → sync остатков из iiko REST API
       → дельта-сравнение с последним снэпшотом (SHA-256 хеш)
