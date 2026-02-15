@@ -96,8 +96,6 @@ INVOICE_PRICE_SHEET_ID: str = os.getenv(
 IIKO_CLOUD_ORG_ID: str | None = os.getenv("IIKO_CLOUD_ORG_ID") or os.getenv("ORG_ID") or None
 # Базовый URL iikoCloud API
 IIKO_CLOUD_BASE_URL: str = os.getenv("IIKO_CLOUD_BASE_URL", "https://api-ru.iiko.services")
-# Каждые N закрытых заказов → проверка остатков
-STOCK_CHECK_ORDER_INTERVAL: int = int(os.getenv("STOCK_CHECK_ORDER_INTERVAL", "5"))
 # Порог изменения суммарных остатков (%) при котором отправляется обновление
 STOCK_CHANGE_THRESHOLD_PCT: float = float(os.getenv("STOCK_CHANGE_THRESHOLD_PCT", "5.0"))
 # authToken для верификации входящих вебхуков от iikoCloud

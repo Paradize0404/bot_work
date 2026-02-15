@@ -320,6 +320,10 @@ test/
 │                             #   get_all_cloud_org_ids() — все привязанные org_id
 │                             #   In-memory кеш (TTL 5 мин) из GSheet «Настройки»
 │
+├── tests/
+│   └── test_iiko_webhook.py # Тесты обработки вебхуков iikoCloud
+├── test_incoming_service.py # Тест-скрипт входящих накладных (корневой)
+│
 └── logs/
     └── app.log              # Лог-файл (ротация)
 ```

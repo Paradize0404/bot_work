@@ -148,10 +148,10 @@ async def send_daily_stoplist_report(bot) -> int:
     report = build_daily_report(stats)
     logger.info("[%s] Отчёт: %d позиций в стопе", LABEL, len(stats))
 
-    # Получаем всех авторизованных пользователей
-    from use_cases import permissions as perm_uc
-    cache = await perm_uc._ensure_cache()
-    user_ids = list(cache.keys())
+    # Получаем подписчиков стоп-листа (роль 🚫 Стоп-лист)
+    # Если ни у кого нет флага — рассылка всем авторизованным (bootstrap)
+    from use_cases.permissions import get_stoplist_subscriber_ids
+    user_ids = await get_stoplist_subscriber_ids()
 
     if not user_ids:
         logger.info("[%s] Нет пользователей для отправки отчёта", LABEL)

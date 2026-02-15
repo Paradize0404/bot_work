@@ -6,9 +6,6 @@ raw_json — полный оригинальный ответ API (страхо�
 ID в FinTablo — integer (не UUID).
 """
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
 from sqlalchemy import (
     Column,
     DateTime,
@@ -20,15 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
-from db.models import Base
-
-# Калининградское время (UTC+2) — единая TZ проекта
-_KGD_TZ = ZoneInfo("Europe/Kaliningrad")
-
-
-def _utcnow() -> datetime:
-    """Текущее время по Калининграду (naive, без tzinfo)."""
-    return datetime.now(_KGD_TZ).replace(tzinfo=None)
+from db.models import Base, _utcnow  # noqa: F401 — _utcnow used in column defaults
 
 
 class FTSyncMixin:
