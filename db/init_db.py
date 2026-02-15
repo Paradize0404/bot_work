@@ -77,6 +77,13 @@ async def create_tables() -> None:
         "CREATE INDEX IF NOT EXISTS ix_stoplist_history_product ON stoplist_history (product_id)",
         "CREATE INDEX IF NOT EXISTS ix_stoplist_history_tg ON stoplist_history (terminal_group_id)",
         "CREATE INDEX IF NOT EXISTS ix_stoplist_history_date ON stoplist_history (date)",
+        # ocr_document — OCR распознанные документы
+        "CREATE INDEX IF NOT EXISTS ix_ocr_document_tg ON ocr_document (telegram_id)",
+        "CREATE INDEX IF NOT EXISTS ix_ocr_document_status ON ocr_document (status)",
+        # ocr_item_mapping — маппинг товаров OCR → iiko
+        "CREATE INDEX IF NOT EXISTS ix_ocr_item_mapping_raw ON ocr_item_mapping (raw_name)",
+        # ocr_supplier_mapping — маппинг поставщиков OCR → iiko
+        "CREATE INDEX IF NOT EXISTS ix_ocr_supplier_mapping_raw ON ocr_supplier_mapping (raw_name)",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:

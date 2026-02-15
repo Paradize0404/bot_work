@@ -528,6 +528,120 @@ async def send_outgoing_invoice(document: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "response": resp_body}
 
 
+# ── 10b. Приходная накладная — XML import ────────────
+
+def _build_incoming_invoice_xml(document: dict[str, Any]) -> str:
+    """Собрать XML приходной накладной для iiko import API.
+
+    Incoming invoice DTO использует ДРУГИЕ имена тегов,
+    чем outgoing invoice:
+      - defaultStore   (не defaultStoreId)
+      - supplier       (не counteragentId)
+      - product        (не productId)   — в items
+    См. https://ru.iiko.help/articles/api-documentations/
+         zagruzka-i-redaktirovanie-nakl
+    """
+    from uuid import uuid4
+
+    root = ET.Element("document")
+
+    doc_number = document.get("documentNumber") or f"OCR-{uuid4().hex[:8].upper()}"
+    ET.SubElement(root, "documentNumber").text = doc_number
+    ET.SubElement(root, "dateIncoming").text = document.get("dateIncoming", "")
+    ET.SubElement(root, "useDefaultDocumentTime").text = "false"
+    ET.SubElement(root, "status").text = document.get("status", "NEW")
+
+    comment = document.get("comment", "")
+    if comment:
+        ET.SubElement(root, "comment").text = comment
+
+    ET.SubElement(root, "defaultStore").text = document["storeId"]
+    ET.SubElement(root, "supplier").text = document["supplierId"]
+
+    items_el = ET.SubElement(root, "items")
+    for idx, item in enumerate(document.get("items", []), 1):
+        item_el = ET.SubElement(items_el, "item")
+        ET.SubElement(item_el, "num").text = str(idx)
+        ET.SubElement(item_el, "product").text = item["productId"]
+        ET.SubElement(item_el, "productArticle").text = item.get("productArticle", "")
+        ET.SubElement(item_el, "amount").text = str(round(item["amount"], 4))
+        unit_id = item.get("measureUnitId", "")
+        if unit_id:
+            ET.SubElement(item_el, "amountUnit").text = unit_id
+        container_id = item.get("containerId", "")
+        if container_id:
+            ET.SubElement(item_el, "containerId").text = container_id
+        ET.SubElement(item_el, "price").text = str(round(item.get("price", 0), 2))
+        ET.SubElement(item_el, "sum").text = str(round(item.get("sum", 0), 2))
+
+    xml_decl = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    return xml_decl + ET.tostring(root, encoding="unicode")
+
+
+async def send_incoming_invoice(document: dict[str, Any]) -> dict[str, Any]:
+    """
+    Отправить приходную накладную в iiko — XML import.
+
+    POST /resto/api/documents/import/incomingInvoice?key={token}
+    Content-Type: application/xml
+    Возвращает {"ok": True} при успехе, иначе {"ok": False, "error": "..."}.
+    """
+    key = await _get_key()
+    url = f"{_base()}/resto/api/documents/import/incomingInvoice"
+    params = {"key": key}
+
+    xml_body = _build_incoming_invoice_xml(document)
+
+    logger.info(
+        "[API] POST incomingInvoice (XML import) — store=%s, supplier=%s, items=%d",
+        document.get("storeId"),
+        document.get("supplierId"),
+        len(document.get("items", [])),
+    )
+    logger.debug("[API] incomingInvoice XML body (first 2000 chars):\n%s", xml_body[:2000])
+    t0 = time.monotonic()
+    client = await _get_client()
+    resp = await client.post(
+        url, params=params,
+        content=xml_body.encode("utf-8"),
+        headers={"Content-Type": "application/xml; charset=utf-8"},
+    )
+    elapsed = time.monotonic() - t0
+
+    if resp.status_code >= 400:
+        body = resp.text[:500] if resp.text else ""
+        logger.error(
+            "[API] POST incomingInvoice FAIL — HTTP %d, %.1f сек, body=%s\nXML sent:\n%s",
+            resp.status_code, elapsed, body, xml_body[:1000],
+        )
+        resp.raise_for_status()
+
+    resp_body = resp.text[:500] if resp.text else ""
+    logger.info(
+        "[API] POST incomingInvoice HTTP %d, %.1f сек, body=%s",
+        resp.status_code, elapsed, resp_body,
+    )
+
+    # iiko возвращает 200 даже при ошибке валидации — проверяем <valid>true/false</valid>
+    try:
+        resp_root = ET.fromstring(resp.text or "")
+        valid_el = resp_root.find("valid")
+        if valid_el is not None and valid_el.text == "false":
+            err_el = resp_root.find("errorMessage")
+            err_msg = err_el.text if err_el is not None else "неизвестная ошибка"
+            doc_num_el = resp_root.find("documentNumber")
+            doc_num = doc_num_el.text if doc_num_el is not None else "?"
+            logger.error(
+                "[API] incomingInvoice VALIDATION FAILED — doc=%s, error: %s",
+                doc_num, err_msg,
+            )
+            return {"ok": False, "error": err_msg, "documentNumber": doc_num}
+    except ET.ParseError:
+        logger.warning("[API] Не удалось распарсить XML-ответ: %s", resp_body)
+
+    return {"ok": True, "response": resp_body}
+
+
 # ═════════════════════════════════════════════════════
 # 11. Приходные накладные — экспорт (XML GET)
 # ═════════════════════════════════════════════════════

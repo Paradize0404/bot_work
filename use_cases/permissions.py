@@ -36,8 +36,9 @@ ROLE_ADMIN = "👑 Админ"
 ROLE_RECEIVER = "📬 Получатель"
 ROLE_STOCK = "📦 Остатки"
 ROLE_STOPLIST = "🚫 Стоп-лист"
+ROLE_ACCOUNTANT = "📑 Бухгалтер"
 
-ROLE_KEYS: list[str] = [ROLE_ADMIN, ROLE_RECEIVER, ROLE_STOCK, ROLE_STOPLIST]
+ROLE_KEYS: list[str] = [ROLE_ADMIN, ROLE_RECEIVER, ROLE_STOCK, ROLE_STOPLIST, ROLE_ACCOUNTANT]
 
 # ─── Какие кнопки контролируются правами ───
 PERMISSION_KEYS: list[str] = [
@@ -164,6 +165,12 @@ async def get_stoplist_subscriber_ids() -> list[int]:
     """Список telegram_id пользователей с флагом «🚫 Стоп-лист»."""
     cache = await _ensure_cache()
     return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_STOPLIST, False)]
+
+
+async def get_accountant_ids() -> list[int]:
+    """Список telegram_id пользователей с ролью «📑 Бухгалтер»."""
+    cache = await _ensure_cache()
+    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_ACCOUNTANT, False)]
 
 
 # ═══════════════════════════════════════════════════════

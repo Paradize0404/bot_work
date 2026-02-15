@@ -36,6 +36,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.min_stock_handlers import router as min_stock_router
     from bot.invoice_handlers import router as invoice_router
     from bot.request_handlers import router as request_router
+    from bot.ocr_handlers import router as ocr_router
 
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
@@ -46,6 +47,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp.include_router(writeoff_router)
     dp.include_router(min_stock_router)
     dp.include_router(invoice_router)
+    dp.include_router(ocr_router)
     dp.include_router(request_router)
     dp.include_router(router)
     return bot, dp
