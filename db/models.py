@@ -932,6 +932,10 @@ class OcrDocument(Base):
     buyer_name = Column(String(500))
     items_count = Column(Integer, default=0)
     total_with_vat = Column(Numeric(14, 2))
+    category = Column(
+        String(20), nullable=False, default="goods",
+        comment="goods = товар (→ iiko), service = услуга (только сообщение)",
+    )
     status = Column(
         String(30), nullable=False, default="recognized",
         comment="recognized → mapping → confirmed → sent_to_iiko → error",
@@ -985,6 +989,10 @@ class OcrSupplierMapping(Base):
                          comment="UUID поставщика в iiko")
     supplier_name = Column(String(500),
                            comment="Название поставщика из iiko")
+    category = Column(
+        String(20), nullable=False, default="goods",
+        comment="goods = товар (→ iiko), service = услуга (только сообщение)",
+    )
     created_at = Column(DateTime, default=_utcnow)
 
     __table_args__ = (

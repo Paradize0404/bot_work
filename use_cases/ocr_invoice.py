@@ -344,6 +344,19 @@ async def update_ocr_mapped_json(doc_id: int, mapped_doc: dict[str, Any]) -> Non
             logger.info("[%s] Saved mapped_json doc_id=%d", LABEL, doc_id)
 
 
+async def update_ocr_category(doc_id: int, category: str) -> None:
+    """Обновить категорию OCR-документа (goods/service)."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(OcrDocument).where(OcrDocument.id == doc_id)
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.category = category
+            await session.commit()
+            logger.info("[%s] Updated category doc_id=%d → %s", LABEL, doc_id, category)
+
+
 # ═══════════════════════════════════════════════════════
 # Хелперы для получения известных поставщиков из БД
 # ═══════════════════════════════════════════════════════

@@ -191,6 +191,7 @@ async def save_supplier_mapping(
     supplier_id: str,
     supplier_name: str,
     raw_inn: str | None = None,
+    category: str = "goods",
 ) -> None:
     """UPSERT маппинг поставщика."""
     async with async_session_factory() as session:
@@ -202,15 +203,17 @@ async def save_supplier_mapping(
             row.supplier_id = UUID(supplier_id)
             row.supplier_name = supplier_name
             row.raw_inn = raw_inn
+            row.category = category
         else:
             session.add(OcrSupplierMapping(
                 raw_name=raw_name,
                 raw_inn=raw_inn,
-                supplier_id=UUID(supplier_id),
+                supplier_id=UUID(supplier_id) if supplier_id else None,
                 supplier_name=supplier_name,
+                category=category,
             ))
         await session.commit()
-    logger.info("[%s] Saved supplier mapping: %s → %s", LABEL, raw_name, supplier_name)
+    logger.info("[%s] Saved supplier mapping: %s → %s (cat=%s)", LABEL, raw_name, supplier_name, category)
 
 
 # ═══════════════════════════════════════════════════════
@@ -278,13 +281,15 @@ async def check_and_map_items(doc: dict[str, Any]) -> dict[str, Any]:
     supplier_mapped = False
     supplier_name = supplier.get("name", "")
     supplier_inn = supplier.get("inn")
+    supplier_category = "goods"  # по умолчанию — товар
 
     if supplier_name:
         # Поиск в маппингах
         s_map = await _find_supplier_in_mappings(supplier_name, supplier_inn)
         if s_map:
-            doc["_supplier_id"] = str(s_map.supplier_id)
+            doc["_supplier_id"] = str(s_map.supplier_id) if s_map.supplier_id else None
             doc["_supplier_name"] = s_map.supplier_name
+            supplier_category = s_map.category or "goods"
             supplier_mapped = True
         else:
             # Поиск в iiko
@@ -296,8 +301,14 @@ async def check_and_map_items(doc: dict[str, Any]) -> dict[str, Any]:
                 supplier_mapped = True
                 await save_supplier_mapping(supplier_name, sid, sname, supplier_inn)
 
+    doc["_category"] = supplier_category
+
     unmapped_count = len(unmapped_items)
-    all_mapped = (unmapped_count == 0) and supplier_mapped
+    # Для услуг маппинг товаров не нужен — всё считаем замапленным
+    if supplier_category == "service":
+        all_mapped = supplier_mapped
+    else:
+        all_mapped = (unmapped_count == 0) and supplier_mapped
 
     # Если есть незамапленные — записываем в GSheet
     sheet_url = None
@@ -321,6 +332,7 @@ async def check_and_map_items(doc: dict[str, Any]) -> dict[str, Any]:
         "unmapped_count": unmapped_count,
         "unmapped_items": unmapped_items,
         "supplier_mapped": supplier_mapped,
+        "supplier_category": supplier_category,
         "sheet_url": sheet_url,
     }
 

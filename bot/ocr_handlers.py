@@ -64,8 +64,22 @@ def _preview_kb() -> InlineKeyboardMarkup:
     ])
 
 
-def _accountant_kb(doc_id: int) -> InlineKeyboardMarkup:
+def _accountant_kb(doc_id: int, category: str = "goods") -> InlineKeyboardMarkup:
     """Кнопки для бухгалтера."""
+    if category == "service":
+        # Услуга — только принять/отклонить (без iiko)
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Принято",
+                    callback_data=f"ocr_ack:{doc_id}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отклонить",
+                    callback_data=f"ocr_reject:{doc_id}",
+                ),
+            ],
+        ])
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -75,6 +89,12 @@ def _accountant_kb(doc_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="❌ Отклонить",
                 callback_data=f"ocr_reject:{doc_id}",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="📋 Это услуга",
+                callback_data=f"ocr_service:{doc_id}",
             ),
         ],
     ])
@@ -287,6 +307,12 @@ async def cb_confirm(callback: CallbackQuery, state: FSMContext) -> None:
 
         # Проверяем маппинг
         mapping_result = await check_and_map_items(doc)
+        category = mapping_result.get("supplier_category", "goods")
+
+        # Услуга — маппинг товаров не нужен, сразу бухгалтеру
+        if category == "service":
+            await _send_to_accountant(callback, state, doc, doc_id, category="service")
+            return
 
         if mapping_result["all_mapped"]:
             # Всё замаплено — отправляем на подтверждение бухгалтеру
@@ -397,20 +423,21 @@ async def _send_to_accountant(
     state: FSMContext,
     doc: dict,
     doc_id: int,
+    category: str = "goods",
 ) -> None:
     """Отправить документ на подтверждение бухгалтеру."""
-    from use_cases.ocr_invoice import format_preview, update_ocr_status, update_ocr_mapped_json
+    from use_cases.ocr_invoice import format_preview, update_ocr_status, update_ocr_mapped_json, update_ocr_category
     from use_cases.permissions import get_accountant_ids
 
-    # Сохраняем замапленный JSON в БД
+    # Сохраняем замапленный JSON и категорию в БД
     await update_ocr_mapped_json(doc_id, doc)
+    await update_ocr_category(doc_id, category)
     await update_ocr_status(doc_id, "pending_approval")
 
     preview = format_preview(doc)
     accountants = await get_accountant_ids()
 
     if not accountants:
-        # Нет бухгалтеров — отправляем админам
         from use_cases.permissions import get_admin_ids
         accountants = await get_admin_ids()
 
@@ -422,26 +449,32 @@ async def _send_to_accountant(
         await state.clear()
         return
 
-    # Отправляем каждому бухгалтеру
+    if category == "service":
+        header = "📋 <b>Услуга — только для ознакомления</b>"
+        footer = "\n\n<i>ℹ️ Этот документ — услуга. В iiko он НЕ загружается.</i>"
+    else:
+        header = "📄 <b>Новый документ на подтверждение</b>"
+        footer = ""
+
     bot = callback.bot
     sent = 0
     for acc_id in accountants:
         try:
             await bot.send_message(
                 acc_id,
-                f"📄 <b>Новый документ на подтверждение</b>\n"
+                f"{header}\n"
                 f"От: tg:{callback.from_user.id}\n\n"
-                f"{preview}",
-                reply_markup=_accountant_kb(doc_id),
+                f"{preview}{footer}",
+                reply_markup=_accountant_kb(doc_id, category),
                 parse_mode="HTML",
             )
             sent += 1
         except Exception:
             logger.warning("[%s] Не удалось отправить acc:%d", LABEL, acc_id)
 
+    label = "бухгалтеру" if category == "goods" else "бухгалтеру (услуга)"
     await callback.message.edit_text(
-        f"✅ Документ отправлен на подтверждение ({sent} бухгалтер(ов)).\n"
-        f"Ожидайте одобрения.",
+        f"✅ Документ отправлен {label} ({sent} чел.).\nОжидайте.",
     )
     await state.clear()
     await restore_menu_kb(
@@ -521,3 +554,78 @@ async def cb_accountant_reject(callback: CallbackQuery) -> None:
     await update_ocr_status(doc_id, "rejected")
 
     await callback.message.edit_text(f"❌ Документ #{doc_id} отклонён.")
+
+
+@router.callback_query(F.data.startswith("ocr_ack:"))
+async def cb_accountant_ack(callback: CallbackQuery) -> None:
+    """Бухгалтер подтвердил получение услуги (без отправки в iiko)."""
+    await callback.answer()
+
+    try:
+        doc_id = int(callback.data.split(":")[1])
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка данных")
+        return
+
+    logger.info("[%s] Бухгалтер ack (услуга) doc_id=%d tg:%d", LABEL, doc_id, callback.from_user.id)
+
+    from use_cases.ocr_invoice import update_ocr_status
+    await update_ocr_status(doc_id, "acknowledged")
+
+    await callback.message.edit_text(
+        f"✅ Документ #{doc_id} (услуга) принят к сведению."
+    )
+
+
+@router.callback_query(F.data.startswith("ocr_service:"))
+async def cb_accountant_mark_service(callback: CallbackQuery) -> None:
+    """Бухгалтер помечает документ как услугу.
+
+    Это обучает систему: в следующий раз этот поставщик
+    автоматически будет определяться как «услуга».
+    """
+    await callback.answer()
+
+    try:
+        doc_id = int(callback.data.split(":")[1])
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка данных")
+        return
+
+    tg_id = callback.from_user.id
+    logger.info("[%s] Бухгалтер mark_service doc_id=%d tg:%d", LABEL, doc_id, tg_id)
+
+    from use_cases.ocr_invoice import get_ocr_document, update_ocr_status, update_ocr_category
+    from use_cases.ocr_mapping import save_supplier_mapping
+
+    doc_row = await get_ocr_document(doc_id)
+    if not doc_row:
+        await callback.message.edit_text("❌ Документ не найден в БД.")
+        return
+
+    # Обновляем категорию документа
+    await update_ocr_category(doc_id, "service")
+    await update_ocr_status(doc_id, "acknowledged")
+
+    # Обучаем систему: сохраняем поставщика как «услуга»
+    supplier_name = doc_row.supplier_name
+    supplier_inn = doc_row.supplier_inn
+    if supplier_name:
+        await save_supplier_mapping(
+            raw_name=supplier_name,
+            supplier_id="",
+            supplier_name=supplier_name,
+            raw_inn=supplier_inn,
+            category="service",
+        )
+        await callback.message.edit_text(
+            f"📋 Документ #{doc_id} помечен как <b>услуга</b>.\n\n"
+            f"Поставщик «{supplier_name}» запомнен — "
+            f"следующие документы от него будут автоматически определяться как услуга.",
+            parse_mode="HTML",
+        )
+    else:
+        await callback.message.edit_text(
+            f"📋 Документ #{doc_id} помечен как <b>услуга</b>.",
+            parse_mode="HTML",
+        )

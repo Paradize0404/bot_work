@@ -84,6 +84,9 @@ async def create_tables() -> None:
         "CREATE INDEX IF NOT EXISTS ix_ocr_item_mapping_raw ON ocr_item_mapping (raw_name)",
         # ocr_supplier_mapping — маппинг поставщиков OCR → iiko
         "CREATE INDEX IF NOT EXISTS ix_ocr_supplier_mapping_raw ON ocr_supplier_mapping (raw_name)",
+        # ocr: добавление колонки category (goods/service)
+        "ALTER TABLE ocr_document ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'goods'",
+        "ALTER TABLE ocr_supplier_mapping ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'goods'",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:
