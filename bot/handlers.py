@@ -120,7 +120,6 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="📤 Google Таблицы")],
         [KeyboardButton(text="🔑 Права доступа → GSheet")],
         [KeyboardButton(text="☁️ iikoCloud вебхук")],
-        [KeyboardButton(text="🧹 Очистить чат")],
         [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -528,45 +527,6 @@ async def btn_gsheet_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Google Таблицы'."""
     logger.info("[nav] Меню Google Таблицы tg:%d", message.from_user.id)
     await reply_menu(message, state, "📤 Google Таблицы:", _gsheet_keyboard())
-
-
-@router.message(F.text == "🧹 Очистить чат")
-@admin_required
-async def btn_clear_chat(message: Message, state: FSMContext) -> None:
-    """Удалить закреплённые сообщения бота (стоп-лист + остатки) из чата пользователя."""
-    tg_id = message.from_user.id
-    logger.info("[clear_chat] tg:%d", tg_id)
-
-    deleted = 0
-    bot = message.bot
-
-    # Удаляем закреплённое сообщение стоп-листа
-    from use_cases.pinned_stoplist_message import _get_msg as _get_sl_msg, _delete_msg as _del_sl_msg
-    sl = await _get_sl_msg(tg_id)
-    if sl:
-        try:
-            await bot.delete_message(chat_id=tg_id, message_id=sl.message_id)
-            deleted += 1
-        except Exception:
-            pass
-        await _del_sl_msg(tg_id)
-
-    # Удаляем закреплённое сообщение остатков
-    from use_cases.pinned_stock_message import (
-        _get_alert_message as _get_stk_msg,
-        _delete_alert_message as _del_stk_msg,
-    )
-    stk = await _get_stk_msg(tg_id)
-    if stk:
-        try:
-            await bot.delete_message(chat_id=tg_id, message_id=stk.message_id)
-            deleted += 1
-        except Exception:
-            pass
-        await _del_stk_msg(tg_id)
-
-    await message.answer(f"✅ Удалено {deleted} закреплённых сообщений бота.")
-    await reply_menu(message, state, "⚙️ Настройки:", _settings_keyboard())
 
 
 @router.message(F.text == "🔙 К настройкам")
