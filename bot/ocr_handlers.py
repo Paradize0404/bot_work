@@ -377,6 +377,7 @@ async def cb_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         # Проверяем маппинг
         mapping_result = await check_and_map_items(doc)
         category = mapping_result.get("supplier_category", "goods")
+        sheet_url = mapping_result.get("sheet_url", "")
 
         # Услуга — маппинг товаров не нужен, сразу бухгалтеру
         if category == "service":
@@ -384,19 +385,30 @@ async def cb_confirm(callback: CallbackQuery, state: FSMContext) -> None:
             return
 
         if mapping_result["all_mapped"]:
-            # Всё замаплено — отправляем на подтверждение бухгалтеру
+            # Всё замаплено — показываем таблицу + отправляем на подтверждение бухгалтеру
+            text = (
+                f"✅ Все <b>{mapping_result['mapped_count']}</b> позиций замаплены автоматически.\n\n"
+            )
+            if sheet_url:
+                text += f"🔗 <a href=\"{sheet_url}\">Проверить в таблице</a>\n\n"
+            text += "Отправляю бухгалтеру..."
+            await callback.message.edit_text(text, parse_mode="HTML")
             await _send_to_accountant(callback, state, doc, doc_id)
         else:
             # Есть немаппленные — отправляем в GSheet
             unmapped_count = mapping_result["unmapped_count"]
-            sheet_url = mapping_result.get("sheet_url", "")
+            mapped_count = mapping_result["mapped_count"]
 
             text = (
-                f"⚠️ Найдено <b>{unmapped_count}</b> нераспознанных товаров.\n\n"
-                f"Откройте Google Таблицу и замапьте товары:\n"
-                f"🔗 <a href=\"{sheet_url}\">Открыть таблицу</a>\n\n"
-                f"После маппинга нажмите «✅ Готово»."
+                f"⚠️ Замаплено <b>{mapped_count}</b> из <b>{mapped_count + unmapped_count}</b> позиций.\n"
+                f"<b>{unmapped_count}</b> — не распознано.\n\n"
             )
+            if sheet_url:
+                text += (
+                    f"Откройте Google Таблицу и замапьте незамапленные товары (❌ в статусе):\n"
+                    f"🔗 <a href=\"{sheet_url}\">Открыть таблицу</a>\n\n"
+                )
+            text += "После маппинга нажмите «✅ Готово»."
             await callback.message.edit_text(
                 text,
                 reply_markup=_mapping_kb(),

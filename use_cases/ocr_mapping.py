@@ -126,7 +126,7 @@ async def _find_supplier_in_iiko(name: str, inn: str | None = None) -> tuple[str
     """Поиск поставщика в iiko по fuzzy match."""
     async with async_session_factory() as session:
         result = await session.execute(
-            select(Supplier.id, Supplier.name, Supplier.inn).where(
+            select(Supplier.id, Supplier.name, Supplier.taxpayer_id_number).where(
                 Supplier.deleted.is_(False),
             )
         )
@@ -310,11 +310,24 @@ async def check_and_map_items(doc: dict[str, Any]) -> dict[str, Any]:
     else:
         all_mapped = (unmapped_count == 0) and supplier_mapped
 
-    # Если есть незамапленные — записываем в GSheet
+    # ВСЕГДА записываем ВСЕ позиции в GSheet (и замапленные, и нет)
     sheet_url = None
-    if not all_mapped:
+    if supplier_category != "service" and items:
         try:
-            sheet_url = await write_unmapped_to_gsheet(unmapped_items, supplier_name if not supplier_mapped else None)
+            all_items_for_sheet = []
+            for item in items:
+                all_items_for_sheet.append({
+                    "name": item.get("name", "???"),
+                    "name_normalized": item.get("name_normalized", ""),
+                    "_product_id": item.get("_product_id", ""),
+                    "_product_name": item.get("_product_name", ""),
+                    "_match_source": item.get("_match_source", ""),
+                })
+            sheet_url = await write_all_items_to_gsheet(
+                all_items_for_sheet,
+                supplier_name=supplier_name,
+                supplier_mapped=supplier_mapped,
+            )
         except Exception as e:
             logger.warning("[%s] Не удалось записать в GSheet: %s", LABEL, e)
 
@@ -344,19 +357,25 @@ async def check_and_map_items(doc: dict[str, Any]) -> dict[str, Any]:
 _OCR_MAPPING_TAB = "OCR Маппинг"
 
 
-async def write_unmapped_to_gsheet(
-    unmapped_items: list[dict],
-    unmapped_supplier: str | None = None,
+async def write_all_items_to_gsheet(
+    all_items: list[dict],
+    *,
+    supplier_name: str = "",
+    supplier_mapped: bool = False,
 ) -> str:
     """
-    Записать незамапленные товары в GSheet для ручного маппинга.
+    Записать ВСЕ позиции документа в GSheet «OCR Маппинг».
 
-    Формат листа «OCR Маппинг»:
+    Формат листа:
       A: raw_name (как распознал LLM)
       B: name_normalized
-      C: product_name (выпадающий список из номенклатуры iiko)
-      D: product_id (VLOOKUP по product_name)
-      E: status (✅ замаплен / ❌ нет)
+      C: Товар iiko (выпадающий список / автозаполнение)
+      D: product_id (UUID)
+      E: Поставщик (OCR)
+      F: Статус (✅ замаплен / ❌ нет)
+
+    Замапленные автоматически заполняют C+D+F.
+    Незамапленные — C+D пусты, F=❌, пользователь заполняет.
 
     Returns: URL таблицы.
     """
@@ -371,41 +390,40 @@ async def write_unmapped_to_gsheet(
         ws = sh.worksheet(_OCR_MAPPING_TAB)
     except gspread.exceptions.WorksheetNotFound:
         ws = sh.add_worksheet(title=_OCR_MAPPING_TAB, rows=1000, cols=6)
-        # Заголовки
         ws.update("A1:F1", [[
             "Название (OCR)", "Нормализованное", "Товар iiko",
             "product_id", "Поставщик (OCR)", "Статус",
         ]])
         ws.format("A1:F1", {"textFormat": {"bold": True}})
         logger.info("[%s] Создан лист «%s»", LABEL, _OCR_MAPPING_TAB)
-
-        # Выпадающий список товаров из номенклатуры
         await _setup_product_dropdown(ws)
 
     # Читаем текущие данные чтобы не дублировать
     existing = ws.col_values(1)  # колонка A — raw_name
     existing_set = set(existing)
 
-    # Записываем новые строки
     new_rows: list[list[str]] = []
-    for item in unmapped_items:
+    for item in all_items:
         raw_name = item.get("name", "")
         if raw_name in existing_set:
             continue
+        product_name = item.get("_product_name", "")
+        product_id = item.get("_product_id", "")
+        is_mapped = bool(product_id)
         new_rows.append([
             raw_name,
             item.get("name_normalized", ""),
-            "",  # product_name — заполняет пользователь
-            "",  # product_id — формула
-            "",  # supplier
-            "❌",
+            product_name,  # автозаполнено если замаплен
+            product_id,    # автозаполнено если замаплен
+            supplier_name,
+            "✅" if is_mapped else "❌",
         ])
 
     # Дописываем поставщика если незамаплен
-    if unmapped_supplier:
-        if unmapped_supplier not in existing_set:
+    if supplier_name and not supplier_mapped:
+        if supplier_name not in existing_set:
             new_rows.append([
-                unmapped_supplier, "", "", "", unmapped_supplier, "❌ поставщик",
+                supplier_name, "", "", "", supplier_name, "❌ поставщик",
             ])
 
     if new_rows:

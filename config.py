@@ -121,4 +121,4 @@ LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
 # ── Gemini Vision (OCR накладных) ──
 GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
