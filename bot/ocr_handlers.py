@@ -3,13 +3,17 @@ Telegram-хэндлеры для OCR-распознавания бухгалте
 
 Flow:
   1. «📸 Распознать документ» → бот просит фото
-  2. Пользователь шлёт фото(а) накладной
+  2. Пользователь шлёт фото (1 или пачкой) накладной
   3. Photo → Gemini Vision → JSON → валидация → превью
   4. Inline-кнопки: ✅ Подтвердить / 📷 Добавить страницу / ❌ Отменить
   5. При подтверждении → сохранение в БД → проверка маппинга
   6. Немаппленные товары → GSheet → ожидание «Готово»
   7. Всё замаплено → отправка на подтверждение бухгалтеру
   8. Бухгалтер подтверждает → загрузка в iiko
+
+Media-group (пачка фото):
+  Telegram присылает каждое фото как отдельный Message с одинаковым media_group_id.
+  Мы собираем все фото из группы (ждём 1.5 сек), затем обрабатываем разом.
 """
 
 import asyncio
@@ -37,6 +41,82 @@ logger = logging.getLogger(__name__)
 router = Router(name="ocr_handlers")
 
 LABEL = "ocr"
+
+# ─────────────────────────────────────────────────────
+# Media-group (альбом) collector
+# ─────────────────────────────────────────────────────
+# Telegram присылает пачку фото как отдельные Message с одинаковым media_group_id.
+# Мы складываем file_id в буфер и через ALBUM_WAIT_SEC запускаем обработку.
+
+ALBUM_WAIT_SEC = 1.5  # ждём столько после последнего фото из группы
+
+# {media_group_id: {"photos": [(file_id, file_unique_id), ...], "chat_id": int, "user_id": int, "timer": Task}}
+_album_buffer: dict[str, dict] = {}
+_album_lock = asyncio.Lock()
+
+
+async def _collect_album_photo(
+    message: Message,
+    state: FSMContext,
+    on_ready_callback,
+) -> None:
+    """Добавить фото из media-group в буфер. Когда таймер истечёт — вызвать callback."""
+    mg_id = message.media_group_id
+    photo = message.photo[-1]
+
+    async with _album_lock:
+        if mg_id not in _album_buffer:
+            _album_buffer[mg_id] = {
+                "photos": [],
+                "chat_id": message.chat.id,
+                "user_id": message.from_user.id,
+                "message": message,
+                "state": state,
+                "timer": None,
+            }
+
+        buf = _album_buffer[mg_id]
+        buf["photos"].append(photo.file_id)
+
+        # Отменяем предыдущий таймер
+        if buf["timer"] and not buf["timer"].done():
+            buf["timer"].cancel()
+
+        # Новый таймер
+        buf["timer"] = asyncio.create_task(
+            _album_timer(mg_id, message, state, on_ready_callback)
+        )
+
+
+async def _album_timer(
+    mg_id: str,
+    message: Message,
+    state: FSMContext,
+    on_ready_callback,
+) -> None:
+    """Подождать ALBUM_WAIT_SEC, затем вызвать callback со всеми фото."""
+    await asyncio.sleep(ALBUM_WAIT_SEC)
+
+    async with _album_lock:
+        buf = _album_buffer.pop(mg_id, None)
+
+    if not buf:
+        return
+
+    file_ids = buf["photos"]
+    logger.info(
+        "[%s] Альбом %s собран: %d фото, tg:%d",
+        LABEL, mg_id, len(file_ids), buf["user_id"],
+    )
+
+    # Скачиваем все фото
+    images: list[bytes] = []
+    for fid in file_ids:
+        file = await message.bot.get_file(fid)
+        file_bytes = await message.bot.download_file(file.file_path)
+        images.append(file_bytes.read())
+
+    await on_ready_callback(message, state, images)
 
 
 # ─────────────────────────────────────────────────────
@@ -129,64 +209,58 @@ async def btn_start_ocr(message: Message, state: FSMContext) -> None:
 
     await message.answer(
         "📸 Отправь фото бумажного документа (накладная, чек, РКО...)\n\n"
-        "💡 Для многостраничного документа — отправляй фото по одному.\n"
-        "Бот объединит все страницы в один документ.",
+        "💡 Можно отправить сразу пачку фото — бот соберёт их в один документ.\n"
+        "Также можно добавлять страницы по одной.",
     )
 
 
 # ─────────────────────────────────────────────────────
-# Приём фото
+# Общая логика OCR (вынесена из хендлеров)
 # ─────────────────────────────────────────────────────
 
-@router.message(OcrStates.waiting_photo, F.photo)
-async def handle_photo(message: Message, state: FSMContext) -> None:
-    """Получили первое фото — запускаем OCR."""
+async def _run_ocr(
+    message: Message,
+    state: FSMContext,
+    images: list[bytes],
+) -> None:
+    """Запустить OCR для одного или нескольких фото и показать превью."""
     tg_id = message.from_user.id
-    logger.info("[%s] Фото получено tg:%d", LABEL, tg_id)
+    count = len(images)
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-
-    # Скачиваем фото (самое большое разрешение)
-    photo = message.photo[-1]
-    file = await message.bot.get_file(photo.file_id)
-    file_bytes = await message.bot.download_file(file.file_path)
-    image_bytes = file_bytes.read()
-
-    try:
-        await message.delete()
-    except Exception:
-        pass
+    placeholder = await message.answer(
+        f"⏳ Распознаю {'документ' if count == 1 else f'{count} страниц(ы)'}..."
+    )
 
     # Сохраняем в state
     data = await state.get_data()
     photos: list[bytes] = data.get("ocr_photos", [])
-    photos.append(image_bytes)
+    photos.extend(images)
     await state.update_data(ocr_photos=photos)
 
-    # Плейсхолдер
-    placeholder = await message.answer("⏳ Распознаю документ через Gemini Vision...")
-
     try:
-        from use_cases.ocr_invoice import process_photo, get_known_suppliers, get_known_buyers
+        from use_cases.ocr_invoice import (
+            process_photo, process_multiple_photos,
+            get_known_suppliers, get_known_buyers,
+        )
 
-        # Подсовываем известных поставщиков/покупателей для точности
         suppliers, buyers = await asyncio.gather(
             get_known_suppliers(),
             get_known_buyers(),
         )
+        kw = {
+            "known_suppliers": suppliers[:50] if suppliers else None,
+            "known_buyers": buyers[:20] if buyers else None,
+        }
 
-        doc, preview = await process_photo(
-            image_bytes,
-            tg_id,
-            known_suppliers=suppliers[:50] if suppliers else None,
-            known_buyers=buyers[:20] if buyers else None,
-        )
+        if len(photos) == 1:
+            doc, preview = await process_photo(photos[0], tg_id, **kw)
+        else:
+            doc, preview = await process_multiple_photos(photos, tg_id, **kw)
 
-        # Сохраняем doc в state
         await state.update_data(ocr_doc=doc)
         await state.set_state(OcrStates.preview)
 
-        # Показываем превью
         await placeholder.edit_text(
             preview,
             reply_markup=_preview_kb(),
@@ -203,65 +277,60 @@ async def handle_photo(message: Message, state: FSMContext) -> None:
         )
 
 
-@router.message(OcrStates.waiting_more_pages, F.photo)
-async def handle_additional_photo(message: Message, state: FSMContext) -> None:
-    """Получили дополнительную страницу."""
+# ─────────────────────────────────────────────────────
+# Приём фото (одно или пачка)
+# ─────────────────────────────────────────────────────
+
+@router.message(OcrStates.waiting_photo, F.photo)
+async def handle_photo(message: Message, state: FSMContext) -> None:
+    """Получили фото — одно или первое из альбома."""
     tg_id = message.from_user.id
-    logger.info("[%s] Доп. фото tg:%d", LABEL, tg_id)
-
-    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-
-    photo = message.photo[-1]
-    file = await message.bot.get_file(photo.file_id)
-    file_bytes = await message.bot.download_file(file.file_path)
-    image_bytes = file_bytes.read()
 
     try:
         await message.delete()
     except Exception:
         pass
 
-    data = await state.get_data()
-    photos: list[bytes] = data.get("ocr_photos", [])
-    photos.append(image_bytes)
-    await state.update_data(ocr_photos=photos)
+    # Пачка фото (media group)
+    if message.media_group_id:
+        logger.info("[%s] Фото из альбома %s tg:%d", LABEL, message.media_group_id, tg_id)
+        await _collect_album_photo(message, state, _run_ocr)
+        return
 
-    placeholder = await message.answer(
-        f"⏳ Распознаю {len(photos)} страниц(ы)..."
-    )
+    # Одиночное фото
+    logger.info("[%s] Одиночное фото tg:%d", LABEL, tg_id)
+    photo = message.photo[-1]
+    file = await message.bot.get_file(photo.file_id)
+    file_bytes = await message.bot.download_file(file.file_path)
+    image_bytes = file_bytes.read()
+
+    await _run_ocr(message, state, [image_bytes])
+
+
+@router.message(OcrStates.waiting_more_pages, F.photo)
+async def handle_additional_photo(message: Message, state: FSMContext) -> None:
+    """Дополнительная страница — одна или пачкой."""
+    tg_id = message.from_user.id
 
     try:
-        from use_cases.ocr_invoice import process_multiple_photos, get_known_suppliers, get_known_buyers
+        await message.delete()
+    except Exception:
+        pass
 
-        suppliers, buyers = await asyncio.gather(
-            get_known_suppliers(),
-            get_known_buyers(),
-        )
+    # Пачка фото (media group)
+    if message.media_group_id:
+        logger.info("[%s] Доп. альбом %s tg:%d", LABEL, message.media_group_id, tg_id)
+        await _collect_album_photo(message, state, _run_ocr)
+        return
 
-        doc, preview = await process_multiple_photos(
-            photos,
-            tg_id,
-            known_suppliers=suppliers[:50] if suppliers else None,
-            known_buyers=buyers[:20] if buyers else None,
-        )
+    # Одиночное фото
+    logger.info("[%s] Доп. фото tg:%d", LABEL, tg_id)
+    photo = message.photo[-1]
+    file = await message.bot.get_file(photo.file_id)
+    file_bytes = await message.bot.download_file(file.file_path)
+    image_bytes = file_bytes.read()
 
-        await state.update_data(ocr_doc=doc)
-        await state.set_state(OcrStates.preview)
-
-        await placeholder.edit_text(
-            preview,
-            reply_markup=_preview_kb(),
-            parse_mode="HTML",
-        )
-
-    except Exception as e:
-        logger.exception("[%s] Multi-page OCR failed tg:%d: %s", LABEL, tg_id, e)
-        await placeholder.edit_text(f"❌ Ошибка распознавания: {e}")
-        await state.clear()
-        await restore_menu_kb(
-            message.bot, message.chat.id, state,
-            "📦 Накладные:", invoices_keyboard(),
-        )
+    await _run_ocr(message, state, [image_bytes])
 
 
 # ─────────────────────────────────────────────────────
