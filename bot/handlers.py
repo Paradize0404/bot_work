@@ -919,16 +919,9 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
 @router.message(F.text == "🔗 Зарегистрировать вебхук")
 @admin_required
 async def btn_cloud_register_webhook(message: Message) -> None:
-    """Зарегистрировать/обновить вебхук в iikoCloud."""
-    from config import IIKO_CLOUD_ORG_ID, WEBHOOK_URL
+    """Зарегистрировать/обновить вебхук в iikoCloud для всех привязанных организаций."""
+    from config import WEBHOOK_URL
     logger.info("[cloud] Регистрация вебхука tg:%d", message.from_user.id)
-
-    if not IIKO_CLOUD_ORG_ID:
-        await message.answer(
-            "❌ Не задан `IIKO_CLOUD_ORG_ID`.\n"
-            "Сначала нажми «📋 Получить организации» и добавь ID в env."
-        )
-        return
 
     if not WEBHOOK_URL:
         await message.answer("❌ Бот работает в polling-режиме. Вебхук доступен только на Railway (webhook-режим).")
@@ -936,22 +929,51 @@ async def btn_cloud_register_webhook(message: Message) -> None:
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
+    # Собираем org_id: из GSheet-маппинга + fallback из env
+    from use_cases.cloud_org_mapping import get_all_cloud_org_ids
+    from config import IIKO_CLOUD_ORG_ID
+
+    org_ids = await get_all_cloud_org_ids()
+    if IIKO_CLOUD_ORG_ID and IIKO_CLOUD_ORG_ID not in org_ids:
+        org_ids.append(IIKO_CLOUD_ORG_ID)
+
+    if not org_ids:
+        await message.answer(
+            "❌ Нет привязанных организаций.\n"
+            "Сначала нажми «🔗 Привязать организации» в GSheet «Настройки»\n"
+            "или задай `IIKO_CLOUD_ORG_ID` в env."
+        )
+        return
+
     try:
         from adapters.iiko_cloud_api import register_webhook
         from config import IIKO_CLOUD_WEBHOOK_SECRET
         webhook_url = f"{WEBHOOK_URL}/iiko-webhook"
-        result = await register_webhook(
-            organization_id=IIKO_CLOUD_ORG_ID,
-            webhook_url=webhook_url,
-            auth_token=IIKO_CLOUD_WEBHOOK_SECRET,
-        )
-        await message.answer(
-            f"✅ Вебхук зарегистрирован!\n\n"
-            f"URL: `{webhook_url}`\n"
-            f"Фильтр: Closed заказы (delivery + table)\n"
-            f"correlationId: `{result.get('correlationId', '—')}`",
-            parse_mode="Markdown",
-        )
+
+        ok_ids: list[str] = []
+        fail_ids: list[str] = []
+        last_corr = "—"
+
+        for oid in org_ids:
+            try:
+                result = await register_webhook(
+                    organization_id=oid,
+                    webhook_url=webhook_url,
+                    auth_token=IIKO_CLOUD_WEBHOOK_SECRET,
+                )
+                ok_ids.append(oid)
+                last_corr = result.get("correlationId", "—")
+                logger.info("[cloud] Вебхук зарегистрирован для org %s", oid)
+            except Exception as exc:
+                logger.warning("[cloud] Ошибка регистрации для org %s: %s", oid, exc)
+                fail_ids.append(oid)
+
+        lines = [f"✅ Вебхук зарегистрирован для {len(ok_ids)}/{len(org_ids)} организаций\n"]
+        lines.append(f"URL: `{webhook_url}`")
+        lines.append("Фильтр: Closed заказы + StopListUpdate")
+        if fail_ids:
+            lines.append(f"\n⚠️ Ошибка для: {len(fail_ids)} орг.")
+        await message.answer("\n".join(lines), parse_mode="Markdown")
     except Exception as exc:
         logger.exception("[cloud] Ошибка регистрации вебхука")
         await message.answer(f"❌ Ошибка регистрации: {exc}")
