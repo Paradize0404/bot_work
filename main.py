@@ -87,6 +87,31 @@ async def on_startup(bot: Bot) -> None:
     await bot.set_webhook(url, drop_pending_updates=True, secret_token=WEBHOOK_SECRET)
     logger.info("Webhook set OK (with secret_token)")
 
+    # Регистрация вебхука iikoCloud (для всех привязанных организаций)
+    try:
+        from use_cases.cloud_org_mapping import get_all_cloud_org_ids
+        from adapters.iiko_cloud_api import register_webhook
+        from config import IIKO_CLOUD_ORG_ID, IIKO_CLOUD_WEBHOOK_SECRET
+
+        org_ids = await get_all_cloud_org_ids()
+        if IIKO_CLOUD_ORG_ID and IIKO_CLOUD_ORG_ID not in org_ids:
+            org_ids.append(IIKO_CLOUD_ORG_ID)
+
+        if org_ids:
+            wh_url = f"{WEBHOOK_URL}/iiko-webhook"
+            ok = 0
+            for oid in org_ids:
+                try:
+                    await register_webhook(oid, wh_url, IIKO_CLOUD_WEBHOOK_SECRET)
+                    ok += 1
+                except Exception:
+                    logger.warning("[startup] iikoCloud webhook failed for org %s", oid)
+            logger.info("[startup] iikoCloud webhook registered for %d/%d orgs → %s", ok, len(org_ids), wh_url)
+        else:
+            logger.info("[startup] No iikoCloud orgs mapped — skipping webhook registration")
+    except Exception:
+        logger.warning("[startup] iikoCloud webhook registration skipped (error)", exc_info=True)
+
     # Запускаем планировщик ежедневной синхронизации (07:00 Калининград)
     from use_cases.scheduler import start_scheduler
     start_scheduler(bot)
