@@ -34,8 +34,10 @@ LABEL = "Permissions"
 # ─── Роли (не кнопки, а флаги) — первые столбцы ───
 ROLE_ADMIN = "👑 Админ"
 ROLE_RECEIVER = "📬 Получатель"
+ROLE_STOCK = "📦 Остатки"
+ROLE_STOPLIST = "🚫 Стоп-лист"
 
-ROLE_KEYS: list[str] = [ROLE_ADMIN, ROLE_RECEIVER]
+ROLE_KEYS: list[str] = [ROLE_ADMIN, ROLE_RECEIVER, ROLE_STOCK, ROLE_STOPLIST]
 
 # ─── Какие кнопки контролируются правами ───
 PERMISSION_KEYS: list[str] = [
@@ -146,6 +148,22 @@ async def get_receiver_ids() -> list[int]:
     """Список telegram_id всех получателей заявок из GSheet."""
     cache = await _ensure_cache()
     return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_RECEIVER, False)]
+
+
+# ═══════════════════════════════════════════════════════
+# Подписки на уведомления: остатки / стоп-лист
+# ═══════════════════════════════════════════════════════
+
+async def get_stock_subscriber_ids() -> list[int]:
+    """Список telegram_id пользователей с флагом «📦 Остатки»."""
+    cache = await _ensure_cache()
+    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_STOCK, False)]
+
+
+async def get_stoplist_subscriber_ids() -> list[int]:
+    """Список telegram_id пользователей с флагом «🚫 Стоп-лист»."""
+    cache = await _ensure_cache()
+    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_STOPLIST, False)]
 
 
 # ═══════════════════════════════════════════════════════

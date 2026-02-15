@@ -98,9 +98,15 @@ def _compute_hash(text: str) -> str:
 
 async def _get_target_user_ids() -> list[int]:
     """
-    Список telegram_id авторизованных пользователей
-    (все, кто есть в таблице прав GSheet).
+    Список telegram_id пользователей, подписанных на остатки.
+    Фильтрует по флагу «📦 Остатки» в таблице прав.
+    Если ни у кого нет флага — отправляем всем (боотстрап).
     """
+    from use_cases.permissions import get_stock_subscriber_ids
+    subscribers = await get_stock_subscriber_ids()
+    if subscribers:
+        return subscribers
+    # Bootstrap: никто не отмечен — шлём всем авторизованным
     cache = await perm_uc._ensure_cache()
     return list(cache.keys())
 

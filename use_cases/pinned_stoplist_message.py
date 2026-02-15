@@ -168,9 +168,10 @@ async def send_stoplist_for_user(bot: Any, telegram_id: int) -> bool:
 
 async def update_all_stoplist_messages(bot: Any, text: str) -> int:
     """
-    Обновить закреплённые сообщения со стоп-листом у всех.
+    Обновить закреплённые сообщения со стоп-листом.
+    Фильтрует по флагу «🚫 Стоп-лист» в таблице прав.
     Всегда удаляет старое и шлёт новое (force=True).
-    text — уже отформатированный текст (из run_stoplist_cycle).
+    Если ни у кого нет флага — отправляем всем (боотстрап).
 
     Returns:
         Количество обновлённых/созданных сообщений.
@@ -178,8 +179,12 @@ async def update_all_stoplist_messages(bot: Any, text: str) -> int:
     t0 = time.monotonic()
     text_hash = _compute_hash(text)
 
-    cache = await perm_uc._ensure_cache()
-    user_ids = list(cache.keys())
+    from use_cases.permissions import get_stoplist_subscriber_ids
+    user_ids = await get_stoplist_subscriber_ids()
+    if not user_ids:
+        # Bootstrap: никто не отмечен — шлём всем
+        cache = await perm_uc._ensure_cache()
+        user_ids = list(cache.keys())
 
     if not user_ids:
         logger.info("[%s] Нет пользователей для рассылки", LABEL)
