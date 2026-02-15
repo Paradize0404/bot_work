@@ -78,6 +78,18 @@ test/
 │   │                         #   verify_webhook_auth() — верификация authToken входящих вебхуков
 │   │                         #   fetch_terminal_groups(org_id) — терминальные группы организации
 │   │                         #   fetch_stop_lists(org_id, tg_ids) — стоп-лист по терминальным группам
+│   ├── gemini_vision.py     # Адаптер Google Gemini Vision LLM (OCR документов)
+│   │                         #   _ensure_configured() — lazy-init genai.configure(api_key)
+│   │                         #   _build_prompt() — system prompt (типы: УПД, чек, РКО, акт, товарный чек)
+│   │                         #     known_suppliers/buyers — хинты для LLM из БД
+│   │                         #   preprocess_image(bytes) — контраст ×1.5, резкость ×2.0, RGB JPEG
+│   │                         #   _clean_json_response() — strip ```json``` markdown wrapper
+│   │                         #   _fix_number_separators() — 73,221.82 → 73221.82
+│   │                         #   recognize_document(image, **kw) — одно фото → structured JSON
+│   │                         #   recognize_multiple_pages(images, **kw) — multi-page → один JSON
+│   │                         #   Модель: GEMINI_MODEL из config (дефолт gemini-2.5-flash-preview)
+│   │                         #   Temperature: 0.1 (детерминированный разбор)
+│   │                         #   Зависимости: google-generativeai, Pillow
 │   └── fintablo_api.py      # HTTP-клиент FinTablo (persistent httpx, Bearer token)
 │                             #   _get_client() — lazy-init с base_url + Authorization header
 │                             #   close_client() — закрыть при остановке
@@ -151,6 +163,19 @@ test/
 │   │                         #   👑 Управление админами (только для админов)
 │   │                         #   Показать текущих | Добавить (из сотрудников с tg) | Удалить
 │   │                         #   AdminMgmtStates: menu | choosing_employee | confirm_remove
+│   ├── ocr_handlers.py      # OCR-распознавание бухгалтерских документов (Gemini Vision)
+│   │                         #   OcrStates: waiting_photo → preview → waiting_mapping → waiting_accountant
+│   │                         #   Media-group collector: _album_buffer + _album_lock + _album_timer (1.5 сек)
+│   │                         #   _run_ocr(message, state, images) — общая логика OCR (single/multi)
+│   │                         #   handle_photo() — приём одиночного/пачки фото (waiting_photo)
+│   │                         #   handle_additional_photo() — доп. страницы (waiting_more_pages)
+│   │                         #   cb_confirm() — подтверждение → сохранение → маппинг → бухгалтер
+│   │                         #   cb_check_mapping() — проверка маппинга после GSheet
+│   │                         #   _send_to_accountant() — отправка бухгалтерам (goods/service)
+│   │                         #   cb_accountant_approve() — бухгалтер → iiko (send_ocr_to_iiko)
+│   │                         #   cb_accountant_reject() — бухгалтер отклонил
+│   │                         #   cb_accountant_ack() — принял услугу (без iiko)
+│   │                         #   cb_accountant_mark_service() — пометить как услугу + обучение
 │
 ├── db/
 │   ├── __init__.py
@@ -166,11 +191,11 @@ test/
 │   │                         #   _MIGRATIONS: telegram_id, department_id в iiko_employee
 │   │                         #   Запуск: python -m db.init_db
 │   │                         #   Импортирует и iiko models, и ft_models
-│   ├── models.py            # 15 моделей iiko/bot (SyncMixin: synced_at + raw_json) + Base
+│   ├── models.py            # 18 моделей iiko/bot (SyncMixin: synced_at + raw_json) + Base
 │   │                         #   Entity, Supplier, Department, Store, GroupDepartment,
 │   │                         #   ProductGroup, Product, Employee, EmployeeRole,
 │   │                         #   SyncLog, BotAdmin, StockBalance, MinStockLevel, GSheetExportGroup,
-│   │                         #   WriteoffHistory
+│   │                         #   WriteoffHistory, OcrDocument, OcrItemMapping, OcrSupplierMapping
 │   │                         #   ENTITY_ROOT_TYPES — список 16 допустимых rootType
 │   └── ft_models.py         # 13 моделей FinTablo (таблиц) SQLAlchemy (ft_* префикс)
 │                             #   FTSyncMixin (synced_at + raw_json)
@@ -318,8 +343,33 @@ test/
 │                             #   resolve_cloud_org_id(dept_id) — dept → org UUID
 │                             #   resolve_cloud_org_id_for_user(tg_id) — per-user org
 │                             #   get_all_cloud_org_ids() — все привязанные org_id
-│                             #   In-memory кеш (TTL 5 мин) из GSheet «Настройки»
-│
+│                             #   In-memory кеш (TTL 5 мин) из GSheet «Настройки»│   ├── ocr_invoice.py       # OCR pipeline: фото → JSON → валидация → превью → БД
+│   │                         #   validate_and_fix(doc) — мат. валидация (qty×price=sum, НДС, итоги)
+│   │                         #   format_preview(doc) — HTML-превью для Telegram
+│   │                         #   process_photo(image, tg_id) — full pipeline 1 фото
+│   │                         #   process_multiple_photos(images, tg_id) — multi-page pipeline
+│   │                         #   save_ocr_result(tg_id, doc) — INSERT ocr_document → id
+│   │                         #   get_ocr_document(doc_id), update_ocr_status(), update_ocr_mapped_json()
+│   │                         #   update_ocr_category(doc_id, category) — goods/service
+│   │                         #   get_known_suppliers() — list[str] из iiko_supplier
+│   │                         #   get_known_buyers() — list[str] из iiko_department
+│   ├── ocr_mapping.py       # Маппинг OCR-товаров/поставщиков на справочники iiko
+│   │                         #   _find_item_in_mappings(name) — fuzzy по ocr_item_mapping (≥85%)
+│   │                         #   _find_item_in_products(name) — fuzzy по iiko_product (≥80%)
+│   │                         #   _find_supplier_in_mappings() — по ИНН (точно) + fuzzy (≥85%)
+│   │                         #   _find_supplier_in_iiko() — по ИНН + fuzzy по iiko_supplier
+│   │                         #   save_item_mapping(), save_supplier_mapping(category=) — UPSERT
+│   │                         #   check_and_map_items(doc) — полная проверка маппинга
+│   │                         #     Возварщает: {all_mapped, mapped_count, unmapped_count, supplier_category}
+│   │                         #   write_unmapped_to_gsheet() — лист «OCR Маппинг»
+│   │                         #   _setup_product_dropdown() — dropdown из _OCR_Products
+│   │                         #   read_mappings_from_gsheet() — чтение маппингов из GSheet
+│   ├── ocr_to_iiko.py       # Отправка OCR-документа в iiko (приходная накладная)
+│   │                         #   send_ocr_to_iiko(doc_id) — load → resolve store → build items → XML POST
+│   │                         #   _resolve_store_id(doc) — env → fuzzy buyer→store (70%) → first store
+│   │                         #   _build_items(doc) — product_id, amount, price, sum из mapped items
+│   │                         #   _parse_date(str) — DD.MM.YYYY → YYYY-MM-DD HH:mm:ss
+│   │                         #   _save_iiko_response(doc_id, response) — persist ответ iiko│
 ├── tests/
 │   └── test_iiko_webhook.py # Тесты обработки вебхуков iikoCloud
 ├── test_incoming_service.py # Тест-скрипт входящих накладных (корневой)
@@ -411,6 +461,14 @@ test/
 |------------------------------|----------------------------------------------|
 | 📝 Создать списание          | FSM: склад → счёт → причина → товары → на проверку |
 | 📋 История списаний          | Просмотр, повтор и редактирование прошлых списаний (фильтр по роли: бар/кухня/все) |
+| ◀️ Назад                    | Возврат в главное меню                    |
+
+### Подменю «Накладные»
+
+| Кнопка                       | Функция                                      |
+|------------------------------|----------------------------------------------|
+| 📸 Распознать документ       | OCR: фото (1 или пачка) → Gemini Vision → валидация → маппинг → бухгалтер → iiko |
+| 📑 Создать шаблон накладной  | FSM: склад → контрагент → товары → шаблон |
 | ◀️ Назад                    | Возврат в главное меню                    |
 
 ---
