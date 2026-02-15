@@ -1,13 +1,11 @@
 """
 Use-case: управление закреплёнными сообщениями со стоп-листом.
 
-Аналогично pinned_stock_message.py, но для стоп-листа.
-
 Логика:
   1. Каждому пользователю — стоп-лист закрепляется в личке.
   2. При авторизации / смене ресторана → свежий стоп-лист.
-  3. При StopListUpdate вебхуке → edit/replace сообщение (если есть изменения).
-  4. snapshot_hash per-message для дедупликации.
+  3. При StopListUpdate вебхуке → ВСЕГДА удаляем старое и шлём новое (delete → send → pin).
+  4. Формат: «Новые блюда в стоп-листе 🚫 / Удалены ✅ / Остались» + #стоплист.
 """
 
 import hashlib
@@ -84,7 +82,8 @@ async def _update_single(
     force: bool = False,
 ) -> bool:
     """
-    Edit или send+pin сообщение со стоп-листом.
+    Удалить старое + отправить новое сообщение со стоп-листом и закрепить.
+    Всегда delete → send → pin (не edit), чтобы сообщение было свежим.
     force=True — игнорировать snapshot_hash.
     """
     existing = await _get_msg(chat_id)
@@ -92,21 +91,13 @@ async def _update_single(
     if not force and existing and existing.snapshot_hash == text_hash:
         return False
 
+    # Удаляем старое сообщение
     if existing:
         try:
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=existing.message_id,
-                text=text,
-            )
-            await _upsert_msg(chat_id, existing.message_id, text_hash)
-            return True
-        except Exception as e:
-            logger.warning(
-                "[%s] edit не удался chat_id=%d (msg=%d): %s — отправляю новое",
-                LABEL, chat_id, existing.message_id, e,
-            )
-            await _delete_msg(chat_id)
+            await bot.delete_message(chat_id=chat_id, message_id=existing.message_id)
+        except Exception:
+            logger.debug("[%s] Не удалось удалить старое msg=%d chat=%d", LABEL, existing.message_id, chat_id)
+        await _delete_msg(chat_id)
 
     # Отправляем новое + закрепляем
     try:
@@ -178,6 +169,7 @@ async def send_stoplist_for_user(bot: Any, telegram_id: int) -> bool:
 async def update_all_stoplist_messages(bot: Any, text: str) -> int:
     """
     Обновить закреплённые сообщения со стоп-листом у всех.
+    Всегда удаляет старое и шлёт новое (force=True).
     text — уже отформатированный текст (из run_stoplist_cycle).
 
     Returns:
@@ -197,7 +189,7 @@ async def update_all_stoplist_messages(bot: Any, text: str) -> int:
 
     updated = 0
     for uid in user_ids:
-        if await _update_single(bot, uid, text, text_hash):
+        if await _update_single(bot, uid, text, text_hash, force=True):
             updated += 1
 
     elapsed = time.monotonic() - t0

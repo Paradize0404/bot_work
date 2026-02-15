@@ -4,32 +4,24 @@ Use-case: обработка входящих вебхуков от iikoCloud.
 Логика:
   1. iikoCloud шлёт POST на /iiko-webhook при закрытии заказа или изменении стоп-листа
   2. Для закрытых заказов (DeliveryOrderUpdate / TableOrderUpdate):
-     - Инкрементируем in-memory счётчик
-     - Каждые N заказов (STOCK_CHECK_ORDER_INTERVAL) → sync + delta → обновить pinned
+     - Синхронизируем остатки из iiko REST API
+     - Сравниваем с последним отправленным снэпшотом
+     - Если изменение ≥ STOCK_CHANGE_THRESHOLD_PCT (5%) → обновляем сообщения
   3. Для StopListUpdate:
-     - Запускаем цикл стоп-листа: fetch → diff → обновить pinned
-
-Счётчик хранится in-memory — при рестарте сбрасывается. Это OK:
-  - Мы не теряем данные, просто отложим проверку на N заказов
-  - Ежедневная синхронизация (07:00) всё равно обновляет остатки
+     - Запускаем цикл стоп-листа: fetch → diff → всегда удаляем старое и шлём новое
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 import time
 from typing import Any
 
-from config import STOCK_CHECK_ORDER_INTERVAL, STOCK_CHANGE_THRESHOLD_PCT
+from config import STOCK_CHANGE_THRESHOLD_PCT
 
 logger = logging.getLogger(__name__)
 
 LABEL = "iikoWebhook"
-
-# In-memory счётчик закрытых заказов (сбрасывается при рестарте)
-_order_counter: int = 0
-_counter_lock = asyncio.Lock()
 
 # Последний снэпшот остатков (для дельта-сравнения)
 _last_snapshot_hash: str | None = None
@@ -157,11 +149,14 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
     """
     Обработать входящий вебхук от iikoCloud.
 
+    - StopListUpdate: всегда удаляем старое сообщение и шлём новое (delete → send → pin).
+    - Закрытые заказы: синхронизируем остатки, при расхождении ≥ 5% → обновляем.
+
     Returns:
         {"processed": int, "triggered_check": bool, "updated_messages": bool,
          "stoplist_updated": bool}
     """
-    global _order_counter, _last_snapshot_hash, _last_total_sum
+    global _last_snapshot_hash, _last_total_sum
 
     result = {
         "processed": 0,
@@ -170,7 +165,7 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         "stoplist_updated": False,
     }
 
-    # ── StopListUpdate ──
+    # ── StopListUpdate → всегда обновляем ──
     if has_stoplist_update(body):
         logger.info("[%s] Обнаружен StopListUpdate, запускаю цикл стоп-листа...", LABEL)
         try:
@@ -184,27 +179,25 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
                 if e.get("eventType") == "StopListUpdate" and e.get("organizationId")
             }
             if not event_org_ids:
-                # Fallback: все привязанные org_id
                 event_org_ids = set(await get_all_cloud_org_ids())
 
-            any_changes = False
             last_text: str | None = None
             for oid in event_org_ids:
-                text, has_changes = await run_stoplist_cycle(org_id=oid)
-                if text and has_changes:
-                    any_changes = True
+                text, _ = await run_stoplist_cycle(org_id=oid)
+                if text:
                     last_text = text
 
-            if any_changes and last_text:
+            # Всегда шлём, даже если нет изменений — пользователь видит актуальное
+            if last_text:
                 await update_all_stoplist_messages(bot, last_text)
                 result["stoplist_updated"] = True
                 logger.info("[%s] Стоп-лист обновлён и разослан (orgs: %s)", LABEL, event_org_ids)
             else:
-                logger.info("[%s] Стоп-лист без изменений", LABEL)
+                logger.warning("[%s] Не удалось получить текст стоп-листа", LABEL)
         except Exception:
             logger.exception("[%s] Ошибка обработки StopListUpdate", LABEL)
 
-    # ── Закрытые заказы ──
+    # ── Закрытые заказы → проверка остатков на каждый вебхук ──
     closed = parse_webhook_events(body)
     if not closed:
         return result
@@ -217,25 +210,12 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         ", ".join(set(e["event_type"] for e in closed)),
     )
 
-    # Инкрементируем счётчик (thread-safe через asyncio.Lock)
-    async with _counter_lock:
-        _order_counter += len(closed)
-        current = _order_counter
-
-    logger.info("[%s] Счётчик: %d / %d", LABEL, current, STOCK_CHECK_ORDER_INTERVAL)
-
-    if current < STOCK_CHECK_ORDER_INTERVAL:
-        return result
-
-    # Порог достигнут → сбрасываем счётчик и проверяем остатки
-    async with _counter_lock:
-        _order_counter = 0
-
-    logger.info("[%s] Порог заказов достигнут, запускаю проверку остатков...", LABEL)
+    # Проверяем остатки при каждом вебхуке (без счётчика)
+    logger.info("[%s] Проверяю остатки...", LABEL)
     t0 = time.monotonic()
 
     try:
-        # 1. Синхронизируем остатки (через существующий iiko REST API)
+        # 1. Синхронизируем остатки (через iiko REST API)
         from use_cases.sync_stock_balances import sync_stock_balances
         await sync_stock_balances(triggered_by="iiko_webhook")
 
@@ -247,7 +227,7 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         new_hash = _compute_snapshot_hash(items)
         new_total = _compute_total_sum(items)
 
-        # 3. Дельта-сравнение
+        # 3. Дельта-сравнение (≥ 5% изменений)
         should = _should_update(new_hash, new_total)
 
         if should:

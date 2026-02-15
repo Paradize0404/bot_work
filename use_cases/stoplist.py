@@ -277,48 +277,61 @@ def format_stoplist_message(
 ) -> str:
     """
     Форматирует диф стоп-листа в Telegram-сообщение.
-    """
-    now = now_kgd()
-    time_str = now.strftime("%H:%M %d.%m")
 
+    Формат:
+      Новые блюда в стоп-листе 🚫
+      ▫️ Блюдо — стоп
+
+      Удалены из стоп-листа ✅
+      ▫️ —
+
+      Остались в стоп-листе
+      ▫️ —
+
+      #стоплист
+    """
     def _fmt(item: dict) -> str:
         if item["balance"] > 0:
             return f"{item['name']} ({int(item['balance'])})"
         return f"{item['name']} — стоп"
 
-    lines: list[str] = [f"🔄 Стоп-лист (обновлено: {time_str})", ""]
+    lines: list[str] = []
 
-    lines.append("🚫 Новые в стоп-листе:")
+    # ── Новые ──
+    lines.append("Новые блюда в стоп-листе 🚫")
     if added:
-        for it in added[:40]:
-            lines.append(f"  ▫️ {_fmt(it)}")
-        if len(added) > 40:
-            lines.append(f"  ...и ещё {len(added) - 40}")
+        for it in sorted(added, key=lambda x: x.get("name", ""))[:50]:
+            lines.append(f"▫️ {_fmt(it)}")
+        if len(added) > 50:
+            lines.append(f"...и ещё {len(added) - 50}")
     else:
-        lines.append("  ▫️ —")
+        lines.append("▫️ —")
 
     lines.append("")
-    lines.append("✅ Удалены из стоп-листа:")
+
+    # ── Удалены ──
+    lines.append("Удалены из стоп-листа ✅")
     if removed:
-        for it in removed[:40]:
-            lines.append(f"  ▫️ {it['name']}")
-        if len(removed) > 40:
-            lines.append(f"  ...и ещё {len(removed) - 40}")
+        for it in sorted(removed, key=lambda x: x.get("name", ""))[:50]:
+            lines.append(f"▫️ {it['name']}")
+        if len(removed) > 50:
+            lines.append(f"...и ещё {len(removed) - 50}")
     else:
-        lines.append("  ▫️ —")
+        lines.append("▫️ —")
 
     lines.append("")
-    lines.append("⏳ Остались в стоп-листе:")
+
+    # ── Остались ──
+    lines.append("Остались в стоп-листе")
     if existing:
-        for it in existing[:40]:
-            lines.append(f"  ▫️ {_fmt(it)}")
-        if len(existing) > 40:
-            lines.append(f"  ...и ещё {len(existing) - 40}")
+        for it in sorted(existing, key=lambda x: x.get("name", ""))[:50]:
+            lines.append(f"▫️ {_fmt(it)}")
+        if len(existing) > 50:
+            lines.append(f"...и ещё {len(existing) - 50}")
     else:
-        lines.append("  ▫️ —")
+        lines.append("▫️ —")
 
     lines.append("")
-    lines.append(f"Всего в стопе: {len(added) + len(existing)} поз.")
     lines.append("#стоплист")
 
     result = "\n".join(lines)
