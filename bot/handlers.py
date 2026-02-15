@@ -1018,7 +1018,7 @@ async def btn_cloud_webhook_status(message: Message) -> None:
 
 
 
-@router.message(F.text == "�🔄 Обновить остатки сейчас")
+@router.message(F.text == "🔄 Обновить остатки сейчас")
 @admin_required
 async def btn_force_stock_check(message: Message) -> None:
     """Принудительная проверка остатков + обновление сообщений у всех пользователей."""

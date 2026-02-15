@@ -1470,7 +1470,7 @@ def _hist_item_action_kb(idx: int) -> InlineKeyboardMarkup:
     ])
 
 
-# ── 1. Кнопка «� История списаний» ──
+# ── 1. Кнопка «🗂 История списаний» ──
 
 @router.message(F.text == "🗂 История списаний")
 async def start_history(message: Message, state: FSMContext) -> None:
