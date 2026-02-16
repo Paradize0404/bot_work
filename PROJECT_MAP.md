@@ -404,9 +404,10 @@ iikoCloud POST /iiko-webhook
 Секция `## Заведение для заявок` (горизонтальный формат, одна строка):
 - A = "Заведение куда приходят заявки" (label)
 - C = выпадающий список подразделений (dropdown, `department_type=DEPARTMENT`)
-- D = department_uuid (скрыт секцией iikoCloud)
-- Столбец B скрыт секцией iikoCloud; столбец C явно показывается
-- Выбранное заведение используется для dropdown колонки C прайс-листа
+- D = VLOOKUP → department_uuid (автоматически из справочника E:F)
+- E:F = скрытый справочник (name → uuid) для VLOOKUP
+- Столбец B/D скрыты секцией iikoCloud; столбец C явно UNHIDE
+- При смене dropdown → UUID в D обновляется автоматически
 - Управление: `read_request_stores()` / `sync_request_stores_to_sheet()`
 
 ---

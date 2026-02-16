@@ -1335,12 +1335,11 @@ async def sync_request_stores_to_sheet(
     stores: [{id, name}, ...] — подразделения (department_type=DEPARTMENT).
 
     Горизонтальный формат (одна строка данных):
-      Маркер: «## Заведение для заявок»
-      Данные: A = "Заведение куда приходят заявки" (label),
-              C = выпадающий список department_name (B скрыт секцией iikoCloud),
-              D = department_uuid (скрыт секцией iikoCloud)
+      Маркер : «## Заведение для заявок»
+      Данные : A = label, C = dropdown (имя заведения), D = VLOOKUP → UUID
+      Справочник: скрытые строки ниже (E=name, F=uuid) для VLOOKUP
 
-    Явно СНИМАЕМ скрытие столбца C, чтобы не ломать другие секции.
+    Столбцы B/D скрыты секцией iikoCloud. Столбец C — явно UNHIDE.
 
     Returns: количество заведений в dropdown.
     """
@@ -1367,7 +1366,6 @@ async def sync_request_stores_to_sheet(
                 break
             if not in_section:
                 continue
-            # Текущий формат: A=label, C=name, D=uuid
             if cell_a == "Заведение куда приходят заявки":
                 col_c = (row[2] if len(row) > 2 else "").strip()
                 col_b = (row[1] if len(row) > 1 else "").strip()
@@ -1387,7 +1385,8 @@ async def sync_request_stores_to_sheet(
         else:
             start_row = (len(all_values) + 2) if all_values else 2
 
-        data_row = start_row + 1  # строка с dropdown
+        data_row = start_row + 1    # строка с dropdown
+        ref_start = start_row + 3   # скрытый справочник (name → uuid)
 
         # ── Подготовка данных ──
         sorted_stores = sorted(stores, key=lambda s: s.get("name", ""))
@@ -1397,19 +1396,35 @@ async def sync_request_stores_to_sheet(
         store_names = [s["name"] for s in sorted_stores]
 
         selected_name = old_selected_name if old_selected_name in name_to_id else ""
-        selected_id = name_to_id.get(selected_name, "")
 
-        # A=label, B=(пусто, скрыт), C=имя dropdown, D=uuid (скрыт)
+        ref_last = ref_start + len(sorted_stores) - 1 if sorted_stores else ref_start
+
+        # VLOOKUP формула: ищет имя из C{data_row} в справочнике E:F
+        vlookup = (
+            f'=IFERROR(VLOOKUP(C{data_row},'
+            f'$E${ref_start}:$F${ref_last},'
+            f'2,FALSE),"")'
+        ) if sorted_stores else ""
+
+        # ── Блок для записи ──
+        # A=label, B=(скрыт), C=dropdown name, D=VLOOKUP uuid
         block: list[list] = [
             ["## Заведение для заявок", "", "", ""],
-            ["Заведение куда приходят заявки", "", selected_name, selected_id],
+            ["Заведение куда приходят заявки", "", selected_name, vlookup],
             ["", "", "", ""],  # разделитель
         ]
+
+        # Скрытый справочник: E=name, F=uuid (для VLOOKUP)
+        for s in sorted_stores:
+            # A-D пусто, E=name, F=uuid
+            block.append(["", "", "", "", s["name"], str(s["id"])])
+
+        block.append(["", "", "", ""])  # финальный разделитель
 
         # ── Очистить старую секцию ──
         if section_start_row is not None:
             clear_end = section_end_row if section_end_row else (
-                section_start_row + 20
+                section_start_row + 30
             )
             clear_end = max(clear_end, section_start_row + len(block) + 5)
             try:
@@ -1417,7 +1432,7 @@ async def sync_request_stores_to_sheet(
             except Exception:
                 pass
 
-        # ── Записать ──
+        # ── Записать (USER_ENTERED чтобы формулы работали) ──
         ws.update(
             f"A{start_row}",
             block,
@@ -1433,7 +1448,7 @@ async def sync_request_stores_to_sheet(
         marker_0 = start_row - 1  # 0-based
         data_0 = data_row - 1     # 0-based
 
-        # 1. СНЯТЬ скрытие столбца C (он нужен другим секциям и нам)
+        # 1. СНЯТЬ скрытие столбца C
         fmt_requests.append({
             "updateDimensionProperties": {
                 "range": {
@@ -1446,7 +1461,36 @@ async def sync_request_stores_to_sheet(
             }
         })
 
-        # 2. Маркер секции — жирный, 12pt
+        # 2. Скрыть столбцы E-F (справочник для VLOOKUP)
+        fmt_requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 4, "endIndex": 6,
+                },
+                "properties": {"hiddenByUser": True},
+                "fields": "hiddenByUser",
+            }
+        })
+
+        # 3. Скрыть строки справочника
+        if sorted_stores:
+            ref_0 = ref_start - 1  # 0-based
+            ref_end_0 = ref_0 + len(sorted_stores) + 1
+            fmt_requests.append({
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "ROWS",
+                        "startIndex": ref_0, "endIndex": ref_end_0,
+                    },
+                    "properties": {"hiddenByUser": True},
+                    "fields": "hiddenByUser",
+                }
+            })
+
+        # 4. Маркер секции — жирный, 12pt
         fmt_requests.append({
             "repeatCell": {
                 "range": {
@@ -1464,7 +1508,7 @@ async def sync_request_stores_to_sheet(
             }
         })
 
-        # 3. Ячейка A (label) — жирный, фон
+        # 5. Ячейка A (label) — жирный, фон
         fmt_requests.append({
             "repeatCell": {
                 "range": {
@@ -1489,7 +1533,7 @@ async def sync_request_stores_to_sheet(
             }
         })
 
-        # 4. Dropdown в столбце C (index=2) — список заведений
+        # 6. Dropdown в столбце C (index=2)
         if store_names:
             dropdown_values = [
                 {"userEnteredValue": name} for name in store_names
@@ -1514,7 +1558,7 @@ async def sync_request_stores_to_sheet(
                 }
             })
 
-        # 5. Ширина столбца A (label) = 300px
+        # 7. Ширина столбца A = 300px, C = 320px
         fmt_requests.append({
             "updateDimensionProperties": {
                 "range": {
@@ -1526,7 +1570,6 @@ async def sync_request_stores_to_sheet(
                 "fields": "pixelSize",
             }
         })
-        # 6. Ширина столбца C (dropdown) = 320px
         fmt_requests.append({
             "updateDimensionProperties": {
                 "range": {
@@ -1539,40 +1582,28 @@ async def sync_request_stores_to_sheet(
             }
         })
 
-        # 7. Границы вокруг строки A+C
+        # 8. Границы
         thin_border = {
             "style": "SOLID",
             "width": 1,
             "color": {"red": 0.75, "green": 0.75, "blue": 0.75},
         }
-        fmt_requests.append({
-            "updateBorders": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": data_0,
-                    "endRowIndex": data_0 + 1,
-                    "startColumnIndex": 0, "endColumnIndex": 1,
-                },
-                "top": thin_border,
-                "bottom": thin_border,
-                "left": thin_border,
-                "right": thin_border,
-            }
-        })
-        fmt_requests.append({
-            "updateBorders": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": data_0,
-                    "endRowIndex": data_0 + 1,
-                    "startColumnIndex": 2, "endColumnIndex": 3,
-                },
-                "top": thin_border,
-                "bottom": thin_border,
-                "left": thin_border,
-                "right": thin_border,
-            }
-        })
+        for col_start, col_end in [(0, 1), (2, 3)]:
+            fmt_requests.append({
+                "updateBorders": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": data_0,
+                        "endRowIndex": data_0 + 1,
+                        "startColumnIndex": col_start,
+                        "endColumnIndex": col_end,
+                    },
+                    "top": thin_border,
+                    "bottom": thin_border,
+                    "left": thin_border,
+                    "right": thin_border,
+                }
+            })
 
         try:
             spreadsheet.batch_update({"requests": fmt_requests})
