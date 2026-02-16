@@ -25,49 +25,50 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════
-# Склады для заявок — настраиваемый список из GSheet
+# Заведения для заявок — настраиваемый список из GSheet
 # ═══════════════════════════════════════════════════════
 
 async def get_request_stores() -> list[dict[str, str]]:
     """
-    Получить список складов для заявок из GSheet «Настройки».
+    Получить список заведений для заявок из GSheet «Настройки».
 
-    Если в GSheet нет настроенных складов (секция пуста или все ❌),
-    возвращает пустой список — вызывающий код покажет сообщение
-    «Нет настроенных складов».
+    Если в GSheet нет настроенных заведений (секция пуста или все ❌),
+    возвращает пустой список.
 
-    Returns: [{id, name}, ...] — только склады с ✅.
+    Returns: [{id, name}, ...] — только заведения с ✅.
     """
     from adapters import google_sheets as gsheet
     stores = await gsheet.read_request_stores()
-    logger.info("[request] Склады для заявок из GSheet: %d шт", len(stores))
+    logger.info("[request] Заведения для заявок из GSheet: %d шт", len(stores))
     return stores
 
 
 async def sync_request_stores_sheet() -> int:
     """
-    Синхронизировать все склады из БД → GSheet «Настройки» → «## Склады для заявок».
+    Синхронизировать подразделения (department_type=DEPARTMENT) из БД
+    → GSheet «Настройки» → «## Заведение для заявок».
 
-    Вызывается при синхронизации складов (sync_stores) или вручную.
-    Пользователь затем ставит ✅ напротив нужных складов в таблице.
+    Вызывается при синхронизации подразделений (sync_departments).
+    Пользователь затем ставит ✅ напротив нужных заведений в таблице.
 
-    Returns: количество складов.
+    Returns: количество заведений.
     """
     from adapters import google_sheets as gsheet
     from db.engine import async_session_factory
-    from db.models import Store
-    from sqlalchemy import select
+    from db.models import Department
+    from sqlalchemy import select, func
 
     async with async_session_factory() as session:
         result = await session.execute(
-            select(Store.id, Store.name)
-            .where(Store.deleted.is_(False))
-            .order_by(Store.name)
+            select(Department.id, Department.name)
+            .where(Department.deleted.is_(False))
+            .where(func.upper(Department.department_type) == "DEPARTMENT")
+            .order_by(Department.name)
         )
-        all_stores = [{"id": str(s.id), "name": s.name} for s in result.all()]
+        all_depts = [{"id": str(d.id), "name": d.name} for d in result.all()]
 
-    count = await gsheet.sync_request_stores_to_sheet(all_stores)
-    logger.info("[request] Синхронизировано %d складов → GSheet", count)
+    count = await gsheet.sync_request_stores_to_sheet(all_depts)
+    logger.info("[request] Синхронизировано %d заведений → GSheet", count)
     return count
 
 

@@ -442,10 +442,17 @@ async def sync_suppliers(triggered_by: str | None = None) -> int:
 
 
 async def sync_departments(triggered_by: str | None = None) -> int:
-    return await _run_sync(
+    count = await _run_sync(
         "Department", iiko_api.fetch_departments(),
         Department.__table__, _map_corporate, ["id"], triggered_by,
     )
+    # Обновляем список заведений для заявок в GSheet
+    try:
+        from use_cases.product_request import sync_request_stores_sheet
+        await sync_request_stores_sheet()
+    except Exception:
+        logger.warning("[Department] Ошибка синхронизации заведений → GSheet Настройки", exc_info=True)
+    return count
 
 
 async def sync_stores(triggered_by: str | None = None) -> int:
@@ -453,12 +460,6 @@ async def sync_stores(triggered_by: str | None = None) -> int:
         "Store", iiko_api.fetch_stores(),
         Store.__table__, _map_corporate, ["id"], triggered_by,
     )
-    # Обновляем список складов для заявок в GSheet
-    try:
-        from use_cases.product_request import sync_request_stores_sheet
-        await sync_request_stores_sheet()
-    except Exception:
-        logger.warning("[Store] Ошибка синхронизации складов → GSheet Настройки", exc_info=True)
     return count
 
 

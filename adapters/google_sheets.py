@@ -541,15 +541,15 @@ async def sync_invoice_prices_to_sheet(
     products:    [{id, name, product_type}, ...] — уже отсортированные по name
     cost_prices: {product_id: cost_price} — себестоимость (авто, iiko API)
     suppliers:   [{id, name}, ...] — список поставщиков для dropdown
-    fallback_stores: [{id, name}, ...] — ВСЕ склады из БД (fallback если в «Настройки»
+    fallback_stores: [{id, name}, ...] — ВСЕ подразделения из БД (fallback если в «Настройки»
                      ни один не включён). Гарантирует dropdown в колонке C.
 
     Структура листа:
       Строка 1 (мета, скрытая):  "", "product_id", "store_id", "cost", supplier1_uuid, ...
-      Строка 2 (заголовки):      "Товар", "ID товара", "Склад", "Себестоимость", dropdown, ...
-      Строка 3+:                 name, uuid, store_name, cost_price, price1, price2, ...
+      Строка 2 (заголовки):      "Товар", "ID товара", "Заведение", "Себестоимость", dropdown, ...
+      Строка 3+:                 name, uuid, dept_name, cost_price, price1, price2, ...
 
-    Колонка C — dropdown складов (из «Настройки» → «Склады для заявок»).
+    Колонка C — dropdown заведений (из «Настройки» → «Заведение для заявок»).
     10 столбцов поставщиков (E..N): в заголовке (строка 2) — dropdown из списка
     поставщиков. Пользователь выбирает поставщика → заполняет цены в столбце.
 
@@ -566,19 +566,19 @@ async def sync_invoice_prices_to_sheet(
     try:
         store_list = await read_request_stores()
     except Exception:
-        logger.warning("[%s] Не удалось загрузить склады для прайс-листа", LABEL, exc_info=True)
+        logger.warning("[%s] Не удалось загрузить заведения для прайс-листа", LABEL, exc_info=True)
 
-    # Fallback: если нет включённых → все склады из БД для dropdown
+    # Fallback: если нет включённых → все подразделения из БД для dropdown
     if not store_list and fallback_stores:
         store_list = fallback_stores
-        logger.info("[%s] Fallback: %d складов из БД для dropdown", LABEL, len(store_list))
+        logger.info("[%s] Fallback: %d подразделений из БД для dropdown", LABEL, len(store_list))
 
     store_name_list = [s["name"] for s in store_list]
     store_id_by_name: dict[str, str] = {s["name"]: s["id"] for s in store_list}
     store_name_by_id: dict[str, str] = {s["id"]: s["name"] for s in store_list}
 
     logger.info(
-        "[%s] Синхронизация прайс-листа → GSheet: %d товаров, %d цен, %d поставщиков, %d складов",
+        "[%s] Синхронизация прайс-листа → GSheet: %d товаров, %d цен, %d поставщиков, %d заведений",
         LABEL, len(products), len(cost_prices), len(suppliers), len(store_list),
     )
 
@@ -663,7 +663,7 @@ async def sync_invoice_prices_to_sheet(
         supplier_names: dict[str, str] = id_to_name
 
         meta = ["", "product_id", "store_id", "cost"] + new_supplier_ids
-        headers = ["Товар", "ID товара", "Склад", "Себестоимость"]
+        headers = ["Товар", "ID товара", "Заведение", "Себестоимость"]
         for sid in new_supplier_ids:
             if sid and sid in supplier_names:
                 headers.append(supplier_names[sid])
@@ -729,11 +729,11 @@ async def sync_invoice_prices_to_sheet(
                     strict=False,
                 )
                 logger.info(
-                    "[%s] Dropdown складов: %d вариантов в %d строках",
+                    "[%s] Dropdown заведений: %d вариантов в %d строках",
                     LABEL, len(store_name_list), len(data_rows),
                 )
         except Exception:
-            logger.warning("[%s] Ошибка dropdown складов", LABEL, exc_info=True)
+            logger.warning("[%s] Ошибка dropdown заведений", LABEL, exc_info=True)
 
         # ── 9. Dropdown поставщиков в заголовках (строка 2, столбцы E..N) ──
         try:
@@ -1330,13 +1330,13 @@ async def sync_request_stores_to_sheet(
     stores: list[dict[str, str]],
 ) -> int:
     """
-    Записать/обновить список складов для заявок в GSheet «Настройки».
+    Записать/обновить список заведений для заявок в GSheet «Настройки».
 
-    stores: [{id, name}, ...] — все не-удалённые склады из iiko_store.
+    stores: [{id, name}, ...] — подразделения (department_type=DEPARTMENT) из iiko.
 
-    Формат раздела «## Склады для заявок»:
-      A = Склад (name)
-      B = store_uuid (скрытый)
+    Формат раздела «## Заведение для заявок»:
+      A = Заведение (name)
+      B = department_uuid (скрытый)
       C = Показывать (✅ / пусто)
 
     Логика:
@@ -1361,7 +1361,7 @@ async def sync_request_stores_to_sheet(
 
         for ri, row in enumerate(all_values):
             cell_a = (row[0] if row else "").strip()
-            if cell_a == "## Склады для заявок":
+            if cell_a == "## Заведение для заявок" or cell_a == "## Склады для заявок":
                 in_section = True
                 section_start_row = ri
                 continue
@@ -1370,7 +1370,7 @@ async def sync_request_stores_to_sheet(
                 break
             if not in_section:
                 continue
-            if cell_a in ("Склад", ""):
+            if cell_a in ("Заведение", "Склад", ""):
                 continue
             store_id = (row[1] if len(row) > 1 else "").strip()
             enabled_val = (row[2] if len(row) > 2 else "").strip()
@@ -1402,8 +1402,8 @@ async def sync_request_stores_to_sheet(
 
         # ── Блок для записи ──
         block: list[list] = [
-            ["## Склады для заявок", "", ""],
-            ["Склад", "", "Показывать ▼"],
+            ["## Заведение для заявок", "", ""],
+            ["Заведение", "", "Показывать ▼"],
         ]
         for dr in data_rows:
             block.append(dr)
@@ -1583,7 +1583,7 @@ async def sync_request_stores_to_sheet(
             spreadsheet.batch_update({"requests": fmt_requests})
         except Exception:
             logger.warning(
-                "[%s] Ошибка форматирования секции Склады для заявок",
+                "[%s] Ошибка форматирования секции Заведение для заявок",
                 LABEL, exc_info=True,
             )
 
@@ -1592,7 +1592,7 @@ async def sync_request_stores_to_sheet(
     count = await asyncio.to_thread(_sync_write)
     elapsed = time.monotonic() - t0
     logger.info(
-        "[%s] Синхронизация складов для заявок → GSheet: %d складов за %.1f сек",
+        "[%s] Синхронизация заведений для заявок → GSheet: %d шт за %.1f сек",
         LABEL, count, elapsed,
     )
     return count
@@ -1600,10 +1600,10 @@ async def sync_request_stores_to_sheet(
 
 async def read_request_stores() -> list[dict[str, str]]:
     """
-    Прочитать список складов для заявок из GSheet «Настройки».
+    Прочитать список заведений для заявок из GSheet «Настройки».
 
-    Возвращает только склады с ✅ в колонке «Показывать»:
-      [{id: store_uuid, name: store_name}, ...]
+    Возвращает только заведения с ✅ в колонке «Показывать»:
+      [{id: dept_uuid, name: dept_name}, ...]
     """
     t0 = time.monotonic()
 
@@ -1616,14 +1616,14 @@ async def read_request_stores() -> list[dict[str, str]]:
 
         for row in all_values:
             cell_a = (row[0] if row else "").strip()
-            if cell_a == "## Склады для заявок":
+            if cell_a in ("## Заведение для заявок", "## Склады для заявок"):
                 in_section = True
                 continue
             if in_section and cell_a.startswith("##"):
                 break
             if not in_section:
                 continue
-            if cell_a in ("Склад", ""):
+            if cell_a in ("Заведение", "Склад", ""):
                 continue
             store_id = (row[1] if len(row) > 1 else "").strip()
             enabled_val = (row[2] if len(row) > 2 else "").strip()
@@ -1635,7 +1635,7 @@ async def read_request_stores() -> list[dict[str, str]]:
     result = await asyncio.to_thread(_sync_read)
     elapsed = time.monotonic() - t0
     logger.info(
-        "[%s] Склады для заявок из GSheet: %d включённых за %.1f сек",
+        "[%s] Заведения для заявок из GSheet: %d включённых за %.1f сек",
         LABEL, len(result), elapsed,
     )
     return result
