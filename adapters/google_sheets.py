@@ -661,10 +661,26 @@ async def sync_invoice_prices_to_sheet(
             else:
                 headers.append("")
 
-        # ── 6. Строим строки данных ──
+        # ── 6. Строим строки данных с разделением на блюда и товары ──
         data_rows = []
+        prev_type = None  # Отслеживаем переходы между типами
+        
         for prod in products:
             pid = prod["id"]
+            current_type = prod.get("product_type", "")
+            
+            # Добавляем заголовок блока при смене типа
+            if current_type != prev_type and current_type in ["DISH", "GOODS"]:
+                if current_type == "DISH":
+                    # Заголовок блока «Блюда»
+                    separator = ["🍽 БЛЮДА", "", "", ""] + [""] * num_supplier_cols
+                    data_rows.append(separator)
+                elif current_type == "GOODS":
+                    # Заголовок блока «Товары»
+                    separator = ["📦 ТОВАРЫ", "", "", ""] + [""] * num_supplier_cols
+                    data_rows.append(separator)
+                prev_type = current_type
+            
             cost = cost_prices.get(pid)
             cost_str = f"{cost:.2f}" if cost is not None else old_costs.get(pid, "")
             store_name = old_stores.get(pid, "")
@@ -765,6 +781,18 @@ async def sync_invoice_prices_to_sheet(
                 "horizontalAlignment": "CENTER",
             })
             ws.freeze(rows=2, cols=1)
+            
+            # Форматирование разделительных строк (заголовки блоков)
+            for i, row in enumerate(data_rows, start=3):
+                if row[0] in ["🍽 БЛЮДА", "📦 ТОВАРЫ"]:
+                    ws.format(f"A{i}:{last_col_letter}{i}", {
+                        "textFormat": {
+                            "bold": True,
+                            "fontSize": 11,
+                        },
+                        "backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
+                        "horizontalAlignment": "LEFT",
+                    })
         except Exception:
             logger.warning("[%s] Ошибка форматирования прайс-листа", LABEL, exc_info=True)
 

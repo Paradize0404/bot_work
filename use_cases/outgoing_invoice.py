@@ -670,16 +670,37 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
     all_costs.update(goods_costs)
     all_costs.update(dish_costs)
 
-    # 5. Подготовка списка продуктов
-    products_for_sheet = [
-        {
+    # 5. Подготовка списка продуктов: сначала блюда (DISH), потом товары (GOODS)
+    dish_products = []
+    goods_products = []
+    other_products = []
+    
+    for p in products:
+        product_dict = {
             "id": p["id"], "name": p["name"],
             "product_type": p.get("product_type", ""),
             "main_unit": p.get("main_unit"),
             "unit_name": p.get("unit_name", "шт"),
         }
-        for p in products
-    ]
+        product_type = p.get("product_type", "")
+        if not product_type:
+            logger.debug("[invoice] Товар без типа: %s", p.get("name"))
+            other_products.append(product_dict)
+        elif product_type == "DISH":
+            dish_products.append(product_dict)
+        elif product_type == "GOODS":
+            goods_products.append(product_dict)
+        else:
+            logger.debug("[invoice] Неизвестный тип '%s' у товара: %s", product_type, p.get("name"))
+            other_products.append(product_dict)
+    
+    # Сначала блюда, потом товары, потом остальное
+    products_for_sheet = dish_products + goods_products + other_products
+    
+    logger.info(
+        "[invoice] Прайс-лист: разделение на блоки — %d блюд, %d товаров, %d прочих",
+        len(dish_products), len(goods_products), len(other_products),
+    )
 
     # 6. Загружаем поставщиков для dropdown в Google Sheet
     suppliers = await load_all_suppliers()
