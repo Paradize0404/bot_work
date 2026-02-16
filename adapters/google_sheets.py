@@ -533,6 +533,7 @@ async def sync_invoice_prices_to_sheet(
     products: list[dict[str, str]],
     cost_prices: dict[str, float],
     suppliers: list[dict[str, str]],
+    fallback_stores: list[dict[str, str]] | None = None,
 ) -> int:
     """
     Синхронизировать прайс-лист товаров в Google Таблицу.
@@ -540,6 +541,8 @@ async def sync_invoice_prices_to_sheet(
     products:    [{id, name, product_type}, ...] — уже отсортированные по name
     cost_prices: {product_id: cost_price} — себестоимость (авто, iiko API)
     suppliers:   [{id, name}, ...] — список поставщиков для dropdown
+    fallback_stores: [{id, name}, ...] — ВСЕ склады из БД (fallback если в «Настройки»
+                     ни один не включён). Гарантирует dropdown в колонке C.
 
     Структура листа:
       Строка 1 (мета, скрытая):  "", "product_id", "store_id", "cost", supplier1_uuid, ...
@@ -564,6 +567,11 @@ async def sync_invoice_prices_to_sheet(
         store_list = await read_request_stores()
     except Exception:
         logger.warning("[%s] Не удалось загрузить склады для прайс-листа", LABEL, exc_info=True)
+
+    # Fallback: если нет включённых → все склады из БД для dropdown
+    if not store_list and fallback_stores:
+        store_list = fallback_stores
+        logger.info("[%s] Fallback: %d складов из БД для dropdown", LABEL, len(store_list))
 
     store_name_list = [s["name"] for s in store_list]
     store_id_by_name: dict[str, str] = {s["name"]: s["id"] for s in store_list}

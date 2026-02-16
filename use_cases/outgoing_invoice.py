@@ -675,8 +675,26 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
     # 6. Загружаем поставщиков для dropdown в Google Sheet
     suppliers = await load_all_suppliers()
 
+    # 6b. Все склады из БД — fallback для dropdown если ни один не включён в «Настройки»
+    all_stores: list[dict[str, str]] = []
+    try:
+        from db.engine import async_session_factory
+        from db.models import Store
+        from sqlalchemy import select as sa_select
+        async with async_session_factory() as sess:
+            res = await sess.execute(
+                sa_select(Store.id, Store.name)
+                .where(Store.deleted.is_(False))
+                .order_by(Store.name)
+            )
+            all_stores = [{"id": str(r.id), "name": r.name} for r in res.all()]
+    except Exception:
+        logger.warning("[invoice] Ошибка загрузки складов для fallback dropdown", exc_info=True)
+
     # 7. Записываем в Google Sheet
-    count = await gs.sync_invoice_prices_to_sheet(products_for_sheet, all_costs, suppliers)
+    count = await gs.sync_invoice_prices_to_sheet(
+        products_for_sheet, all_costs, suppliers, fallback_stores=all_stores,
+    )
 
     # 8. Читаем обратно из GSheet (вкл. ручные цены поставщиков) и пишем в БД
     try:
