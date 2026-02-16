@@ -333,6 +333,20 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
         reply_markup=kb,
     )
 
+    # Фоновая синхронизация таблицы «Права доступа»
+    async def _sync_perms():
+        try:
+            await perm_uc.sync_permissions_to_gsheet(
+                triggered_by=f"auth:{callback.from_user.id}",
+            )
+        except Exception:
+            logger.warning("[auth] Не удалось синхронизировать права доступа", exc_info=True)
+
+    asyncio.create_task(
+        _sync_perms(),
+        name=f"perms_sync_auth_{callback.from_user.id}",
+    )
+
     # Фоновая отправка остатков подразделения
     asyncio.create_task(
         send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
