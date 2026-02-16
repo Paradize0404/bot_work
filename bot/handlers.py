@@ -39,6 +39,7 @@ from use_cases import writeoff as wo_uc
 from use_cases import admin as admin_uc
 from use_cases import reports as reports_uc
 from use_cases import permissions as perm_uc
+from use_cases import price_list as price_uc
 from bot.middleware import (
     admin_required, auth_required, permission_required,
     sync_with_progress, track_task, get_sync_lock,
@@ -92,6 +93,9 @@ def _main_keyboard(allowed: set[str] | None = None, dept_name: str | None = None
     rows: list[list[KeyboardButton]] = []
     for i in range(0, len(visible), 2):
         rows.append(visible[i:i + 2])
+
+    # «Прайс-лист» — всегда видна всем пользователям
+    rows.append([KeyboardButton(text="💰 Прайс-лист")])
 
     # «Сменить ресторан» — всегда видна, показываем текущий ресторан
     dept_label = f"🏠 Сменить ресторан ({dept_name})" if dept_name else "🏠 Сменить ресторан"
@@ -518,6 +522,31 @@ async def btn_reports_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Отчёты'."""
     logger.info("[nav] Меню Отчёты tg:%d", message.from_user.id)
     await reply_menu(message, state, "📊 Отчёты:", _reports_keyboard())
+
+
+@router.message(F.text == "💰 Прайс-лист")
+@auth_required
+async def btn_price_list(message: Message, state: FSMContext) -> None:
+    """Показать прайс-лист блюд пользователю."""
+    logger.info("[price_list] Запрос прайс-листа tg:%d", message.from_user.id)
+    
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+    
+    try:
+        dishes = await price_uc.get_dishes_price_list()
+        text = price_uc.format_price_list(dishes)
+        
+        await message.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=await _get_main_kb(message.from_user.id),
+        )
+    except Exception as exc:
+        logger.exception("[price_list] Ошибка получения прайс-листа tg:%d", message.from_user.id)
+        await message.answer(
+            "❌ Ошибка при загрузке прайс-листа. Попробуйте позже.",
+            reply_markup=await _get_main_kb(message.from_user.id),
+        )
 
 
 @router.message(F.text == "⚙️ Настройки")
