@@ -139,6 +139,7 @@ def _sync_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="⚡ Синхр. ВСЁ (iiko + FT)")],
         [KeyboardButton(text="🔄 Синхр. ВСЁ iiko"), KeyboardButton(text="💹 FT: Синхр. ВСЁ")],
         [KeyboardButton(text="📋 Синхр. справочники"), KeyboardButton(text="📦 Синхр. номенклатуру")],
+        [KeyboardButton(text="🏢 Синхр. подразделения")],
         [KeyboardButton(text="🔙 К настройкам")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
