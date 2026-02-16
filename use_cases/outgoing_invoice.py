@@ -675,31 +675,46 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
     # 6. Загружаем поставщиков для dropdown в Google Sheet
     suppliers = await load_all_suppliers()
 
-    # 6b. Все подразделения из БД — fallback для dropdown если ни одно не включено в «Настройки»
-    all_stores: list[dict[str, str]] = []
+    # 6b. Склады выбранного заведения для dropdown в колонке C прайс-листа
+    stores_for_dropdown: list[dict[str, str]] = []
     try:
+        from use_cases.product_request import get_request_stores
         from db.engine import async_session_factory
-        from db.models import Department
-        from sqlalchemy import select as sa_select, func as sa_func
-        async with async_session_factory() as sess:
-            res = await sess.execute(
-                sa_select(Department.id, Department.name)
-                .where(Department.deleted.is_(False))
-                .where(sa_func.upper(Department.department_type) == "DEPARTMENT")
-                .order_by(Department.name)
+        from db.models import Store
+        from sqlalchemy import select as sa_select
+
+        selected = await get_request_stores()  # [{id, name}] — 0 или 1
+        if selected:
+            dept_uuid = selected[0]["id"]
+            async with async_session_factory() as sess:
+                res = await sess.execute(
+                    sa_select(Store.id, Store.name)
+                    .where(Store.deleted.is_(False))
+                    .where(Store.parent_id == dept_uuid)
+                    .order_by(Store.name)
+                )
+                stores_for_dropdown = [
+                    {"id": str(r.id), "name": r.name} for r in res.all()
+                ]
+            logger.info(
+                "[invoice] Склады заведения %s: %d шт",
+                selected[0]["name"], len(stores_for_dropdown),
             )
-            all_stores = [{"id": str(r.id), "name": r.name} for r in res.all()]
+        else:
+            logger.warning("[invoice] Заведение для заявок не выбрано в Настройках")
     except Exception:
-        logger.warning("[invoice] Ошибка загрузки подразделений для fallback dropdown", exc_info=True)
+        logger.warning("[invoice] Ошибка загрузки складов для dropdown", exc_info=True)
 
     # 7. Записываем в Google Sheet
     count = await gs.sync_invoice_prices_to_sheet(
-        products_for_sheet, all_costs, suppliers, fallback_stores=all_stores,
+        products_for_sheet, all_costs, suppliers,
+        stores_for_dropdown=stores_for_dropdown,
     )
 
     # 8. Читаем обратно из GSheet (вкл. ручные цены поставщиков) и пишем в БД
     try:
-        gsheet_data = await gs.read_invoice_prices()
+        store_id_map = {s["name"]: s["id"] for s in stores_for_dropdown}
+        gsheet_data = await gs.read_invoice_prices(store_id_map=store_id_map)
         db_count = await _sync_prices_to_db(
             products_for_sheet, all_costs, gsheet_data, suppliers,
         )

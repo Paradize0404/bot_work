@@ -533,7 +533,7 @@ async def sync_invoice_prices_to_sheet(
     products: list[dict[str, str]],
     cost_prices: dict[str, float],
     suppliers: list[dict[str, str]],
-    fallback_stores: list[dict[str, str]] | None = None,
+    stores_for_dropdown: list[dict[str, str]] | None = None,
 ) -> int:
     """
     Синхронизировать прайс-лист товаров в Google Таблицу.
@@ -546,10 +546,10 @@ async def sync_invoice_prices_to_sheet(
 
     Структура листа:
       Строка 1 (мета, скрытая):  "", "product_id", "store_id", "cost", supplier1_uuid, ...
-      Строка 2 (заголовки):      "Товар", "ID товара", "Заведение", "Себестоимость", dropdown, ...
-      Строка 3+:                 name, uuid, dept_name, cost_price, price1, price2, ...
+      Строка 2 (заголовки):      "Товар", "ID товара", "Склад", "Себестоимость", dropdown, ...
+      Строка 3+:                 name, uuid, store_name, cost_price, price1, price2, ...
 
-    Колонка C — dropdown заведений (из «Настройки» → «Заведение для заявок»).
+    Колонка C — dropdown складов выбранного заведения.
     10 столбцов поставщиков (E..N): в заголовке (строка 2) — dropdown из списка
     поставщиков. Пользователь выбирает поставщика → заполняет цены в столбце.
 
@@ -561,17 +561,8 @@ async def sync_invoice_prices_to_sheet(
     num_fixed = 4  # A=name, B=id, C=store, D=cost
     num_cols = num_fixed + num_supplier_cols
 
-    # Загружаем список включённых складов для dropdown
-    store_list: list[dict[str, str]] = []
-    try:
-        store_list = await read_request_stores()
-    except Exception:
-        logger.warning("[%s] Не удалось загрузить заведения для прайс-листа", LABEL, exc_info=True)
-
-    # Fallback: если нет включённых → все подразделения из БД для dropdown
-    if not store_list and fallback_stores:
-        store_list = fallback_stores
-        logger.info("[%s] Fallback: %d подразделений из БД для dropdown", LABEL, len(store_list))
+    # Список складов для dropdown (передан вызывающим кодом)
+    store_list: list[dict[str, str]] = stores_for_dropdown or []
 
     store_name_list = [s["name"] for s in store_list]
     store_id_by_name: dict[str, str] = {s["name"]: s["id"] for s in store_list}
@@ -663,7 +654,7 @@ async def sync_invoice_prices_to_sheet(
         supplier_names: dict[str, str] = id_to_name
 
         meta = ["", "product_id", "store_id", "cost"] + new_supplier_ids
-        headers = ["Товар", "ID товара", "Заведение", "Себестоимость"]
+        headers = ["Товар", "ID товара", "Склад", "Себестоимость"]
         for sid in new_supplier_ids:
             if sid and sid in supplier_names:
                 headers.append(supplier_names[sid])
@@ -876,9 +867,13 @@ async def sync_invoice_prices_to_sheet(
     return count
 
 
-async def read_invoice_prices() -> list[dict[str, Any]]:
+async def read_invoice_prices(
+    store_id_map: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
     """
     Прочитать прайс-лист из Google Таблицы.
+
+    store_id_map: {store_name: store_uuid} — маппинг имён складов в UUID.
 
     Возвращает:
       [{product_id, product_name, store_id, store_name, cost_price,
@@ -887,13 +882,7 @@ async def read_invoice_prices() -> list[dict[str, Any]]:
     """
     t0 = time.monotonic()
 
-    # Загружаем store_name → store_id маппинг
-    store_id_by_name: dict[str, str] = {}
-    try:
-        store_list = await read_request_stores()
-        store_id_by_name = {s["name"]: s["id"] for s in store_list}
-    except Exception:
-        logger.warning("[%s] Не удалось загрузить склады при чтении прайса", LABEL, exc_info=True)
+    store_id_by_name: dict[str, str] = store_id_map or {}
 
     def _sync_read() -> list[dict[str, Any]]:
         ws = _get_price_worksheet()
