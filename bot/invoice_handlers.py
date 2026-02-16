@@ -671,6 +671,24 @@ async def choose_template_cb(callback: CallbackQuery, state: FSMContext) -> None
         await callback.answer("❌ У шаблона нет позиций", show_alert=True)
         return
 
+    # ── Динамическое подтягивание цен (не хардкодим в шаблоне) ──
+    product_ids = [it.get("product_id") or it.get("id", "") for it in items]
+    supplier_prices = await inv_uc.get_supplier_prices(template["counteragent_id"])
+    cost_prices = await inv_uc.get_cost_prices_bulk(product_ids)
+
+    for item in items:
+        pid = item.get("product_id") or item.get("id", "")
+        sup_price = supplier_prices.get(pid, 0.0)
+        cost_price = cost_prices.get(pid, 0.0)
+        effective = sup_price or cost_price
+        item["sell_price"] = effective
+        item["cost_price"] = cost_price
+
+    logger.info(
+        "[invoice][from_tpl] Динамические цены: supplier=%d, cost=%d, tg:%d",
+        len(supplier_prices), len(cost_prices), callback.from_user.id,
+    )
+
     # Показываем позиции с ценами и подсказкой единиц ввода
     text = (
         f"📋 <b>Шаблон:</b> {template['name']}\n"
@@ -681,6 +699,7 @@ async def choose_template_cb(callback: CallbackQuery, state: FSMContext) -> None
     )
     for i, item in enumerate(items, 1):
         price = item.get("sell_price", 0)
+        cost = item.get("cost_price", 0)
         unit = item.get("unit_name", "шт")
         norm = normalize_unit(unit)
         if norm == "kg":
@@ -689,7 +708,12 @@ async def choose_template_cb(callback: CallbackQuery, state: FSMContext) -> None
             input_hint = "в мл"
         else:
             input_hint = f"в {unit}"
-        price_str = f" — {price:.2f}₽/{unit}" if price else ""
+        if price and price != cost:
+            price_str = f" — 💰 {price:.2f}₽/{unit}"
+        elif price:
+            price_str = f" — себест. {price:.2f}₽/{unit}"
+        else:
+            price_str = ""
         text += f"  {i}. {item['name']}{price_str} → <i>{input_hint}</i>\n"
 
     text += (

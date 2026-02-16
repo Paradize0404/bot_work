@@ -347,6 +347,15 @@ async def save_template(
         name, created_by, len(items),
     )
 
+    # Шаблон хранит только позиции (без цен — они подтягиваются динамически)
+    clean_items = [
+        {
+            k: v for k, v in it.items()
+            if k not in ("cost_price", "sell_price", "price")
+        }
+        for it in items
+    ]
+
     async with async_session_factory() as session:
         tmpl = InvoiceTemplate(
             name=name,
@@ -358,7 +367,7 @@ async def save_template(
             account_name=account_name,
             store_id=UUID(store_id),
             store_name=store_name,
-            items=items,
+            items=clean_items,
         )
         session.add(tmpl)
         await session.commit()
@@ -901,6 +910,36 @@ async def get_supplier_prices(supplier_id: str) -> dict[str, float]:
         )
         rows = (await session.execute(stmt)).all()
     return {str(r.product_id): float(r.price) for r in rows}
+
+
+async def get_cost_prices_bulk(product_ids: list[str]) -> dict[str, float]:
+    """
+    Получить себестоимости (cost_price) из PriceProduct для списка product_id.
+    Возвращает {product_id: cost_price}.
+    """
+    if not product_ids:
+        return {}
+    uuids = []
+    for pid in product_ids:
+        try:
+            uuids.append(UUID(pid))
+        except (ValueError, AttributeError):
+            continue
+    if not uuids:
+        return {}
+
+    async with async_session_factory() as session:
+        stmt = (
+            select(PriceProduct.product_id, PriceProduct.cost_price)
+            .where(PriceProduct.product_id.in_(uuids))
+        )
+        rows = (await session.execute(stmt)).all()
+
+    return {
+        str(r.product_id): float(r.cost_price)
+        for r in rows
+        if r.cost_price and float(r.cost_price) > 0
+    }
 
 
 async def get_supplier_prices_by_store(target_store_name: str) -> dict[str, float]:
