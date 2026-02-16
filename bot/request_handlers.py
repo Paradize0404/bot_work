@@ -222,37 +222,25 @@ async def _send_prompt(
 #  Хелпер: текст сводки добавленных позиций
 # ══════════════════════════════════════════════════════
 
-def _items_summary(items: list[dict], sup_name: str) -> str:
-    """Формирует текст сводки добавленных товаров, сгруппированных по складу."""
-    from collections import OrderedDict
-
-    groups: dict[str, list[dict]] = OrderedDict()
-    for it in items:
-        # Группируем по целевому складу (подразделение пользователя)
-        store_key = it.get("target_store_name") or it.get("store_name") or "⚠️ Склад не назначен"
-        if store_key not in groups:
-            groups[store_key] = []
-        groups[store_key].append(it)
-
-    text = f"🏨 <b>{sup_name}</b>\n\n"
+def _items_summary(items: list[dict], user_dept: str, settings_dept: str = "") -> str:
+    """Формирует текст сводки добавленных товаров (плоский список, без деления по складам)."""
+    header = f"📤 <b>{user_dept}</b>"
+    if settings_dept:
+        header += f" → 📥 <b>{settings_dept}</b>"
+    text = header + "\n\n"
     total = 0.0
-    item_num = 0
 
-    for store_label, store_items in groups.items():
-        text += f"🏦 <b>{store_label}:</b>\n"
-        for it in store_items:
-            item_num += 1
-            qty_display = it.get("qty_display", "")
-            name = it["name"]
-            price = it.get("price", 0)
-            amount = it.get("amount", 0)
-            line_sum = amount * price
-            total += line_sum
-            price_str = f" × {price:.2f}₽ = {line_sum:.2f}₽" if price else ""
-            text += f"  {item_num}. {name}  ×  {qty_display}{price_str}\n"
-        text += "\n"
+    for i, it in enumerate(items, 1):
+        qty_display = it.get("qty_display", "")
+        name = it["name"]
+        price = it.get("price", 0)
+        amount = it.get("amount", 0)
+        line_sum = amount * price
+        total += line_sum
+        price_str = f" × {price:.2f}₽ = {line_sum:.2f}₽" if price else ""
+        text += f"  {i}. {name}  ×  {qty_display}{price_str}\n"
 
-    text += f"<b>Итого: {total:.2f}₽</b>"
+    text += f"\n<b>Итого: {total:.2f}₽</b>"
     return text
 
 
@@ -317,6 +305,8 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
         )
         return
 
+    settings_dept_name = settings_stores[0]["name"] if settings_stores else ""
+
     await state.update_data(
         department_id=ctx.department_id,
         department_name=ctx.department_name,
@@ -325,13 +315,14 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
         account_name=account["name"],
         _user_store_map=user_store_map,
         _settings_dept_id=settings_dept_id,
+        _settings_dept_name=settings_dept_name,
         items=[],
     )
 
     # Пропускаем выбор поставщика → сразу к поиску товаров
     await state.set_state(CreateRequestStates.add_items)
     await _send_prompt(message.bot, message.chat.id, state,
-        f"🏨 <b>{ctx.department_name}</b>\n\n"
+        f"📤 <b>{ctx.department_name}</b> → 📥 <b>{settings_dept_name}</b>\n\n"
         "🔍 Введите название товара для поиска:",
     )
 
@@ -432,14 +423,25 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
     else:
         price_str = ""
 
-    # Показываем целевой склад (авто-определение)
-    user_store_map = data.get("_user_store_map", {})
-    target = req_uc.resolve_target_store(product.get("store_name", ""), user_store_map)
-    store_info = f"\n🏦 → {target['name']}" if target else ""
+    # ── Блокировка: товар без склада ──
+    if not product.get("store_id"):
+        await callback.answer(
+            "⚠️ У товара не указан склад. Выберите другой товар.",
+            show_alert=True,
+        )
+        await _send_prompt(callback.bot, callback.message.chat.id, state,
+            f"⚠️ У товара <b>{product['name']}</b> не указан склад "
+            "в прайс-листе.\n\n"
+            "Выберите другой товар и обратитесь к администратору "
+            "для указания склада этому товару.\n\n"
+            "🔍 Введите название другого товара:",
+            reply_markup=_req_add_more_kb(len(items)) if items else None,
+        )
+        return
 
     try:
         await callback.message.edit_text(
-            f"📦 <b>{product['name']}</b>{price_str}{store_info}\n\n"
+            f"📦 <b>{product['name']}</b>{price_str}\n\n"
             f"✏️ Введите количество ({hint}):",
             parse_mode="HTML",
         )
@@ -545,8 +547,9 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
     )
 
     # Показываем сводку + предлагаем добавить ещё
-    dept_name = data.get("department_name", "?")
-    summary = _items_summary(items, dept_name)
+    summary = _items_summary(
+        items, data.get("department_name", "?"), data.get("_settings_dept_name", ""),
+    )
 
     await state.set_state(CreateRequestStates.add_items)
     await _send_prompt(message.bot, message.chat.id, state,
@@ -570,15 +573,18 @@ async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
     removed = items.pop()
     await state.update_data(items=items)
 
+    dept_name = data.get("department_name", "?")
+    settings_dept = data.get("_settings_dept_name", "")
     if items:
-        dept_name = data.get("department_name", "?")
-        summary = _items_summary(items, dept_name)
+        summary = _items_summary(items, dept_name, settings_dept)
         text = f"🗑 Удалено: {removed['name']}\n\n{summary}\n\n🔍 Введите название товара:"
     else:
-        dept_name = data.get("department_name", "?")
+        header = f"📤 <b>{dept_name}</b>"
+        if settings_dept:
+            header += f" → 📥 <b>{settings_dept}</b>"
         text = (
             f"🗑 Удалено: {removed['name']}\n\n"
-            f"🏨 <b>{dept_name}</b>\n\n"
+            f"{header}\n\n"
             "🔍 Введите название товара для поиска:"
         )
 
@@ -610,8 +616,8 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.message.edit_text(
                 f"❌ У {len(no_store)} товаров не назначен склад в прайс-листе:\n"
                 f"{names}\n\n"
-                "Откройте Прайс-лист → столбец «Склад» → укажите склад "
-                "для каждого товара → запустите синхронизацию прайс-листа.",
+                "Выберите другие товары и обратитесь к администратору "
+                "для указания склада этим товарам.",
                 parse_mode="HTML",
                 reply_markup=_req_add_more_kb(len(items)),
             )
@@ -619,37 +625,14 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
             pass
         return
 
-    # Проверяем: у товаров должен быть целевой склад (авто-определённый)
-    no_target = [it for it in items if not it.get("target_store_id")]
-    if no_target:
-        names = "\n".join(f"  • {it['name']}" for it in no_target[:10])
-        try:
-            await callback.message.edit_text(
-                f"⚠️ Для {len(no_target)} товаров не найден склад "
-                f"в подразделении «{data.get('department_name', '?')}»:\n"
-                f"{names}\n\n"
-                "Проверьте, что склады вашего подразделения совпадают по типу "
-                "(Кухня, Бар, ТМЦ) со складами в прайс-листе.",
-                parse_mode="HTML",
-                reply_markup=_req_add_more_kb(len(items)),
-            )
-        except Exception:
-            pass
-        return
-
-    dept_name = data.get("department_name", "?")
-    summary = _items_summary(items, dept_name)
-
-    # Кол-во целевых складов → кол-во заявок
-    target_ids = set(it.get("target_store_id") for it in items if it.get("target_store_id"))
-    multi_note = ""
-    if len(target_ids) > 1:
-        multi_note = f"\n\n📋 Будет создано <b>{len(target_ids)} заявки</b> (по одной на каждый склад)."
+    summary = _items_summary(
+        items, data.get("department_name", "?"), data.get("_settings_dept_name", ""),
+    )
 
     await state.set_state(CreateRequestStates.confirm)
     try:
         await callback.message.edit_text(
-            f"📝 <b>Подтверждение заявки</b>\n\n{summary}{multi_note}\n\n"
+            f"📝 <b>Подтверждение заявки</b>\n\n{summary}\n\n"
             "<i>Проверьте и отправьте заявку получателям.</i>",
             parse_mode="HTML",
             reply_markup=_confirm_kb(),
@@ -658,7 +641,7 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
         pass
 
 
-# ── 8. Подтверждение → группировка по целевым складам → авто-контрагент → отправка ──
+# ── 8. Подтверждение → одна заявка + раздельные уведомления ──
 
 @router.callback_query(CreateRequestStates.confirm, F.data == "req_confirm_send")
 async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> None:
@@ -681,78 +664,77 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
         await callback.answer("❌ Нет позиций", show_alert=True)
         return
 
-    # Группируем товары по ЦЕЛЕВОМУ складу (подразделение пользователя)
-    from collections import OrderedDict
-    store_groups: dict[str, list[dict]] = OrderedDict()
+    # ── Определяем контрагента (по первому целевому складу) ──
+    first_target_name = ""
+    first_source_name = ""
+    first_source_id = ""
     for it in items:
-        # Ключ группировки = целевой склад; fallback на источник
-        sid = it.get("target_store_id") or it.get("store_id", "")
-        if sid not in store_groups:
-            store_groups[sid] = []
-        store_groups[sid].append(it)
+        if it.get("target_store_name"):
+            first_target_name = it["target_store_name"]
+            first_source_id = it.get("store_id", "")
+            first_source_name = it.get("store_name", "")
+            break
+    if not first_source_id:
+        first_source_id = items[0].get("store_id", "")
+        first_source_name = items[0].get("store_name", "?")
 
-    # Создаём одну заявку на каждый целевой склад
-    all_pks: list[int] = []
-    for target_store_id, store_items in store_groups.items():
-        # Склад-источник (из прайс-листа) — для расходной накладной
-        source_store_id = store_items[0].get("store_id", "")
-        source_store_name = store_items[0].get("store_name", "?")
-
-        # Целевой склад (подразделение пользователя)
-        target_store_name = store_items[0].get("target_store_name", "?")
-
-        total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in store_items)
-
-        # Авто-определение контрагента по имени целевого склада
-        counteragent = await req_uc.find_counteragent_for_store(target_store_name)
-        if not counteragent:
-            # Fallback: поиск по имени склада-источника
-            counteragent = await req_uc.find_counteragent_for_store(source_store_name)
-        if not counteragent:
-            logger.warning(
-                "[request] Контрагент не найден для склада '%s', tg:%d",
-                target_store_name, callback.from_user.id,
-            )
-            try:
-                await callback.message.edit_text(
-                    f"❌ Не удалось определить контрагента для склада "
-                    f"«{target_store_name}».\n\n"
-                    "Проверьте, что склады зарегистрированы как контрагенты в iiko.",
-                    parse_mode="HTML",
-                    reply_markup=_confirm_kb(),
-                )
-            except Exception:
-                pass
-            return
-
-        pk = await req_uc.create_request(
-            requester_tg=callback.from_user.id,
-            requester_name=data.get("requester_name", "?"),
-            department_id=data["department_id"],
-            department_name=data.get("department_name", "?"),
-            store_id=source_store_id,
-            store_name=source_store_name,
-            counteragent_id=counteragent["id"],
-            counteragent_name=counteragent["name"],
-            account_id=data["account_id"],
-            account_name=data.get("account_name", "?"),
-            items=store_items,
-            total_sum=total_sum,
+    counteragent = await req_uc.find_counteragent_for_store(first_target_name) if first_target_name else None
+    if not counteragent:
+        counteragent = await req_uc.find_counteragent_for_store(first_source_name)
+    if not counteragent:
+        logger.warning(
+            "[request] Контрагент не найден для '%s' / '%s', tg:%d",
+            first_target_name, first_source_name, callback.from_user.id,
         )
-        all_pks.append(pk)
+        try:
+            await callback.message.edit_text(
+                "❌ Не удалось определить контрагента.\n\n"
+                "Проверьте, что склады зарегистрированы как контрагенты в iiko.",
+                parse_mode="HTML",
+                reply_markup=_confirm_kb(),
+            )
+        except Exception:
+            pass
+        return
 
-    logger.info(
-        "[request] Создано %d заявок %s по целевым складам, tg:%d",
-        len(all_pks), all_pks, callback.from_user.id,
+    total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in items)
+
+    # ── Создаём ОДНУ заявку со всеми позициями ──
+    pk = await req_uc.create_request(
+        requester_tg=callback.from_user.id,
+        requester_name=data.get("requester_name", "?"),
+        department_id=data["department_id"],
+        department_name=data.get("department_name", "?"),
+        store_id=first_source_id,
+        store_name=first_source_name,
+        counteragent_id=counteragent["id"],
+        counteragent_name=counteragent["name"],
+        account_id=data["account_id"],
+        account_name=data.get("account_name", "?"),
+        items=items,
+        total_sum=total_sum,
     )
 
-    # Уведомить получателей
+    logger.info(
+        "[request] Создана заявка #%d, items=%d, tg:%d",
+        pk, len(items), callback.from_user.id,
+    )
+
+    # ── Формируем текст заявки ──
+    req_data = await req_uc.get_request_by_pk(pk)
+    settings_dept = data.get("_settings_dept_name", "")
+    text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+
+    # ── Уведомления: админам → с кнопками, получателям → информативное ──
+    admin_ids = await admin_uc.get_admin_ids()
     receiver_ids = await req_uc.get_receiver_ids()
 
-    if not receiver_ids:
-        pk_list = ", ".join(f"#{pk}" for pk in all_pks)
+    # Убираем пересечение (админ не дублируется в получателях)
+    receiver_only = [tg for tg in receiver_ids if tg not in set(admin_ids)]
+
+    if not admin_ids and not receiver_only:
         await callback.message.edit_text(
-            f"✅ Заявки {pk_list} сохранены, но нет назначенных получателей.\n"
+            f"✅ Заявка #{pk} сохранена, но нет назначенных получателей.\n"
             "Попросите администратора добавить получателей заявок."
         )
         await state.clear()
@@ -760,34 +742,36 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
                               "📋 Заявки:", requests_keyboard())
         return
 
-    # Отправляем уведомление по каждой заявке
     total_sent = 0
-    for pk in all_pks:
-        req_data = await req_uc.get_request_by_pk(pk)
-        text = req_uc.format_request_text(req_data)
-        for tg_id in receiver_ids:
-            try:
-                await callback.bot.send_message(
-                    tg_id, text,
-                    parse_mode="HTML",
-                    reply_markup=_approve_kb(pk),
-                )
-                total_sent += 1
-            except Exception as exc:
-                logger.warning("[request] Не удалось уведомить tg:%d: %s", tg_id, exc)
+
+    # Админам — полная заявка с кнопками управления
+    for tg_id in admin_ids:
+        try:
+            await callback.bot.send_message(
+                tg_id, text, parse_mode="HTML",
+                reply_markup=_approve_kb(pk),
+            )
+            total_sent += 1
+        except Exception as exc:
+            logger.warning("[request] Не удалось уведомить админа tg:%d: %s", tg_id, exc)
+
+    # Получателям — информативное (без кнопок)
+    info_text = text + "\n\n<i>ℹ️ Информационное уведомление</i>"
+    for tg_id in receiver_only:
+        try:
+            await callback.bot.send_message(tg_id, info_text, parse_mode="HTML")
+            total_sent += 1
+        except Exception as exc:
+            logger.warning("[request] Не удалось уведомить получателя tg:%d: %s", tg_id, exc)
 
     logger.info(
-        "[request] Заявки %s отправлены %d получателям",
-        all_pks, len(receiver_ids),
+        "[request] Заявка #%d: admin=%d, receiver=%d, sent=%d",
+        pk, len(admin_ids), len(receiver_only), total_sent,
     )
 
-    pk_list = ", ".join(f"#{pk}" for pk in all_pks)
-    if len(all_pks) == 1:
-        msg = f"✅ Заявка {pk_list} отправлена получателям!\nОжидайте подтверждения."
-    else:
-        msg = f"✅ {len(all_pks)} заявки ({pk_list}) отправлены получателям!\nОжидайте подтверждения."
-
-    await callback.message.edit_text(msg)
+    await callback.message.edit_text(
+        f"✅ Заявка #{pk} отправлена!\nОжидайте подтверждения."
+    )
     await state.clear()
     await restore_menu_kb(callback.bot, callback.message.chat.id, state,
                           "📋 Заявки:", requests_keyboard())
@@ -842,7 +826,10 @@ async def approve_request(callback: CallbackQuery) -> None:
 
 
 async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
-    """Внутренняя логика одобрения (вынесена для читаемости + lock в вызывающем коде)."""
+    """
+    Одобрение заявки: группировка позиций по складам → N расходных накладных в iiko.
+    Внешне — одна заявка, внутри — по накладной на каждый склад.
+    """
     req_data = await req_uc.get_request_by_pk(pk)
     if not req_data:
         await callback.answer("❌ Заявка не найдена", show_alert=True)
@@ -857,7 +844,6 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
         pk, callback.from_user.id, len(req_data.get("items", [])),
     )
 
-    # Собираем данные для расходной накладной
     items = req_data.get("items", [])
     product_ids = [it["product_id"] for it in items if it.get("product_id")]
     containers = await inv_uc.get_product_containers(product_ids)
@@ -866,27 +852,57 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
     author_name = ctx.employee_name if ctx else ""
     requester = req_data.get("requester_name", "?")
 
-    comment = f"Заявка #{pk} от {requester}"
-    if author_name:
-        comment += f" (Отправил: {author_name})"
+    # ── Группировка позиций по target_store_id → N накладных ──
+    from collections import OrderedDict
+    store_groups: dict[str, list[dict]] = OrderedDict()
+    for it in items:
+        sid = it.get("target_store_id") or it.get("store_id", "")
+        if sid not in store_groups:
+            store_groups[sid] = []
+        store_groups[sid].append(it)
 
-    document = inv_uc.build_outgoing_invoice_document(
-        store_id=req_data["store_id"],
-        counteragent_id=req_data["counteragent_id"],
-        account_id=req_data["account_id"],
-        items=items,
-        containers=containers,
-        comment=comment,
-    )
+    all_results: list[str] = []
+    any_success = False
 
-    try:
-        result_text = await inv_uc.send_outgoing_invoice_document(document)
-    except Exception as exc:
-        logger.exception("[request] Ошибка отправки накладной #%d", pk)
-        result_text = f"❌ Ошибка отправки в iiko: {exc}"
+    for group_store_id, group_items in store_groups.items():
+        source_store_id = group_items[0].get("store_id", req_data["store_id"])
+        target_store_name = group_items[0].get("target_store_name", "")
+        source_store_name = group_items[0].get("store_name", "")
 
-    # Если успех — помечаем заявку approved
-    if result_text.startswith("✅"):
+        # Авто-определение контрагента для этой группы
+        counteragent = await req_uc.find_counteragent_for_store(target_store_name) if target_store_name else None
+        if not counteragent:
+            counteragent = await req_uc.find_counteragent_for_store(source_store_name) if source_store_name else None
+        if not counteragent:
+            # Fallback на request-level контрагента
+            counteragent = {"id": req_data["counteragent_id"], "name": req_data["counteragent_name"]}
+
+        comment = f"Заявка #{pk} от {requester}"
+        if author_name:
+            comment += f" (Отправил: {author_name})"
+
+        document = inv_uc.build_outgoing_invoice_document(
+            store_id=source_store_id,
+            counteragent_id=counteragent["id"],
+            account_id=req_data["account_id"],
+            items=group_items,
+            containers=containers,
+            comment=comment,
+        )
+
+        try:
+            result_text = await inv_uc.send_outgoing_invoice_document(document)
+        except Exception as exc:
+            logger.exception("[request] Ошибка отправки накладной #%d (store=%s)", pk, group_store_id)
+            result_text = f"❌ Ошибка: {exc}"
+
+        store_label = target_store_name or source_store_name or group_store_id
+        all_results.append(f"{store_label}: {result_text}")
+        if result_text.startswith("✅"):
+            any_success = True
+
+    # Если хотя бы одна успешна — помечаем заявку approved
+    if any_success:
         await req_uc.approve_request(pk, callback.from_user.id)
 
         # Уведомить создателя
@@ -901,7 +917,7 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
             logger.warning("[request] Не удалось уведомить создателя tg:%d: %s",
                            req_data["requester_tg"], exc)
 
-        # Генерация и отправка PDF-документа (получателю + создателю)
+        # Генерация PDF
         try:
             pdf_bytes = pdf_uc.generate_invoice_pdf(
                 items=items,
@@ -919,13 +935,11 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
                 store_name=req_data.get("store_name", ""),
             )
             pdf_file = BufferedInputFile(pdf_bytes, filename=filename)
-            # PDF получателю (кто одобрил)
             await callback.bot.send_document(
                 callback.message.chat.id,
                 pdf_file,
                 caption="📄 Расходная накладная (2 копии)",
             )
-            # PDF создателю заявки
             try:
                 pdf_file2 = BufferedInputFile(pdf_bytes, filename=filename)
                 await callback.bot.send_document(
@@ -941,12 +955,12 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
         except Exception:
             logger.exception("[request] Ошибка генерации PDF для заявки #%d", pk)
 
-    # Обновить сообщение у получателя
+    # Итоговый текст
+    combined_result = "\n".join(all_results) if len(store_groups) > 1 else all_results[0] if all_results else "?"
     updated_req = await req_uc.get_request_by_pk(pk)
     text = req_uc.format_request_text(updated_req or req_data)
-    text += f"\n\n{result_text}"
-    # При ошибке — сохраняем кнопки для повторной попытки
-    kb = _approve_kb(pk) if not result_text.startswith("✅") else None
+    text += f"\n\n{combined_result}"
+    kb = _approve_kb(pk) if not any_success else None
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception:
@@ -1283,9 +1297,10 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
     ctx = await uctx.get_user_context(callback.from_user.id)
     user_dept_id = ctx.department_id if ctx else req_data["department_id"]
 
-    store_map, user_store_map = await asyncio.gather(
+    store_map, user_store_map, settings_stores = await asyncio.gather(
         inv_uc.get_product_store_map([it.get("product_id", "") for it in items]),
         req_uc.build_store_type_map(user_dept_id),
+        req_uc.get_request_stores(),
     )
 
     # Обогащаем items текущими данными о складах + авто-матч целевых
@@ -1301,6 +1316,8 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
 
     account = await inv_uc.get_revenue_account()
 
+    settings_dept_name = settings_stores[0]["name"] if settings_stores else ""
+
     await state.clear()
     await state.update_data(
         _dup_source_pk=pk,
@@ -1311,13 +1328,17 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
         account_name=account["name"] if account else req_data["account_name"],
         _dup_items=items,
         _user_store_map=user_store_map,
+        _settings_dept_name=settings_dept_name,
     )
 
     # Показать позиции с текущими количествами
     dept_name = ctx.department_name if ctx else req_data.get("department_name", "?")
+    header = f"📤 <b>{dept_name}</b>"
+    if settings_dept_name:
+        header += f" → 📥 <b>{settings_dept_name}</b>"
     text = (
         f"🔄 <b>Повторение заявки #{pk}</b>\n"
-        f"🏨 {dept_name}\n\n"
+        f"{header}\n\n"
         f"<b>Позиции ({len(items)}):</b>\n"
     )
     for i, it in enumerate(items, 1):
@@ -1444,7 +1465,8 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
 
     source_pk = data.get("_dup_source_pk", "?")
     dept_name = data.get("department_name", "?")
-    summary = _items_summary(new_items, dept_name)
+    settings_dept = data.get("_settings_dept_name", "")
+    summary = _items_summary(new_items, dept_name, settings_dept)
     text = f"📝 <b>Новая заявка (на основе #{source_pk})</b>\n\n{summary}"
     text += "\n\n<i>Проверьте и отправьте заявку.</i>"
 
@@ -1515,8 +1537,8 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.message.edit_text(
                 f"❌ У {len(no_store)} товаров не назначен склад в прайс-листе:\n"
                 f"{names}\n\n"
-                "Откройте Прайс-лист → столбец «Склад» → укажите склад "
-                "для каждого товара → запустите синхронизацию прайс-листа.",
+                "Выберите другие товары и обратитесь к администратору "
+                "для указания склада этим товарам.",
                 parse_mode="HTML",
             )
         except Exception:
@@ -1528,68 +1550,77 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
 
     source_pk = data.get("_dup_source_pk", "?")
 
-    # Группируем товары по ЦЕЛЕВОМУ складу
-    from collections import OrderedDict
-    store_groups: dict[str, list[dict]] = OrderedDict()
+    # ── Определяем контрагента (по первому целевому складу) ──
+    first_target_name = ""
+    first_source_id = ""
+    first_source_name = ""
     for it in items:
-        sid = it.get("target_store_id") or it.get("store_id", "")
-        if sid not in store_groups:
-            store_groups[sid] = []
-        store_groups[sid].append(it)
+        if it.get("target_store_name"):
+            first_target_name = it["target_store_name"]
+            first_source_id = it.get("store_id", "")
+            first_source_name = it.get("store_name", "")
+            break
+    if not first_source_id:
+        first_source_id = items[0].get("store_id", "")
+        first_source_name = items[0].get("store_name", "?")
 
-    # Создаём одну заявку на каждый целевой склад
-    all_pks: list[int] = []
-    for target_store_id, store_items in store_groups.items():
-        source_store_id = store_items[0].get("store_id", "")
-        source_store_name = store_items[0].get("store_name", "?")
-        target_store_name = store_items[0].get("target_store_name", "?")
-        total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in store_items)
-
-        # Авто-определение контрагента
-        counteragent = await req_uc.find_counteragent_for_store(target_store_name)
-        if not counteragent:
-            counteragent = await req_uc.find_counteragent_for_store(source_store_name)
-        if not counteragent:
-            logger.warning(
-                "[request] Контрагент не найден для склада '%s' в дубле, tg:%d",
-                target_store_name, callback.from_user.id,
-            )
-            try:
-                await callback.message.edit_text(
-                    f"❌ Не удалось определить контрагента для склада "
-                    f"«{target_store_name}».\n\n"
-                    "Проверьте, что склады зарегистрированы как контрагенты в iiko.",
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-            await state.clear()
-            await restore_menu_kb(callback.bot, callback.message.chat.id, state,
-                                  "📋 Заявки:", requests_keyboard())
-            return
-
-        pk = await req_uc.create_request(
-            requester_tg=callback.from_user.id,
-            requester_name=data.get("requester_name", "?"),
-            department_id=data["department_id"],
-            department_name=data.get("department_name", "?"),
-            store_id=source_store_id,
-            store_name=source_store_name,
-            counteragent_id=counteragent["id"],
-            counteragent_name=counteragent["name"],
-            account_id=data["account_id"],
-            account_name=data.get("account_name", "?"),
-            items=store_items,
-            total_sum=total_sum,
+    counteragent = await req_uc.find_counteragent_for_store(first_target_name) if first_target_name else None
+    if not counteragent:
+        counteragent = await req_uc.find_counteragent_for_store(first_source_name)
+    if not counteragent:
+        logger.warning(
+            "[request] Контрагент не найден для '%s' в дубле, tg:%d",
+            first_target_name or first_source_name, callback.from_user.id,
         )
-        all_pks.append(pk)
+        try:
+            await callback.message.edit_text(
+                "❌ Не удалось определить контрагента.\n\n"
+                "Проверьте, что склады зарегистрированы как контрагенты в iiko.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        await state.clear()
+        await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                              "📋 Заявки:", requests_keyboard())
+        return
 
+    total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in items)
+
+    # ── Одна заявка со всеми позициями ──
+    pk = await req_uc.create_request(
+        requester_tg=callback.from_user.id,
+        requester_name=data.get("requester_name", "?"),
+        department_id=data["department_id"],
+        department_name=data.get("department_name", "?"),
+        store_id=first_source_id,
+        store_name=first_source_name,
+        counteragent_id=counteragent["id"],
+        counteragent_name=counteragent["name"],
+        account_id=data["account_id"],
+        account_name=data.get("account_name", "?"),
+        items=items,
+        total_sum=total_sum,
+    )
+
+    logger.info("[request] Дубль #%s → новая #%d, items=%d, tg:%d",
+                source_pk, pk, len(items), callback.from_user.id)
+
+    # ── Формируем текст ──
+    req_data = await req_uc.get_request_by_pk(pk)
+    settings_stores = await req_uc.get_request_stores()
+    settings_dept = settings_stores[0]["name"] if settings_stores else ""
+    text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+    text += f"\n\n🔄 <i>На основе заявки #{source_pk}</i>"
+
+    # ── Уведомления: админам → с кнопками, получателям → информативное ──
+    admin_ids = await admin_uc.get_admin_ids()
     receiver_ids = await req_uc.get_receiver_ids()
+    receiver_only = [tg for tg in receiver_ids if tg not in set(admin_ids)]
 
-    if not receiver_ids:
-        pk_list = ", ".join(f"#{pk}" for pk in all_pks)
+    if not admin_ids and not receiver_only:
         await callback.message.edit_text(
-            f"✅ Заявки {pk_list} сохранены (дубль #{source_pk}), но нет получателей.\n"
+            f"✅ Заявка #{pk} сохранена (дубль #{source_pk}), но нет получателей.\n"
             "Попросите администратора добавить получателей заявок."
         )
         await state.clear()
@@ -1598,33 +1629,32 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
     total_sent = 0
-    for pk in all_pks:
-        req_data = await req_uc.get_request_by_pk(pk)
-        text = req_uc.format_request_text(req_data)
-        text += f"\n\n🔄 <i>На основе заявки #{source_pk}</i>"
-        for tg_id in receiver_ids:
-            try:
-                await callback.bot.send_message(
-                    tg_id, text,
-                    parse_mode="HTML",
-                    reply_markup=_approve_kb(pk),
-                )
-                total_sent += 1
-            except Exception as exc:
-                logger.warning("[request] Не удалось уведомить tg:%d: %s", tg_id, exc)
+    for tg_id in admin_ids:
+        try:
+            await callback.bot.send_message(
+                tg_id, text, parse_mode="HTML",
+                reply_markup=_approve_kb(pk),
+            )
+            total_sent += 1
+        except Exception as exc:
+            logger.warning("[request] Не удалось уведомить админа tg:%d: %s", tg_id, exc)
+
+    info_text = text + "\n\n<i>ℹ️ Информационное уведомление</i>"
+    for tg_id in receiver_only:
+        try:
+            await callback.bot.send_message(tg_id, info_text, parse_mode="HTML")
+            total_sent += 1
+        except Exception as exc:
+            logger.warning("[request] Не удалось уведомить получателя tg:%d: %s", tg_id, exc)
 
     logger.info(
-        "[request] Дубль заявки #%s → новые %s, отправлены %d получателям",
-        source_pk, all_pks, len(receiver_ids),
+        "[request] Дубль #%s → #%d, admin=%d, receiver=%d, sent=%d",
+        source_pk, pk, len(admin_ids), len(receiver_only), total_sent,
     )
 
-    pk_list = ", ".join(f"#{pk}" for pk in all_pks)
-    if len(all_pks) == 1:
-        msg = f"✅ Заявка {pk_list} (дубль #{source_pk}) отправлена получателям!\nОжидайте подтверждения."
-    else:
-        msg = f"✅ {len(all_pks)} заявки ({pk_list}, дубль #{source_pk}) отправлены получателям!\nОжидайте подтверждения."
-
-    await callback.message.edit_text(msg)
+    await callback.message.edit_text(
+        f"✅ Заявка #{pk} (дубль #{source_pk}) отправлена!\nОжидайте подтверждения."
+    )
     await state.clear()
     await restore_menu_kb(callback.bot, callback.message.chat.id, state,
                           "📋 Заявки:", requests_keyboard())
@@ -1648,18 +1678,30 @@ async def view_pending_requests(message: Message) -> None:
 
     logger.info("[request] Просмотр входящих заявок tg:%d", message.from_user.id)
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    pending = await req_uc.get_pending_requests_full()
+
+    pending, settings_stores = await asyncio.gather(
+        req_uc.get_pending_requests_full(),
+        req_uc.get_request_stores(),
+    )
+    settings_dept = settings_stores[0]["name"] if settings_stores else ""
 
     if not pending:
         await message.answer("📬 Нет ожидающих заявок.")
         return
 
     for req_data in pending[:10]:
-        text = req_uc.format_request_text(req_data)
-        await message.answer(
-            text, parse_mode="HTML",
-            reply_markup=_approve_kb(req_data["pk"]),
-        )
+        text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+        # Админы — кнопки управления, остальные — информативное
+        if is_adm:
+            await message.answer(
+                text, parse_mode="HTML",
+                reply_markup=_approve_kb(req_data["pk"]),
+            )
+        else:
+            await message.answer(
+                text + "\n\n<i>ℹ️ Информационное уведомление</i>",
+                parse_mode="HTML",
+            )
 
 
 # DEPRECATED: Управление получателями перенесено в Google Таблицу

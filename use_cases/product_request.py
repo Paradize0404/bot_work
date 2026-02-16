@@ -434,19 +434,22 @@ async def update_request_items(pk: int, items: list[dict], total_sum: float) -> 
     return True
 
 
-def format_request_text(req: dict) -> str:
-    """HTML-текст заявки для отображения."""
+def format_request_text(req: dict, settings_dept_name: str = "") -> str:
+    """HTML-текст заявки для отображения (плоский список, без деления по складам)."""
     items = req.get("items", [])
     created = req.get("created_at")
     date_str = created.strftime("%d.%m.%Y %H:%M") if created else "?"
+
+    dept_name = req.get('department_name', '?')
+    header = f"📤 {dept_name}"
+    if settings_dept_name:
+        header += f" → 📥 {settings_dept_name}"
 
     text = (
         f"📝 <b>Заявка #{req['pk']}</b>\n"
         f"📅 {date_str}\n"
         f"👤 {req.get('requester_name', '?')}\n"
-        f"🏨 {req.get('department_name', '?')}\n"
-        f"🏬 {req.get('store_name', '?')}\n"
-        f"🏢 {req.get('counteragent_name', '?')}\n\n"
+        f"{header}\n\n"
         f"<b>Позиции ({len(items)}):</b>\n"
     )
     for i, item in enumerate(items, 1):
