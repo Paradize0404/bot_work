@@ -4,10 +4,10 @@ Telegram-хэндлеры: заявки на товары + управление
 Три FSM-потока:
 
 A) Создание заявки (любой авторизованный сотрудник):
-  1. 🏬 Выбор склада
-  2. 🏢 Выбор поставщика из прайс-листа
-  3. 🔍 Поиск товаров по названию → добавление по одному с вводом количества
-  4. ✅ Подтверждение → сохранение в БД + уведомление получателям
+  1. � Выбор поставщика из прайс-листа
+  2. 🔍 Поиск товаров по названию → добавление по одному с вводом количества
+  3. ✅ Подтверждение → авто-группировка по складам (из прайс-листа) →
+     создание N заявок (одна на каждый склад) → уведомление получателям
 
 B) Просмотр / одобрение / редактирование заявки (получатели):
   - «✅ Отправить» → расходная накладная в iiko
@@ -59,7 +59,6 @@ _approve_lock: set[int] = set()
 # ══════════════════════════════════════════════════════
 
 class CreateRequestStates(StatesGroup):
-    store = State()
     supplier_choose = State()
     add_items = State()          # поиск товаров по названию
     enter_item_qty = State()     # ввод количества для выбранного товара
@@ -78,15 +77,6 @@ class DuplicateRequestStates(StatesGroup):
 # ══════════════════════════════════════════════════════
 #  Клавиатуры
 # ══════════════════════════════════════════════════════
-
-def _stores_kb(stores: list[dict]) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text=s["name"], callback_data=f"req_store:{s['id']}")]
-        for s in stores
-    ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
 
 def _suppliers_kb(suppliers: list[dict]) -> InlineKeyboardMarkup:
     buttons = [
@@ -228,23 +218,36 @@ async def _send_prompt(
 #  Хелпер: текст сводки добавленных позиций
 # ══════════════════════════════════════════════════════
 
-def _items_summary(items: list[dict], store_name: str, sup_name: str) -> str:
-    """Формирует текст сводки добавленных товаров."""
-    text = (
-        f"🏬 <b>{store_name}</b>  ·  🏢 <b>{sup_name}</b>\n\n"
-        f"<b>Позиции ({len(items)}):</b>\n"
-    )
+def _items_summary(items: list[dict], sup_name: str) -> str:
+    """Формирует текст сводки добавленных товаров, сгруппированных по складу."""
+    from collections import OrderedDict
+
+    groups: dict[str, list[dict]] = OrderedDict()
+    for it in items:
+        store_key = it.get("store_name") or "⚠️ Склад не назначен"
+        if store_key not in groups:
+            groups[store_key] = []
+        groups[store_key].append(it)
+
+    text = f"🏢 <b>{sup_name}</b>\n\n"
     total = 0.0
-    for i, it in enumerate(items, 1):
-        qty_display = it.get("qty_display", "")
-        name = it["name"]
-        price = it.get("price", 0)
-        amount = it.get("amount", 0)
-        line_sum = amount * price
-        total += line_sum
-        price_str = f" × {price:.2f}₽ = {line_sum:.2f}₽" if price else ""
-        text += f"  {i}. {name}  ×  {qty_display}{price_str}\n"
-    text += f"\n<b>Итого: {total:.2f}₽</b>"
+    item_num = 0
+
+    for store_label, store_items in groups.items():
+        text += f"🏦 <b>{store_label}:</b>\n"
+        for it in store_items:
+            item_num += 1
+            qty_display = it.get("qty_display", "")
+            name = it["name"]
+            price = it.get("price", 0)
+            amount = it.get("amount", 0)
+            line_sum = amount * price
+            total += line_sum
+            price_str = f" × {price:.2f}₽ = {line_sum:.2f}₽" if price else ""
+            text += f"  {item_num}. {name}  ×  {qty_display}{price_str}\n"
+        text += "\n"
+
+    text += f"<b>Итого: {total:.2f}₽</b>"
     return text
 
 
@@ -272,19 +275,11 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
     )
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    stores, account, price_suppliers = await asyncio.gather(
-        req_uc.get_request_stores(),
+    account, price_suppliers = await asyncio.gather(
         inv_uc.get_revenue_account(),
         inv_uc.get_price_list_suppliers(),
     )
 
-    if not stores:
-        await message.answer(
-            "❌ Нет настроенных складов для заявок.\n\n"
-            "Откройте Google Таблицу → лист «Настройки» → "
-            "раздел «Склады для заявок» и отметьте ✅ нужные склады."
-        )
-        return
     if not account:
         await message.answer("❌ Счёт реализации не найден.")
         return
@@ -298,48 +293,17 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
         requester_name=ctx.employee_name,
         account_id=account["id"],
         account_name=account["name"],
-        _stores_cache=stores,
         _suppliers_cache=price_suppliers,
         items=[],
     )
 
-    await state.set_state(CreateRequestStates.store)
-    await _send_prompt(message.bot, message.chat.id, state,
-        "🏬 Выберите склад:", reply_markup=_stores_kb(stores))
-
-
-# ── 1. Выбор склада ──
-
-@router.callback_query(CreateRequestStates.store, F.data.startswith("req_store:"))
-async def choose_store(callback: CallbackQuery, state: FSMContext) -> None:
-    await callback.answer()
-    store_id = callback.data.split(":", 1)[1]
-    try:
-        UUID(store_id)
-    except ValueError:
-        await callback.answer("❌ Ошибка данных", show_alert=True)
-        return
-
-    data = await state.get_data()
-    stores = data.get("_stores_cache", [])
-    store = next((s for s in stores if s["id"] == store_id), None)
-    if not store:
-        await callback.answer("❌ Склад не найден", show_alert=True)
-        return
-
-    logger.info("[request] Выбран склад: %s tg:%d", store["name"], callback.from_user.id)
-    await state.update_data(store_id=store_id, store_name=store["name"])
-
-    suppliers = data.get("_suppliers_cache", [])
     await state.set_state(CreateRequestStates.supplier_choose)
-    await callback.message.edit_text(
-        f"🏬 Склад: <b>{store['name']}</b>\n\n🏢 Выберите поставщика:",
-        reply_markup=_suppliers_kb(suppliers),
-        parse_mode="HTML",
-    )
+    await _send_prompt(message.bot, message.chat.id, state,
+        f"🏨 <b>{ctx.department_name}</b>\n\n🏢 Выберите поставщика:",
+        reply_markup=_suppliers_kb(price_suppliers))
 
 
-# ── 2. Выбор поставщика → переход к поиску товаров ──
+# ── 1. Выбор поставщика → переход к поиску товаров ──
 
 @router.callback_query(CreateRequestStates.supplier_choose, F.data.startswith("req_sup:"))
 async def choose_supplier(callback: CallbackQuery, state: FSMContext) -> None:
@@ -370,10 +334,10 @@ async def choose_supplier(callback: CallbackQuery, state: FSMContext) -> None:
         _supplier_prices=supplier_prices,
     )
 
-    # Переход к поиску товаров (как при создании шаблона)
+    # Переход к поиску товаров
     await state.set_state(CreateRequestStates.add_items)
     await callback.message.edit_text(
-        f"🏬 <b>{data.get('store_name')}</b>  ·  🏢 <b>{supplier['name']}</b>\n\n"
+        f"🏨 <b>{data.get('department_name')}</b>  ·  🏢 <b>{supplier['name']}</b>\n\n"
         "🔍 Введите название товара для поиска:",
         parse_mode="HTML",
     )
@@ -553,18 +517,20 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
         "sell_price": price,
         "qty_display": qty_display,
         "raw_qty": qty,
+        "store_id": product.get("store_id", ""),
+        "store_name": product.get("store_name", ""),
     })
     await state.update_data(items=items, _selected_product=None)
 
     logger.info(
-        "[request] Добавлен товар #%d: «%s» qty=%s, price=%.2f, tg:%d",
-        len(items), product["name"], qty_display, price, message.from_user.id,
+        "[request] Добавлен товар #%d: «%s» qty=%s, price=%.2f, store=%s, tg:%d",
+        len(items), product["name"], qty_display, price,
+        product.get("store_name", "?"), message.from_user.id,
     )
 
     # Показываем сводку + предлагаем добавить ещё
-    store_name = data.get("store_name", "?")
     sup_name = data.get("counteragent_name", "?")
-    summary = _items_summary(items, store_name, sup_name)
+    summary = _items_summary(items, sup_name)
 
     await state.set_state(CreateRequestStates.add_items)
     await _send_prompt(message.bot, message.chat.id, state,
@@ -588,16 +554,15 @@ async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
     removed = items.pop()
     await state.update_data(items=items)
 
-    store_name = data.get("store_name", "?")
     sup_name = data.get("counteragent_name", "?")
 
     if items:
-        summary = _items_summary(items, store_name, sup_name)
+        summary = _items_summary(items, sup_name)
         text = f"🗑 Удалено: {removed['name']}\n\n{summary}\n\n🔍 Введите название товара:"
     else:
         text = (
             f"🗑 Удалено: {removed['name']}\n\n"
-            f"🏬 <b>{store_name}</b>  ·  🏢 <b>{sup_name}</b>\n\n"
+            f"🏢 <b>{sup_name}</b>\n\n"
             "🔍 Введите название товара для поиска:"
         )
 
@@ -621,14 +586,36 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("⚠️ Добавьте хотя бы одну позицию", show_alert=True)
         return
 
-    store_name = data.get("store_name", "?")
+    # Проверяем, у всех ли товаров назначен склад
+    no_store = [it for it in items if not it.get("store_id")]
+    if no_store:
+        names = "\n".join(f"  • {it['name']}" for it in no_store[:10])
+        try:
+            await callback.message.edit_text(
+                f"❌ У {len(no_store)} товаров не назначен склад в прайс-листе:\n"
+                f"{names}\n\n"
+                "Откройте Прайс-лист → столбец «Склад» → укажите склад "
+                "для каждого товара → запустите синхронизацию прайс-листа.",
+                parse_mode="HTML",
+                reply_markup=_req_add_more_kb(len(items)),
+            )
+        except Exception:
+            pass
+        return
+
     sup_name = data.get("counteragent_name", "?")
-    summary = _items_summary(items, store_name, sup_name)
+    summary = _items_summary(items, sup_name)
+
+    # Кол-во складов → кол-во заявок
+    store_ids = set(it.get("store_id") for it in items)
+    multi_note = ""
+    if len(store_ids) > 1:
+        multi_note = f"\n\n📋 Будет создано <b>{len(store_ids)} заявки</b> (по одной на каждый склад)."
 
     await state.set_state(CreateRequestStates.confirm)
     try:
         await callback.message.edit_text(
-            f"📝 <b>Подтверждение заявки</b>\n\n{summary}\n\n"
+            f"📝 <b>Подтверждение заявки</b>\n\n{summary}{multi_note}\n\n"
             "<i>Проверьте и отправьте заявку получателям.</i>",
             parse_mode="HTML",
             reply_markup=_confirm_kb(),
@@ -637,7 +624,7 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
         pass
 
 
-# ── 8. Подтверждение → отправка заявки получателям ──
+# ── 8. Подтверждение → группировка по складам → отправка заявок получателям ──
 
 @router.callback_query(CreateRequestStates.confirm, F.data == "req_confirm_send")
 async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> None:
@@ -660,32 +647,49 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
         await callback.answer("❌ Нет позиций", show_alert=True)
         return
 
-    # Считаем total_sum
-    total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in items)
+    # Группируем товары по складу
+    from collections import OrderedDict
+    store_groups: dict[str, list[dict]] = OrderedDict()
+    for it in items:
+        sid = it.get("store_id", "")
+        if sid not in store_groups:
+            store_groups[sid] = []
+        store_groups[sid].append(it)
 
-    # Сохраняем заявку в БД
-    pk = await req_uc.create_request(
-        requester_tg=callback.from_user.id,
-        requester_name=data.get("requester_name", "?"),
-        department_id=data["department_id"],
-        department_name=data.get("department_name", "?"),
-        store_id=data["store_id"],
-        store_name=data.get("store_name", "?"),
-        counteragent_id=data["counteragent_id"],
-        counteragent_name=data.get("counteragent_name", "?"),
-        account_id=data["account_id"],
-        account_name=data.get("account_name", "?"),
-        items=items,
-        total_sum=total_sum,
+    # Создаём одну заявку на каждый склад
+    all_pks: list[int] = []
+    for store_id, store_items in store_groups.items():
+        store_name = store_items[0].get("store_name", "?")
+        total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in store_items)
+
+        pk = await req_uc.create_request(
+            requester_tg=callback.from_user.id,
+            requester_name=data.get("requester_name", "?"),
+            department_id=data["department_id"],
+            department_name=data.get("department_name", "?"),
+            store_id=store_id,
+            store_name=store_name,
+            counteragent_id=data["counteragent_id"],
+            counteragent_name=data.get("counteragent_name", "?"),
+            account_id=data["account_id"],
+            account_name=data.get("account_name", "?"),
+            items=store_items,
+            total_sum=total_sum,
+        )
+        all_pks.append(pk)
+
+    logger.info(
+        "[request] Создано %d заявок %s по складам, tg:%d",
+        len(all_pks), all_pks, callback.from_user.id,
     )
 
     # Уведомить получателей
     receiver_ids = await req_uc.get_receiver_ids()
-    req_data = await req_uc.get_request_by_pk(pk)
 
     if not receiver_ids:
+        pk_list = ", ".join(f"#{pk}" for pk in all_pks)
         await callback.message.edit_text(
-            f"✅ Заявка #{pk} сохранена, но нет назначенных получателей.\n"
+            f"✅ Заявки {pk_list} сохранены, но нет назначенных получателей.\n"
             "Попросите администратора добавить получателей заявок."
         )
         await state.clear()
@@ -693,30 +697,34 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
                               "📋 Заявки:", requests_keyboard())
         return
 
-    # Отправляем уведомление каждому получателю
-    sent = 0
-    text = req_uc.format_request_text(req_data)
-
-    for tg_id in receiver_ids:
-        try:
-            await callback.bot.send_message(
-                tg_id, text,
-                parse_mode="HTML",
-                reply_markup=_approve_kb(pk),
-            )
-            sent += 1
-        except Exception as exc:
-            logger.warning("[request] Не удалось уведомить tg:%d: %s", tg_id, exc)
+    # Отправляем уведомление по каждой заявке
+    total_sent = 0
+    for pk in all_pks:
+        req_data = await req_uc.get_request_by_pk(pk)
+        text = req_uc.format_request_text(req_data)
+        for tg_id in receiver_ids:
+            try:
+                await callback.bot.send_message(
+                    tg_id, text,
+                    parse_mode="HTML",
+                    reply_markup=_approve_kb(pk),
+                )
+                total_sent += 1
+            except Exception as exc:
+                logger.warning("[request] Не удалось уведомить tg:%d: %s", tg_id, exc)
 
     logger.info(
-        "[request] Заявка #%d отправлена %d/%d получателям",
-        pk, sent, len(receiver_ids),
+        "[request] Заявки %s отправлены %d получателям",
+        all_pks, len(receiver_ids),
     )
 
-    await callback.message.edit_text(
-        f"✅ Заявка #{pk} отправлена получателям ({sent}/{len(receiver_ids)})!\n"
-        f"Ожидайте подтверждения."
-    )
+    pk_list = ", ".join(f"#{pk}" for pk in all_pks)
+    if len(all_pks) == 1:
+        msg = f"✅ Заявка {pk_list} отправлена получателям!\nОжидайте подтверждения."
+    else:
+        msg = f"✅ {len(all_pks)} заявки ({pk_list}) отправлены получателям!\nОжидайте подтверждения."
+
+    await callback.message.edit_text(msg)
     await state.clear()
     await restore_menu_kb(callback.bot, callback.message.chat.id, state,
                           "📋 Заявки:", requests_keyboard())
@@ -726,7 +734,6 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
 #  Защита: текст в inline-состояниях
 # ══════════════════════════════════════════════════════
 
-@router.message(CreateRequestStates.store)
 @router.message(CreateRequestStates.supplier_choose)
 @router.message(CreateRequestStates.confirm)
 @router.message(DuplicateRequestStates.confirm)
@@ -1208,9 +1215,19 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer("⚠️ В этой заявке нет позиций", show_alert=True)
         return
 
-    # Проверяем/обновляем цены поставщика
+    # Обновляем цены поставщика + склады из текущего прайс-листа
     await callback.bot.send_chat_action(callback.message.chat.id, ChatAction.TYPING)
-    supplier_prices = await inv_uc.get_supplier_prices(req_data["counteragent_id"])
+    supplier_prices, store_map = await asyncio.gather(
+        inv_uc.get_supplier_prices(req_data["counteragent_id"]),
+        inv_uc.get_product_store_map([it.get("product_id", "") for it in items]),
+    )
+
+    # Обогащаем items текущими данными о складах
+    for it in items:
+        pid = it.get("product_id", "")
+        if pid in store_map:
+            it["store_id"] = store_map[pid]["store_id"]
+            it["store_name"] = store_map[pid]["store_name"]
 
     ctx = await uctx.get_user_context(callback.from_user.id)
     account = await inv_uc.get_revenue_account()
@@ -1218,11 +1235,9 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
     await state.clear()
     await state.update_data(
         _dup_source_pk=pk,
-        department_id=req_data["department_id"],
-        department_name=req_data["department_name"],
+        department_id=ctx.department_id if ctx else req_data["department_id"],
+        department_name=ctx.department_name if ctx else req_data["department_name"],
         requester_name=ctx.employee_name if ctx else req_data.get("requester_name", "?"),
-        store_id=req_data["store_id"],
-        store_name=req_data["store_name"],
         counteragent_id=req_data["counteragent_id"],
         counteragent_name=req_data["counteragent_name"],
         account_id=account["id"] if account else req_data["account_id"],
@@ -1234,7 +1249,7 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
     # Показать позиции с текущими количествами
     text = (
         f"🔄 <b>Повторение заявки #{pk}</b>\n"
-        f"🏬 {req_data['store_name']}  ·  🏢 {req_data['counteragent_name']}\n\n"
+        f" {req_data['counteragent_name']}\n\n"
         f"<b>Позиции ({len(items)}):</b>\n"
     )
     for i, it in enumerate(items, 1):
@@ -1316,11 +1331,6 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
 
     new_items: list[dict] = []
     total_sum = 0.0
-    text = (
-        f"📝 <b>Новая заявка (на основе #{data.get('_dup_source_pk', '?')})</b>\n"
-        f"🏬 {data.get('store_name')}\n"
-        f"🏢 {data.get('counteragent_name')}\n\n"
-    )
     for i, (it, qty) in enumerate(zip(items, quantities), 1):
         if qty <= 0:
             continue
@@ -1343,11 +1353,6 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
         line_sum = converted * price
         total_sum += line_sum
 
-        text += f"  {i}. {it.get('name', '?')} × {qty_display}"
-        if price:
-            text += f" × {price:.2f}₽ = {line_sum:.2f}₽"
-        text += "\n"
-
         new_items.append({
             "product_id": it.get("product_id"),
             "name": it.get("name", "?"),
@@ -1358,6 +1363,8 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
             "sell_price": price,
             "qty_display": qty_display,
             "raw_qty": qty,
+            "store_id": it.get("store_id", ""),
+            "store_name": it.get("store_name", ""),
         })
 
     if not new_items:
@@ -1365,7 +1372,10 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
             "⚠️ Все позиции с количеством 0. Введите заново.")
         return
 
-    text += f"\n<b>Итого: {total_sum:.2f}₽</b>"
+    source_pk = data.get("_dup_source_pk", "?")
+    sup_name = data.get("counteragent_name", "?")
+    summary = _items_summary(new_items, sup_name)
+    text = f"📝 <b>Новая заявка (на основе #{source_pk})</b>\n\n{summary}"
     text += "\n\n<i>Проверьте и отправьте заявку.</i>"
 
     await state.update_data(
@@ -1417,29 +1427,45 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("❌ Нет позиций", show_alert=True)
         return
 
-    total_sum = data.get("_total_sum", 0)
+    source_pk = data.get("_dup_source_pk", "?")
 
-    pk = await req_uc.create_request(
-        requester_tg=callback.from_user.id,
-        requester_name=data.get("requester_name", "?"),
-        department_id=data["department_id"],
-        department_name=data.get("department_name", "?"),
-        store_id=data["store_id"],
-        store_name=data.get("store_name", "?"),
-        counteragent_id=data["counteragent_id"],
-        counteragent_name=data.get("counteragent_name", "?"),
-        account_id=data["account_id"],
-        account_name=data.get("account_name", "?"),
-        items=items,
-        total_sum=total_sum,
-    )
+    # Группируем товары по складу
+    from collections import OrderedDict
+    store_groups: dict[str, list[dict]] = OrderedDict()
+    for it in items:
+        sid = it.get("store_id", "")
+        if sid not in store_groups:
+            store_groups[sid] = []
+        store_groups[sid].append(it)
+
+    # Создаём одну заявку на каждый склад
+    all_pks: list[int] = []
+    for store_id, store_items in store_groups.items():
+        store_name = store_items[0].get("store_name", "?")
+        total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in store_items)
+
+        pk = await req_uc.create_request(
+            requester_tg=callback.from_user.id,
+            requester_name=data.get("requester_name", "?"),
+            department_id=data["department_id"],
+            department_name=data.get("department_name", "?"),
+            store_id=store_id,
+            store_name=store_name,
+            counteragent_id=data["counteragent_id"],
+            counteragent_name=data.get("counteragent_name", "?"),
+            account_id=data["account_id"],
+            account_name=data.get("account_name", "?"),
+            items=store_items,
+            total_sum=total_sum,
+        )
+        all_pks.append(pk)
 
     receiver_ids = await req_uc.get_receiver_ids()
-    req_data = await req_uc.get_request_by_pk(pk)
 
     if not receiver_ids:
+        pk_list = ", ".join(f"#{pk}" for pk in all_pks)
         await callback.message.edit_text(
-            f"✅ Заявка #{pk} сохранена, но нет назначенных получателей.\n"
+            f"✅ Заявки {pk_list} сохранены (дубль #{source_pk}), но нет получателей.\n"
             "Попросите администратора добавить получателей заявок."
         )
         await state.clear()
@@ -1447,30 +1473,34 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
                               "📋 Заявки:", requests_keyboard())
         return
 
-    sent = 0
-    text = req_uc.format_request_text(req_data)
-    source_pk = data.get("_dup_source_pk", "?")
-    text += f"\n\n🔄 <i>На основе заявки #{source_pk}</i>"
-    for tg_id in receiver_ids:
-        try:
-            await callback.bot.send_message(
-                tg_id, text,
-                parse_mode="HTML",
-                reply_markup=_approve_kb(pk),
-            )
-            sent += 1
-        except Exception as exc:
-            logger.warning("[request] Не удалось уведомить tg:%d: %s", tg_id, exc)
+    total_sent = 0
+    for pk in all_pks:
+        req_data = await req_uc.get_request_by_pk(pk)
+        text = req_uc.format_request_text(req_data)
+        text += f"\n\n🔄 <i>На основе заявки #{source_pk}</i>"
+        for tg_id in receiver_ids:
+            try:
+                await callback.bot.send_message(
+                    tg_id, text,
+                    parse_mode="HTML",
+                    reply_markup=_approve_kb(pk),
+                )
+                total_sent += 1
+            except Exception as exc:
+                logger.warning("[request] Не удалось уведомить tg:%d: %s", tg_id, exc)
 
     logger.info(
-        "[request] Дубль заявки #%s → новая #%d, отправлена %d/%d получателям",
-        source_pk, pk, sent, len(receiver_ids),
+        "[request] Дубль заявки #%s → новые %s, отправлены %d получателям",
+        source_pk, all_pks, len(receiver_ids),
     )
 
-    await callback.message.edit_text(
-        f"✅ Заявка #{pk} (дубль #{source_pk}) отправлена получателям ({sent}/{len(receiver_ids)})!\n"
-        f"Ожидайте подтверждения."
-    )
+    pk_list = ", ".join(f"#{pk}" for pk in all_pks)
+    if len(all_pks) == 1:
+        msg = f"✅ Заявка {pk_list} (дубль #{source_pk}) отправлена получателям!\nОжидайте подтверждения."
+    else:
+        msg = f"✅ {len(all_pks)} заявки ({pk_list}, дубль #{source_pk}) отправлены получателям!\nОжидайте подтверждения."
+
+    await callback.message.edit_text(msg)
     await state.clear()
     await restore_menu_kb(callback.bot, callback.message.chat.id, state,
                           "📋 Заявки:", requests_keyboard())

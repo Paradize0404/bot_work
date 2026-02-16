@@ -848,6 +848,8 @@ async def search_price_products(query: str, limit: int = 15) -> list[dict]:
             "unit_name": r.unit_name or "шт",
             "main_unit": str(r.main_unit) if r.main_unit else None,
             "product_type": r.product_type or "",
+            "store_id": str(r.store_id) if r.store_id else "",
+            "store_name": r.store_name or "",
         }
         for r in rows
     ]
@@ -865,6 +867,34 @@ async def get_supplier_prices(supplier_id: str) -> dict[str, float]:
         )
         rows = (await session.execute(stmt)).all()
     return {str(r.product_id): float(r.price) for r in rows}
+
+
+async def get_product_store_map(product_ids: list[str]) -> dict[str, dict[str, str]]:
+    """
+    Получить назначения складов для товаров из прайс-листа.
+    Возвращает {product_id: {store_id, store_name}}.
+    """
+    if not product_ids:
+        return {}
+    uuids = []
+    for pid in product_ids:
+        try:
+            uuids.append(UUID(pid))
+        except (ValueError, AttributeError):
+            continue
+    if not uuids:
+        return {}
+    async with async_session_factory() as session:
+        stmt = (
+            select(PriceProduct.product_id, PriceProduct.store_id, PriceProduct.store_name)
+            .where(PriceProduct.product_id.in_(uuids))
+            .where(PriceProduct.store_id.isnot(None))
+        )
+        rows = (await session.execute(stmt)).all()
+    return {
+        str(r.product_id): {"store_id": str(r.store_id), "store_name": r.store_name or ""}
+        for r in rows
+    }
 
 
 async def get_product_price_for_supplier(
