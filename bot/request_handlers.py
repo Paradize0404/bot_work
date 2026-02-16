@@ -54,8 +54,27 @@ router = Router(name="request_handlers")
 
 MAX_ITEMS = 50
 
-# Double-click / race condition защита при одобрении заявок
-_approve_lock: set[int] = set()
+# ── Блокировки заявок (как в списаниях) ──
+# pk → (admin_tg_id, admin_name) — кто сейчас обрабатывает
+_request_locks: dict[int, tuple[int, str]] = {}
+# pk → {admin_tg_id: message_id} — сообщения с кнопками у админов
+_request_admin_msgs: dict[int, dict[int, int]] = {}
+
+
+def _try_lock_request(pk: int, admin_tg: int, admin_name: str) -> bool:
+    """Залочить заявку. True если лок получен, False если уже занята."""
+    if pk in _request_locks:
+        return False
+    _request_locks[pk] = (admin_tg, admin_name)
+    return True
+
+
+def _unlock_request(pk: int) -> None:
+    _request_locks.pop(pk, None)
+
+
+def _get_lock_owner(pk: int) -> tuple[int, str] | None:
+    return _request_locks.get(pk)
 
 
 # ══════════════════════════════════════════════════════
@@ -183,6 +202,14 @@ def _approve_kb(request_pk: int) -> InlineKeyboardMarkup:
 async def cancel_request_flow(callback: CallbackQuery, state: FSMContext) -> None:
     logger.debug("[request] Отмена флоу tg:%d", callback.from_user.id)
     await callback.answer("Отменено")
+
+    # Если отменяем редактирование — снять блокировку и вернуть кнопки
+    data = await state.get_data()
+    edit_pk = data.get("_edit_pk")
+    if edit_pk:
+        _unlock_request(edit_pk)
+        await _resend_admin_buttons(callback.bot, edit_pk)
+
     await state.clear()
     try:
         await callback.message.edit_text("❌ Заявка отменена.")
@@ -743,17 +770,22 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
         return
 
     total_sent = 0
+    admin_msg_ids: dict[int, int] = {}
 
     # Админам — полная заявка с кнопками управления
     for tg_id in admin_ids:
         try:
-            await callback.bot.send_message(
+            msg = await callback.bot.send_message(
                 tg_id, text, parse_mode="HTML",
                 reply_markup=_approve_kb(pk),
             )
+            admin_msg_ids[tg_id] = msg.message_id
             total_sent += 1
         except Exception as exc:
             logger.warning("[request] Не удалось уведомить админа tg:%d: %s", tg_id, exc)
+
+    # Сохраняем для блокировки
+    _request_admin_msgs[pk] = admin_msg_ids
 
     # Получателям — информативное (без кнопок)
     info_text = text + "\n\n<i>ℹ️ Информационное уведомление</i>"
@@ -795,6 +827,54 @@ async def _ignore_text_request(message: Message) -> None:
 #  B) ОДОБРЕНИЕ / РЕДАКТИРОВАНИЕ / ОТКЛОНЕНИЕ ЗАЯВКИ
 # ══════════════════════════════════════════════════════
 
+
+async def _update_other_admin_msgs(
+    bot: Bot, pk: int, status_text: str, except_admin: int = 0,
+) -> None:
+    """Убрать кнопки / обновить статус у всех админов кроме текущего."""
+    msgs = _request_admin_msgs.get(pk, {})
+    targets = [(tg, mid) for tg, mid in msgs.items() if tg != except_admin]
+    if not targets:
+        return
+
+    req_data = await req_uc.get_request_by_pk(pk)
+    settings_stores = await req_uc.get_request_stores()
+    settings_dept = settings_stores[0]["name"] if settings_stores else ""
+    text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+    text += f"\n\n{status_text}"
+
+    for admin_tg, msg_id in targets:
+        try:
+            await bot.edit_message_text(
+                chat_id=admin_tg, message_id=msg_id,
+                text=text, parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+
+async def _resend_admin_buttons(bot: Bot, pk: int) -> None:
+    """Переотправить кнопки всем админам (после отмены редактирования)."""
+    admin_ids = await admin_uc.get_admin_ids()
+    req_data = await req_uc.get_request_by_pk(pk)
+    if not req_data or req_data["status"] != "pending":
+        return
+    settings_stores = await req_uc.get_request_stores()
+    settings_dept = settings_stores[0]["name"] if settings_stores else ""
+    text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+    new_msgs: dict[int, int] = {}
+    for tg_id in admin_ids:
+        try:
+            msg = await bot.send_message(
+                tg_id, text, parse_mode="HTML",
+                reply_markup=_approve_kb(pk),
+            )
+            new_msgs[tg_id] = msg.message_id
+        except Exception:
+            pass
+    _request_admin_msgs[pk] = new_msgs
+
+
 # ── Одобрить → отправить в iiko ──
 
 @router.callback_query(F.data.startswith("req_approve:"))
@@ -813,16 +893,22 @@ async def approve_request(callback: CallbackQuery) -> None:
         logger.warning("[request] Попытка одобрить заявку без прав tg:%d", callback.from_user.id)
         return
 
-    # Защита от double-click / конкурентного одобрения
-    if pk in _approve_lock:
+    # Блокировка: только один админ может обрабатывать заявку
+    admin_name = callback.from_user.full_name
+    lock_owner = _get_lock_owner(pk)
+    if lock_owner:
+        owner_tg, owner_name = lock_owner
+        if owner_tg != callback.from_user.id:
+            await callback.answer(f"⏳ Заявку обрабатывает {owner_name}", show_alert=True)
+            return
+    if not _try_lock_request(pk, callback.from_user.id, admin_name):
         await callback.answer("⏳ Заявка уже обрабатывается", show_alert=True)
         return
-    _approve_lock.add(pk)
 
     try:
         await _do_approve_request(callback, pk)
     finally:
-        _approve_lock.discard(pk)
+        _unlock_request(pk)
 
 
 async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
@@ -839,17 +925,35 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
         await callback.answer(f"⚠️ Заявка уже {req_data['status']}", show_alert=True)
         return
 
+    ctx = await uctx.get_user_context(callback.from_user.id)
+    admin_name = ctx.employee_name if ctx else callback.from_user.full_name
+
     logger.info(
-        "[request] Одобрение заявки #%d tg:%d, items=%d",
-        pk, callback.from_user.id, len(req_data.get("items", [])),
+        "[request] Одобрение заявки #%d tg:%d (%s), items=%d",
+        pk, callback.from_user.id, admin_name, len(req_data.get("items", [])),
+    )
+
+    # Показать статус текущему админу
+    try:
+        settings_stores = await req_uc.get_request_stores()
+        settings_dept = settings_stores[0]["name"] if settings_stores else ""
+        status_text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+        status_text += f"\n\n⏳ Отправляется в iiko... ({admin_name})"
+        await callback.message.edit_text(status_text, parse_mode="HTML")
+    except Exception:
+        pass
+
+    # Убрать кнопки у остальных админов
+    await _update_other_admin_msgs(
+        callback.bot, pk, f"✅ Отправляет {admin_name}",
+        except_admin=callback.from_user.id,
     )
 
     items = req_data.get("items", [])
     product_ids = [it["product_id"] for it in items if it.get("product_id")]
     containers = await inv_uc.get_product_containers(product_ids)
 
-    ctx = await uctx.get_user_context(callback.from_user.id)
-    author_name = ctx.employee_name if ctx else ""
+    author_name = admin_name
     requester = req_data.get("requester_name", "?")
 
     # ── Группировка позиций по target_store_id → N накладных ──
@@ -959,12 +1063,21 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
     combined_result = "\n".join(all_results) if len(store_groups) > 1 else all_results[0] if all_results else "?"
     updated_req = await req_uc.get_request_by_pk(pk)
     text = req_uc.format_request_text(updated_req or req_data)
-    text += f"\n\n{combined_result}"
+    text += f"\n\n{combined_result}\n👤 {admin_name}"
     kb = _approve_kb(pk) if not any_success else None
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception:
         pass
+
+    # Обновить остальных админов финальным статусом
+    final_status = f"✅ Отправлена в iiko ({admin_name})" if any_success else f"❌ Ошибка отправки ({admin_name})"
+    await _update_other_admin_msgs(
+        callback.bot, pk, final_status,
+        except_admin=callback.from_user.id,
+    )
+    # Очистить трекинг сообщений
+    _request_admin_msgs.pop(pk, None)
 
 
 # ── Редактировать количества (получатель) ──
@@ -994,6 +1107,27 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
     if req_data["status"] != "pending":
         await callback.answer(f"⚠️ Заявка уже {req_data['status']}", show_alert=True)
         return
+
+    # Блокировка: только один админ может редактировать
+    ctx = await uctx.get_user_context(callback.from_user.id)
+    admin_name = ctx.employee_name if ctx else callback.from_user.full_name
+    lock_owner = _get_lock_owner(pk)
+    if lock_owner:
+        owner_tg, owner_name = lock_owner
+        if owner_tg != callback.from_user.id:
+            await callback.answer(f"⏳ Редактирует {owner_name}", show_alert=True)
+            return
+    if not _try_lock_request(pk, callback.from_user.id, admin_name):
+        await callback.answer("⏳ Заявка уже обрабатывается", show_alert=True)
+        return
+
+    logger.info("[request] Начало редактирования #%d tg:%d (%s)", pk, callback.from_user.id, admin_name)
+
+    # Убрать кнопки у остальных админов
+    await _update_other_admin_msgs(
+        callback.bot, pk, f"✏️ Редактирует {admin_name}",
+        except_admin=callback.from_user.id,
+    )
 
     items = req_data.get("items", [])
 
@@ -1116,6 +1250,9 @@ async def edit_quantities_input(message: Message, state: FSMContext) -> None:
     # Обновить заявку в БД
     await req_uc.update_request_items(pk, updated_items, total_sum)
 
+    # Снять блокировку
+    _unlock_request(pk)
+
     # Показать обновлённую заявку
     req_data = await req_uc.get_request_by_pk(pk)
     text = req_uc.format_request_text(req_data)
@@ -1125,6 +1262,9 @@ async def edit_quantities_input(message: Message, state: FSMContext) -> None:
         text, reply_markup=_approve_kb(pk),
     )
     await state.clear()
+
+    # Переотправить кнопки всем админам
+    await _resend_admin_buttons(message.bot, pk)
 
 
 # ── Отклонить заявку ──
@@ -1155,26 +1295,43 @@ async def reject_request(callback: CallbackQuery) -> None:
         await callback.answer(f"⚠️ Заявка уже {req_data['status']}", show_alert=True)
         return
 
+    # Блокировка
+    ctx = await uctx.get_user_context(callback.from_user.id)
+    admin_name = ctx.employee_name if ctx else callback.from_user.full_name
+    lock_owner = _get_lock_owner(pk)
+    if lock_owner:
+        owner_tg, owner_name = lock_owner
+        if owner_tg != callback.from_user.id:
+            await callback.answer(f"⏳ Заявку обрабатывает {owner_name}", show_alert=True)
+            return
+
     await req_uc.cancel_request(pk, callback.from_user.id)
-    logger.info("[request] Заявка #%d отклонена tg:%d", pk, callback.from_user.id)
+    logger.info("[request] Заявка #%d отклонена tg:%d (%s)", pk, callback.from_user.id, admin_name)
 
     # Уведомить создателя
-    ctx = await uctx.get_user_context(callback.from_user.id)
-    who = ctx.employee_name if ctx else "?"
     try:
         await callback.bot.send_message(
             req_data["requester_tg"],
-            f"❌ Ваша заявка #{pk} отклонена.\nОтклонил: {who}",
+            f"❌ Ваша заявка #{pk} отклонена.\nОтклонил: {admin_name}",
         )
     except Exception:
         pass
 
     updated_req = await req_uc.get_request_by_pk(pk)
     text = req_uc.format_request_text(updated_req or req_data)
+    text += f"\n\n👤 Отклонил: {admin_name}"
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:
         pass
+
+    # Обновить остальных админов
+    await _update_other_admin_msgs(
+        callback.bot, pk, f"❌ Отклонена ({admin_name})",
+        except_admin=callback.from_user.id,
+    )
+    _request_admin_msgs.pop(pk, None)
+    _unlock_request(pk)
 
 
 # ══════════════════════════════════════════════════════
@@ -1629,15 +1786,19 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
     total_sent = 0
+    admin_msg_ids: dict[int, int] = {}
     for tg_id in admin_ids:
         try:
-            await callback.bot.send_message(
+            msg = await callback.bot.send_message(
                 tg_id, text, parse_mode="HTML",
                 reply_markup=_approve_kb(pk),
             )
+            admin_msg_ids[tg_id] = msg.message_id
             total_sent += 1
         except Exception as exc:
             logger.warning("[request] Не удалось уведомить админа tg:%d: %s", tg_id, exc)
+
+    _request_admin_msgs[pk] = admin_msg_ids
 
     info_text = text + "\n\n<i>ℹ️ Информационное уведомление</i>"
     for tg_id in receiver_only:
@@ -1690,13 +1851,23 @@ async def view_pending_requests(message: Message) -> None:
         return
 
     for req_data in pending[:10]:
+        pk = req_data["pk"]
         text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
-        # Админы — кнопки управления, остальные — информативное
+
+        # Если заявка заблокирована — показать кем
+        lock_owner = _get_lock_owner(pk)
+        if lock_owner:
+            _, owner_name = lock_owner
+            text += f"\n\n⏳ Обрабатывает: {owner_name}"
+
+        # Админы — кнопки управления (если не залочена), остальные — информативное
         if is_adm:
-            await message.answer(
-                text, parse_mode="HTML",
-                reply_markup=_approve_kb(req_data["pk"]),
-            )
+            kb = _approve_kb(pk) if not lock_owner else None
+            msg = await message.answer(text, parse_mode="HTML", reply_markup=kb)
+            # Обновляем трекинг сообщений
+            if pk not in _request_admin_msgs:
+                _request_admin_msgs[pk] = {}
+            _request_admin_msgs[pk][message.from_user.id] = msg.message_id
         else:
             await message.answer(
                 text + "\n\n<i>ℹ️ Информационное уведомление</i>",
