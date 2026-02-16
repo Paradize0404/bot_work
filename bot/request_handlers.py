@@ -273,13 +273,17 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     stores, account, price_suppliers = await asyncio.gather(
-        inv_uc.get_stores_for_department(ctx.department_id),
+        req_uc.get_request_stores(),
         inv_uc.get_revenue_account(),
         inv_uc.get_price_list_suppliers(),
     )
 
     if not stores:
-        await message.answer("❌ Нет складов для вашего подразделения.")
+        await message.answer(
+            "❌ Нет настроенных складов для заявок.\n\n"
+            "Откройте Google Таблицу → лист «Настройки» → "
+            "раздел «Склады для заявок» и отметьте ✅ нужные склады."
+        )
         return
     if not account:
         await message.answer("❌ Счёт реализации не найден.")

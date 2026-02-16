@@ -1239,6 +1239,326 @@ async def sync_permissions_to_sheet(
 
 
 # ═══════════════════════════════════════════════════════
+# Склады для заявок (лист «Настройки», раздел «## Склады для заявок»)
+# ═══════════════════════════════════════════════════════
+
+
+async def sync_request_stores_to_sheet(
+    stores: list[dict[str, str]],
+) -> int:
+    """
+    Записать/обновить список складов для заявок в GSheet «Настройки».
+
+    stores: [{id, name}, ...] — все не-удалённые склады из iiko_store.
+
+    Формат раздела «## Склады для заявок»:
+      A = Склад (name)
+      B = store_uuid (скрытый)
+      C = Показывать (✅ / пусто)
+
+    Логика:
+      - Новые склады добавляются с пустым значением (❌ по умолчанию)
+      - Существующие ✅ сохраняются
+      - Удалённые из iiko — убираются
+      - Чекбокс → пользователь ставит ✅ для нужных складов
+
+    Returns: количество складов в таблице.
+    """
+    t0 = time.monotonic()
+
+    def _sync_write() -> int:
+        ws = _get_settings_worksheet()
+        all_values = ws.get_all_values()
+
+        # ── Найти существующую секцию и её данные ──
+        old_enabled: dict[str, bool] = {}  # store_uuid → enabled
+        in_section = False
+        section_start_row: int | None = None
+        section_end_row: int | None = None
+
+        for ri, row in enumerate(all_values):
+            cell_a = (row[0] if row else "").strip()
+            if cell_a == "## Склады для заявок":
+                in_section = True
+                section_start_row = ri
+                continue
+            if in_section and cell_a.startswith("##"):
+                section_end_row = ri
+                break
+            if not in_section:
+                continue
+            if cell_a in ("Склад", ""):
+                continue
+            store_id = (row[1] if len(row) > 1 else "").strip()
+            enabled_val = (row[2] if len(row) > 2 else "").strip()
+            if store_id:
+                old_enabled[store_id] = enabled_val in (
+                    "TRUE", "true", "True", "✅", "1", "да",
+                )
+
+        # ── Позиция записи (1-based) ──
+        if section_start_row is not None:
+            start_row = section_start_row + 1  # 1-based (маркер секции)
+        else:
+            # Добавляем в конец (с отступом)
+            start_row = (len(all_values) + 2) if all_values else 2
+
+        header_row = start_row + 1
+        first_data = start_row + 2
+
+        # ── Строки данных ──
+        sorted_stores = sorted(stores, key=lambda s: s.get("name", ""))
+        data_rows: list[list] = []
+        for s in sorted_stores:
+            sid = str(s["id"])
+            sname = s.get("name", "—")
+            enabled = old_enabled.get(sid, False)
+            data_rows.append([sname, sid, enabled])
+
+        last_data = first_data + len(data_rows) - 1 if data_rows else first_data
+
+        # ── Блок для записи ──
+        block: list[list] = [
+            ["## Склады для заявок", "", ""],
+            ["Склад", "", "Показывать ▼"],
+        ]
+        for dr in data_rows:
+            block.append(dr)
+        block.append(["", "", ""])  # разделитель
+
+        # ── Очистить старую секцию ──
+        if section_start_row is not None:
+            clear_end = section_end_row if section_end_row else (
+                section_start_row + len(block) + 10
+            )
+            clear_end = max(clear_end, section_start_row + len(block) + 5)
+            try:
+                ws.batch_clear([f"A{section_start_row + 1}:Z{clear_end}"])
+            except Exception:
+                pass
+
+        # ── Записать ──
+        ws.update(
+            f"A{start_row}",
+            block,
+            value_input_option="USER_ENTERED",
+        )
+
+        # ════════════════════════════════════════════════
+        #  Форматирование
+        # ════════════════════════════════════════════════
+        spreadsheet = _get_client().open_by_key(MIN_STOCK_SHEET_ID)
+        fmt_requests: list[dict] = []
+
+        # 1. Скрыть столбец B (store_uuid)
+        fmt_requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 1, "endIndex": 2,
+                },
+                "properties": {"hiddenByUser": True},
+                "fields": "hiddenByUser",
+            }
+        })
+
+        # 2. Маркер секции — жирный, 12pt
+        marker_0 = start_row - 1  # 0-based
+        fmt_requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": marker_0,
+                    "endRowIndex": marker_0 + 1,
+                    "startColumnIndex": 0, "endColumnIndex": 1,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "textFormat": {"bold": True, "fontSize": 12},
+                    }
+                },
+                "fields": "userEnteredFormat(textFormat)",
+            }
+        })
+
+        # 3. Заголовок — жирный, фон
+        hdr_0 = header_row - 1
+        fmt_requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": hdr_0,
+                    "endRowIndex": hdr_0 + 1,
+                    "startColumnIndex": 0, "endColumnIndex": 3,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": {
+                            "red": 0.82, "green": 0.88, "blue": 0.97,
+                        },
+                        "textFormat": {"bold": True, "fontSize": 10},
+                        "horizontalAlignment": "CENTER",
+                        "verticalAlignment": "MIDDLE",
+                    }
+                },
+                "fields": (
+                    "userEnteredFormat("
+                    "backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+                ),
+            }
+        })
+
+        # 4. Чекбокс в колонке C (Показывать)
+        if data_rows:
+            fd_0 = first_data - 1
+            ld_0 = first_data - 1 + len(data_rows)
+            fmt_requests.append({
+                "setDataValidation": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": fd_0,
+                        "endRowIndex": ld_0,
+                        "startColumnIndex": 2,
+                        "endColumnIndex": 3,
+                    },
+                    "rule": {
+                        "condition": {"type": "BOOLEAN"},
+                        "strict": True,
+                        "showCustomUi": True,
+                    },
+                }
+            })
+
+            # 5. Колонка C — по центру
+            fmt_requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": fd_0,
+                        "endRowIndex": ld_0,
+                        "startColumnIndex": 2,
+                        "endColumnIndex": 3,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "horizontalAlignment": "CENTER",
+                        }
+                    },
+                    "fields": "userEnteredFormat(horizontalAlignment)",
+                }
+            })
+
+            # 6. Ширина столбцов
+            fmt_requests.append({
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 0, "endIndex": 1,
+                    },
+                    "properties": {"pixelSize": 300},
+                    "fields": "pixelSize",
+                }
+            })
+            fmt_requests.append({
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 2, "endIndex": 3,
+                    },
+                    "properties": {"pixelSize": 120},
+                    "fields": "pixelSize",
+                }
+            })
+
+            # 7. Границы
+            thin_border = {
+                "style": "SOLID",
+                "width": 1,
+                "color": {"red": 0.75, "green": 0.75, "blue": 0.75},
+            }
+            fmt_requests.append({
+                "updateBorders": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": hdr_0,
+                        "endRowIndex": ld_0,
+                        "startColumnIndex": 0, "endColumnIndex": 3,
+                    },
+                    "top": thin_border,
+                    "bottom": thin_border,
+                    "left": thin_border,
+                    "right": thin_border,
+                    "innerHorizontal": thin_border,
+                    "innerVertical": thin_border,
+                }
+            })
+
+        try:
+            spreadsheet.batch_update({"requests": fmt_requests})
+        except Exception:
+            logger.warning(
+                "[%s] Ошибка форматирования секции Склады для заявок",
+                LABEL, exc_info=True,
+            )
+
+        return len(data_rows)
+
+    count = await asyncio.to_thread(_sync_write)
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "[%s] Синхронизация складов для заявок → GSheet: %d складов за %.1f сек",
+        LABEL, count, elapsed,
+    )
+    return count
+
+
+async def read_request_stores() -> list[dict[str, str]]:
+    """
+    Прочитать список складов для заявок из GSheet «Настройки».
+
+    Возвращает только склады с ✅ в колонке «Показывать»:
+      [{id: store_uuid, name: store_name}, ...]
+    """
+    t0 = time.monotonic()
+
+    def _sync_read() -> list[dict[str, str]]:
+        ws = _get_settings_worksheet()
+        all_values = ws.get_all_values()
+
+        result: list[dict[str, str]] = []
+        in_section = False
+
+        for row in all_values:
+            cell_a = (row[0] if row else "").strip()
+            if cell_a == "## Склады для заявок":
+                in_section = True
+                continue
+            if in_section and cell_a.startswith("##"):
+                break
+            if not in_section:
+                continue
+            if cell_a in ("Склад", ""):
+                continue
+            store_id = (row[1] if len(row) > 1 else "").strip()
+            enabled_val = (row[2] if len(row) > 2 else "").strip()
+            if store_id and enabled_val in ("TRUE", "true", "True", "✅", "1", "да"):
+                result.append({"id": store_id, "name": cell_a})
+
+        return result
+
+    result = await asyncio.to_thread(_sync_read)
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "[%s] Склады для заявок из GSheet: %d включённых за %.1f сек",
+        LABEL, len(result), elapsed,
+    )
+    return result
+
+
+# ═══════════════════════════════════════════════════════
 # Настройки (лист «Настройки»)
 # ═══════════════════════════════════════════════════════
 

@@ -25,6 +25,53 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════
+# Склады для заявок — настраиваемый список из GSheet
+# ═══════════════════════════════════════════════════════
+
+async def get_request_stores() -> list[dict[str, str]]:
+    """
+    Получить список складов для заявок из GSheet «Настройки».
+
+    Если в GSheet нет настроенных складов (секция пуста или все ❌),
+    возвращает пустой список — вызывающий код покажет сообщение
+    «Нет настроенных складов».
+
+    Returns: [{id, name}, ...] — только склады с ✅.
+    """
+    from adapters import google_sheets as gsheet
+    stores = await gsheet.read_request_stores()
+    logger.info("[request] Склады для заявок из GSheet: %d шт", len(stores))
+    return stores
+
+
+async def sync_request_stores_sheet() -> int:
+    """
+    Синхронизировать все склады из БД → GSheet «Настройки» → «## Склады для заявок».
+
+    Вызывается при синхронизации складов (sync_stores) или вручную.
+    Пользователь затем ставит ✅ напротив нужных складов в таблице.
+
+    Returns: количество складов.
+    """
+    from adapters import google_sheets as gsheet
+    from db.engine import async_session_factory
+    from db.models import Store
+    from sqlalchemy import select
+
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Store.id, Store.name)
+            .where(Store.deleted.is_(False))
+            .order_by(Store.name)
+        )
+        all_stores = [{"id": str(s.id), "name": s.name} for s in result.all()]
+
+    count = await gsheet.sync_request_stores_to_sheet(all_stores)
+    logger.info("[request] Синхронизировано %d складов → GSheet", count)
+    return count
+
+
+# ═══════════════════════════════════════════════════════
 # Получатели заявок — делегируем в permissions (GSheet)
 # ═══════════════════════════════════════════════════════
 
