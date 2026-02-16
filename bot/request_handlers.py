@@ -4,10 +4,14 @@ Telegram-хэндлеры: заявки на товары + управление
 Три FSM-потока:
 
 A) Создание заявки (любой авторизованный сотрудник):
-  1. � Выбор поставщика из прайс-листа
-  2. 🔍 Поиск товаров по названию → добавление по одному с вводом количества
-  3. ✅ Подтверждение → авто-группировка по складам (из прайс-листа) →
-     создание N заявок (одна на каждый склад) → уведомление получателям
+  1. Поиск товаров по названию, добавление по одному с вводом количества
+     - Склад-получатель авто-определяется по типу склада + подразделению пользователя
+     - Контрагент авто-определяется из iiko_supplier по имени целевого склада
+  2. Подтверждение, авто-группировка по складам,
+     создание N заявок (одна на каждый склад), уведомление получателям
+  Блокировки:
+     - Гости (нет подразделения): «Свяжитесь с администратором»
+     - Пользователь на подразделении == «Заведение для заявок»: «Смените подразделение»
 
 B) Просмотр / одобрение / редактирование заявки (получатели):
   - «✅ Отправить» → расходная накладная в iiko
@@ -224,12 +228,13 @@ def _items_summary(items: list[dict], sup_name: str) -> str:
 
     groups: dict[str, list[dict]] = OrderedDict()
     for it in items:
-        store_key = it.get("store_name") or "⚠️ Склад не назначен"
+        # Группируем по целевому складу (подразделение пользователя)
+        store_key = it.get("target_store_name") or it.get("store_name") or "⚠️ Склад не назначен"
         if store_key not in groups:
             groups[store_key] = []
         groups[store_key].append(it)
 
-    text = f"🏢 <b>{sup_name}</b>\n\n"
+    text = f"🏨 <b>{sup_name}</b>\n\n"
     total = 0.0
     item_num = 0
 
@@ -263,8 +268,12 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
         pass
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
+
+    # ── Гость (нет в справочнике / нет подразделения) → блок ──
     if not ctx or not ctx.department_id:
-        await message.answer("⚠️ Сначала авторизуйтесь (/start) и выберите ресторан.")
+        await message.answer(
+            "⚠️ Свяжитесь с администратором для получения доступа."
+        )
         return
 
     await set_cancel_kb(message.bot, message.chat.id, state)
@@ -275,16 +284,37 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
     )
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    account, price_suppliers = await asyncio.gather(
+
+    # Параллельная загрузка: account + настройки (заведение) + store_type_map
+    account, settings_stores, user_store_map = await asyncio.gather(
         inv_uc.get_revenue_account(),
-        inv_uc.get_price_list_suppliers(),
+        req_uc.get_request_stores(),
+        req_uc.build_store_type_map(ctx.department_id),
     )
 
     if not account:
         await message.answer("❌ Счёт реализации не найден.")
         return
-    if not price_suppliers:
-        await message.answer("❌ В прайс-листе нет поставщиков.")
+
+    # ── Пользователь на подразделении == «Заведение для заявок» → блок ──
+    settings_dept_id = settings_stores[0]["id"] if settings_stores else None
+    if settings_dept_id and ctx.department_id == settings_dept_id:
+        logger.info(
+            "[request] Блокировка: user dept == settings dept, tg:%d", message.from_user.id,
+        )
+        await message.answer(
+            "⚠️ Вы находитесь на подразделении, куда приходят заявки.\n"
+            "Смените подразделение (🏠 Сменить ресторан) и попробуйте снова."
+        )
+        await restore_menu_kb(message.bot, message.chat.id, state,
+                              "📋 Заявки:", requests_keyboard())
+        return
+
+    if not user_store_map:
+        await message.answer(
+            "⚠️ У вашего подразделения нет складов.\n"
+            "Синхронизируйте подразделения и попробуйте снова."
+        )
         return
 
     await state.update_data(
@@ -293,54 +323,20 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
         requester_name=ctx.employee_name,
         account_id=account["id"],
         account_name=account["name"],
-        _suppliers_cache=price_suppliers,
+        _user_store_map=user_store_map,
+        _settings_dept_id=settings_dept_id,
         items=[],
     )
 
-    await state.set_state(CreateRequestStates.supplier_choose)
-    await _send_prompt(message.bot, message.chat.id, state,
-        f"🏨 <b>{ctx.department_name}</b>\n\n🏢 Выберите поставщика:",
-        reply_markup=_suppliers_kb(price_suppliers))
-
-
-# ── 1. Выбор поставщика → переход к поиску товаров ──
-
-@router.callback_query(CreateRequestStates.supplier_choose, F.data.startswith("req_sup:"))
-async def choose_supplier(callback: CallbackQuery, state: FSMContext) -> None:
-    await callback.answer()
-    sup_id = callback.data.split(":", 1)[1]
-    try:
-        UUID(sup_id)
-    except ValueError:
-        await callback.answer("❌ Ошибка данных", show_alert=True)
-        return
-
-    data = await state.get_data()
-    suppliers = data.get("_suppliers_cache", [])
-    supplier = next((s for s in suppliers if s["id"] == sup_id), None)
-    if not supplier:
-        await callback.answer("❌ Поставщик не найден", show_alert=True)
-        return
-
-    logger.info("[request] Выбран поставщик: %s tg:%d", supplier["name"], callback.from_user.id)
-
-    # Предзагружаем цены поставщика
-    await callback.bot.send_chat_action(callback.message.chat.id, ChatAction.TYPING)
-    supplier_prices = await inv_uc.get_supplier_prices(sup_id)
-
-    await state.update_data(
-        counteragent_id=sup_id,
-        counteragent_name=supplier["name"],
-        _supplier_prices=supplier_prices,
-    )
-
-    # Переход к поиску товаров
+    # Пропускаем выбор поставщика → сразу к поиску товаров
     await state.set_state(CreateRequestStates.add_items)
-    await callback.message.edit_text(
-        f"🏨 <b>{data.get('department_name')}</b>  ·  🏢 <b>{supplier['name']}</b>\n\n"
+    await _send_prompt(message.bot, message.chat.id, state,
+        f"🏨 <b>{ctx.department_name}</b>\n\n"
         "🔍 Введите название товара для поиска:",
-        parse_mode="HTML",
     )
+
+
+# ── (шаг выбора поставщика удалён — контрагент авто-определяется) ──
 
 
 # ── 3. Поиск товаров по названию ──
@@ -430,19 +426,20 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
     await state.update_data(_selected_product=product)
     await state.set_state(CreateRequestStates.enter_item_qty)
 
-    supplier_prices = data.get("_supplier_prices", {})
-    sup_price = supplier_prices.get(prod_id, 0)
     cost_price = product.get("cost_price", 0)
-    effective_price = sup_price or cost_price
-    if effective_price:
-        label = "себест." if (not sup_price and cost_price) else "Цена"
-        price_str = f"\n💰 {label}: {effective_price:.2f}₽/{unit}"
+    if cost_price:
+        price_str = f"\n💰 себест.: {cost_price:.2f}₽/{unit}"
     else:
         price_str = ""
 
+    # Показываем целевой склад (авто-определение)
+    user_store_map = data.get("_user_store_map", {})
+    target = req_uc.resolve_target_store(product.get("store_name", ""), user_store_map)
+    store_info = f"\n🏦 → {target['name']}" if target else ""
+
     try:
         await callback.message.edit_text(
-            f"📦 <b>{product['name']}</b>{price_str}\n\n"
+            f"📦 <b>{product['name']}</b>{price_str}{store_info}\n\n"
             f"✏️ Введите количество ({hint}):",
             parse_mode="HTML",
         )
@@ -486,10 +483,9 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
         await state.set_state(CreateRequestStates.add_items)
         return
 
-    supplier_prices = data.get("_supplier_prices", {})
-    sup_price = supplier_prices.get(product["id"], 0)
+    # Цена: себестоимость (без выбора поставщика)
     cost_price = product.get("cost_price", 0)
-    price = sup_price or cost_price or product.get("sell_price", 0)
+    price = cost_price or product.get("sell_price", 0)
     unit = product.get("unit_name", "шт")
     norm = normalize_unit(unit)
 
@@ -505,6 +501,21 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
         api_unit = unit
         qty_display = f"{qty:.4g} {unit}"
 
+    # ── Авто-определение целевого склада ──
+    source_store_id = product.get("store_id", "")
+    source_store_name = product.get("store_name", "")
+    user_store_map = data.get("_user_store_map", {})
+
+    target = req_uc.resolve_target_store(source_store_name, user_store_map)
+    target_store_id = target["id"] if target else ""
+    target_store_name = target["name"] if target else ""
+
+    if not target and source_store_name:
+        logger.warning(
+            "[request] Не найден целевой склад для '%s' в подразделении %s, tg:%d",
+            source_store_name, data.get("department_name"), message.from_user.id,
+        )
+
     items = data.get("items", [])
     items.append({
         "product_id": product["id"],
@@ -517,20 +528,25 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
         "sell_price": price,
         "qty_display": qty_display,
         "raw_qty": qty,
-        "store_id": product.get("store_id", ""),
-        "store_name": product.get("store_name", ""),
+        # Склад-источник (из прайс-листа, для расходной накладной)
+        "store_id": source_store_id,
+        "store_name": source_store_name,
+        # Целевой склад (подразделение пользователя, для группировки и отображения)
+        "target_store_id": target_store_id,
+        "target_store_name": target_store_name,
     })
     await state.update_data(items=items, _selected_product=None)
 
     logger.info(
-        "[request] Добавлен товар #%d: «%s» qty=%s, price=%.2f, store=%s, tg:%d",
+        "[request] Добавлен товар #%d: «%s» qty=%s, price=%.2f, "
+        "source_store=%s → target_store=%s, tg:%d",
         len(items), product["name"], qty_display, price,
-        product.get("store_name", "?"), message.from_user.id,
+        source_store_name or "?", target_store_name or "?", message.from_user.id,
     )
 
     # Показываем сводку + предлагаем добавить ещё
-    sup_name = data.get("counteragent_name", "?")
-    summary = _items_summary(items, sup_name)
+    dept_name = data.get("department_name", "?")
+    summary = _items_summary(items, dept_name)
 
     await state.set_state(CreateRequestStates.add_items)
     await _send_prompt(message.bot, message.chat.id, state,
@@ -554,15 +570,15 @@ async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
     removed = items.pop()
     await state.update_data(items=items)
 
-    sup_name = data.get("counteragent_name", "?")
-
     if items:
-        summary = _items_summary(items, sup_name)
+        dept_name = data.get("department_name", "?")
+        summary = _items_summary(items, dept_name)
         text = f"🗑 Удалено: {removed['name']}\n\n{summary}\n\n🔍 Введите название товара:"
     else:
+        dept_name = data.get("department_name", "?")
         text = (
             f"🗑 Удалено: {removed['name']}\n\n"
-            f"🏢 <b>{sup_name}</b>\n\n"
+            f"🏨 <b>{dept_name}</b>\n\n"
             "🔍 Введите название товара для поиска:"
         )
 
@@ -586,7 +602,7 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("⚠️ Добавьте хотя бы одну позицию", show_alert=True)
         return
 
-    # Проверяем, у всех ли товаров назначен склад
+    # Проверяем: у товаров должен быть склад-источник (из прайс-листа)
     no_store = [it for it in items if not it.get("store_id")]
     if no_store:
         names = "\n".join(f"  • {it['name']}" for it in no_store[:10])
@@ -603,14 +619,32 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
             pass
         return
 
-    sup_name = data.get("counteragent_name", "?")
-    summary = _items_summary(items, sup_name)
+    # Проверяем: у товаров должен быть целевой склад (авто-определённый)
+    no_target = [it for it in items if not it.get("target_store_id")]
+    if no_target:
+        names = "\n".join(f"  • {it['name']}" for it in no_target[:10])
+        try:
+            await callback.message.edit_text(
+                f"⚠️ Для {len(no_target)} товаров не найден склад "
+                f"в подразделении «{data.get('department_name', '?')}»:\n"
+                f"{names}\n\n"
+                "Проверьте, что склады вашего подразделения совпадают по типу "
+                "(Кухня, Бар, ТМЦ) со складами в прайс-листе.",
+                parse_mode="HTML",
+                reply_markup=_req_add_more_kb(len(items)),
+            )
+        except Exception:
+            pass
+        return
 
-    # Кол-во складов → кол-во заявок
-    store_ids = set(it.get("store_id") for it in items)
+    dept_name = data.get("department_name", "?")
+    summary = _items_summary(items, dept_name)
+
+    # Кол-во целевых складов → кол-во заявок
+    target_ids = set(it.get("target_store_id") for it in items if it.get("target_store_id"))
     multi_note = ""
-    if len(store_ids) > 1:
-        multi_note = f"\n\n📋 Будет создано <b>{len(store_ids)} заявки</b> (по одной на каждый склад)."
+    if len(target_ids) > 1:
+        multi_note = f"\n\n📋 Будет создано <b>{len(target_ids)} заявки</b> (по одной на каждый склад)."
 
     await state.set_state(CreateRequestStates.confirm)
     try:
@@ -624,7 +658,7 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
         pass
 
 
-# ── 8. Подтверждение → группировка по складам → отправка заявок получателям ──
+# ── 8. Подтверждение → группировка по целевым складам → авто-контрагент → отправка ──
 
 @router.callback_query(CreateRequestStates.confirm, F.data == "req_confirm_send")
 async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> None:
@@ -647,30 +681,59 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
         await callback.answer("❌ Нет позиций", show_alert=True)
         return
 
-    # Группируем товары по складу
+    # Группируем товары по ЦЕЛЕВОМУ складу (подразделение пользователя)
     from collections import OrderedDict
     store_groups: dict[str, list[dict]] = OrderedDict()
     for it in items:
-        sid = it.get("store_id", "")
+        # Ключ группировки = целевой склад; fallback на источник
+        sid = it.get("target_store_id") or it.get("store_id", "")
         if sid not in store_groups:
             store_groups[sid] = []
         store_groups[sid].append(it)
 
-    # Создаём одну заявку на каждый склад
+    # Создаём одну заявку на каждый целевой склад
     all_pks: list[int] = []
-    for store_id, store_items in store_groups.items():
-        store_name = store_items[0].get("store_name", "?")
+    for target_store_id, store_items in store_groups.items():
+        # Склад-источник (из прайс-листа) — для расходной накладной
+        source_store_id = store_items[0].get("store_id", "")
+        source_store_name = store_items[0].get("store_name", "?")
+
+        # Целевой склад (подразделение пользователя)
+        target_store_name = store_items[0].get("target_store_name", "?")
+
         total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in store_items)
+
+        # Авто-определение контрагента по имени целевого склада
+        counteragent = await req_uc.find_counteragent_for_store(target_store_name)
+        if not counteragent:
+            # Fallback: поиск по имени склада-источника
+            counteragent = await req_uc.find_counteragent_for_store(source_store_name)
+        if not counteragent:
+            logger.warning(
+                "[request] Контрагент не найден для склада '%s', tg:%d",
+                target_store_name, callback.from_user.id,
+            )
+            try:
+                await callback.message.edit_text(
+                    f"❌ Не удалось определить контрагента для склада "
+                    f"«{target_store_name}».\n\n"
+                    "Проверьте, что склады зарегистрированы как контрагенты в iiko.",
+                    parse_mode="HTML",
+                    reply_markup=_confirm_kb(),
+                )
+            except Exception:
+                pass
+            return
 
         pk = await req_uc.create_request(
             requester_tg=callback.from_user.id,
             requester_name=data.get("requester_name", "?"),
             department_id=data["department_id"],
             department_name=data.get("department_name", "?"),
-            store_id=store_id,
-            store_name=store_name,
-            counteragent_id=data["counteragent_id"],
-            counteragent_name=data.get("counteragent_name", "?"),
+            store_id=source_store_id,
+            store_name=source_store_name,
+            counteragent_id=counteragent["id"],
+            counteragent_name=counteragent["name"],
             account_id=data["account_id"],
             account_name=data.get("account_name", "?"),
             items=store_items,
@@ -679,7 +742,7 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
         all_pks.append(pk)
 
     logger.info(
-        "[request] Создано %d заявок %s по складам, tg:%d",
+        "[request] Создано %d заявок %s по целевым складам, tg:%d",
         len(all_pks), all_pks, callback.from_user.id,
     )
 
@@ -734,7 +797,6 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
 #  Защита: текст в inline-состояниях
 # ══════════════════════════════════════════════════════
 
-@router.message(CreateRequestStates.supplier_choose)
 @router.message(CreateRequestStates.confirm)
 @router.message(DuplicateRequestStates.confirm)
 async def _ignore_text_request(message: Message) -> None:
@@ -1215,41 +1277,47 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
         await callback.answer("⚠️ В этой заявке нет позиций", show_alert=True)
         return
 
-    # Обновляем цены поставщика + склады из текущего прайс-листа
+    # Обновляем склады из текущего прайс-листа + строим маппинг для подразделения
     await callback.bot.send_chat_action(callback.message.chat.id, ChatAction.TYPING)
-    supplier_prices, store_map = await asyncio.gather(
-        inv_uc.get_supplier_prices(req_data["counteragent_id"]),
+
+    ctx = await uctx.get_user_context(callback.from_user.id)
+    user_dept_id = ctx.department_id if ctx else req_data["department_id"]
+
+    store_map, user_store_map = await asyncio.gather(
         inv_uc.get_product_store_map([it.get("product_id", "") for it in items]),
+        req_uc.build_store_type_map(user_dept_id),
     )
 
-    # Обогащаем items текущими данными о складах
+    # Обогащаем items текущими данными о складах + авто-матч целевых
     for it in items:
         pid = it.get("product_id", "")
         if pid in store_map:
             it["store_id"] = store_map[pid]["store_id"]
             it["store_name"] = store_map[pid]["store_name"]
+        source_store_name = it.get("store_name", "")
+        target = req_uc.resolve_target_store(source_store_name, user_store_map)
+        it["target_store_id"] = target["id"] if target else ""
+        it["target_store_name"] = target["name"] if target else ""
 
-    ctx = await uctx.get_user_context(callback.from_user.id)
     account = await inv_uc.get_revenue_account()
 
     await state.clear()
     await state.update_data(
         _dup_source_pk=pk,
-        department_id=ctx.department_id if ctx else req_data["department_id"],
+        department_id=user_dept_id,
         department_name=ctx.department_name if ctx else req_data["department_name"],
         requester_name=ctx.employee_name if ctx else req_data.get("requester_name", "?"),
-        counteragent_id=req_data["counteragent_id"],
-        counteragent_name=req_data["counteragent_name"],
         account_id=account["id"] if account else req_data["account_id"],
         account_name=account["name"] if account else req_data["account_name"],
         _dup_items=items,
-        _supplier_prices=supplier_prices,
+        _user_store_map=user_store_map,
     )
 
     # Показать позиции с текущими количествами
+    dept_name = ctx.department_name if ctx else req_data.get("department_name", "?")
     text = (
         f"🔄 <b>Повторение заявки #{pk}</b>\n"
-        f" {req_data['counteragent_name']}\n\n"
+        f"🏨 {dept_name}\n\n"
         f"<b>Позиции ({len(items)}):</b>\n"
     )
     for i, it in enumerate(items, 1):
@@ -1264,7 +1332,7 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
         else:
             hint = unit
             current = it.get("amount", 0)
-        price = supplier_prices.get(it.get("product_id", ""), 0) or it.get("cost_price", 0) or it.get("price", 0)
+        price = it.get("cost_price", 0) or it.get("price", 0)
         price_str = f" — {price:.2f}₽/{unit}" if price else ""
         text += f"  {i}. {it.get('name', '?')} — было: {current:.4g}{price_str} (в {hint})\n"
 
@@ -1306,7 +1374,6 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
 
     data = await state.get_data()
     items = data.get("_dup_items", [])
-    supplier_prices = data.get("_supplier_prices", {})
 
     parts = re.split(r"[\n,;\s]+", raw.strip())
     quantities: list[float] = []
@@ -1335,7 +1402,7 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
         if qty <= 0:
             continue
 
-        price = supplier_prices.get(it.get("product_id", ""), 0) or it.get("cost_price", 0) or it.get("price", 0)
+        price = it.get("cost_price", 0) or it.get("price", 0)
         unit = it.get("unit_name", "шт")
         norm = normalize_unit(unit)
 
@@ -1366,6 +1433,8 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
             "raw_qty": qty,
             "store_id": it.get("store_id", ""),
             "store_name": it.get("store_name", ""),
+            "target_store_id": it.get("target_store_id", ""),
+            "target_store_name": it.get("target_store_name", ""),
         })
 
     if not new_items:
@@ -1374,8 +1443,8 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
         return
 
     source_pk = data.get("_dup_source_pk", "?")
-    sup_name = data.get("counteragent_name", "?")
-    summary = _items_summary(new_items, sup_name)
+    dept_name = data.get("department_name", "?")
+    summary = _items_summary(new_items, dept_name)
     text = f"📝 <b>Новая заявка (на основе #{source_pk})</b>\n\n{summary}"
     text += "\n\n<i>Проверьте и отправьте заявку.</i>"
 
@@ -1393,7 +1462,6 @@ async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     data = await state.get_data()
     items = data.get("_dup_items", [])
-    supplier_prices = data.get("_supplier_prices", {})
 
     text = f"<b>Позиции ({len(items)}):</b>\n"
     for i, it in enumerate(items, 1):
@@ -1405,7 +1473,7 @@ async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
             hint = "в мл"
         else:
             hint = f"в {unit}"
-        price = supplier_prices.get(it.get("product_id", ""), 0) or it.get("cost_price", 0) or it.get("price", 0)
+        price = it.get("cost_price", 0) or it.get("price", 0)
         price_str = f" — {price:.2f}₽/{unit}" if price else ""
         text += f"  {i}. {it.get('name', '?')}{price_str} → <i>{hint}</i>\n"
 
@@ -1460,30 +1528,55 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
 
     source_pk = data.get("_dup_source_pk", "?")
 
-    # Группируем товары по складу
+    # Группируем товары по ЦЕЛЕВОМУ складу
     from collections import OrderedDict
     store_groups: dict[str, list[dict]] = OrderedDict()
     for it in items:
-        sid = it.get("store_id", "")
+        sid = it.get("target_store_id") or it.get("store_id", "")
         if sid not in store_groups:
             store_groups[sid] = []
         store_groups[sid].append(it)
 
-    # Создаём одну заявку на каждый склад
+    # Создаём одну заявку на каждый целевой склад
     all_pks: list[int] = []
-    for store_id, store_items in store_groups.items():
-        store_name = store_items[0].get("store_name", "?")
+    for target_store_id, store_items in store_groups.items():
+        source_store_id = store_items[0].get("store_id", "")
+        source_store_name = store_items[0].get("store_name", "?")
+        target_store_name = store_items[0].get("target_store_name", "?")
         total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in store_items)
+
+        # Авто-определение контрагента
+        counteragent = await req_uc.find_counteragent_for_store(target_store_name)
+        if not counteragent:
+            counteragent = await req_uc.find_counteragent_for_store(source_store_name)
+        if not counteragent:
+            logger.warning(
+                "[request] Контрагент не найден для склада '%s' в дубле, tg:%d",
+                target_store_name, callback.from_user.id,
+            )
+            try:
+                await callback.message.edit_text(
+                    f"❌ Не удалось определить контрагента для склада "
+                    f"«{target_store_name}».\n\n"
+                    "Проверьте, что склады зарегистрированы как контрагенты в iiko.",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+            await state.clear()
+            await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                                  "📋 Заявки:", requests_keyboard())
+            return
 
         pk = await req_uc.create_request(
             requester_tg=callback.from_user.id,
             requester_name=data.get("requester_name", "?"),
             department_id=data["department_id"],
             department_name=data.get("department_name", "?"),
-            store_id=store_id,
-            store_name=store_name,
-            counteragent_id=data["counteragent_id"],
-            counteragent_name=data.get("counteragent_name", "?"),
+            store_id=source_store_id,
+            store_name=source_store_name,
+            counteragent_id=counteragent["id"],
+            counteragent_name=counteragent["name"],
             account_id=data["account_id"],
             account_name=data.get("account_name", "?"),
             items=store_items,

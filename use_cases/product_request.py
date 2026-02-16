@@ -2,9 +2,12 @@
 Use-case: заявки на товары (product requests).
 
 Флоу:
-  1. Создатель (точка) выбирает склад → поставщика → вводит количества
-  2. Заявка сохраняется в БД (status=pending), уведомление → получателям
-  3. Получатель видит заявку, нажимает «Отправить» →
+  1. Создатель начинает заявку → вводит наименования
+  2. Склад-источник берётся из прайс-листа (PriceProduct.store_id)
+  3. Склад-получатель авто-определяется по типу склада + подразделению пользователя
+  4. Контрагент авто-определяется из iiko_supplier по имени целевого склада
+  5. Заявка сохраняется в БД (status=pending), уведомление → получателям
+  6. Получатель видит заявку, нажимает «Отправить» →
      создаётся расходная накладная в iiko (через outgoing_invoice)
 
 Получатели определяются через Google Таблицу (столбец «📬 Получатель»
@@ -12,6 +15,7 @@ Use-case: заявки на товары (product requests).
 """
 
 import logging
+import re
 import time
 from use_cases._helpers import now_kgd
 from uuid import UUID
@@ -19,7 +23,7 @@ from uuid import UUID
 from sqlalchemy import select, func
 
 from db.engine import async_session_factory
-from db.models import ProductRequest
+from db.models import ProductRequest, Store, Supplier
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +71,122 @@ async def sync_request_stores_sheet() -> int:
     count = await gsheet.sync_request_stores_to_sheet(all_depts)
     logger.info("[request] Синхронизировано %d заведений → GSheet", count)
     return count
+
+
+# ═══════════════════════════════════════════════════════
+# Авто-определение складов по типу + подразделению
+# ═══════════════════════════════════════════════════════
+
+def extract_store_type(store_name: str) -> str:
+    """
+    Извлечь «тип» склада из полного имени.
+
+    Примеры:
+        'PizzaYolo: Кухня (Московский)'  → 'кухня'
+        'Кухня (Клиническая)'            → 'кухня'
+        'Бар'                            → 'бар'
+        'PizzaYolo: ТМЦ (Гайдара)'       → 'тмц'
+    """
+    name = store_name.strip()
+    # Убираем бренд-префикс до ':'
+    if ":" in name:
+        name = name.split(":", 1)[1].strip()
+    # Убираем суффикс (подразделение) в скобках
+    name = re.sub(r"\s*\([^)]+\)\s*$", "", name).strip()
+    return name.lower()
+
+
+async def get_all_stores_for_department(department_id: str) -> list[dict[str, str]]:
+    """
+    Все склады подразделения (parent_id = department_id, deleted=False).
+    Возвращает [{id, name}, ...].
+    """
+    async with async_session_factory() as session:
+        stmt = (
+            select(Store.id, Store.name)
+            .where(Store.deleted.is_(False))
+            .where(Store.parent_id == UUID(department_id))
+            .order_by(Store.name)
+        )
+        rows = (await session.execute(stmt)).all()
+    return [{"id": str(r.id), "name": r.name} for r in rows]
+
+
+async def build_store_type_map(department_id: str) -> dict[str, dict[str, str]]:
+    """
+    Построить маппинг {store_type_lower: {id, name}} для складов подразделения.
+
+    Пример для подразделения «Московский»:
+        {'кухня': {'id': '...', 'name': 'PizzaYolo: Кухня (Московский)'},
+         'бар':   {'id': '...', 'name': 'PizzaYolo: Бар (Московский)'}}
+    """
+    stores = await get_all_stores_for_department(department_id)
+    result: dict[str, dict[str, str]] = {}
+    for s in stores:
+        stype = extract_store_type(s["name"])
+        if stype and stype not in result:  # первый совпавший
+            result[stype] = {"id": s["id"], "name": s["name"]}
+    logger.debug(
+        "[request] store_type_map для dept=%s: %s",
+        department_id, list(result.keys()),
+    )
+    return result
+
+
+def resolve_target_store(
+    source_store_name: str,
+    user_store_type_map: dict[str, dict[str, str]],
+) -> dict[str, str] | None:
+    """
+    По названию склада-источника найти целевой склад пользователя.
+
+    source_store_name: 'Кухня (Клиническая)' → type 'кухня'
+    user_store_type_map: {'кухня': {id, name}} (склады подразделения пользователя)
+    Возвращает {id, name} или None.
+    """
+    stype = extract_store_type(source_store_name)
+    if not stype:
+        return None
+    return user_store_type_map.get(stype)
+
+
+async def find_counteragent_for_store(store_name: str) -> dict[str, str] | None:
+    """
+    Найти контрагента (iiko_supplier) по имени склада.
+
+    В iiko склады/подразделения часто зарегистрированы как контрагенты
+    для внутренних перемещений. Ищем по точному совпадению,
+    потом по частичному (contains).
+
+    Возвращает {id, name} или None.
+    """
+    name_lower = store_name.strip().lower()
+    async with async_session_factory() as session:
+        # 1) Точное совпадение
+        stmt = (
+            select(Supplier.id, Supplier.name)
+            .where(Supplier.deleted.is_(False))
+            .where(func.lower(Supplier.name) == name_lower)
+        )
+        row = (await session.execute(stmt)).first()
+        if row:
+            logger.debug("[request] counteragent exact match: '%s' → '%s'", store_name, row.name)
+            return {"id": str(row.id), "name": row.name}
+
+        # 2) Частичное (contains)
+        stmt = (
+            select(Supplier.id, Supplier.name)
+            .where(Supplier.deleted.is_(False))
+            .where(func.lower(Supplier.name).contains(name_lower))
+            .limit(1)
+        )
+        row = (await session.execute(stmt)).first()
+        if row:
+            logger.debug("[request] counteragent partial match: '%s' → '%s'", store_name, row.name)
+            return {"id": str(row.id), "name": row.name}
+
+        logger.warning("[request] counteragent not found for store '%s'", store_name)
+        return None
 
 
 # ═══════════════════════════════════════════════════════
