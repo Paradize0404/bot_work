@@ -1004,7 +1004,7 @@ async def edit_quantities_input(message: Message, state: FSMContext) -> None:
     updated_items: list[dict] = []
     total_sum = 0.0
     for it, qty in zip(items, quantities):
-        if qty == 0:
+        if qty <= 0:
             continue
 
         unit = it.get("unit_name", "шт")
@@ -1358,6 +1358,7 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
             "name": it.get("name", "?"),
             "amount": converted,
             "price": price,
+            "cost_price": it.get("cost_price", 0),
             "main_unit": it.get("main_unit"),
             "unit_name": unit,
             "sell_price": price,
@@ -1420,11 +1421,41 @@ async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(DuplicateRequestStates.confirm, F.data == "dup_confirm_send")
 async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer("⏳ Отправляю заявку...")
+
+    # Перепроверка авторизации на финальном шаге
+    ctx = await uctx.get_user_context(callback.from_user.id)
+    if not ctx or not ctx.department_id:
+        await state.clear()
+        try:
+            await callback.message.edit_text("⚠️ Сессия истекла. Пожалуйста, авторизуйтесь (/start).")
+        except Exception:
+            pass
+        return
+
     data = await state.get_data()
     items = data.get("_new_items", [])
 
     if not items:
         await callback.answer("❌ Нет позиций", show_alert=True)
+        return
+
+    # Проверяем store_id у всех товаров
+    no_store = [it for it in items if not it.get("store_id")]
+    if no_store:
+        names = "\n".join(f"  • {it['name']}" for it in no_store[:10])
+        try:
+            await callback.message.edit_text(
+                f"❌ У {len(no_store)} товаров не назначен склад в прайс-листе:\n"
+                f"{names}\n\n"
+                "Откройте Прайс-лист → столбец «Склад» → укажите склад "
+                "для каждого товара → запустите синхронизацию прайс-листа.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        await state.clear()
+        await restore_menu_kb(callback.bot, callback.message.chat.id, state,
+                              "📋 Заявки:", requests_keyboard())
         return
 
     source_pk = data.get("_dup_source_pk", "?")
