@@ -444,12 +444,6 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
     await state.update_data(_selected_product=product)
     await state.set_state(CreateRequestStates.enter_item_qty)
 
-    cost_price = product.get("cost_price", 0)
-    if cost_price:
-        price_str = f"\n💰 себест.: {cost_price:.2f}₽/{unit}"
-    else:
-        price_str = ""
-
     # ── Блокировка: товар без склада ──
     if not product.get("store_id"):
         await callback.answer(
@@ -465,6 +459,25 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
             reply_markup=_req_add_more_kb(len(items)) if items else None,
         )
         return
+
+    # ── Определяем цену: сначала из столбца поставщика, потом себестоимость ──
+    source_store_name = product.get("store_name", "")
+    user_store_map = data.get("_user_store_map", {})
+    target = req_uc.resolve_target_store(source_store_name, user_store_map)
+    target_store_name = target["name"] if target else ""
+
+    supplier_price = await inv_uc.get_supplier_price_for_product(
+        product["id"], target_store_name,
+    ) if target_store_name else None
+    cost_price = product.get("cost_price", 0)
+    display_price = supplier_price or cost_price or 0
+
+    if supplier_price:
+        price_str = f"\n💰 цена: {supplier_price:.2f}₽/{unit}"
+    elif cost_price:
+        price_str = f"\n💰 себест.: {cost_price:.2f}₽/{unit}"
+    else:
+        price_str = ""
 
     try:
         await callback.message.edit_text(
@@ -512,9 +525,8 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
         await state.set_state(CreateRequestStates.add_items)
         return
 
-    # Цена: себестоимость (без выбора поставщика)
+    # Цена: сначала из столбца поставщика (target store), потом себестоимость
     cost_price = product.get("cost_price", 0)
-    price = cost_price or product.get("sell_price", 0)
     unit = product.get("unit_name", "шт")
     norm = normalize_unit(unit)
 
@@ -544,6 +556,12 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
             "[request] Не найден целевой склад для '%s' в подразделении %s, tg:%d",
             source_store_name, data.get("department_name"), message.from_user.id,
         )
+
+    # ── Цена из столбца поставщика → fallback себестоимость ──
+    supplier_price = await inv_uc.get_supplier_price_for_product(
+        product["id"], target_store_name,
+    ) if target_store_name else None
+    price = supplier_price or cost_price or 0
 
     items = data.get("items", [])
     items.append({
@@ -1490,6 +1508,15 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
 
     # Показать позиции с текущими количествами
     dept_name = ctx.department_name if ctx else req_data.get("department_name", "?")
+
+    # Предзагрузка цен поставщиков для отображения
+    unique_target_stores = set(
+        it.get("target_store_name", "") for it in items if it.get("target_store_name")
+    )
+    store_price_maps: dict[str, dict[str, float]] = {}
+    for sn in unique_target_stores:
+        store_price_maps[sn] = await inv_uc.get_supplier_prices_by_store(sn)
+
     header = f"📤 <b>{dept_name}</b>"
     if settings_dept_name:
         header += f" → 📥 <b>{settings_dept_name}</b>"
@@ -1510,7 +1537,9 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
         else:
             hint = unit
             current = it.get("amount", 0)
-        price = it.get("cost_price", 0) or it.get("price", 0)
+        target_sn = it.get("target_store_name", "")
+        supplier_price = store_price_maps.get(target_sn, {}).get(it.get("product_id", ""))
+        price = supplier_price or it.get("cost_price", 0) or it.get("price", 0)
         price_str = f" — {price:.2f}₽/{unit}" if price else ""
         text += f"  {i}. {it.get('name', '?')} — было: {current:.4g}{price_str} (в {hint})\n"
 
@@ -1574,13 +1603,23 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
         )
         return
 
+    # ── Предзагрузка цен поставщиков для уникальных целевых складов ──
+    unique_target_stores = set(
+        it.get("target_store_name", "") for it in items if it.get("target_store_name")
+    )
+    store_price_maps: dict[str, dict[str, float]] = {}
+    for sn in unique_target_stores:
+        store_price_maps[sn] = await inv_uc.get_supplier_prices_by_store(sn)
+
     new_items: list[dict] = []
     total_sum = 0.0
     for i, (it, qty) in enumerate(zip(items, quantities), 1):
         if qty <= 0:
             continue
 
-        price = it.get("cost_price", 0) or it.get("price", 0)
+        target_sn = it.get("target_store_name", "")
+        supplier_price = store_price_maps.get(target_sn, {}).get(it.get("product_id", ""))
+        price = supplier_price or it.get("cost_price", 0) or it.get("price", 0)
         unit = it.get("unit_name", "шт")
         norm = normalize_unit(unit)
 

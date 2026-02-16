@@ -903,6 +903,123 @@ async def get_supplier_prices(supplier_id: str) -> dict[str, float]:
     return {str(r.product_id): float(r.price) for r in rows}
 
 
+async def get_supplier_prices_by_store(target_store_name: str) -> dict[str, float]:
+    """
+    Найти столбец поставщика по имени целевого склада и вернуть все цены.
+
+    PriceSupplierColumn.supplier_name = iiko_supplier.name (= контрагент).
+    Матчинг: exact → partial (contains).
+
+    Возвращает {product_id: price} для всех товаров этого поставщика.
+    """
+    if not target_store_name:
+        return {}
+    name_lower = target_store_name.strip().lower()
+
+    async with async_session_factory() as session:
+        # Точное совпадение
+        stmt = select(PriceSupplierColumn.supplier_id).where(
+            func.lower(PriceSupplierColumn.supplier_name) == name_lower
+        )
+        row = (await session.execute(stmt)).first()
+        if not row:
+            # Частичное: supplier_name содержит store_name
+            stmt = select(PriceSupplierColumn.supplier_id).where(
+                func.lower(PriceSupplierColumn.supplier_name).contains(name_lower)
+            ).limit(1)
+            row = (await session.execute(stmt)).first()
+        if not row:
+            # Обратное: store_name содержит supplier_name
+            stmt = select(
+                PriceSupplierColumn.supplier_id,
+                PriceSupplierColumn.supplier_name,
+            )
+            rows_all = (await session.execute(stmt)).all()
+            for r in rows_all:
+                if r.supplier_name and r.supplier_name.lower() in name_lower:
+                    row = r
+                    break
+        if not row:
+            logger.debug(
+                "[invoice] Supplier column not found for store '%s'",
+                target_store_name,
+            )
+            return {}
+
+        # Получаем все цены этого поставщика
+        stmt = (
+            select(PriceSupplierPrice.product_id, PriceSupplierPrice.price)
+            .where(PriceSupplierPrice.supplier_id == row.supplier_id)
+        )
+        price_rows = (await session.execute(stmt)).all()
+
+    result = {
+        str(r.product_id): float(r.price)
+        for r in price_rows
+        if r.price and float(r.price) > 0
+    }
+    logger.debug(
+        "[invoice] Supplier prices for store '%s': %d products",
+        target_store_name, len(result),
+    )
+    return result
+
+
+async def get_supplier_price_for_product(
+    product_id: str, target_store_name: str,
+) -> float | None:
+    """
+    Получить цену товара из столбца поставщика, соответствующего целевому складу.
+
+    Возвращает float если цена найдена, иначе None.
+    Используется при добавлении одного товара в заявку.
+    """
+    if not target_store_name or not product_id:
+        return None
+    name_lower = target_store_name.strip().lower()
+    try:
+        prod_uuid = UUID(product_id)
+    except (ValueError, AttributeError):
+        return None
+
+    async with async_session_factory() as session:
+        # Найти supplier_id из PriceSupplierColumn
+        stmt = select(PriceSupplierColumn.supplier_id).where(
+            func.lower(PriceSupplierColumn.supplier_name) == name_lower
+        )
+        row = (await session.execute(stmt)).first()
+        if not row:
+            stmt = select(PriceSupplierColumn.supplier_id).where(
+                func.lower(PriceSupplierColumn.supplier_name).contains(name_lower)
+            ).limit(1)
+            row = (await session.execute(stmt)).first()
+        if not row:
+            stmt = select(
+                PriceSupplierColumn.supplier_id,
+                PriceSupplierColumn.supplier_name,
+            )
+            rows_all = (await session.execute(stmt)).all()
+            for r in rows_all:
+                if r.supplier_name and r.supplier_name.lower() in name_lower:
+                    row = r
+                    break
+        if not row:
+            return None
+
+        # Получить цену для конкретного товара
+        stmt = (
+            select(PriceSupplierPrice.price)
+            .where(
+                PriceSupplierPrice.product_id == prod_uuid,
+                PriceSupplierPrice.supplier_id == row.supplier_id,
+            )
+        )
+        price_row = (await session.execute(stmt)).first()
+        if price_row and price_row.price and float(price_row.price) > 0:
+            return float(price_row.price)
+        return None
+
+
 async def get_product_store_map(product_ids: list[str]) -> dict[str, dict[str, str]]:
     """
     Получить назначения складов для товаров из прайс-листа.
