@@ -30,16 +30,13 @@ logger = logging.getLogger(__name__)
 
 async def get_request_stores() -> list[dict[str, str]]:
     """
-    Получить список заведений для заявок из GSheet «Настройки».
+    Получить выбранное заведение для заявок из GSheet «Настройки».
 
-    Если в GSheet нет настроенных заведений (секция пуста или все ❌),
-    возвращает пустой список.
-
-    Returns: [{id, name}, ...] — только заведения с ✅.
+    Возвращает [{id, name}] (0 или 1 элемент — одно выбранное заведение).
     """
     from adapters import google_sheets as gsheet
     stores = await gsheet.read_request_stores()
-    logger.info("[request] Заведения для заявок из GSheet: %d шт", len(stores))
+    logger.info("[request] Заведение для заявок из GSheet: %d шт", len(stores))
     return stores
 
 

@@ -1330,22 +1330,19 @@ async def sync_request_stores_to_sheet(
     stores: list[dict[str, str]],
 ) -> int:
     """
-    Записать/обновить список заведений для заявок в GSheet «Настройки».
+    Записать/обновить секцию «Заведение для заявок» в GSheet «Настройки».
 
     stores: [{id, name}, ...] — подразделения (department_type=DEPARTMENT) из iiko.
 
-    Формат раздела «## Заведение для заявок»:
-      A = Заведение (name)
-      B = department_uuid (скрытый)
-      C = Показывать (✅ / пусто)
+    Формат раздела:
+      Строка 1: «## Заведение для заявок» (маркер секции)
+      Строка 2: A = "Заведение куда приходят заявки",
+                B = выпадающий список department_name,
+                C = department_uuid (скрытый, VLOOKUP-формула)
 
-    Логика:
-      - Новые склады добавляются с пустым значением (❌ по умолчанию)
-      - Существующие ✅ сохраняются
-      - Удалённые из iiko — убираются
-      - Чекбокс → пользователь ставит ✅ для нужных складов
+    Если ранее было выбрано заведение — сохраняем выбор.
 
-    Returns: количество складов в таблице.
+    Returns: количество заведений в dropdown.
     """
     t0 = time.monotonic()
 
@@ -1353,15 +1350,15 @@ async def sync_request_stores_to_sheet(
         ws = _get_settings_worksheet()
         all_values = ws.get_all_values()
 
-        # ── Найти существующую секцию и её данные ──
-        old_enabled: dict[str, bool] = {}  # store_uuid → enabled
+        # ── Найти существующую секцию и текущий выбор ──
+        old_selected_name: str = ""
         in_section = False
         section_start_row: int | None = None
         section_end_row: int | None = None
 
         for ri, row in enumerate(all_values):
             cell_a = (row[0] if row else "").strip()
-            if cell_a == "## Заведение для заявок" or cell_a == "## Склады для заявок":
+            if cell_a in ("## Заведение для заявок", "## Склады для заявок"):
                 in_section = True
                 section_start_row = ri
                 continue
@@ -1370,49 +1367,46 @@ async def sync_request_stores_to_sheet(
                 break
             if not in_section:
                 continue
+            # Новый формат: A = label, B = selected name
+            if cell_a == "Заведение куда приходят заявки":
+                old_selected_name = (row[1] if len(row) > 1 else "").strip()
+                break
+            # Обратная совместимость (старый формат с чекбоксами)
             if cell_a in ("Заведение", "Склад", ""):
                 continue
-            store_id = (row[1] if len(row) > 1 else "").strip()
             enabled_val = (row[2] if len(row) > 2 else "").strip()
-            if store_id:
-                old_enabled[store_id] = enabled_val in (
-                    "TRUE", "true", "True", "✅", "1", "да",
-                )
+            if enabled_val in ("TRUE", "true", "True", "✅", "1", "да"):
+                if not old_selected_name:
+                    old_selected_name = cell_a  # берём первое включённое
 
         # ── Позиция записи (1-based) ──
         if section_start_row is not None:
-            start_row = section_start_row + 1  # 1-based (маркер секции)
+            start_row = section_start_row + 1
         else:
-            # Добавляем в конец (с отступом)
             start_row = (len(all_values) + 2) if all_values else 2
 
-        header_row = start_row + 1
-        first_data = start_row + 2
+        data_row = start_row + 1  # строка с dropdown
 
-        # ── Строки данных ──
+        # ── Подготовка данных ──
         sorted_stores = sorted(stores, key=lambda s: s.get("name", ""))
-        data_rows: list[list] = []
-        for s in sorted_stores:
-            sid = str(s["id"])
-            sname = s.get("name", "—")
-            enabled = old_enabled.get(sid, False)
-            data_rows.append([sname, sid, enabled])
+        name_to_id: dict[str, str] = {s["name"]: str(s["id"]) for s in sorted_stores}
+        store_names = [s["name"] for s in sorted_stores]
 
-        last_data = first_data + len(data_rows) - 1 if data_rows else first_data
+        # Сохраняем предыдущий выбор, если он всё ещё валиден
+        selected_name = old_selected_name if old_selected_name in name_to_id else ""
+        selected_id = name_to_id.get(selected_name, "")
 
         # ── Блок для записи ──
         block: list[list] = [
             ["## Заведение для заявок", "", ""],
-            ["Заведение", "", "Показывать ▼"],
+            ["Заведение куда приходят заявки", selected_name, selected_id],
+            ["", "", ""],  # разделитель
         ]
-        for dr in data_rows:
-            block.append(dr)
-        block.append(["", "", ""])  # разделитель
 
         # ── Очистить старую секцию ──
         if section_start_row is not None:
             clear_end = section_end_row if section_end_row else (
-                section_start_row + len(block) + 10
+                section_start_row + 20
             )
             clear_end = max(clear_end, section_start_row + len(block) + 5)
             try:
@@ -1433,13 +1427,16 @@ async def sync_request_stores_to_sheet(
         spreadsheet = _get_client().open_by_key(MIN_STOCK_SHEET_ID)
         fmt_requests: list[dict] = []
 
-        # 1. Скрыть столбец B (store_uuid)
+        marker_0 = start_row - 1  # 0-based
+        data_0 = data_row - 1     # 0-based
+
+        # 1. Скрыть столбец C (department_uuid)
         fmt_requests.append({
             "updateDimensionProperties": {
                 "range": {
                     "sheetId": ws.id,
                     "dimension": "COLUMNS",
-                    "startIndex": 1, "endIndex": 2,
+                    "startIndex": 2, "endIndex": 3,
                 },
                 "properties": {"hiddenByUser": True},
                 "fields": "hiddenByUser",
@@ -1447,7 +1444,6 @@ async def sync_request_stores_to_sheet(
         })
 
         # 2. Маркер секции — жирный, 12pt
-        marker_0 = start_row - 1  # 0-based
         fmt_requests.append({
             "repeatCell": {
                 "range": {
@@ -1465,15 +1461,14 @@ async def sync_request_stores_to_sheet(
             }
         })
 
-        # 3. Заголовок — жирный, фон
-        hdr_0 = header_row - 1
+        # 3. Ячейка A (label) — жирный, фон
         fmt_requests.append({
             "repeatCell": {
                 "range": {
                     "sheetId": ws.id,
-                    "startRowIndex": hdr_0,
-                    "endRowIndex": hdr_0 + 1,
-                    "startColumnIndex": 0, "endColumnIndex": 3,
+                    "startRowIndex": data_0,
+                    "endRowIndex": data_0 + 1,
+                    "startColumnIndex": 0, "endColumnIndex": 1,
                 },
                 "cell": {
                     "userEnteredFormat": {
@@ -1481,103 +1476,86 @@ async def sync_request_stores_to_sheet(
                             "red": 0.82, "green": 0.88, "blue": 0.97,
                         },
                         "textFormat": {"bold": True, "fontSize": 10},
-                        "horizontalAlignment": "CENTER",
                         "verticalAlignment": "MIDDLE",
                     }
                 },
                 "fields": (
                     "userEnteredFormat("
-                    "backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+                    "backgroundColor,textFormat,verticalAlignment)"
                 ),
             }
         })
 
-        # 4. Чекбокс в колонке C (Показывать)
-        if data_rows:
-            fd_0 = first_data - 1
-            ld_0 = first_data - 1 + len(data_rows)
+        # 4. Dropdown в ячейке B (список заведений)
+        if store_names:
+            dropdown_values = [
+                {"userEnteredValue": name} for name in store_names
+            ]
             fmt_requests.append({
                 "setDataValidation": {
                     "range": {
                         "sheetId": ws.id,
-                        "startRowIndex": fd_0,
-                        "endRowIndex": ld_0,
-                        "startColumnIndex": 2,
-                        "endColumnIndex": 3,
+                        "startRowIndex": data_0,
+                        "endRowIndex": data_0 + 1,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 2,
                     },
                     "rule": {
-                        "condition": {"type": "BOOLEAN"},
+                        "condition": {
+                            "type": "ONE_OF_LIST",
+                            "values": dropdown_values,
+                        },
                         "strict": True,
                         "showCustomUi": True,
                     },
                 }
             })
 
-            # 5. Колонка C — по центру
-            fmt_requests.append({
-                "repeatCell": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "startRowIndex": fd_0,
-                        "endRowIndex": ld_0,
-                        "startColumnIndex": 2,
-                        "endColumnIndex": 3,
-                    },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "horizontalAlignment": "CENTER",
-                        }
-                    },
-                    "fields": "userEnteredFormat(horizontalAlignment)",
-                }
-            })
-
-            # 6. Ширина столбцов
-            fmt_requests.append({
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "dimension": "COLUMNS",
-                        "startIndex": 0, "endIndex": 1,
-                    },
-                    "properties": {"pixelSize": 300},
-                    "fields": "pixelSize",
-                }
-            })
-            fmt_requests.append({
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "dimension": "COLUMNS",
-                        "startIndex": 2, "endIndex": 3,
-                    },
-                    "properties": {"pixelSize": 120},
-                    "fields": "pixelSize",
-                }
-            })
-
-            # 7. Границы
-            thin_border = {
-                "style": "SOLID",
-                "width": 1,
-                "color": {"red": 0.75, "green": 0.75, "blue": 0.75},
+        # 5. Ширина столбцов
+        fmt_requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 0, "endIndex": 1,
+                },
+                "properties": {"pixelSize": 300},
+                "fields": "pixelSize",
             }
-            fmt_requests.append({
-                "updateBorders": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "startRowIndex": hdr_0,
-                        "endRowIndex": ld_0,
-                        "startColumnIndex": 0, "endColumnIndex": 3,
-                    },
-                    "top": thin_border,
-                    "bottom": thin_border,
-                    "left": thin_border,
-                    "right": thin_border,
-                    "innerHorizontal": thin_border,
-                    "innerVertical": thin_border,
-                }
-            })
+        })
+        fmt_requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 1, "endIndex": 2,
+                },
+                "properties": {"pixelSize": 300},
+                "fields": "pixelSize",
+            }
+        })
+
+        # 6. Границы вокруг строки
+        thin_border = {
+            "style": "SOLID",
+            "width": 1,
+            "color": {"red": 0.75, "green": 0.75, "blue": 0.75},
+        }
+        fmt_requests.append({
+            "updateBorders": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": data_0,
+                    "endRowIndex": data_0 + 1,
+                    "startColumnIndex": 0, "endColumnIndex": 2,
+                },
+                "top": thin_border,
+                "bottom": thin_border,
+                "left": thin_border,
+                "right": thin_border,
+                "innerVertical": thin_border,
+            }
+        })
 
         try:
             spreadsheet.batch_update({"requests": fmt_requests})
@@ -1587,7 +1565,7 @@ async def sync_request_stores_to_sheet(
                 LABEL, exc_info=True,
             )
 
-        return len(data_rows)
+        return len(store_names)
 
     count = await asyncio.to_thread(_sync_write)
     elapsed = time.monotonic() - t0
@@ -1600,10 +1578,12 @@ async def sync_request_stores_to_sheet(
 
 async def read_request_stores() -> list[dict[str, str]]:
     """
-    Прочитать список заведений для заявок из GSheet «Настройки».
+    Прочитать выбранное заведение для заявок из GSheet «Настройки».
 
-    Возвращает только заведения с ✅ в колонке «Показывать»:
-      [{id: dept_uuid, name: dept_name}, ...]
+    Новый формат: одна строка, ячейка B = выбранное название, C = UUID.
+    Обратная совместимость: старый формат с чекбоксами тоже читается.
+
+    Возвращает [{id: dept_uuid, name: dept_name}] (0 или 1 элемент).
     """
     t0 = time.monotonic()
 
@@ -1623,6 +1603,16 @@ async def read_request_stores() -> list[dict[str, str]]:
                 break
             if not in_section:
                 continue
+
+            # Новый формат: A = label, B = selected name, C = uuid
+            if cell_a == "Заведение куда приходят заявки":
+                sel_name = (row[1] if len(row) > 1 else "").strip()
+                sel_id = (row[2] if len(row) > 2 else "").strip()
+                if sel_name and sel_id:
+                    result.append({"id": sel_id, "name": sel_name})
+                return result
+
+            # Обратная совместимость (старый формат с чекбоксами)
             if cell_a in ("Заведение", "Склад", ""):
                 continue
             store_id = (row[1] if len(row) > 1 else "").strip()
@@ -1635,7 +1625,7 @@ async def read_request_stores() -> list[dict[str, str]]:
     result = await asyncio.to_thread(_sync_read)
     elapsed = time.monotonic() - t0
     logger.info(
-        "[%s] Заведения для заявок из GSheet: %d включённых за %.1f сек",
+        "[%s] Заведение для заявок из GSheet: %d за %.1f сек",
         LABEL, len(result), elapsed,
     )
     return result
