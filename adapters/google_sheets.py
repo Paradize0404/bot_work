@@ -542,11 +542,12 @@ async def sync_invoice_prices_to_sheet(
     suppliers:   [{id, name}, ...] — список поставщиков для dropdown
 
     Структура листа:
-      Строка 1 (мета, скрытая):  "", "product_id", "cost", supplier1_uuid, supplier2_uuid, ...
-      Строка 2 (заголовки):      "Товар", "ID товара", "Себестоимость", dropdown, dropdown, ...
-      Строка 3+:                 name, uuid, cost_price, price1, price2, ...
+      Строка 1 (мета, скрытая):  "", "product_id", "store_id", "cost", supplier1_uuid, ...
+      Строка 2 (заголовки):      "Товар", "ID товара", "Склад", "Себестоимость", dropdown, ...
+      Строка 3+:                 name, uuid, store_name, cost_price, price1, price2, ...
 
-    10 столбцов поставщиков (D..M): в заголовке (строка 2) — dropdown из списка
+    Колонка C — dropdown складов (из «Настройки» → «Склады для заявок»).
+    10 столбцов поставщиков (E..N): в заголовке (строка 2) — dropdown из списка
     поставщиков. Пользователь выбирает поставщика → заполняет цены в столбце.
 
     Сохраняет ручные цены привязанные к (product_id, supplier_id).
@@ -554,12 +555,23 @@ async def sync_invoice_prices_to_sheet(
     """
     t0 = time.monotonic()
     num_supplier_cols = PRICE_SUPPLIER_COLS
-    num_fixed = 3  # A=name, B=id, C=cost
+    num_fixed = 4  # A=name, B=id, C=store, D=cost
     num_cols = num_fixed + num_supplier_cols
 
+    # Загружаем список включённых складов для dropdown
+    store_list: list[dict[str, str]] = []
+    try:
+        store_list = await read_request_stores()
+    except Exception:
+        logger.warning("[%s] Не удалось загрузить склады для прайс-листа", LABEL, exc_info=True)
+
+    store_name_list = [s["name"] for s in store_list]
+    store_id_by_name: dict[str, str] = {s["name"]: s["id"] for s in store_list}
+    store_name_by_id: dict[str, str] = {s["id"]: s["name"] for s in store_list}
+
     logger.info(
-        "[%s] Синхронизация прайс-листа → GSheet: %d товаров, %d цен, %d поставщиков",
-        LABEL, len(products), len(cost_prices), len(suppliers),
+        "[%s] Синхронизация прайс-листа → GSheet: %d товаров, %d цен, %d поставщиков, %d складов",
+        LABEL, len(products), len(cost_prices), len(suppliers), len(store_list),
     )
 
     def _sync_write() -> int:
@@ -568,27 +580,29 @@ async def sync_invoice_prices_to_sheet(
         # ── 1. Читаем существующие данные ──
         existing_data = ws.get_all_values()
 
-        # ── 2. Извлекаем ручные цены по (product_id, supplier_id) ──
-        # Ключ: (product_id, supplier_id) → price_str
+        # ── 2. Определяем old_num_fixed (3 или 4) для корректного чтения старых данных ──
+        old_num_fixed = num_fixed  # по умолчанию 4
+        if len(existing_data) >= 1:
+            meta_row_0 = existing_data[0]
+            # Старый формат: meta[2] == "cost"; Новый: meta[2] == "store_id", meta[3] == "cost"
+            if len(meta_row_0) >= 3 and meta_row_0[2].strip() == "cost":
+                old_num_fixed = 3  # старый формат без столбца склада
+
+        # ── 3. Извлекаем ручные цены по (product_id, supplier_id) ──
         old_prices: dict[tuple[str, str], str] = {}
         old_costs: dict[str, str] = {}
-        # Словарь supplier_name → supplier_id для резолва из header
+        old_stores: dict[str, str] = {}  # product_id → store_name
         name_to_id: dict[str, str] = {s["name"]: s["id"] for s in suppliers}
         id_to_name: dict[str, str] = {s["id"]: s["name"] for s in suppliers}
 
-        # Резолвим supplier_id для каждого столбца:
-        #   - берём мета-строку (строка 1) — UUID
-        #   - если пусто — смотрим header (строка 2) и резолвим по имени
-        resolved_supplier_ids: list[str] = []  # supplier UUID для каждого столбца
+        resolved_supplier_ids: list[str] = []
         if len(existing_data) >= 2:
             meta_row = existing_data[0]
             header_row = existing_data[1]
-            for ci in range(num_fixed, max(len(meta_row), len(header_row))):
+            for ci in range(old_num_fixed, max(len(meta_row), len(header_row))):
                 meta_val = meta_row[ci].strip() if ci < len(meta_row) else ""
                 header_val = header_row[ci].strip() if ci < len(header_row) else ""
 
-                # Приоритет: если header отличается от ожидаемого по meta,
-                # значит пользователь поменял dropdown → резолвим заново
                 if header_val and header_val in name_to_id:
                     resolved_sid = name_to_id[header_val]
                 elif meta_val and meta_val in id_to_name:
@@ -598,59 +612,65 @@ async def sync_invoice_prices_to_sheet(
                 resolved_supplier_ids.append(resolved_sid)
         elif len(existing_data) >= 1:
             meta_row = existing_data[0]
-            for ci in range(num_fixed, len(meta_row)):
+            for ci in range(old_num_fixed, len(meta_row)):
                 sid = meta_row[ci].strip()
                 resolved_supplier_ids.append(sid if sid in id_to_name else "")
 
         if len(existing_data) >= 3:
-            for row in existing_data[2:]:  # данные с строки 3
+            # Индексы столбцов зависят от old_num_fixed
+            cost_col_idx = 2 if old_num_fixed == 3 else 3
+            store_col_idx = 2 if old_num_fixed == 4 else -1  # -1 = нет столбца
+
+            for row in existing_data[2:]:
                 if len(row) < 2 or not row[1].strip():
                     continue
                 pid = row[1].strip()
-                # Себестоимость (col C)
-                if len(row) >= 3 and row[2].strip():
-                    old_costs[pid] = row[2].strip()
-                # Цены поставщиков (col D+)
-                for ci in range(num_fixed, len(row)):
-                    si = ci - num_fixed
+                # Себестоимость
+                if len(row) > cost_col_idx and row[cost_col_idx].strip():
+                    old_costs[pid] = row[cost_col_idx].strip()
+                # Склад (только если столбец существовал)
+                if store_col_idx >= 0 and len(row) > store_col_idx and row[store_col_idx].strip():
+                    old_stores[pid] = row[store_col_idx].strip()
+                # Цены поставщиков
+                for ci in range(old_num_fixed, len(row)):
+                    si = ci - old_num_fixed
                     price_val = row[ci].strip() if ci < len(row) else ""
                     if not price_val:
                         continue
-                    # Привязываем к supplier_id (резолвленному)
                     if si < len(resolved_supplier_ids) and resolved_supplier_ids[si]:
                         old_prices[(pid, resolved_supplier_ids[si])] = price_val
 
         logger.info(
-            "[%s] Прайс-лист: %d ручных цен сохранено, %d старых поставщиков",
-            LABEL, len(old_prices), len([s for s in resolved_supplier_ids if s]),
+            "[%s] Прайс-лист: %d ручных цен, %d складов, %d старых поставщиков",
+            LABEL, len(old_prices), len(old_stores),
+            len([s for s in resolved_supplier_ids if s]),
         )
 
-        # ── 3. Готовим список supplier_id для 10 столбцов ──
-        # Сохраняем порядок: сначала старые (с ценами), потом незанятые
+        # ── 4. Готовим список supplier_id для 10 столбцов ──
         new_supplier_ids: list[str] = [""] * num_supplier_cols
         for i, sid in enumerate(resolved_supplier_ids[:num_supplier_cols]):
             new_supplier_ids[i] = sid
 
-        # ── 4. Строим мета/заголовки ──
+        # ── 5. Строим мета/заголовки ──
         supplier_names: dict[str, str] = id_to_name
 
-        meta = ["", "product_id", "cost"] + new_supplier_ids
-        headers = ["Товар", "ID товара", "Себестоимость"]
+        meta = ["", "product_id", "store_id", "cost"] + new_supplier_ids
+        headers = ["Товар", "ID товара", "Склад", "Себестоимость"]
         for sid in new_supplier_ids:
             if sid and sid in supplier_names:
                 headers.append(supplier_names[sid])
             else:
-                headers.append("")  # пустой столбец — ещё не выбран
+                headers.append("")
 
-        # ── 5. Строим строки данных ──
+        # ── 6. Строим строки данных ──
         data_rows = []
         for prod in products:
             pid = prod["id"]
             cost = cost_prices.get(pid)
             cost_str = f"{cost:.2f}" if cost is not None else old_costs.get(pid, "")
-            row = [prod["name"], pid, cost_str]
+            store_name = old_stores.get(pid, "")
+            row = [prod["name"], pid, store_name, cost_str]
 
-            # 10 столбцов цен
             for sid in new_supplier_ids:
                 if sid:
                     price_str = old_prices.get((pid, sid), "")
@@ -660,7 +680,7 @@ async def sync_invoice_prices_to_sheet(
 
             data_rows.append(row)
 
-        # ── 6. Записываем ──
+        # ── 7. Записываем ──
         all_rows = [meta, headers] + data_rows
         needed_rows = len(all_rows) + 10
         needed_cols = num_cols
@@ -671,7 +691,6 @@ async def sync_invoice_prices_to_sheet(
                 cols=max(needed_cols, ws.col_count),
             )
 
-        # gspread 6.x может вернуть пустой body → JSONDecodeError
         try:
             ws.clear()
         except json.JSONDecodeError:
@@ -688,7 +707,27 @@ async def sync_invoice_prices_to_sheet(
             except json.JSONDecodeError:
                 logger.debug("[%s] update() вернул пустой body (ОК)", LABEL)
 
-        # ── 7. Dropdown (data validation) для заголовков поставщиков ──
+        # ── 8. Dropdown складов в колонке C (строки 3+) ──
+        try:
+            from gspread.worksheet import ValidationConditionType
+
+            if store_name_list and len(data_rows) > 0:
+                store_range = f"C3:C{2 + len(data_rows)}"
+                ws.add_validation(
+                    store_range,
+                    ValidationConditionType.one_of_list,
+                    store_name_list,
+                    showCustomUi=True,
+                    strict=False,
+                )
+                logger.info(
+                    "[%s] Dropdown складов: %d вариантов в %d строках",
+                    LABEL, len(store_name_list), len(data_rows),
+                )
+        except Exception:
+            logger.warning("[%s] Ошибка dropdown складов", LABEL, exc_info=True)
+
+        # ── 9. Dropdown поставщиков в заголовках (строка 2, столбцы E..N) ──
         try:
             from gspread.worksheet import ValidationConditionType
 
@@ -697,8 +736,8 @@ async def sync_invoice_prices_to_sheet(
             )
             if supplier_name_list:
                 for ci in range(num_supplier_cols):
-                    col_letter = chr(ord("D") + ci)
-                    cell = f"{col_letter}2"  # строка заголовков
+                    col_letter = chr(ord("E") + ci)
+                    cell = f"{col_letter}2"
                     ws.add_validation(
                         cell,
                         ValidationConditionType.one_of_list,
@@ -713,26 +752,24 @@ async def sync_invoice_prices_to_sheet(
         except Exception:
             logger.warning("[%s] Ошибка dropdown поставщиков", LABEL, exc_info=True)
 
-        # ── 8. Форматирование ──
+        # ── 10. Форматирование ──
         try:
             last_col_letter = chr(ord("A") + num_cols - 1)
-            # Мета-строка — скрытая (мелкий серый шрифт)
             ws.format(f"A1:{last_col_letter}1", {
                 "textFormat": {
                     "fontSize": 8,
                     "foregroundColor": {"red": 0.6, "green": 0.6, "blue": 0.6},
                 },
             })
-            # Заголовки — жирные
             ws.format(f"A2:{last_col_letter}2", {
                 "textFormat": {"bold": True},
                 "horizontalAlignment": "CENTER",
             })
-            ws.freeze(rows=2, cols=1)  # закрепить строки 1-2 + столбец A
+            ws.freeze(rows=2, cols=1)
         except Exception:
             logger.warning("[%s] Ошибка форматирования прайс-листа", LABEL, exc_info=True)
 
-        # ── 9. batch_update: скрыть строку 1 + колонку B, ширина столбцов ──
+        # ── 11. batch_update: скрыть строку 1 + колонку B, ширина столбцов ──
         try:
             spreadsheet = ws.spreadsheet
 
@@ -774,7 +811,7 @@ async def sync_invoice_prices_to_sheet(
                         }
                     }
                 },
-                # Ширина колонки C (Себестоимость) — 120px
+                # Ширина колонки C (Склад) — 200px
                 {
                     "updateDimensionProperties": {
                         "range": {
@@ -783,18 +820,31 @@ async def sync_invoice_prices_to_sheet(
                             "startIndex": 2,
                             "endIndex": 3,
                         },
-                        "properties": {"pixelSize": 120},
+                        "properties": {"pixelSize": 200},
                         "fields": "pixelSize",
                     }
                 },
-                # Ширина столбцов D..M (поставщики) — 130px
+                # Ширина колонки D (Себестоимость) — 120px
                 {
                     "updateDimensionProperties": {
                         "range": {
                             "sheetId": ws.id,
                             "dimension": "COLUMNS",
                             "startIndex": 3,
-                            "endIndex": 3 + num_supplier_cols,
+                            "endIndex": 4,
+                        },
+                        "properties": {"pixelSize": 120},
+                        "fields": "pixelSize",
+                    }
+                },
+                # Ширина столбцов E..N (поставщики) — 130px
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 4,
+                            "endIndex": 4 + num_supplier_cols,
                         },
                         "properties": {"pixelSize": 130},
                         "fields": "pixelSize",
@@ -823,11 +873,19 @@ async def read_invoice_prices() -> list[dict[str, Any]]:
     Прочитать прайс-лист из Google Таблицы.
 
     Возвращает:
-      [{product_id, product_name, cost_price,
+      [{product_id, product_name, store_id, store_name, cost_price,
         supplier_prices: {supplier_id: price, ...}}, ...]
     Только строки где есть product_id.
     """
     t0 = time.monotonic()
+
+    # Загружаем store_name → store_id маппинг
+    store_id_by_name: dict[str, str] = {}
+    try:
+        store_list = await read_request_stores()
+        store_id_by_name = {s["name"]: s["id"] for s in store_list}
+    except Exception:
+        logger.warning("[%s] Не удалось загрузить склады при чтении прайса", LABEL, exc_info=True)
 
     def _sync_read() -> list[dict[str, Any]]:
         ws = _get_price_worksheet()
@@ -836,27 +894,42 @@ async def read_invoice_prices() -> list[dict[str, Any]]:
         if len(all_values) < 3:
             return []
 
-        # Извлекаем supplier_id из мета-строки (строка 1)
+        # Определяем формат: old (num_fixed=3) или new (num_fixed=4)
         meta_row = all_values[0]
-        num_fixed = 3
+        if len(meta_row) >= 3 and meta_row[2].strip() == "store_id":
+            num_fixed = 4  # новый формат: name, id, store, cost
+        else:
+            num_fixed = 3  # старый формат: name, id, cost
+
+        # Извлекаем supplier_id из мета-строки
         supplier_ids: list[str] = []
         for ci in range(num_fixed, len(meta_row)):
             supplier_ids.append(meta_row[ci].strip())
 
-        # Извлекаем supplier_name из заголовков (строка 2)
         header_row = all_values[1] if len(all_values) >= 2 else []
         supplier_names_in_header: list[str] = []
         for ci in range(num_fixed, len(header_row)):
             supplier_names_in_header.append(header_row[ci].strip())
 
+        cost_col = 3 if num_fixed == 4 else 2
+        store_col = 2 if num_fixed == 4 else -1
+
         result: list[dict[str, Any]] = []
-        for row in all_values[2:]:  # данные с строки 3
+        for row in all_values[2:]:
             if len(row) < 2 or not row[1].strip():
                 continue
             pid = row[1].strip()
             name = row[0].strip()
-            cost_str = row[2].strip() if len(row) >= 3 else ""
 
+            # Склад
+            store_name = ""
+            store_id = ""
+            if store_col >= 0 and len(row) > store_col:
+                store_name = row[store_col].strip()
+                store_id = store_id_by_name.get(store_name, "")
+
+            # Себестоимость
+            cost_str = row[cost_col].strip() if len(row) > cost_col else ""
             cost = 0.0
             if cost_str:
                 try:
@@ -864,7 +937,7 @@ async def read_invoice_prices() -> list[dict[str, Any]]:
                 except ValueError:
                     pass
 
-            # Собираем цены по поставщикам
+            # Цены поставщиков
             supplier_prices: dict[str, float] = {}
             for si, sid in enumerate(supplier_ids):
                 ci = num_fixed + si
@@ -881,6 +954,8 @@ async def read_invoice_prices() -> list[dict[str, Any]]:
             result.append({
                 "product_id": pid,
                 "product_name": name,
+                "store_id": store_id,
+                "store_name": store_name,
                 "cost_price": cost,
                 "supplier_prices": supplier_prices,
             })

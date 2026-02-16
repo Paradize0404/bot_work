@@ -712,7 +712,7 @@ async def _sync_prices_to_db(
 
     products:     [{id, name, product_type, main_unit, unit_name}, ...]
     cost_prices:  {product_id: cost_price}
-    gsheet_data:  [{product_id, product_name, cost_price, supplier_prices: {sid: price}}, ...]
+    gsheet_data:  [{product_id, product_name, store_id, store_name, cost_price, supplier_prices: {sid: price}}, ...]
     suppliers:    [{id, name}, ...]
     """
     t0 = time.monotonic()
@@ -736,6 +736,7 @@ async def _sync_prices_to_db(
             info = prod_info.get(pid, {})
             cost = cost_prices.get(pid, item.get("cost_price"))
             main_unit_str = info.get("main_unit")
+            store_id_str = item.get("store_id", "")
             product_rows.append({
                 "product_id": UUID(pid),
                 "product_name": item.get("product_name") or info.get("name", ""),
@@ -743,6 +744,8 @@ async def _sync_prices_to_db(
                 "cost_price": cost,
                 "main_unit": UUID(main_unit_str) if main_unit_str else None,
                 "unit_name": info.get("unit_name", "шт"),
+                "store_id": UUID(store_id_str) if store_id_str else None,
+                "store_name": item.get("store_name", "") or None,
             })
         for i in range(0, len(product_rows), CHUNK):
             chunk = product_rows[i : i + CHUNK]
@@ -755,6 +758,8 @@ async def _sync_prices_to_db(
                     "cost_price": stmt.excluded.cost_price,
                     "main_unit": stmt.excluded.main_unit,
                     "unit_name": stmt.excluded.unit_name,
+                    "store_id": stmt.excluded.store_id,
+                    "store_name": stmt.excluded.store_name,
                 },
             )
             await session.execute(stmt)

@@ -581,6 +581,14 @@ class PriceProduct(Base):
         String(100), nullable=True, default="шт",
         comment="Название единицы (денормализовано)",
     )
+    store_id = Column(
+        UUID(as_uuid=True), nullable=True,
+        comment="UUID склада отгрузки (выбирается в прайс-листе)",
+    )
+    store_name = Column(
+        String(500), nullable=True,
+        comment="Название склада отгрузки (денормализовано)",
+    )
     synced_at = Column(
         DateTime, default=_utcnow, onupdate=_utcnow, nullable=False,
         comment="Время последней синхронизации",

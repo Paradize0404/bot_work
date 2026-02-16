@@ -87,6 +87,9 @@ async def create_tables() -> None:
         # ocr: добавление колонки category (goods/service)
         "ALTER TABLE ocr_document ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'goods'",
         "ALTER TABLE ocr_supplier_mapping ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'goods'",
+        # price_product: склад отгрузки (из прайс-листа)
+        "ALTER TABLE price_product ADD COLUMN IF NOT EXISTS store_id UUID",
+        "ALTER TABLE price_product ADD COLUMN IF NOT EXISTS store_name VARCHAR(500)",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:
