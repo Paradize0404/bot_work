@@ -252,9 +252,10 @@ async def recognize_document(
     # Отправляем фото + промпт
     logger.info("[%s] Отправляю фото в Gemini (%s), size=%d bytes", LABEL, GEMINI_MODEL, len(image_bytes))
 
+    # Новый API использует словари для contents
     contents = [
-        types.Part.from_text(prompt),
-        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+        {"text": prompt},
+        {"inline_data": {"mime_type": "image/jpeg", "data": image_bytes}}
     ]
 
     response = await client.aio.models.generate_content(
@@ -317,12 +318,12 @@ async def recognize_multiple_pages(
         " В page_info укажи сколько страниц распознано."
     )
 
-    contents: list[types.Part] = [types.Part.from_text(prompt)]
+    contents: list[dict] = [{"text": prompt}]
     for img_bytes in images:
         processed = preprocess_image(img_bytes)
-        contents.append(
-            types.Part.from_bytes(data=processed, mime_type="image/jpeg")
-        )
+        contents.append({
+            "inline_data": {"mime_type": "image/jpeg", "data": processed}
+        })
 
     logger.info("[%s] Отправляю %d фото в Gemini (multi-page)", LABEL, len(images))
 

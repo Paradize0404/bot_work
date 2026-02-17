@@ -45,21 +45,21 @@ LABEL = "ocr"
 # ─────────────────────────────────────────────────────
 # Media-group (альбом) collector
 # ─────────────────────────────────────────────────────
-# Telegram присылает пачку фото как отдельные Message с одинаковым media_group_id.
-# Мы складываем file_id в буфер и через ALBUM_WAIT_SEC запускаем обработку.
+# Telegram может разбить большой альбом (>10 фото) на несколько media_group_id.
+# Мы собираем ВСЕ фото от одного пользователя в один буфер по user_id.
+# Через ALBUM_WAIT_SEC после последнего фото запускаем обработку.
 
-ALBUM_WAIT_SEC = 2.0  # ждём столько после последнего фото из группы
+ALBUM_WAIT_SEC = 4.0  # ждём 4 секунды после последнего фото (чтобы собрать все альбомы)
 
-# {media_group_id: {
+# {user_id: {
 #   "photos": [file_id, ...],
 #   "chat_id": int,
-#   "user_id": int,
 #   "message": Message,
 #   "state": FSMContext,
 #   "timer": Task,
 #   "status_message": Message  # сообщение-индикатор "⏳ Получаю фото..."
 # }}
-_album_buffer: dict[str, dict] = {}
+_album_buffer: dict[int, dict] = {}
 _album_lock = asyncio.Lock()
 
 
@@ -68,25 +68,28 @@ async def _collect_album_photo(
     state: FSMContext,
     on_ready_callback,
 ) -> None:
-    """Добавить фото из media-group в буфер. Когда таймер истечёт — вызвать callback."""
-    mg_id = message.media_group_id
+    """
+    Добавить фото в буфер пользователя. 
+    Собираем ВСЕ фото от одного пользователя (даже если несколько альбомов).
+    Когда таймер истечёт — вызвать callback.
+    """
+    user_id = message.from_user.id
     photo = message.photo[-1]
 
     async with _album_lock:
-        if mg_id not in _album_buffer:
-            # Первое фото из альбома → показываем индикатор
+        if user_id not in _album_buffer:
+            # Первое фото от пользователя → создаём буфер
             status_msg = await message.answer("⏳ Получаю фото... (1)")
-            _album_buffer[mg_id] = {
+            _album_buffer[user_id] = {
                 "photos": [],
                 "chat_id": message.chat.id,
-                "user_id": message.from_user.id,
                 "message": message,
                 "state": state,
                 "timer": None,
                 "status_message": status_msg,
             }
 
-        buf = _album_buffer[mg_id]
+        buf = _album_buffer[user_id]
         buf["photos"].append(photo.file_id)
         
         # Обновляем индикатор с количеством полученных фото
@@ -102,33 +105,33 @@ async def _collect_album_photo(
         if buf["timer"] and not buf["timer"].done():
             buf["timer"].cancel()
 
-        # Новый таймер
+        # Новый таймер - ждём 4 секунды после ПОСЛЕДНЕГО фото
         buf["timer"] = asyncio.create_task(
-            _album_timer(mg_id, message, state, on_ready_callback)
+            _album_timer(user_id, message, state, on_ready_callback)
         )
 
 
 async def _album_timer(
-    mg_id: str,
+    user_id: int,
     message: Message,
     state: FSMContext,
     on_ready_callback,
 ):
-    """Ждёт ALBUM_WAIT_SEC и запускает обработку альбома."""
+    """Ждёт ALBUM_WAIT_SEC и запускает обработку всех фото пользователя."""
     await asyncio.sleep(ALBUM_WAIT_SEC)
 
     async with _album_lock:
-        if mg_id not in _album_buffer:
+        if user_id not in _album_buffer:
             return
-        buf = _album_buffer.pop(mg_id)
+        buf = _album_buffer.pop(user_id)
 
     file_ids = buf["photos"]
     count = len(file_ids)
     status_msg = buf.get("status_message")
     
     logger.info(
-        "[%s] Альбом %s собран: %d фото, tg:%d",
-        LABEL, mg_id, count, buf["user_id"],
+        "[%s] Собрано фото от user_id=%d: %d фото",
+        LABEL, user_id, count,
     )
 
     # Обновляем индикатор на "Распознаю X страниц..."
@@ -392,7 +395,7 @@ async def handle_photo(message: Message, state: FSMContext) -> None:
 
     # Пачка фото (media group)
     if message.media_group_id:
-        logger.info("[%s] Фото из альбома %s tg:%d", LABEL, message.media_group_id, tg_id)
+        logger.info("[%s] Фото из альбома tg:%d (group=%s)", LABEL, tg_id, message.media_group_id)
         await _collect_album_photo(message, state, _run_ocr_from_album)
         return
 
