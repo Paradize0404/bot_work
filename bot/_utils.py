@@ -29,7 +29,6 @@ def writeoffs_keyboard() -> ReplyKeyboardMarkup:
 def invoices_keyboard() -> ReplyKeyboardMarkup:
     """Подменю 'Накладные'."""
     return ReplyKeyboardMarkup(keyboard=[
-        # [KeyboardButton(text="📸 Распознать документ")],  # Временно отключено для отладки промта
         [KeyboardButton(text="📑 Создать шаблон накладной")],
         [KeyboardButton(text="📦 Создать по шаблону")],
         [KeyboardButton(text="◀️ Назад")],
