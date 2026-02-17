@@ -412,8 +412,8 @@ async def _run_ocr(
                 else:
                     reason = qr.get("retake_reason", "низкое качество")[:50]
                 # Экранируем HTML-символы
-                supplier_safe = html.escape(supplier)
-                reason_safe = html.escape(reason)
+                supplier_safe = html.escape(str(supplier))
+                reason_safe = html.escape(str(reason))
                 summary_lines.append(f"  • {supplier_safe}: {reason_safe}")
             summary_lines.append("\n📸 Если есть сомнения в качестве — переснимите и отправьте заново.")
 

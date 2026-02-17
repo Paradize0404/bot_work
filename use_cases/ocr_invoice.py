@@ -516,8 +516,8 @@ def format_preview(doc: dict[str, Any]) -> str:
 
             # Экранируем все значения для безопасности
             lines.append(
-                f"  {html.escape(str(num))}. {html.escape(name)}\n"
-                f"     {html.escape(str(qty))} {html.escape(unit)} × {html.escape(str(price))} = {html.escape(str(sum_with))}"
+                f"  {html.escape(str(num))}. {html.escape(str(name))}\n"
+                f"     {html.escape(str(qty))} {html.escape(str(unit))} × {html.escape(str(price))} = {html.escape(str(sum_with))}"
             )
 
     # Итоги
