@@ -121,9 +121,8 @@ TIMEZONE: str = "Europe/Kaliningrad"
 # ── Logging ──
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# ── Gemini Vision (OCR накладных) ──
-GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+# ── OpenAI GPT-4o Vision (OCR накладных) ──
+OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 
 # ── OCR ──
 # UUID склада для приходных накладных. Если не задан — авто-определение по buyer через fuzzy match

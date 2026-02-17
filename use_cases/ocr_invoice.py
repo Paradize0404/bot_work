@@ -19,7 +19,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from adapters.gemini_vision import (
+from adapters.openai_vision import (
     recognize_document,
     recognize_multiple_pages,
     extract_document_metadata,
@@ -184,22 +184,19 @@ async def group_photos_by_document(
     t0 = time.monotonic()
     logger.info("[%s] Группировка %d фото по документам...", LABEL, len(images))
 
-    # 1. Извлекаем метаданные ПОСЛЕДОВАТЕЛЬНО (rate-limit friendly)
-    # Free tier: 5 RPM — нельзя запускать всё параллельно.
-    # Retry-логика в адаптере обрабатывает 429, но между запросами тоже ждём.
-    from adapters.gemini_vision import GEMINI_REQUEST_DELAY
-
+    # 1. Извлекаем метаданные ПАРАЛЛЕЛЬНО (OpenAI paid tier: 10k RPM)
     metadata_list: list[dict[str, Any]] = []
-    for i, img in enumerate(images):
+    
+    async def _safe_extract(i: int, img: bytes) -> dict[str, Any]:
+        """Безопасная обёртка для извлечения метаданных с fallback."""
         try:
-            meta = await extract_document_metadata(img)
-            metadata_list.append(meta)
+            return await extract_document_metadata(img)
         except Exception as e:
             logger.warning(
                 "[%s] Metadata extraction failed for photo %d: %s",
                 LABEL, i + 1, e,
             )
-            metadata_list.append({
+            return {
                 "doc_number": None,
                 "date": None,
                 "supplier_name": f"__unknown_{i}__",
@@ -208,11 +205,12 @@ async def group_photos_by_document(
                 "has_total": True,
                 "page_number": None,
                 "total_pages": None,
-            })
-        
-        # Пауза между запросами (кроме последнего)
-        if i < len(images) - 1:
-            await asyncio.sleep(GEMINI_REQUEST_DELAY)
+            }
+    
+    # Параллельно извлекаем метаданные всех фото
+    metadata_list = await asyncio.gather(*[
+        _safe_extract(i, img) for i, img in enumerate(images)
+    ])
 
     # 2. Формируем ключ группировки для каждого фото
     def _make_group_key(meta: dict) -> str:
@@ -326,9 +324,7 @@ async def process_photo_batch(
 
     groups = await group_photos_by_document(images)
 
-    # Шаг 2: Обработка каждой группы (ПОСЛЕДОВАТЕЛЬНО с паузами — rate limit)
-    from adapters.gemini_vision import GEMINI_REQUEST_DELAY
-
+    # Шаг 2: Обработка каждой группы ПОСЛЕДОВАТЕЛЬНО (с progress updates)
     results: list[tuple[dict[str, Any], str]] = []
     total = len(groups)
     kw = {
@@ -345,10 +341,6 @@ async def process_photo_batch(
                 i + 1, total,
                 f"Распознаю документ {i+1}/{total} (фото {page_nums})..."
             )
-
-        # Пауза перед запросом (кроме первого) — rate limit
-        if i > 0:
-            await asyncio.sleep(GEMINI_REQUEST_DELAY)
 
         try:
             if len(group_images) == 1:

@@ -23,8 +23,8 @@ apscheduler>=3.10.0
 # Timezone data (нужен на Windows / Alpine для ZoneInfo)
 tzdata>=2024.1
 
-# OCR via Gemini Vision LLM (новый API)
-google-genai>=0.2.0
+# OCR via OpenAI GPT-4o Vision
+openai>=1.51.0
 
 # Fuzzy matching (маппинг распознанных названий → номенклатура)
 thefuzz>=0.22.0
