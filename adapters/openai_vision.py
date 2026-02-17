@@ -255,34 +255,47 @@ async def recognize_document(
     # Конвертируем в base64
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
 
-    # Отправляем фото + промпт
-    logger.info("[%s] Отправляю фото в GPT-4o, size=%d bytes", LABEL, len(image_bytes))
-
-    response = await client.chat.completions.create(
-        model=GPT_MODEL,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                            "detail": "high"
+    # Отправляем фото + промпт (с retry при пустом ответе)
+    logger.info("[%s] Отправляю фото в GPT-5.2, size=%d bytes", LABEL, len(image_bytes))
+    
+    max_retries = 2
+    for attempt in range(max_retries):
+        response = await client.chat.completions.create(
+            model=GPT_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}",
+                                "detail": "high"
+                            }
                         }
-                    }
-                ]
-            }
-        ],
-        temperature=0.1,
-        max_completion_tokens=4096,
-    )
+                    ]
+                }
+            ],
+            temperature=0.1,
+            max_completion_tokens=4096,
+        )
 
-    elapsed = time.monotonic() - t0
-    raw_text = response.choices[0].message.content or ""
-    logger.info("[%s] Ответ GPT-5.2 за %.1f сек, len=%d", LABEL, elapsed, len(raw_text))
-    logger.debug("[%s] Raw response:\n%s", LABEL, raw_text[:2000])
+        elapsed = time.monotonic() - t0
+        raw_text = response.choices[0].message.content or ""
+        
+        # Если ответ пустой - retry
+        if not raw_text.strip():
+            logger.warning("[%s] Попытка %d/%d: GPT-5.2 вернул пустой ответ, retry...", LABEL, attempt + 1, max_retries)
+            if attempt < max_retries - 1:
+                continue
+            else:
+                logger.error("[%s] GPT-5.2 вернул пустой ответ после %d попыток", LABEL, max_retries)
+                raise ValueError(f"GPT-5.2 вернул пустой ответ после {max_retries} попыток")
+        
+        logger.info("[%s] Ответ GPT-5.2 за %.1f сек, len=%d", LABEL, elapsed, len(raw_text))
+        logger.debug("[%s] Raw response:\n%s", LABEL, raw_text[:2000])
+        break
 
     # Парсим JSON
     clean_text = _clean_json_response(raw_text)
@@ -291,8 +304,10 @@ async def recognize_document(
     try:
         result = json.loads(clean_text)
     except json.JSONDecodeError as e:
-        logger.error("[%s] GPT-4o вернул не JSON: %s\nRaw:\n%s", LABEL, e, clean_text[:1000])
-        raise ValueError(f"GPT-4o вернул не JSON: {e}") from e
+        logger.error("[%s] GPT-5.2 вернул не JSON: %s", LABEL, e)
+        logger.error("[%s] Raw text (full len=%d):\n%s", LABEL, len(raw_text), raw_text)
+        logger.error("[%s] Clean text (full len=%d):\n%s", LABEL, len(clean_text), clean_text)
+        raise ValueError(f"GPT-5.2 вернул не JSON: {e}") from e
 
     logger.info(
         "[%s] Распознано: doc_type=%s, items=%d, supplier=%s",
@@ -345,6 +360,10 @@ async def recognize_multiple_pages(
         })
 
     logger.info("[%s] Отправляю %d фото в GPT-5.2 (multi-page)", LABEL, len(images))
+    
+    # Проверка на пустые изображения
+    if not images:
+        raise ValueError("Список изображений пуст")
 
     response = await client.chat.completions.create(
         model=GPT_MODEL,
@@ -363,8 +382,10 @@ async def recognize_multiple_pages(
     try:
         result = json.loads(clean_text)
     except json.JSONDecodeError as e:
-        logger.error("[%s] GPT-4o multi-page не JSON: %s", LABEL, e)
-        raise ValueError(f"GPT-4o вернул не JSON: {e}") from e
+        logger.error("[%s] Multi-page: GPT-5.2 вернул не JSON: %s", LABEL, e)
+        logger.error("[%s] Multi-page raw (len=%d):\n%s", LABEL, len(raw_text), raw_text)
+        logger.error("[%s] Multi-page clean (len=%d):\n%s", LABEL, len(clean_text), clean_text)
+        raise ValueError(f"GPT-5.2 multi-page вернул не JSON: {e}") from e
 
     return result
 
@@ -458,7 +479,9 @@ async def extract_document_metadata(image_bytes: bytes) -> dict[str, Any]:
     try:
         result = json.loads(clean_text)
     except json.JSONDecodeError as e:
-        logger.warning("[%s] Metadata не JSON, возвращаю fallback: %s", LABEL, e)
+        logger.warning("[%s] Metadata: GPT-5.2 вернул не JSON: %s", LABEL, e)
+        logger.warning("[%s] Metadata raw (len=%d): %s", LABEL, len(raw_text), raw_text[:500])
+        logger.warning("[%s] Metadata clean (len=%d): %s", LABEL, len(clean_text), clean_text[:500])
         # Fallback: считаем что это отдельный документ
         return {
             "doc_number": None,
