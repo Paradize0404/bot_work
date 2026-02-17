@@ -129,6 +129,25 @@ async def _album_timer(
     count = len(file_ids)
     status_msg = buf.get("status_message")
     
+    # Gemini Flash лимит: ~16 изображений, безопасно до 14
+    MAX_PHOTOS = 14
+    if count > MAX_PHOTOS:
+        logger.warning(
+            "[%s] Слишком много фото от user_id=%d: %d фото (макс %d)",
+            LABEL, user_id, count, MAX_PHOTOS,
+        )
+        if status_msg:
+            try:
+                await status_msg.edit_text(
+                    f"⚠️ Получено {count} фото, но Gemini поддерживает максимум {MAX_PHOTOS} за раз.\n\n"
+                    f"Обрабатываю первые {MAX_PHOTOS} фото. Остальные отправьте отдельным сообщением.",
+                )
+            except Exception:
+                pass
+        # Берём только первые MAX_PHOTOS
+        file_ids = file_ids[:MAX_PHOTOS]
+        count = MAX_PHOTOS
+    
     logger.info(
         "[%s] Собрано фото от user_id=%d: %d фото",
         LABEL, user_id, count,
