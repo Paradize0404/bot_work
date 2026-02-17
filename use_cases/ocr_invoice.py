@@ -93,12 +93,12 @@ def check_photo_quality(doc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def format_quality_message(quality_result: dict[str, Any]) -> str:
+def format_quality_message(quality_result: dict[str, Any]) -> tuple[str, list[tuple[int, str]]]:
     """
     Сформировать сообщение о проблемах качества фото.
     
     Returns:
-        HTML-текст для отправки пользователю.
+        (HTML-текст для отправки, список проблемных фото [(номер, описание)])
     """
     lines = ["⚠️ <b>Проблемы с качеством фото</b>\n"]
     
@@ -109,29 +109,43 @@ def format_quality_message(quality_result: dict[str, Any]) -> str:
     if retake_reason:
         lines.append(f"\n❌ <b>Причина:</b> {retake_reason}")
     
+    # Парсим номера проблемных фото из issues
     issues = quality_result.get("issues", [])
+    problematic_photos: list[tuple[int, str]] = []
+    
     if issues:
         lines.append("\n📋 <b>Обнаруженные проблемы:</b>")
         for issue in issues[:10]:  # показываем до 10 проблем
-            # Выделяем номера фото жирным если есть паттерн "Фото N:"
+            # Извлекаем номер фото если есть паттерн "Фото N:"
             if issue.startswith("Фото "):
                 parts = issue.split(":", 1)
                 if len(parts) == 2:
-                    lines.append(f"  📸 <b>{parts[0]}</b>:{parts[1]}")
+                    try:
+                        # Парсим номер: "Фото 3" -> 3
+                        photo_num_str = parts[0].replace("Фото", "").strip()
+                        photo_num = int(photo_num_str)
+                        problem_text = parts[1].strip()
+                        problematic_photos.append((photo_num, problem_text))
+                        lines.append(f"  📸 <b>Фото {photo_num}</b>: {problem_text}")
+                    except ValueError:
+                        lines.append(f"  • {issue}")
                 else:
                     lines.append(f"  • {issue}")
             else:
                 lines.append(f"  • {issue}")
     
     lines.append("\n💡 <b>Что делать:</b>")
-    lines.append("1. Убедитесь что нет бликов от лампы/окна")
-    lines.append("2. Держите камеру ровно над документом")
-    lines.append("3. Проверьте что весь документ в кадре")
-    lines.append("4. Сделайте фото заново в хорошо освещённом месте")
+    if problematic_photos:
+        lines.append("Переснимите проблемные фото (они показаны выше)")
+    else:
+        lines.append("1. Убедитесь что нет бликов от лампы/окна")
+        lines.append("2. Держите камеру ровно над документом")
+        lines.append("3. Проверьте что весь документ в кадре")
+        lines.append("4. Сделайте фото заново в хорошо освещённом месте")
     
     lines.append("\n📸 Отправьте новое фото или нажмите ❌ Отменить»")
     
-    return "\n".join(lines)
+    return "\n".join(lines), problematic_photos
     lines.append("3. Проверьте что весь документ в кадре")
     lines.append("4. Сделайте фото заново в хорошо освещённом месте")
     

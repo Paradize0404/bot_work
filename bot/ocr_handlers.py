@@ -312,18 +312,35 @@ async def _run_ocr(
         quality_result = check_photo_quality(doc)
         
         if not quality_result["ok"]:
-            # Плохое качество → просим переснять КАССИРА
-            quality_msg = format_quality_message(quality_result)
+            # Плохое качество → показываем проблемные фото + просим переснять
+            quality_msg, problematic_photos = format_quality_message(quality_result)
             await state.set_state(OcrStates.waiting_retake)
             await state.update_data(ocr_bad_quality_doc=doc)
             
+            # Отправляем проблемные фото с подписями
+            from aiogram.types import BufferedInputFile
+            for photo_num, problem_text in problematic_photos:
+                # Номера фото в списке начинаются с 1, но индексы с 0
+                photo_idx = photo_num - 1
+                if 0 <= photo_idx < len(images):
+                    photo_file = BufferedInputFile(
+                        images[photo_idx],
+                        filename=f"photo_{photo_num}.jpg"
+                    )
+                    await message.answer_photo(
+                        photo=photo_file,
+                        caption=f"❌ <b>Фото {photo_num}</b>: {problem_text}",
+                        parse_mode="HTML",
+                    )
+            
+            # Затем текстовое сообщение с инструкциями
             await placeholder.edit_text(
                 quality_msg,
                 parse_mode="HTML",
             )
             logger.warning(
-                "[%s] Плохое качество фото tg:%d, confidence=%d%%, reason=%s",
-                LABEL, tg_id, quality_result["confidence"], quality_result["retake_reason"],
+                "[%s] Плохое качество фото tg:%d, confidence=%d%%, problematic=%s",
+                LABEL, tg_id, quality_result["confidence"], problematic_photos,
             )
             return
 
