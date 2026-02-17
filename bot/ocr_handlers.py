@@ -891,12 +891,49 @@ async def cb_accountant_approve(callback: CallbackQuery) -> None:
             await callback.message.edit_text(
                 f"✅ Документ #{doc_id} успешно загружен в iiko."
             )
+            
+            # Уведомляем отправителя об успешной загрузке
+            try:
+                supplier = doc_row.supplier_name or "?"
+                await callback.bot.send_message(
+                    doc_row.telegram_id,
+                    f"✅ <b>Документ загружен в iiko</b>\n\n"
+                    f"Документ #{doc_id}\n"
+                    f"Поставщик: {supplier}\n"
+                    f"Дата: {doc_row.doc_date or '?'}\n"
+                    f"Номер: {doc_row.doc_number or '?'}\n\n"
+                    f"Бухгалтер подтвердил и загрузил документ в систему.",
+                    parse_mode="HTML"
+                )
+                logger.info("[%s] Уведомление об успешной загрузке отправлено tg:%d", LABEL, doc_row.telegram_id)
+            except Exception as e:
+                logger.warning("[%s] Не удалось отправить уведомление об успешной загрузке tg:%d: %s", 
+                              LABEL, doc_row.telegram_id, e)
         else:
             error = result.get("error", "неизвестная ошибка")
             await update_ocr_status(doc_id, "error")
             await callback.message.edit_text(
                 f"❌ Ошибка загрузки в iiko:\n{error}"
             )
+            
+            # Уведомляем отправителя об ошибке
+            try:
+                supplier = doc_row.supplier_name or "?"
+                await callback.bot.send_message(
+                    doc_row.telegram_id,
+                    f"❌ <b>Ошибка загрузки в iiko</b>\n\n"
+                    f"Документ #{doc_id}\n"
+                    f"Поставщик: {supplier}\n"
+                    f"Дата: {doc_row.doc_date or '?'}\n"
+                    f"Номер: {doc_row.doc_number or '?'}\n\n"
+                    f"Ошибка: {error}\n\n"
+                    f"Свяжитесь с бухгалтером.",
+                    parse_mode="HTML"
+                )
+                logger.info("[%s] Уведомление об ошибке загрузки отправлено tg:%d", LABEL, doc_row.telegram_id)
+            except Exception as e:
+                logger.warning("[%s] Не удалось отправить уведомление об ошибке загрузки tg:%d: %s", 
+                              LABEL, doc_row.telegram_id, e)
 
     except Exception as e:
         logger.exception("[%s] Send to iiko failed doc:%d: %s", LABEL, doc_id, e)
@@ -917,10 +954,32 @@ async def cb_accountant_reject(callback: CallbackQuery) -> None:
 
     logger.info("[%s] Бухгалтер reject doc_id=%d tg:%d", LABEL, doc_id, callback.from_user.id)
 
-    from use_cases.ocr_invoice import update_ocr_status
+    from use_cases.ocr_invoice import update_ocr_status, get_ocr_document
+    
+    # Получаем документ для уведомления отправителя
+    doc = await get_ocr_document(doc_id)
+    
     await update_ocr_status(doc_id, "rejected")
-
     await callback.message.edit_text(f"❌ Документ #{doc_id} отклонён.")
+    
+    # Уведомляем отправителя
+    if doc:
+        try:
+            supplier = doc.supplier_name or "?"
+            await callback.bot.send_message(
+                doc.telegram_id,
+                f"❌ <b>Документ отклонён бухгалтером</b>\n\n"
+                f"Документ #{doc_id}\n"
+                f"Поставщик: {supplier}\n"
+                f"Дата: {doc.doc_date or '?'}\n"
+                f"Номер: {doc.doc_number or '?'}\n\n"
+                f"Свяжитесь с бухгалтером для уточнений.",
+                parse_mode="HTML"
+            )
+            logger.info("[%s] Уведомление об отклонении отправлено tg:%d", LABEL, doc.telegram_id)
+        except Exception as e:
+            logger.warning("[%s] Не удалось отправить уведомление об отклонении tg:%d: %s", 
+                          LABEL, doc.telegram_id, e)
 
 
 @router.callback_query(F.data.startswith("ocr_ack:"))
@@ -936,12 +995,35 @@ async def cb_accountant_ack(callback: CallbackQuery) -> None:
 
     logger.info("[%s] Бухгалтер ack (услуга) doc_id=%d tg:%d", LABEL, doc_id, callback.from_user.id)
 
-    from use_cases.ocr_invoice import update_ocr_status
+    from use_cases.ocr_invoice import update_ocr_status, get_ocr_document
+    
+    # Получаем документ для уведомления отправителя
+    doc = await get_ocr_document(doc_id)
+    
     await update_ocr_status(doc_id, "acknowledged")
 
     await callback.message.edit_text(
         f"✅ Документ #{doc_id} (услуга) принят к сведению."
     )
+    
+    # Уведомляем отправителя
+    if doc:
+        try:
+            supplier = doc.supplier_name or "?"
+            await callback.bot.send_message(
+                doc.telegram_id,
+                f"✅ <b>Документ принят бухгалтером</b>\n\n"
+                f"Документ #{doc_id}\n"
+                f"Поставщик: {supplier}\n"
+                f"Дата: {doc.doc_date or '?'}\n"
+                f"Номер: {doc.doc_number or '?'}\n\n"
+                f"Документ принят к учёту.",
+                parse_mode="HTML"
+            )
+            logger.info("[%s] Уведомление о принятии отправлено tg:%d", LABEL, doc.telegram_id)
+        except Exception as e:
+            logger.warning("[%s] Не удалось отправить уведомление о принятии tg:%d: %s", 
+                          LABEL, doc.telegram_id, e)
 
 
 @router.callback_query(F.data.startswith("ocr_service:"))
