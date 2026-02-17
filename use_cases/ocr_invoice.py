@@ -324,7 +324,7 @@ async def process_photo_batch(
 
     groups = await group_photos_by_document(images)
 
-    # Шаг 2: Обработка каждой группы ПОСЛЕДОВАТЕЛЬНО (с progress updates)
+    # Шаг 2: ПАРАЛЛЕЛЬНАЯ обработка всех групп (быстро!)
     results: list[tuple[dict[str, Any], str]] = []
     total = len(groups)
     kw = {
@@ -332,50 +332,59 @@ async def process_photo_batch(
         "known_buyers": known_buyers,
     }
 
-    for i, group_indices in enumerate(groups):
-        group_images = [images[idx] for idx in group_indices]
-        page_nums = ", ".join(str(idx + 1) for idx in group_indices)
+    if progress_callback:
+        await progress_callback(0, total, f"Распознаю {total} документ(ов) параллельно...")
 
-        if progress_callback:
-            await progress_callback(
-                i + 1, total,
-                f"Распознаю документ {i+1}/{total} (фото {page_nums})..."
-            )
+    # Семафор для ограничения одновременных запросов (макс 10 одновременно)
+    semaphore = asyncio.Semaphore(10)
 
-        try:
-            if len(group_images) == 1:
-                doc, preview = await process_photo(
-                    group_images[0], telegram_id, **kw
+    async def _process_one_group(i: int, group_indices: list[int]):
+        """Обработать одну группу фото с защитой семафора."""
+        async with semaphore:
+            group_images = [images[idx] for idx in group_indices]
+            page_nums = ", ".join(str(idx + 1) for idx in group_indices)
+
+            try:
+                if len(group_images) == 1:
+                    doc, preview = await process_photo(
+                        group_images[0], telegram_id, **kw
+                    )
+                else:
+                    doc, preview = await process_multiple_photos(
+                        group_images, telegram_id, **kw
+                    )
+                logger.info(
+                    "[%s] Документ %d/%d OK: %s, items=%d (фото %s)",
+                    LABEL, i + 1, total,
+                    doc.get("doc_type", "?"),
+                    len(doc.get("items", [])),
+                    page_nums,
                 )
-            else:
-                doc, preview = await process_multiple_photos(
-                    group_images, telegram_id, **kw
+                return (doc, preview)
+            except Exception as e:
+                logger.exception(
+                    "[%s] Ошибка распознавания документа %d/%d (фото %s): %s",
+                    LABEL, i + 1, total, page_nums, e,
                 )
-            results.append((doc, preview))
-            logger.info(
-                "[%s] Документ %d/%d OK: %s, items=%d (фото %s)",
-                LABEL, i + 1, total,
-                doc.get("doc_type", "?"),
-                len(doc.get("items", [])),
-                page_nums,
-            )
-        except Exception as e:
-            logger.exception(
-                "[%s] Ошибка распознавания документа %d/%d (фото %s): %s",
-                LABEL, i + 1, total, page_nums, e,
-            )
-            # Создаём "ошибочный" документ чтобы не терять остальные
-            error_doc = {
-                "doc_type": "Ошибка",
-                "doc_number": None,
-                "date": None,
-                "supplier": {"name": "Ошибка распознавания"},
-                "items": [],
-                "notes": f"Не удалось распознать фото {page_nums}: {e}",
-                "_error": True,
-            }
-            error_preview = f"❌ Ошибка распознавания фото {page_nums}:\n{e}"
-            results.append((error_doc, error_preview))
+                # Создаём "ошибочный" документ
+                error_doc = {
+                    "doc_type": "Ошибка",
+                    "doc_number": None,
+                    "date": None,
+                    "supplier": {"name": "Ошибка распознавания"},
+                    "items": [],
+                    "notes": f"Не удалось распознать фото {page_nums}: {e}",
+                    "_error": True,
+                }
+                error_preview = f"❌ Ошибка распознавания фото {page_nums}:\n{e}"
+                return (error_doc, error_preview)
+
+    # Запускаем все группы параллельно
+    tasks = [
+        _process_one_group(i, group_indices)
+        for i, group_indices in enumerate(groups)
+    ]
+    results = await asyncio.gather(*tasks)
 
     elapsed = time.monotonic() - t0
     ok_count = sum(1 for doc, _ in results if not doc.get("_error"))
