@@ -1329,7 +1329,7 @@ async def admin_set_new_quantity(message: Message, state: FSMContext) -> None:
 
 async def _finish_edit(callback: CallbackQuery, state: FSMContext,
                        doc: pending.PendingWriteoff) -> None:
-    """Завершить редактирование: разблокировать, разослать обновлённый документ."""
+    """Завершить редактирование: разблокировать, обновить сообщения у всех админов."""
     doc_id = doc.doc_id
     logger.info("[writeoff-edit] Завершение редактирования tg:%d, doc=%s", callback.from_user.id, doc_id)
     await state.clear()
@@ -1338,21 +1338,42 @@ async def _finish_edit(callback: CallbackQuery, state: FSMContext,
     text = pending.build_summary_text(doc)
     kb = pending.admin_keyboard(doc_id)
 
-    # Обновляем сообщение текущего админа
-    try:
-        await callback.message.edit_text(text + "\n\n✏️ <i>Отредактировано</i>",
-                                          parse_mode="HTML")
-    except Exception:
-        pass
+    # Получаем список всех админов
+    admin_ids = await admin_uc.get_admin_ids()
+    existing_msgs = doc.admin_msg_ids.copy()
+    new_msg_ids: dict[int, int] = {}
 
-    # Рассылаем обновлённый документ всем админам
-    _ids = await admin_uc.get_admin_ids()
-    for admin_id in _ids:
+    for admin_id in admin_ids:
+        msg_id = existing_msgs.get(admin_id)
+        
+        # Если есть существующее сообщение, пробуем отредактировать
+        if msg_id:
+            try:
+                await callback.bot.edit_message_text(
+                    chat_id=admin_id,
+                    message_id=msg_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=kb,
+                )
+                new_msg_ids[admin_id] = msg_id
+                logger.debug("[writeoff-edit] Отредактировано сообщение #%d для админа tg:%d в документе %s", 
+                            msg_id, admin_id, doc_id)
+                continue
+            except Exception as exc:
+                logger.warning("[writeoff-edit] Не удалось отредактировать сообщение #%d для tg:%d: %s. Отправляю новое.", 
+                             msg_id, admin_id, exc)
+        
+        # Если нет существующего сообщения или редактирование не удалось, отправляем новое
         try:
             msg = await callback.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=kb)
-            doc.admin_msg_ids[admin_id] = msg.message_id
-        except Exception:
-            pass
+            new_msg_ids[admin_id] = msg.message_id
+            logger.debug("[writeoff-edit] Отправлено новое сообщение #%d админу tg:%d для документа %s", 
+                        msg.message_id, admin_id, doc_id)
+        except Exception as exc:
+            logger.warning("[writeoff-edit] Не удалось отправить сообщение админу tg:%d: %s", admin_id, exc)
+    
+    doc.admin_msg_ids = new_msg_ids
 
 
 async def _finish_edit_msg(message: Message, state: FSMContext,
@@ -1366,15 +1387,42 @@ async def _finish_edit_msg(message: Message, state: FSMContext,
     text = pending.build_summary_text(doc)
     kb = pending.admin_keyboard(doc_id)
 
-    await message.answer(text + "\n\n✏️ <i>Отредактировано</i>", parse_mode="HTML")
+    # Получаем список всех админов
+    admin_ids = await admin_uc.get_admin_ids()
+    existing_msgs = doc.admin_msg_ids.copy()
+    new_msg_ids: dict[int, int] = {}
 
-    _ids = await admin_uc.get_admin_ids()
-    for admin_id in _ids:
+    for admin_id in admin_ids:
+        msg_id = existing_msgs.get(admin_id)
+        
+        # Если есть существующее сообщение, пробуем отредактировать
+        if msg_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=admin_id,
+                    message_id=msg_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=kb,
+                )
+                new_msg_ids[admin_id] = msg_id
+                logger.debug("[writeoff-edit] Отредактировано сообщение #%d для админа tg:%d в документе %s", 
+                            msg_id, admin_id, doc_id)
+                continue
+            except Exception as exc:
+                logger.warning("[writeoff-edit] Не удалось отредактировать сообщение #%d для tg:%d: %s. Отправляю новое.", 
+                             msg_id, admin_id, exc)
+        
+        # Если нет существующего сообщения или редактирование не удалось, отправляем новое
         try:
             msg = await message.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=kb)
-            doc.admin_msg_ids[admin_id] = msg.message_id
-        except Exception:
-            pass
+            new_msg_ids[admin_id] = msg.message_id
+            logger.debug("[writeoff-edit] Отправлено новое сообщение #%d админу tg:%d для документа %s", 
+                        msg.message_id, admin_id, doc_id)
+        except Exception as exc:
+            logger.warning("[writeoff-edit] Не удалось отправить сообщение админу tg:%d: %s", admin_id, exc)
+    
+    doc.admin_msg_ids = new_msg_ids
 
 
 # ══════════════════════════════════════════════════════

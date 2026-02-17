@@ -97,7 +97,9 @@ IIKO_CLOUD_ORG_ID: str | None = os.getenv("IIKO_CLOUD_ORG_ID") or os.getenv("ORG
 # Базовый URL iikoCloud API
 IIKO_CLOUD_BASE_URL: str = os.getenv("IIKO_CLOUD_BASE_URL", "https://api-ru.iiko.services")
 # Порог изменения суммарных остатков (%) при котором отправляется обновление
-STOCK_CHANGE_THRESHOLD_PCT: float = float(os.getenv("STOCK_CHANGE_THRESHOLD_PCT", "5.0"))
+STOCK_CHANGE_THRESHOLD_PCT: float = float(os.getenv("STOCK_CHANGE_THRESHOLD_PCT", "3.0"))
+# Минимальный интервал между отправками остатков (минуты)
+STOCK_UPDATE_INTERVAL_MIN: int = int(os.getenv("STOCK_UPDATE_INTERVAL_MIN", "30"))
 # authToken для верификации входящих вебхуков от iikoCloud
 # ⚠️ ОБЯЗАТЕЛЬНО задайте в env! При auto-generation каждый рестарт — новый секрет,
 # и зарегистрированный вебхук перестанет проходить проверку.

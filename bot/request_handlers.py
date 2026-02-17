@@ -89,7 +89,10 @@ class CreateRequestStates(StatesGroup):
 
 
 class EditRequestStates(StatesGroup):
-    enter_quantities = State()   # получатель вводит новые количества
+    choose_item = State()          # выбор позиции для редактирования
+    choose_action = State()        # выбор действия (наименование/количество/удалить)
+    new_product_search = State()   # поиск нового товара
+    new_quantity = State()         # ввод нового количества
 
 
 class DuplicateRequestStates(StatesGroup):
@@ -872,7 +875,7 @@ async def _update_other_admin_msgs(
 
 
 async def _resend_admin_buttons(bot: Bot, pk: int) -> None:
-    """Переотправить кнопки всем админам (после отмены редактирования)."""
+    """Обновить сообщения с заявкой у всех админов (редактирование или отправка новых)."""
     admin_ids = await admin_uc.get_admin_ids()
     req_data = await req_uc.get_request_by_pk(pk)
     if not req_data or req_data["status"] != "pending":
@@ -880,16 +883,142 @@ async def _resend_admin_buttons(bot: Bot, pk: int) -> None:
     settings_stores = await req_uc.get_request_stores()
     settings_dept = settings_stores[0]["name"] if settings_stores else ""
     text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+    
+    # Получаем существующие сообщения
+    existing_msgs = _request_admin_msgs.get(pk, {})
     new_msgs: dict[int, int] = {}
+    
     for tg_id in admin_ids:
+        msg_id = existing_msgs.get(tg_id)
+        
+        # Если есть существующее сообщение, пробуем его отредактировать
+        if msg_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=tg_id,
+                    message_id=msg_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=_approve_kb(pk),
+                )
+                new_msgs[tg_id] = msg_id
+                logger.debug("[request] Отредактировано сообщение #%d для админа tg:%d в заявке #%d", 
+                            msg_id, tg_id, pk)
+                continue
+            except Exception as exc:
+                logger.warning("[request] Не удалось отредактировать сообщение #%d для tg:%d: %s. Отправляю новое.", 
+                             msg_id, tg_id, exc)
+        
+        # Если нет существующего сообщения или редактирование не удалось, отправляем новое
         try:
             msg = await bot.send_message(
                 tg_id, text, parse_mode="HTML",
                 reply_markup=_approve_kb(pk),
             )
             new_msgs[tg_id] = msg.message_id
+            logger.debug("[request] Отправлено новое сообщение #%d админу tg:%d для заявки #%d", 
+                        msg.message_id, tg_id, pk)
+        except Exception as exc:
+            logger.warning("[request] Не удалось отправить сообщение админу tg:%d: %s", tg_id, exc)
+    
+    _request_admin_msgs[pk] = new_msgs
+
+
+async def _finish_request_edit(callback: CallbackQuery, state: FSMContext, pk: int, change_description: str) -> None:
+    """Завершить редактирование заявки: обновить сообщения с комментарием."""
+    _unlock_request(pk)
+    await state.clear()
+    
+    # Получаем обновлённую заявку
+    req_data = await req_uc.get_request_by_pk(pk)
+    if not req_data:
+        return
+    
+    settings_stores = await req_uc.get_request_stores()
+    settings_dept = settings_stores[0]["name"] if settings_stores else ""
+    text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+    text += f"\n\n✏️ <i>Изменено: {change_description}</i>"
+    
+    admin_ids = await admin_uc.get_admin_ids()
+    existing_msgs = _request_admin_msgs.get(pk, {})
+    new_msgs: dict[int, int] = {}
+    
+    for admin_id in admin_ids:
+        msg_id = existing_msgs.get(admin_id)
+        
+        if msg_id:
+            try:
+                await callback.bot.edit_message_text(
+                    chat_id=admin_id,
+                    message_id=msg_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=_approve_kb(pk),
+                )
+                new_msgs[admin_id] = msg_id
+                continue
+            except Exception:
+                pass
+        
+        # Fallback: отправить новое сообщение только если редактирование не удалось
+        try:
+            msg = await callback.bot.send_message(
+                admin_id, text, parse_mode="HTML",
+                reply_markup=_approve_kb(pk),
+            )
+            new_msgs[admin_id] = msg.message_id
         except Exception:
             pass
+    
+    _request_admin_msgs[pk] = new_msgs
+
+
+async def _finish_request_edit_msg(message: Message, state: FSMContext, pk: int, change_description: str) -> None:
+    """То же, но из message-хэндлера."""
+    _unlock_request(pk)
+    await state.clear()
+    
+    # Получаем обновлённую заявку
+    req_data = await req_uc.get_request_by_pk(pk)
+    if not req_data:
+        return
+    
+    settings_stores = await req_uc.get_request_stores()
+    settings_dept = settings_stores[0]["name"] if settings_stores else ""
+    text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
+    text += f"\n\n✏️ <i>Изменено: {change_description}</i>"
+    
+    admin_ids = await admin_uc.get_admin_ids()
+    existing_msgs = _request_admin_msgs.get(pk, {})
+    new_msgs: dict[int, int] = {}
+    
+    for admin_id in admin_ids:
+        msg_id = existing_msgs.get(admin_id)
+        
+        if msg_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=admin_id,
+                    message_id=msg_id,
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=_approve_kb(pk),
+                )
+                new_msgs[admin_id] = msg_id
+                continue
+            except Exception:
+                pass
+        
+        # Fallback: отправить новое сообщение только если редактирование не удалось
+        try:
+            msg = await message.bot.send_message(
+                admin_id, text, parse_mode="HTML",
+                reply_markup=_approve_kb(pk),
+            )
+            new_msgs[admin_id] = msg.message_id
+        except Exception:
+            pass
+    
     _request_admin_msgs[pk] = new_msgs
 
 
@@ -1148,141 +1277,340 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
     )
 
     items = req_data.get("items", [])
+    
+    if not items:
+        await callback.answer("❌ В заявке нет позиций", show_alert=True)
+        _unlock_request(pk)
+        return
 
-    text = f"✏️ <b>Редактирование заявки #{pk}</b>\n\n"
-    for i, it in enumerate(items, 1):
-        unit = it.get("unit_name", "шт")
-        norm = normalize_unit(unit)
-        if norm == "kg":
-            hint = "граммах"
-            current = it.get("amount", 0) * 1000
-        elif norm == "l":
-            hint = "мл"
-            current = it.get("amount", 0) * 1000
-        else:
-            hint = unit
-            current = it.get("amount", 0)
-        text += f"  {i}. {it.get('name', '?')} — сейчас: {current:.4g} (в {hint})\n"
-
-    text += (
-        "\n✏️ <b>Введите новые количества</b>\n"
-        "(по одному числу на строке, 0 = убрать позицию):"
-    )
-
-    _cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")],
-    ])
+    # Показываем список позиций для выбора
+    buttons = [
+        [InlineKeyboardButton(
+            text=f"{i}. {it['name']} — {it.get('qty_display', str(it.get('amount', 0)))} {it.get('unit_name', 'шт')}",
+            callback_data=f"req_edit_item:{i-1}"
+        )]
+        for i, it in enumerate(items, 1)
+    ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")]]
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await state.clear()
     await state.update_data(_edit_pk=pk, _edit_items=items, _bot_msg_id=callback.message.message_id)
-    await state.set_state(EditRequestStates.enter_quantities)
+    await state.set_state(EditRequestStates.choose_item)
 
     try:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_cancel_kb)
+        await callback.message.edit_text(
+            f"✏️ <b>Редактирование заявки #{pk}</b>\n\n📦 Какую позицию редактировать?",
+            parse_mode="HTML",
+            reply_markup=kb
+        )
     except Exception:
         pass
 
 
-@router.message(EditRequestStates.enter_quantities)
-async def edit_quantities_input(message: Message, state: FSMContext) -> None:
-    raw = (message.text or "").strip()
-    logger.info("[request] Ввод новых кол-в tg:%d, raw='%s'", message.from_user.id, raw[:100])
+# ── Выбор позиции ──
+
+@router.callback_query(EditRequestStates.choose_item, F.data.startswith("req_edit_item:"))
+async def choose_item_to_edit(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    idx_str = callback.data.split(":", 1)[1]
+    try:
+        idx = int(idx_str)
+    except ValueError:
+        await callback.answer("❌ Ошибка данных", show_alert=True)
+        return
+    
+    data = await state.get_data()
+    items = data.get("_edit_items", [])
+    pk = data.get("_edit_pk")
+    
+    if idx < 0 or idx >= len(items):
+        await callback.answer("❌ Позиция не найдена", show_alert=True)
+        return
+    
+    item = items[idx]
+    await state.update_data(_edit_item_idx=idx)
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📦 Сменить наименование", callback_data="req_edit_action:name")],
+        [InlineKeyboardButton(text="🔢 Изменить количество", callback_data="req_edit_action:qty")],
+        [InlineKeyboardButton(text="🗑 Удалить позицию", callback_data="req_edit_action:delete")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")],
+    ])
+    
+    qty_display = item.get("qty_display", f"{item.get('amount', 0)} {item.get('unit_name', 'шт')}")
+    await state.set_state(EditRequestStates.choose_action)
+    
+    try:
+        await callback.message.edit_text(
+            f"📦 Позиция #{idx+1}: <b>{item['name']}</b> — {qty_display}\n\nЧто меняем?",
+            parse_mode="HTML",
+            reply_markup=kb
+        )
+    except Exception:
+        pass
+
+
+# ── Действие с позицией ──
+
+@router.callback_query(EditRequestStates.choose_action, F.data.startswith("req_edit_action:"))
+async def choose_edit_action(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    action = callback.data.split(":", 1)[1]
+    
+    data = await state.get_data()
+    pk = data.get("_edit_pk")
+    items = data.get("_edit_items", [])
+    idx = data.get("_edit_item_idx", -1)
+    
+    if idx < 0 or idx >= len(items):
+        await state.clear()
+        return
+    
+    item = items[idx]
+    
+    if action == "delete":
+        # Удалить позицию
+        removed = items.pop(idx)
+        logger.info("[request] Удалена позиция #%d: %s из заявки #%d", idx+1, removed.get('name'), pk)
+        
+        if not items:
+            await callback.answer("⚠️ Нельзя удалить последнюю позицию", show_alert=True)
+            items.insert(idx, removed)  # вернуть обратно
+            return
+        
+        # Обновить заявку в БД
+        total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in items)
+        await req_uc.update_request_items(pk, items, total_sum)
+        
+        # Обновить сообщения у всех админов
+        await _finish_request_edit(callback, state, pk, f"Удалена позиция: {removed.get('name')}")
+        return
+    
+    elif action == "name":
+        # Сменить наименование
+        await state.set_state(EditRequestStates.new_product_search)
+        try:
+            await callback.message.edit_text(
+                "🔍 Введите часть названия нового товара:",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")]
+                ])
+            )
+        except Exception:
+            pass
+        return
+    
+    elif action == "qty":
+        # Изменить количество
+        unit = item.get("unit_name", "шт")
+        norm = normalize_unit(unit)
+        if norm == "kg":
+            hint = "в граммах"
+        elif norm == "l":
+            hint = "в мл"
+        else:
+            hint = f"в {unit}"
+        
+        await state.set_state(EditRequestStates.new_quantity)
+        try:
+            await callback.message.edit_text(
+                f"🔢 Введите новое количество ({hint}) для «{item['name']}»:",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")]
+                ])
+            )
+        except Exception:
+            pass
+        return
+
+
+# ── Поиск нового товара ──
+
+@router.message(EditRequestStates.new_product_search)
+async def edit_search_new_product(message: Message, state: FSMContext) -> None:
+    query = (message.text or "").strip()
+    logger.info("[request] Поиск нового товара для заявки tg:%d, query='%s'", message.from_user.id, query)
     try:
         await message.delete()
     except Exception:
         pass
-
-    if not raw:
+    
+    if len(query) < 2:
         await _send_prompt(message.bot, message.chat.id, state,
-            "⚠️ Введите количества (по числу на строке).")
+            "⚠️ Минимум 2 символа. Введите название товара:")
         return
-
-    if len(raw) > 2000:
+    
+    from use_cases import invoice_cache as inv_uc
+    products = await inv_uc.search_price_products(query)
+    
+    if not products:
         await _send_prompt(message.bot, message.chat.id, state,
-            "⚠️ Слишком длинный ввод. Максимум 2000 символов.")
+            "🔎 Ничего не найдено. Попробуйте другой запрос:")
         return
+    
+    await state.update_data(_edit_product_cache={p["id"]: p for p in products})
+    
+    buttons = [
+        [InlineKeyboardButton(text=p["name"], callback_data=f"req_edit_newprod:{p['id']}")]
+        for p in products[:15]  # ограничиваем 15 позициями
+    ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")]]
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await _send_prompt(message.bot, message.chat.id, state,
+        f"🔍 Найдено {len(products)}. Выберите товар:",
+        reply_markup=kb)
 
+
+@router.callback_query(EditRequestStates.new_product_search, F.data.startswith("req_edit_newprod:"))
+async def edit_pick_new_product(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    prod_id = callback.data.split(":", 1)[1]
+    
+    try:
+        UUID(prod_id)
+    except ValueError:
+        await callback.answer("❌ Ошибка данных", show_alert=True)
+        return
+    
     data = await state.get_data()
     pk = data.get("_edit_pk")
     items = data.get("_edit_items", [])
-
-    # Парсим числа
-    parts = re.split(r"[\n,;\s]+", raw.strip())
-    quantities: list[float] = []
-    for p in parts:
-        p = p.strip().replace(",", ".")
-        if not p:
-            continue
-        try:
-            q = float(p)
-            quantities.append(q)
-        except ValueError:
-            await _send_prompt(message.bot, message.chat.id, state,
-                f"⚠️ Не удалось распознать: «{p}». Введите заново.")
-            return
-
-    if len(quantities) != len(items):
-        await _send_prompt(message.bot, message.chat.id, state,
-            f"⚠️ Ожидается {len(items)} чисел, получено {len(quantities)}.\n"
-            "Введите заново:"
-        )
+    idx = data.get("_edit_item_idx", -1)
+    cache = data.get("_edit_product_cache", {})
+    product = cache.get(prod_id)
+    
+    if not product or idx < 0 or idx >= len(items):
+        await state.clear()
         return
-
-    # Собираем обновлённые позиции
-    updated_items: list[dict] = []
-    total_sum = 0.0
-    for it, qty in zip(items, quantities):
-        if qty <= 0:
-            continue
-
-        unit = it.get("unit_name", "шт")
-        norm = normalize_unit(unit)
-        price = it.get("price", it.get("sell_price", 0))
-
-        if norm in ("kg", "l"):
-            converted = qty / 1000
-            display_unit = "г" if norm == "kg" else "мл"
-            api_unit = "кг" if norm == "kg" else "л"
-            qty_display = f"{qty:.4g} {display_unit} ({converted:.3g} {api_unit})"
-        else:
-            converted = qty
-            display_unit = unit
-            api_unit = unit
-            qty_display = f"{qty:.4g} {unit}"
-
-        line_sum = converted * price
-        total_sum += line_sum
-
-        updated_items.append({
-            **it,
-            "amount": converted,
-            "qty_display": qty_display,
-            "raw_qty": qty,
-        })
-
-    if not updated_items:
-        await _send_prompt(message.bot, message.chat.id, state,
-            "⚠️ Все позиции с количеством 0. Введите заново.")
-        return
-
+    
+    old_name = items[idx]["name"]
+    
+    # Определяем склад-источник и целевой склад для нового товара
+    source_store_id = product.get("store_id", "")
+    source_store_name = product.get("store_name", "")
+    
+    user_store_map = data.get("_user_store_map", {})
+    target = req_uc.resolve_target_store(source_store_name, user_store_map) if source_store_name else None
+    target_store_id = target["id"] if target else ""
+    target_store_name = target["name"] if target else ""
+    
+    # Цена: сначала из столбца поставщика, потом себестоимость
+    from use_cases import invoice_cache as inv_uc
+    supplier_price = await inv_uc.get_supplier_price_for_product(
+        product["id"], target_store_name,
+    ) if target_store_name else None
+    cost_price = product.get("cost_price", 0)
+    price = supplier_price or cost_price or 0
+    
+    # Сохраняем количество из старой позиции
+    old_amount = items[idx].get("amount", 0)
+    old_qty_display = items[idx].get("qty_display", "")
+    old_raw_qty = items[idx].get("raw_qty", old_amount)
+    
+    items[idx] = {
+        "product_id": product["id"],
+        "name": product["name"],
+        "amount": old_amount,
+        "price": price,
+        "cost_price": cost_price,
+        "main_unit": product.get("main_unit"),
+        "unit_name": product.get("unit_name", "шт"),
+        "sell_price": price,
+        "qty_display": old_qty_display,
+        "raw_qty": old_raw_qty,
+        "store_id": source_store_id,
+        "store_name": source_store_name,
+        "target_store_id": target_store_id,
+        "target_store_name": target_store_name,
+    }
+    
+    logger.info("[request] Позиция #%d заменена: %s → %s в заявке #%d", idx+1, old_name, product["name"], pk)
+    
     # Обновить заявку в БД
-    await req_uc.update_request_items(pk, updated_items, total_sum)
+    total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in items)
+    await req_uc.update_request_items(pk, items, total_sum)
+    
+    # Обновить сообщения у всех админов
+    await _finish_request_edit(callback, state, pk, f"Замена: {old_name} → {product['name']}")
 
-    # Снять блокировку
-    _unlock_request(pk)
 
-    # Показать обновлённую заявку
-    req_data = await req_uc.get_request_by_pk(pk)
-    text = req_uc.format_request_text(req_data)
-    text += "\n\n✅ <i>Количества обновлены.</i>"
+# ── Ввод нового количества ──
 
-    await _send_prompt(message.bot, message.chat.id, state,
-        text, reply_markup=_approve_kb(pk),
-    )
-    await state.clear()
+@router.message(EditRequestStates.new_quantity)
+async def edit_enter_new_quantity(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip().replace(",", ".")
+    logger.info("[request] Новое количество для заявки tg:%d, raw='%s'", message.from_user.id, raw)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    
+    if not raw:
+        await _send_prompt(message.bot, message.chat.id, state,
+            "⚠️ Введите число.")
+        return
+    
+    try:
+        qty = float(raw)
+    except ValueError:
+        await _send_prompt(message.bot, message.chat.id, state,
+            f"⚠️ Не удалось распознать число: «{raw}». Введите заново.")
+        return
+    
+    if qty <= 0:
+        await _send_prompt(message.bot, message.chat.id, state,
+            "⚠️ Количество должно быть > 0.")
+        return
+    
+    data = await state.get_data()
+    pk = data.get("_edit_pk")
+    items = data.get("_edit_items", [])
+    idx = data.get("_edit_item_idx", -1)
+    
+    if idx < 0 or idx >= len(items):
+        await state.clear()
+        return
+    
+    item = items[idx]
+    unit = item.get("unit_name", "шт")
+    norm = normalize_unit(unit)
+    
+    # Конвертация единиц
+    if norm in ("kg", "l"):
+        converted = qty / 1000
+        display_unit = "г" if norm == "kg" else "мл"
+        api_unit = "кг" if norm == "l" else "л"
+        qty_display = f"{qty:.4g} {display_unit} ({converted:.3g} {api_unit})"
+    else:
+        converted = qty
+        display_unit = unit
+        qty_display = f"{qty:.4g} {unit}"
+    
+    items[idx]["amount"] = converted
+    items[idx]["qty_display"] = qty_display
+    items[idx]["raw_qty"] = qty
+    
+    logger.info("[request] Позиция #%d кол-во изменено: %s в заявке #%d", idx+1, qty_display, pk)
+    
+    # Обновить заявку в БД
+    total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in items)
+    await req_uc.update_request_items(pk, items, total_sum)
+    
+    # Обновить сообщения у всех админов
+    await _finish_request_edit_msg(message, state, pk, f"{item['name']}: количество изменено на {qty_display}")
 
-    # Переотправить кнопки всем админам
-    await _resend_admin_buttons(message.bot, pk)
+
+# ── Защита: текст в inline-состояниях ──
+
+@router.message(EditRequestStates.choose_item)
+@router.message(EditRequestStates.choose_action)
+async def _ignore_text_edit_inline(message: Message) -> None:
+    logger.debug("[request] Игнор текста в inline-состоянии редактирования tg:%d", message.from_user.id)
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
 
 # ── Отклонить заявку ──

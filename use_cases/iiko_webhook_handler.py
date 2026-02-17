@@ -27,7 +27,8 @@ LABEL = "iikoWebhook"
 
 # Последний снэпшот остатков (для дельта-сравнения)
 _last_snapshot_hash: str | None = None
-_last_total_sum: float = 0.0
+_last_snapshot_items: dict[tuple[str, str], float] = {}  # {(product_id, dept_id): amount}
+_last_update_time: float | None = None  # timestamp последней отправки (monotonic)
 
 # ═══════════════════════════════════════════════════════
 # Debounce для StopListUpdate
@@ -195,38 +196,118 @@ def _compute_snapshot_hash(items: list[dict]) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _compute_total_sum(items: list[dict]) -> float:
-    """Суммарное значение остатков (для процентного сравнения)."""
-    return sum(it.get("total_amount", 0.0) for it in items)
-
-
-def _should_update(new_hash: str, new_total: float) -> bool:
+def _compute_items_dict(items: list[dict]) -> dict[tuple[str, str], float]:
     """
-    Определяем, нужно ли обновлять сообщения.
+    Преобразует список items в словарь {(product_name, department_name): total_amount}.
+    Используется для покомпонентного сравнения (каждая позиция отдельно).
+    """
+    return {
+        (it["product_name"], it["department_name"]): it["total_amount"]
+        for it in items
+    }
+
+
+def _should_update(new_hash: str, new_items_dict: dict[tuple[str, str], float]) -> bool:
+    """
+    Определяем, нужно ли обновлять сообщения (защита от спама).
+    
     Обновляем если:
-      - Это первая проверка (нет предыдущего снэпшота)
-      - Хеш изменился И изменение суммы >= threshold %
+      1. Первая проверка (нет предыдущего снэпшота)
+      2. ЛЮБАЯ позиция изменилась >= 3% от своего значения
+      3. Появились новые позиции ниже минимума
+      4. Позиции исчезли из списка (стали выше минимума)
+      5. Прошло >= 30 мин с последней отправки И есть хоть какие-то изменения
+    
+    НЕ обновляем если:
+      - Хеш не изменился (ничего не изменилось)
+      - Все изменения < 3% И прошло < 30 мин (мелкие продажи, антиспам)
     """
-    global _last_snapshot_hash, _last_total_sum
+    global _last_snapshot_hash, _last_snapshot_items, _last_update_time
+
+    from config import STOCK_CHANGE_THRESHOLD_PCT, STOCK_UPDATE_INTERVAL_MIN
 
     if _last_snapshot_hash is None:
         # Первый запуск — всегда обновляем
+        logger.info("[%s] Первая проверка — обновляем", LABEL)
         return True
 
     if new_hash == _last_snapshot_hash:
         # Ничего не изменилось
+        logger.info("[%s] Хеш не изменился — пропускаем", LABEL)
         return False
 
-    # Хеш разный — проверяем порог по сумме
-    if _last_total_sum == 0:
-        return True  # было 0, стало что-то (или наоборот)
-
-    change_pct = abs(new_total - _last_total_sum) / _last_total_sum * 100
+    # Хеш изменился — проверяем КАЖДУЮ позицию
+    old_keys = set(_last_snapshot_items.keys())
+    new_keys = set(new_items_dict.keys())
+    
+    # Проверяем новые позиции (появились в списке)
+    added = new_keys - old_keys
+    if added:
+        logger.info(
+            "[%s] Появилось %d новых позиций ниже минимума: %s — обновляем",
+            LABEL, len(added), list(added)[:3],
+        )
+        return True
+    
+    # Проверяем удалённые позиции (исчезли из списка — стали выше минимума)
+    removed = old_keys - new_keys
+    if removed:
+        logger.info(
+            "[%s] Исчезло %d позиций (стали выше минимума): %s — обновляем",
+            LABEL, len(removed), list(removed)[:3],
+        )
+        return True
+    
+    # Проверяем изменения существующих позиций
+    max_change_pct = 0.0
+    max_change_item = None
+    
+    for key in new_keys & old_keys:
+        old_val = _last_snapshot_items[key]
+        new_val = new_items_dict[key]
+        
+        if old_val == 0:
+            continue  # пропускаем деление на 0
+        
+        change_pct = abs(new_val - old_val) / old_val * 100
+        
+        if change_pct > max_change_pct:
+            max_change_pct = change_pct
+            max_change_item = (key, old_val, new_val)
+        
+        # Если хотя бы одна позиция изменилась >= порога — триггерим
+        if change_pct >= STOCK_CHANGE_THRESHOLD_PCT:
+            logger.info(
+                "[%s] Позиция '%s / %s' изменилась %.1f%% >= %.1f%% (%.2f → %.2f) — обновляем",
+                LABEL, key[0][:30], key[1][:20], change_pct, STOCK_CHANGE_THRESHOLD_PCT,
+                old_val, new_val,
+            )
+            return True
+    
+    # Все изменения < порога — проверяем временное условие (30 мин)
+    if _last_update_time is not None:
+        elapsed_min = (time.monotonic() - _last_update_time) / 60
+        if elapsed_min >= STOCK_UPDATE_INTERVAL_MIN:
+            logger.info(
+                "[%s] Прошло %.1f мин >= %d мин + есть изменения (макс %.1f%%) — обновляем",
+                LABEL, elapsed_min, STOCK_UPDATE_INTERVAL_MIN, max_change_pct,
+            )
+            return True
+        else:
+            logger.info(
+                "[%s] Все изменения < %.1f%% (макс %.1f%% у '%s') И прошло %.1f мин < %d мин — пропускаем (антиспам)",
+                LABEL, STOCK_CHANGE_THRESHOLD_PCT, max_change_pct,
+                max_change_item[0][0][:30] if max_change_item else "?",
+                elapsed_min, STOCK_UPDATE_INTERVAL_MIN,
+            )
+            return False
+    
+    # Первое изменение после старта (нет _last_update_time) — обновляем
     logger.info(
-        "[%s] Дельта остатков: %.1f%% (порог: %.1f%%)",
-        LABEL, change_pct, STOCK_CHANGE_THRESHOLD_PCT,
+        "[%s] Первое изменение после старта (макс %.1f%%) — обновляем",
+        LABEL, max_change_pct,
     )
-    return change_pct >= STOCK_CHANGE_THRESHOLD_PCT
+    return True
 
 
 # ═══════════════════════════════════════════════════════
@@ -290,10 +371,10 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
 
         items = stock_result.get("items", [])
         new_hash = _compute_snapshot_hash(items)
-        new_total = _compute_total_sum(items)
+        new_items_dict = _compute_items_dict(items)
 
-        # 3. Дельта-сравнение (≥ 5% изменений)
-        should = _should_update(new_hash, new_total)
+        # 3. Покомпонентное сравнение (каждая позиция отдельно)
+        should = _should_update(new_hash, new_items_dict)
 
         if should:
             # 4. Обновляем закреплённые сообщения (per-department для каждого юзера)
@@ -301,7 +382,8 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
             await update_all_stock_alerts(bot)
 
             _last_snapshot_hash = new_hash
-            _last_total_sum = new_total
+            _last_snapshot_items = new_items_dict
+            _last_update_time = time.monotonic()  # запоминаем время отправки
             logger.info(
                 "[%s] Остатки обновлены и разосланы за %.1f сек (items=%d)",
                 LABEL, time.monotonic() - t0, len(items),
@@ -331,7 +413,7 @@ async def force_stock_check(bot: Any) -> dict[str, Any]:
     Принудительная проверка остатков и обновление сообщений.
     Вызывается вручную из админки (игнорирует счётчик и порог).
     """
-    global _last_snapshot_hash, _last_total_sum
+    global _last_snapshot_hash, _last_snapshot_items, _last_update_time
 
     t0 = time.monotonic()
     logger.info("[%s] Принудительная проверка остатков...", LABEL)
@@ -344,13 +426,14 @@ async def force_stock_check(bot: Any) -> dict[str, Any]:
 
     items = result.get("items", [])
     new_hash = _compute_snapshot_hash(items)
-    new_total = _compute_total_sum(items)
+    new_items_dict = _compute_items_dict(items)
 
     from use_cases.pinned_stock_message import update_all_stock_alerts
     await update_all_stock_alerts(bot)
 
     _last_snapshot_hash = new_hash
-    _last_total_sum = new_total
+    _last_snapshot_items = new_items_dict
+    _last_update_time = time.monotonic()  # запоминаем время отправки
 
     elapsed = time.monotonic() - t0
     logger.info(
