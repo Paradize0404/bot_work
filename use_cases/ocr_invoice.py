@@ -27,6 +27,7 @@ from adapters.openai_vision import (
 )
 from db.engine import async_session_factory
 from db.models import OcrDocument
+from use_cases.user_context import get_user_context
 
 logger = logging.getLogger(__name__)
 LABEL = "OCR"
@@ -492,10 +493,7 @@ def format_preview(doc: dict[str, Any]) -> str:
     # Поставщик
     supplier = doc.get("supplier") or {}
     if supplier.get("name"):
-        s_line = f"\n🏢 <b>Поставщик:</b> {html.escape(supplier['name'])}"
-        if supplier.get("inn"):
-            s_line += f" (ИНН {html.escape(str(supplier['inn']))})"
-        lines.append(s_line)
+        lines.append(f"\n🏢 <b>Поставщик:</b> {html.escape(supplier['name'])}")
 
     # Покупатель
     buyer = doc.get("buyer") or {}
@@ -511,13 +509,19 @@ def format_preview(doc: dict[str, Any]) -> str:
             name = item.get("name", "???")
             qty = item.get("qty", "?")
             unit = item.get("unit", "шт")
+            packaging = item.get("packaging")
             price = item.get("price", "?")
             sum_with = item.get("sum_with_vat") or item.get("sum_without_vat") or "?"
+
+            # Формируем строку с единицей измерения и упаковкой (если есть)
+            unit_str = html.escape(str(unit))
+            if packaging:
+                unit_str += f" ({html.escape(str(packaging))})"
 
             # Экранируем все значения для безопасности
             lines.append(
                 f"  {html.escape(str(num))}. {html.escape(str(name))}\n"
-                f"     {html.escape(str(qty))} {html.escape(str(unit))} × {html.escape(str(price))} = {html.escape(str(sum_with))}"
+                f"     {html.escape(str(qty))} {unit_str} × {html.escape(str(price))} = {html.escape(str(sum_with))}"
             )
 
     # Итоги
@@ -650,6 +654,14 @@ async def save_ocr_result(
         if supplier_inn is not None:
             supplier_inn = str(supplier_inn)
         
+        # Получаем buyer_name, если пустой — используем подразделение пользователя
+        buyer_name = (doc.get("buyer") or {}).get("name")
+        if not buyer_name:
+            user_ctx = await get_user_context(telegram_id)
+            if user_ctx and user_ctx.department_name:
+                buyer_name = user_ctx.department_name
+                logger.info("[%s] Buyer пустой → fallback на подразделение: %s", LABEL, buyer_name)
+        
         row = OcrDocument(
             telegram_id=telegram_id,
             doc_type=doc.get("doc_type", "Неизвестный"),
@@ -657,7 +669,7 @@ async def save_ocr_result(
             doc_date=doc.get("date"),
             supplier_name=(doc.get("supplier") or {}).get("name"),
             supplier_inn=supplier_inn,
-            buyer_name=(doc.get("buyer") or {}).get("name"),
+            buyer_name=buyer_name,
             items_count=len(doc.get("items", [])),
             total_with_vat=doc.get("total_with_vat") or doc.get("_calc_total_with_vat"),
             status="recognized",
