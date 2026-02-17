@@ -356,9 +356,18 @@ async def _run_ocr(
 
         for doc, preview in ok_docs:
             quality_result = check_photo_quality(doc)
+            # Документ хороший если:
+            # 1. quality_result["ok"] = True (needs_retake=false)
+            # 2. ИЛИ есть замечания но issues пустые (GPT распознал успешно)
+            has_real_issues = len(quality_result.get("issues", [])) > 0
+            
             if quality_result["ok"]:
                 good_docs.append((doc, preview))
+            elif not has_real_issues:
+                # Формально "bad" но issues пустые → считаем хорошим
+                good_docs.append((doc, preview))
             else:
+                # Реальные проблемы с качеством
                 bad_quality_docs.append((doc, preview, quality_result))
 
         # ═══ ОТПРАВКА ХОРОШИХ ДОКУМЕНТОВ БУХГАЛТЕРУ ═══

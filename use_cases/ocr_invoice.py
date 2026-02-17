@@ -60,34 +60,20 @@ def check_photo_quality(doc: dict[str, Any]) -> dict[str, Any]:
     needs_retake = quality.get("needs_retake", False)
     retake_reason = quality.get("retake_reason", "")
     
-    # Дополнительные эвристики если LLM не указал needs_retake
+    # ДОВЕРЯЕМ GPT-5.2 — он знает лучше!
+    # Дополнительные эвристики ТОЛЬКО для экстремальных случаев
     if not needs_retake:
-        # Критически низкая уверенность
-        if confidence < 70:
+        # Критически низкая уверенность (GPT почти не уверен)
+        if confidence < 40:
             needs_retake = True
             if not retake_reason:
-                retake_reason = f"Низкая уверенность распознавания ({confidence}%)"
+                retake_reason = f"очень низкая уверенность ({confidence}%)"
         
-        # Множественные проблемы
-        if len(issues) >= 3:
+        # Документ явно нечитаем (все флаги красные)
+        if not is_readable and not is_complete:
             needs_retake = True
             if not retake_reason:
-                retake_reason = "Множественные проблемы качества фото"
-        
-        # Критические флаги
-        if not is_readable or (has_glare and has_blur) or not is_complete:
-            needs_retake = True
-            if not retake_reason:
-                problems = []
-                if not is_readable:
-                    problems.append("нечитаемый текст")
-                if has_glare:
-                    problems.append("блики")
-                if has_blur:
-                    problems.append("размытость")
-                if not is_complete:
-                    problems.append("обрезаны края")
-                retake_reason = ", ".join(problems)
+                retake_reason = "документ нечитаем или неполный"
     
     return {
         "ok": not needs_retake,
