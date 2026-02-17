@@ -390,13 +390,19 @@ async def _run_ocr(
 
         if bad_quality_docs:
             summary_lines.append(
-                f"\n⚠️ {len(bad_quality_docs)} документ(ов) с плохим качеством фото:"
+                f"\n⚠️ {len(bad_quality_docs)} документ(ов) с замечаниями по качеству фото:"
             )
             for doc, _preview, qr in bad_quality_docs:
                 supplier = (doc.get("supplier") or {}).get("name", "?")
-                reason = qr.get("retake_reason", "низкое качество")
+                # Короткое описание вместо полного retake_reason
+                issues = qr.get("issues", [])
+                if issues:
+                    # Берём первую проблему (макс 50 символов)
+                    reason = issues[0][:50]
+                else:
+                    reason = qr.get("retake_reason", "низкое качество")[:50]
                 summary_lines.append(f"  • {supplier}: {reason}")
-            summary_lines.append("\n📸 Переснимите проблемные документы и отправьте заново.")
+            summary_lines.append("\n📸 Если есть сомнения в качестве — переснимите и отправьте заново.")
 
         if err_docs:
             summary_lines.append(
