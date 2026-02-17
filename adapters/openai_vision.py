@@ -20,8 +20,9 @@ from config import OPENAI_API_KEY
 logger = logging.getLogger(__name__)
 LABEL = "GPT4o-OCR"
 
-# OpenAI GPT-4o (paid tier) - 10,000 RPM, no daily limits
-GPT_MODEL = "gpt-4o"
+# OpenAI GPT-4o latest (paid tier) - 10,000 RPM, no daily limits
+# chatgpt-4o-latest всегда использует самую новую версию модели
+GPT_MODEL = "chatgpt-4o-latest"
 
 
 # ═══════════════════════════════════════════════════════
