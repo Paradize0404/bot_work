@@ -174,15 +174,6 @@ def validate_and_fix(doc: dict[str, Any]) -> dict[str, Any]:
     calc_total_vat = sum((it.get("vat_sum") or 0) for it in items)
     calc_total_with = sum((it.get("sum_with_vat") or 0) for it in items)
 
-    doc_total_wo = doc.get("total_without_vat")
-    if doc_total_wo and abs(doc_total_wo - calc_total_wo) > 1.0:
-        warnings.append(
-            f"Итого без НДС: документ {doc_total_wo} ≠ сумма позиций {round(calc_total_wo, 2)}"
-        ) (только для проверки бухгалтером)
-    calc_total_wo = sum((it.get("sum_without_vat") or 0) for it in items)
-    calc_total_vat = sum((it.get("vat_sum") or 0) for it in items)
-    calc_total_with = sum((it.get("sum_with_vat") or 0) for it in items)
-
     # Сравниваем с тем что в документе
     doc_total_wo = doc.get("total_without_vat")
     doc_total_vat = doc.get("total_vat")
@@ -199,7 +190,16 @@ def validate_and_fix(doc: dict[str, Any]) -> dict[str, Any]:
             f"⚠️ Итого с НДС: в документе {doc_total_with}, расчёт {round(calc_total_with, 2)} (разница {abs(doc_total_with - calc_total_with):.2f})"
         )
     
-    # Сохраняем расчётные значения для справкиe_vat_rate(rate_str: str | None) -> float | None:
+    # Сохраняем расчётные значения для справки
+    doc["_calc_total_wo"] = round(calc_total_wo, 2)
+    doc["_calc_total_vat"] = round(calc_total_vat, 2)
+    doc["_calc_total_with"] = round(calc_total_with, 2)
+    doc["_warnings"] = warnings
+    
+    return doc
+
+
+def _parse_vat_rate(rate_str: str | None) -> float | None:
     """'20%' → 0.2, '10%' → 0.1, 'без НДС' → None."""
     if not rate_str:
         return None
