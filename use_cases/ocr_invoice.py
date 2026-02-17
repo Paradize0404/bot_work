@@ -10,6 +10,7 @@ Use-case: OCR-распознавание бухгалтерских докуме
 Этот модуль НЕ знает про Telegram — только бизнес-логика.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -18,7 +19,11 @@ from typing import Any
 
 from sqlalchemy import select
 
-from adapters.gemini_vision import recognize_document, recognize_multiple_pages
+from adapters.gemini_vision import (
+    recognize_document,
+    recognize_multiple_pages,
+    extract_document_metadata,
+)
 from db.engine import async_session_factory
 from db.models import OcrDocument
 
@@ -143,15 +148,240 @@ def format_quality_message(quality_result: dict[str, Any]) -> tuple[str, list[tu
         lines.append("3. Проверьте что весь документ в кадре")
         lines.append("4. Сделайте фото заново в хорошо освещённом месте")
     
-    lines.append("\n📸 Отправьте новое фото или нажмите ❌ Отменить»")
-    
-    return "\n".join(lines), problematic_photos
-    lines.append("3. Проверьте что весь документ в кадре")
-    lines.append("4. Сделайте фото заново в хорошо освещённом месте")
-    
     lines.append("\n📸 Отправьте новое фото или нажмите «❌ Отменить»")
     
-    return "\n".join(lines)
+    return "\n".join(lines), problematic_photos
+
+
+# ═══════════════════════════════════════════════════════
+# Группировка фото по документам (FOOL-PROOF)
+# ═══════════════════════════════════════════════════════
+
+async def group_photos_by_document(
+    images: list[bytes],
+) -> list[list[int]]:
+    """
+    Автоматическая группировка фото по принадлежности к документам.
+
+    Пользователь просто кидает пачку фото (любое количество).
+    Система сама определяет: где разные документы, а где страницы одного.
+
+    Алгоритм:
+      1. Извлекаем метаданные из каждого фото (Gemini — быстрый промпт)
+      2. Группируем по ключу: (supplier_name/inn, doc_number, date)
+      3. Внутри каждой группы сортируем по page_number (если есть)
+
+    Args:
+        images: список байтов фото
+
+    Returns:
+        Список групп, каждая группа — список индексов фото в `images`.
+        Пример: [[0], [1, 2], [3]] = 3 документа, второй на 2 листах
+    """
+    if len(images) <= 1:
+        return [[0]] if images else []
+
+    t0 = time.monotonic()
+    logger.info("[%s] Группировка %d фото по документам...", LABEL, len(images))
+
+    # 1. Извлекаем метаданные ПАРАЛЛЕЛЬНО (все фото сразу)
+    tasks = [extract_document_metadata(img) for img in images]
+    metadata_list: list[dict[str, Any]] = await asyncio.gather(
+        *tasks, return_exceptions=True
+    )
+
+    # Обрабатываем ошибки — если метаданные не извлеклись, считаем отдельным документом
+    for i, meta in enumerate(metadata_list):
+        if isinstance(meta, Exception):
+            logger.warning(
+                "[%s] Metadata extraction failed for photo %d: %s",
+                LABEL, i + 1, meta,
+            )
+            metadata_list[i] = {
+                "doc_number": None,
+                "date": None,
+                "supplier_name": f"__unknown_{i}__",
+                "supplier_inn": None,
+                "total_amount": 0.0,
+                "has_total": True,
+                "page_number": None,
+                "total_pages": None,
+            }
+
+    # 2. Формируем ключ группировки для каждого фото
+    def _make_group_key(meta: dict) -> str:
+        """
+        Ключ для объединения страниц одного документа.
+
+        Логика:
+          - Если есть INN поставщика — используем его (самый надёжный)
+          - Иначе — нормализованное имя поставщика
+          - + номер документа (если есть)
+          - + дата (если есть)
+        """
+        supplier_key = (meta.get("supplier_inn") or "").strip()
+        if not supplier_key:
+            supplier_key = (meta.get("supplier_name") or "unknown").strip().lower()
+            # Убираем форму собственности для лучшего матчинга
+            for prefix in ("ип ", "ооо ", "ао ", "пао ", "зао "):
+                if supplier_key.startswith(prefix):
+                    supplier_key = supplier_key[len(prefix):]
+                    break
+
+        doc_num = (meta.get("doc_number") or "").strip()
+        date = (meta.get("date") or "").strip()
+
+        return f"{supplier_key}||{doc_num}||{date}"
+
+    keys = [_make_group_key(m) for m in metadata_list]
+
+    # 3. Группируем индексы по ключам, сохраняя порядок
+    from collections import OrderedDict
+    groups_map: OrderedDict[str, list[int]] = OrderedDict()
+    for idx, key in enumerate(keys):
+        if key not in groups_map:
+            groups_map[key] = []
+        groups_map[key].append(idx)
+
+    # 4. Внутри каждой группы сортируем по page_number (если есть)
+    groups: list[list[int]] = []
+    for key, indices in groups_map.items():
+        if len(indices) > 1:
+            # Пытаемся отсортировать по page_number
+            def _sort_key(idx: int) -> int:
+                pn = metadata_list[idx].get("page_number")
+                return pn if isinstance(pn, int) else 999
+            indices.sort(key=_sort_key)
+        groups.append(indices)
+
+    elapsed = time.monotonic() - t0
+
+    # Логируем результат
+    group_info = []
+    for g in groups:
+        if len(g) == 1:
+            m = metadata_list[g[0]]
+            group_info.append(
+                f"[фото {g[0]+1}] {m.get('supplier_name', '?')}"
+            )
+        else:
+            m = metadata_list[g[0]]
+            pages = ", ".join(str(i + 1) for i in g)
+            group_info.append(
+                f"[фото {pages}] {m.get('supplier_name', '?')} ({len(g)} стр.)"
+            )
+
+    logger.info(
+        "[%s] Группировка за %.1f сек → %d документ(ов) из %d фото:\n  %s",
+        LABEL, elapsed, len(groups), len(images),
+        "\n  ".join(group_info),
+    )
+
+    return groups
+
+
+async def process_photo_batch(
+    images: list[bytes],
+    telegram_id: int,
+    *,
+    known_suppliers: list[str] | None = None,
+    known_buyers: list[str] | None = None,
+    progress_callback=None,
+) -> list[tuple[dict[str, Any], str]]:
+    """
+    Fool-proof обработка пачки фото:
+      - Автоматическая группировка по документам
+      - Каждый документ обрабатывается отдельно
+
+    Args:
+        images: все фото от пользователя
+        telegram_id: ID пользователя
+        known_suppliers: подсказки по поставщикам
+        known_buyers: подсказки по покупателям
+        progress_callback: async callable(current, total, info) для обновления прогресса
+
+    Returns:
+        Список (doc, preview) для каждого найденного документа
+    """
+    t0 = time.monotonic()
+
+    # Одно фото — не нужна группировка
+    if len(images) == 1:
+        doc, preview = await process_photo(
+            images[0], telegram_id,
+            known_suppliers=known_suppliers,
+            known_buyers=known_buyers,
+        )
+        return [(doc, preview)]
+
+    # Шаг 1: Группировка
+    if progress_callback:
+        await progress_callback(0, 0, "Определяю границы документов...")
+
+    groups = await group_photos_by_document(images)
+
+    # Шаг 2: Обработка каждой группы
+    results: list[tuple[dict[str, Any], str]] = []
+    total = len(groups)
+    kw = {
+        "known_suppliers": known_suppliers,
+        "known_buyers": known_buyers,
+    }
+
+    for i, group_indices in enumerate(groups):
+        group_images = [images[idx] for idx in group_indices]
+        page_nums = ", ".join(str(idx + 1) for idx in group_indices)
+
+        if progress_callback:
+            await progress_callback(
+                i + 1, total,
+                f"Распознаю документ {i+1}/{total} (фото {page_nums})..."
+            )
+
+        try:
+            if len(group_images) == 1:
+                doc, preview = await process_photo(
+                    group_images[0], telegram_id, **kw
+                )
+            else:
+                doc, preview = await process_multiple_photos(
+                    group_images, telegram_id, **kw
+                )
+            results.append((doc, preview))
+            logger.info(
+                "[%s] Документ %d/%d OK: %s, items=%d (фото %s)",
+                LABEL, i + 1, total,
+                doc.get("doc_type", "?"),
+                len(doc.get("items", [])),
+                page_nums,
+            )
+        except Exception as e:
+            logger.exception(
+                "[%s] Ошибка распознавания документа %d/%d (фото %s): %s",
+                LABEL, i + 1, total, page_nums, e,
+            )
+            # Создаём "ошибочный" документ чтобы не терять остальные
+            error_doc = {
+                "doc_type": "Ошибка",
+                "doc_number": None,
+                "date": None,
+                "supplier": {"name": "Ошибка распознавания"},
+                "items": [],
+                "notes": f"Не удалось распознать фото {page_nums}: {e}",
+                "_error": True,
+            }
+            error_preview = f"❌ Ошибка распознавания фото {page_nums}:\n{e}"
+            results.append((error_doc, error_preview))
+
+    elapsed = time.monotonic() - t0
+    ok_count = sum(1 for doc, _ in results if not doc.get("_error"))
+    err_count = sum(1 for doc, _ in results if doc.get("_error"))
+    logger.info(
+        "[%s] Batch tg:%d — %d документов (✅ %d, ❌ %d) за %.1f сек",
+        LABEL, telegram_id, total, ok_count, err_count, elapsed,
+    )
+
+    return results
 
 
 # ═══════════════════════════════════════════════════════

@@ -153,16 +153,16 @@ async def _album_timer(
         LABEL, user_id, count,
     )
 
-    # Обновляем индикатор на "Распознаю X страниц..."
+    # Обновляем индикатор на "Распознаю..."
     if status_msg:
         try:
             await status_msg.edit_text(
-                f"⏳ Распознаю {'документ' if count == 1 else f'{count} страниц(ы)'}..."
+                f"⏳ Обрабатываю {count} фото — определяю документы..."
             )
         except Exception:
             # Если не удалось отредактировать, создаём новое
             status_msg = await message.answer(
-                f"⏳ Распознаю {'документ' if count == 1 else f'{count} страниц(ы)'}..."
+                f"⏳ Обрабатываю {count} фото — определяю документы..."
             )
 
     # Скачиваем все фото
@@ -266,8 +266,9 @@ async def btn_start_ocr(message: Message, state: FSMContext) -> None:
 
     await message.answer(
         "📸 Отправь фото бумажного документа (накладная, чек, РКО...)\n\n"
-        "💡 Можно отправить сразу пачку фото — бот соберёт их в один документ.\n"
-        "Также можно добавлять страницы по одной.",
+        "💡 Можно отправить сразу несколько документов —\n"
+        "бот автоматически определит какие фото к какому документу относятся.\n"
+        "Если документ на нескольких листах — тоже не проблема!",
     )
 
 
@@ -291,28 +292,35 @@ async def _run_ocr(
     images: list[bytes],
     status_message: Message | None = None,
 ) -> None:
-    """Запустить OCR для одного или нескольких фото и показать превью."""
+    """
+    Запустить OCR для одного или нескольких фото.
+
+    FOOL-PROOF логика:
+      - 1 фото  → распознаём как один документ
+      - N фото  → автоматически группируем по документам
+      - Каждый документ → отдельное сообщение бухгалтеру
+    """
     tg_id = message.from_user.id
     count = len(images)
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    
+
     # Используем существующее сообщение или создаём новое
     if status_message:
         placeholder = status_message
     else:
         placeholder = await message.answer(
-            f"⏳ Распознаю {'документ' if count == 1 else f'{count} страниц(ы)'}..."
+            f"⏳ Распознаю {'документ' if count == 1 else f'{count} фото'}..."
         )
 
-    # ВАЖНО: НЕ добавляем к старым фото, а ЗАМЕНЯЕМ
     await state.update_data(ocr_photos=images)
 
     try:
         from use_cases.ocr_invoice import (
-            process_photo, process_multiple_photos,
+            process_photo_batch,
             get_known_suppliers, get_known_buyers,
             check_photo_quality, format_quality_message,
+            save_ocr_result,
         )
 
         suppliers, buyers = await asyncio.gather(
@@ -324,69 +332,93 @@ async def _run_ocr(
             "known_buyers": buyers[:20] if buyers else None,
         }
 
-        # Используем ВСЕ собранные фото из state
-        if count == 1:
-            doc, preview = await process_photo(images[0], tg_id, **kw)
-        else:
-            doc, preview = await process_multiple_photos(images, tg_id, **kw)
+        # Callback для обновления прогресса в placeholder
+        async def _progress(current: int, total: int, info: str):
+            try:
+                await placeholder.edit_text(f"⏳ {info}")
+            except Exception:
+                pass
 
-        # ═══ ПРОВЕРКА КАЧЕСТВА ФОТО ═══
-        quality_result = check_photo_quality(doc)
-        
-        if not quality_result["ok"]:
-            # Плохое качество → показываем проблемные фото + просим переснять
-            quality_msg, problematic_photos = format_quality_message(quality_result)
-            await state.set_state(OcrStates.waiting_retake)
-            await state.update_data(ocr_bad_quality_doc=doc)
-            
-            # Отправляем проблемные фото с подписями
-            from aiogram.types import BufferedInputFile
-            for photo_num, problem_text in problematic_photos:
-                # Номера фото в списке начинаются с 1, но индексы с 0
-                photo_idx = photo_num - 1
-                if 0 <= photo_idx < len(images):
-                    photo_file = BufferedInputFile(
-                        images[photo_idx],
-                        filename=f"photo_{photo_num}.jpg"
-                    )
-                    await message.answer_photo(
-                        photo=photo_file,
-                        caption=f"❌ <b>Фото {photo_num}</b>: {problem_text}",
-                        parse_mode="HTML",
-                    )
-            
-            # Затем текстовое сообщение с инструкциями
-            await placeholder.edit_text(
-                quality_msg,
-                parse_mode="HTML",
-            )
-            logger.warning(
-                "[%s] Плохое качество фото tg:%d, confidence=%d%%, problematic=%s",
-                LABEL, tg_id, quality_result["confidence"], problematic_photos,
-            )
-            return
-
-        # ═══ КАЧЕСТВО OK → СОХРАНЯЕМ БЕЗ ПРЕВЬЮ КАССИРУ ═══
-        from use_cases.ocr_invoice import save_ocr_result
-
-        # Сохраняем в БД
-        doc_id = await save_ocr_result(tg_id, doc)
-        
-        # Кассиру: короткое подтверждение
-        await placeholder.edit_text(
-            f"✅ Загружено {'фото' if count == 1 else f'{count} фото'}.\n"
-            f"📄 Документ отправлен бухгалтеру на проверку.",
+        # ═══ FOOL-PROOF BATCH: AUTO-GROUP + PROCESS ═══
+        results = await process_photo_batch(
+            images, tg_id,
+            progress_callback=_progress,
+            **kw,
         )
-        
+
+        # ═══ ОБРАБОТКА РЕЗУЛЬТАТОВ ═══
+        ok_docs = [(doc, preview) for doc, preview in results if not doc.get("_error")]
+        err_docs = [(doc, preview) for doc, preview in results if doc.get("_error")]
+
+        # Проверяем качество каждого документа
+        good_docs = []
+        bad_quality_docs = []
+
+        for doc, preview in ok_docs:
+            quality_result = check_photo_quality(doc)
+            if quality_result["ok"]:
+                good_docs.append((doc, preview))
+            else:
+                bad_quality_docs.append((doc, preview, quality_result))
+
+        # ═══ ОТПРАВКА ХОРОШИХ ДОКУМЕНТОВ БУХГАЛТЕРУ ═══
+        saved_count = 0
+        for doc, preview in good_docs:
+            try:
+                doc_id = await save_ocr_result(tg_id, doc)
+                await _send_to_accountant_with_preview(
+                    message.bot, doc, doc_id, tg_id
+                )
+                saved_count += 1
+            except Exception as e:
+                logger.exception(
+                    "[%s] Ошибка сохранения/отправки doc tg:%d: %s",
+                    LABEL, tg_id, e,
+                )
+                err_docs.append((doc, f"❌ Ошибка сохранения: {e}"))
+
+        # ═══ ФОРМИРУЕМ ИТОГОВОЕ СООБЩЕНИЕ КАССИРУ ═══
+        summary_lines = []
+
+        if saved_count > 0:
+            if saved_count == 1:
+                summary_lines.append("✅ Документ отправлен бухгалтеру на проверку.")
+            else:
+                summary_lines.append(
+                    f"✅ {saved_count} документ(ов) отправлено бухгалтеру на проверку."
+                )
+
+        if bad_quality_docs:
+            summary_lines.append(
+                f"\n⚠️ {len(bad_quality_docs)} документ(ов) с плохим качеством фото:"
+            )
+            for doc, _preview, qr in bad_quality_docs:
+                supplier = (doc.get("supplier") or {}).get("name", "?")
+                reason = qr.get("retake_reason", "низкое качество")
+                summary_lines.append(f"  • {supplier}: {reason}")
+            summary_lines.append("\n📸 Переснимите проблемные документы и отправьте заново.")
+
+        if err_docs:
+            summary_lines.append(
+                f"\n❌ {len(err_docs)} фото не удалось распознать."
+            )
+            for _doc, err_preview in err_docs:
+                summary_lines.append(f"  • {err_preview[:100]}")
+
+        if not summary_lines:
+            summary_lines.append("❌ Не удалось распознать ни одного документа.")
+
+        await placeholder.edit_text(
+            "\n".join(summary_lines),
+            parse_mode="HTML",
+        )
+
         # Очищаем state
         await state.clear()
         await restore_menu_kb(
             message.bot, message.chat.id, state,
             "📦 Накладные:", invoices_keyboard(),
         )
-        
-        # ═══ БУХГАЛТЕРУ: ПОЛНОЕ ПРЕВЬЮ ═══
-        await _send_to_accountant_with_preview(message.bot, doc, doc_id, tg_id)
 
     except Exception as e:
         logger.exception("[%s] OCR failed tg:%d: %s", LABEL, tg_id, e)

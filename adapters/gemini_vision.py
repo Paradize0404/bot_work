@@ -344,3 +344,106 @@ async def recognize_multiple_pages(
         raise ValueError(f"Gemini вернул не JSON: {e}") from e
 
     return result
+
+
+# ═══════════════════════════════════════════════════════
+# Извлечение метаданных документа (для группировки)
+# ═══════════════════════════════════════════════════════
+
+_METADATA_PROMPT = """Ты — OCR-система для определения метаданных документа.
+
+ЗАДАЧА: Быстро извлечь ТОЛЬКО ключевые метаданные документа, БЕЗ полного распознавания таблицы товаров.
+
+ВЕРНИ ТОЛЬКО:
+{{
+  "doc_number": "номер документа или null",
+  "date": "ДД.ММ.ГГГГ или null",
+  "supplier_name": "название поставщика/продавца",
+  "supplier_inn": "ИНН поставщика или null",
+  "total_amount": 0.00,
+  "has_total": true,
+  "page_number": 1,
+  "total_pages": 2
+}}
+
+ПРАВИЛА:
+- has_total: true если на странице есть ИТОГОВАЯ СУММА документа (последняя страница)
+- page_number: номер страницы (если указан на документе, иначе null)
+- total_pages: общее кол-во страниц (если указано "Лист 2 из 3", иначе null)
+- Если номер документа не найден — попробуй из штрих-кода, QR, или заголовка
+- Формат ответа — СТРОГО JSON, без markdown, без ```json, без пояснений
+"""
+
+
+async def extract_document_metadata(image_bytes: bytes) -> dict[str, Any]:
+    """
+    Быстрое извлечение метаданных документа для группировки.
+    
+    Используется чтобы определить: это разные документы или страницы одного?
+    Гораздо быстрее и дешевле чем полное распознавание.
+    
+    Returns:
+        {
+            "doc_number": str | None,
+            "date": str | None,  # ДД.ММ.ГГГГ
+            "supplier_name": str,
+            "supplier_inn": str | None,
+            "total_amount": float,
+            "has_total": bool,  # есть ли итоговая сумма (признак последней страницы)
+            "page_number": int | None,
+            "total_pages": int | None
+        }
+    """
+    client = _get_client()
+    
+    t0 = time.monotonic()
+    
+    # Предобработка
+    processed = preprocess_image(image_bytes)
+    
+    contents = [
+        {"text": _METADATA_PROMPT},
+        {"inline_data": {"mime_type": "image/jpeg", "data": processed}}
+    ]
+    
+    logger.info("[%s] Извлекаю метаданные (metadata-only)", LABEL)
+    
+    response = await client.aio.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config={"temperature": 0.0},  # 0.0 для максимальной стабильности
+    )
+    
+    raw_text = response.text
+    elapsed = time.monotonic() - t0
+    logger.debug("[%s] Metadata за %.1f сек: %s", LABEL, elapsed, raw_text[:200])
+    
+    clean_text = _clean_json_response(raw_text)
+    clean_text = _fix_number_separators(clean_text)
+    
+    try:
+        result = json.loads(clean_text)
+    except json.JSONDecodeError as e:
+        logger.warning("[%s] Metadata не JSON, возвращаю fallback: %s", LABEL, e)
+        # Fallback: считаем что это отдельный документ
+        return {
+            "doc_number": None,
+            "date": None,
+            "supplier_name": "Неизвестно",
+            "supplier_inn": None,
+            "total_amount": 0.0,
+            "has_total": True,  # считаем что это целый документ
+            "page_number": None,
+            "total_pages": None,
+        }
+    
+    logger.info(
+        "[%s] Metadata: doc=%s, date=%s, supplier=%s (%.2f₽)",
+        LABEL,
+        result.get("doc_number"),
+        result.get("date"),
+        result.get("supplier_name"),
+        result.get("total_amount", 0),
+    )
+    
+    return result
