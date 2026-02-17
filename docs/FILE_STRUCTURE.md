@@ -16,6 +16,12 @@ test/
 │                             #   FINTABLO_BASE_URL (дефолт), FINTABLO_TOKEN, TELEGRAM_BOT_TOKEN
 │                             #   TIMEZONE = "Europe/Kaliningrad" — единая TZ проекта
 │                             #   LOG_LEVEL (дефолт INFO)
+│                             #   GEMINI_MODEL (дефолт gemini-3-flash-preview), OCR_DEFAULT_STORE_ID
+├── requirements.txt         # Зависимости Python (pip install -r requirements.txt)
+├── Procfile                 # Railway deploy: web: python -m db.init_db && python main.py
+├── runtime.txt              # Версия Python для Railway (python-3.12.3)
+├── PROJECT_MAP.md           # Карта проекта (ЧИТАТЬ ВСЕГДА)
+├── PROMPT_FOR_NEW_PROJECT.md # Промпт-шаблон для нового проекта
 ├── iiko_auth.py             # Авторизация iiko API (токен, кеш 10 мин, retry×4)
 │                             #   get_auth_token() → str — async, кеширует в _token_cache
 │                             #   get_base_url() → str — IIKO_BASE_URL из config
@@ -87,7 +93,7 @@ test/
 │   │                         #   _fix_number_separators() — 73,221.82 → 73221.82
 │   │                         #   recognize_document(image, **kw) — одно фото → structured JSON
 │   │                         #   recognize_multiple_pages(images, **kw) — multi-page → один JSON
-│   │                         #   Модель: GEMINI_MODEL из config (дефолт gemini-2.5-flash-preview)
+│   │                         #   Модель: GEMINI_MODEL из config (дефолт gemini-3-flash-preview)
 │   │                         #   Temperature: 0.1 (детерминированный разбор)
 │   │                         #   Зависимости: google-generativeai, Pillow
 │   └── fintablo_api.py      # HTTP-клиент FinTablo (persistent httpx, Bearer token)
@@ -203,6 +209,10 @@ test/
 │
 ├── use_cases/
 │   ├── __init__.py
+│   ├── _helpers.py          # Общие хелперы: время + парсинг + конвертация
+│   │                         #   now_kgd() — текущее время по Калининграду (naive)
+│   │                         #   safe_uuid(), safe_bool(), safe_decimal(), safe_int(), safe_float()
+│   │                         #   KGD_TZ = ZoneInfo("Europe/Kaliningrad")
 │   ├── auth.py              # Бизнес-логика авторизации через Telegram
 │   │                         #   find_employees_by_last_name(), bind_telegram_id()
 │   │                         #   bind_telegram_id() резолвит role_name из iiko_employee_role
@@ -339,11 +349,29 @@ test/
 │   ├── stoplist_report.py   # Ежевечерний отчёт стоп-листа (22:00)
 │   │                         #   send_daily_stoplist_report(bot) — отчёт за день всем авториз. пользователям
 │   │                         #   StoplistHistory: суммарное время в стопе за день по каждому товару
-│   └── cloud_org_mapping.py # Маппинг department_id → cloud_org_id
-│                             #   resolve_cloud_org_id(dept_id) — dept → org UUID
-│                             #   resolve_cloud_org_id_for_user(tg_id) — per-user org
-│                             #   get_all_cloud_org_ids() — все привязанные org_id
-│                             #   In-memory кеш (TTL 5 мин) из GSheet «Настройки»│   ├── ocr_invoice.py       # OCR pipeline: фото → JSON → валидация → превью → БД
+│   ├── cloud_org_mapping.py # Маппинг department_id → cloud_org_id
+│   │                         #   resolve_cloud_org_id(dept_id) — dept → org UUID
+│   │                         #   resolve_cloud_org_id_for_user(tg_id) — per-user org
+│   │                         #   get_all_cloud_org_ids() — все привязанные org_id
+│   │                         #   In-memory кеш (TTL 5 мин) из GSheet «Настройки»
+│   ├── iiko_webhook_handler.py # Обработка вебхуков iikoCloud
+│   │                         #   handle_webhook(body, bot) — диспетчеризация событий
+│   │                         #   StopListUpdate → debounce 60 сек → flush_stoplist
+│   │                         #   DeliveryOrderUpdate / TableOrderUpdate (Closed) → sync остатков
+│   │                         #   Покомпонентное сравнение + антиспам
+│   ├── pinned_stock_message.py # Закреплённые сообщения с остатками ниже минимума
+│   │                         #   send_stock_alert_for_user(bot, tg_id, dept_id) — одному пользователю
+│   │                         #   update_all_stock_alerts(bot) — всем подписанным
+│   │                         #   snapshot_hash для дедупликации (delete → send → pin)
+│   ├── reports.py           # Отчёты (минимальные остатки)
+│   │                         #   run_min_stock_report(department_id, triggered_by) → str
+│   │                         #   Синхронизация остатков + min/max из GSheet + проверка
+│   ├── price_list.py        # Прайс-лист блюд для пользователей
+│   │                         #   get_dishes_price_list() — DISH с ценами из price_product
+│   │                         #   format_price_list(dishes) — Telegram-формат
+│   ├── cooldown.py          # Rate limiting / cooldown для handler’ов
+│   │                         #   check_cooldown(tg_id, action, seconds) — in-memory cooldown
+│   │                         #   Авто-cleanup протухших записей│   ├── ocr_invoice.py       # OCR pipeline: фото → JSON → валидация → превью → БД
 │   │                         #   validate_and_fix(doc) — мат. валидация (qty×price=sum, НДС, итоги)
 │   │                         #   format_preview(doc) — HTML-превью для Telegram
 │   │                         #   process_photo(image, tg_id) — full pipeline 1 фото

@@ -125,6 +125,7 @@ async def _album_timer(
 
 class OcrStates(StatesGroup):
     waiting_photo = State()          # ожидаем фото
+    waiting_retake = State()         # ожидаем переснятое фото (плохое качество)
     waiting_more_pages = State()     # ожидаем дополнительные страницы
     preview = State()                # показываем превью, ждём решения
     waiting_mapping = State()        # ждём маппинга в GSheet
@@ -136,10 +137,9 @@ class OcrStates(StatesGroup):
 # ─────────────────────────────────────────────────────
 
 def _preview_kb() -> InlineKeyboardMarkup:
-    """Кнопки после OCR-превью."""
+    """Кнопки после OCR-превью (упрощённая версия)."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Подтвердить", callback_data="ocr:confirm")],
-        [InlineKeyboardButton(text="📷 Добавить страницу", callback_data="ocr:add_page")],
+        [InlineKeyboardButton(text="✅ Отправить бухгалтеру", callback_data="ocr:confirm")],
         [InlineKeyboardButton(text="❌ Отменить", callback_data="ocr:cancel")],
     ])
 
@@ -242,6 +242,7 @@ async def _run_ocr(
         from use_cases.ocr_invoice import (
             process_photo, process_multiple_photos,
             get_known_suppliers, get_known_buyers,
+            check_photo_quality, format_quality_message,
         )
 
         suppliers, buyers = await asyncio.gather(
@@ -258,6 +259,26 @@ async def _run_ocr(
         else:
             doc, preview = await process_multiple_photos(photos, tg_id, **kw)
 
+        # ═══ ПРОВЕРКА КАЧЕСТВА ФОТО ═══
+        quality_result = check_photo_quality(doc)
+        
+        if not quality_result["ok"]:
+            # Плохое качество → просим переснять
+            quality_msg = format_quality_message(quality_result)
+            await state.set_state(OcrStates.waiting_retake)
+            await state.update_data(ocr_bad_quality_doc=doc)  # сохраняем для истории
+            
+            await placeholder.edit_text(
+                quality_msg,
+                parse_mode="HTML",
+            )
+            logger.warning(
+                "[%s] Плохое качество фото tg:%d, confidence=%d%%, reason=%s",
+                LABEL, tg_id, quality_result["confidence"], quality_result["retake_reason"],
+            )
+            return
+
+        # ═══ КАЧЕСТВО OK → ПОКАЗЫВАЕМ ПРЕВЬЮ ═══
         await state.update_data(ocr_doc=doc)
         await state.set_state(OcrStates.preview)
 
@@ -333,12 +354,43 @@ async def handle_additional_photo(message: Message, state: FSMContext) -> None:
     await _run_ocr(message, state, [image_bytes])
 
 
+@router.message(OcrStates.waiting_retake, F.photo)
+async def handle_retake_photo(message: Message, state: FSMContext) -> None:
+    """Переснятое фото (после обнаружения плохого качества)."""
+    tg_id = message.from_user.id
+
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    logger.info("[%s] Переснятое фото tg:%d", LABEL, tg_id)
+
+    # Очищаем старые фото, начинаем заново
+    await state.update_data(ocr_photos=[])
+
+    # Пачка фото (media group)
+    if message.media_group_id:
+        logger.info("[%s] Переснятый альбом %s tg:%d", LABEL, message.media_group_id, tg_id)
+        await _collect_album_photo(message, state, _run_ocr)
+        return
+
+    # Одиночное фото
+    photo = message.photo[-1]
+    file = await message.bot.get_file(photo.file_id)
+    file_bytes = await message.bot.download_file(file.file_path)
+    image_bytes = file_bytes.read()
+
+    await _run_ocr(message, state, [image_bytes])
+
+
 # ─────────────────────────────────────────────────────
 # Guard: текст вместо фото
 # ─────────────────────────────────────────────────────
 
 @router.message(OcrStates.waiting_photo)
 @router.message(OcrStates.waiting_more_pages)
+@router.message(OcrStates.waiting_retake)
 async def handle_not_photo(message: Message, state: FSMContext) -> None:
     """Пользователь прислал текст вместо фото."""
     try:
@@ -354,7 +406,7 @@ async def handle_not_photo(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "ocr:confirm")
 async def cb_confirm(callback: CallbackQuery, state: FSMContext) -> None:
-    """Подтвердить распознанный документ — сохранить в БД."""
+    """Подтвердить распознанный документ — отправить бухгалтеру."""
     await callback.answer()
     tg_id = callback.from_user.id
     logger.info("[%s] Подтверждение OCR tg:%d", LABEL, tg_id)
@@ -368,53 +420,20 @@ async def cb_confirm(callback: CallbackQuery, state: FSMContext) -> None:
 
     try:
         from use_cases.ocr_invoice import save_ocr_result
-        from use_cases.ocr_mapping import check_and_map_items
 
         # Сохраняем в БД
         doc_id = await save_ocr_result(tg_id, doc)
         await state.update_data(ocr_doc_id=doc_id)
 
-        # Проверяем маппинг
-        mapping_result = await check_and_map_items(doc)
-        category = mapping_result.get("supplier_category", "goods")
-        sheet_url = mapping_result.get("sheet_url", "")
-
-        # Услуга — маппинг товаров не нужен, сразу бухгалтеру
-        if category == "service":
-            await _send_to_accountant(callback, state, doc, doc_id, category="service")
-            return
-
-        if mapping_result["all_mapped"]:
-            # Всё замаплено — показываем таблицу + отправляем на подтверждение бухгалтеру
-            text = (
-                f"✅ Все <b>{mapping_result['mapped_count']}</b> позиций замаплены автоматически.\n\n"
-            )
-            if sheet_url:
-                text += f"🔗 <a href=\"{sheet_url}\">Проверить в таблице</a>\n\n"
-            text += "Отправляю бухгалтеру..."
-            await callback.message.edit_text(text, parse_mode="HTML")
-            await _send_to_accountant(callback, state, doc, doc_id)
-        else:
-            # Есть немаппленные — отправляем в GSheet
-            unmapped_count = mapping_result["unmapped_count"]
-            mapped_count = mapping_result["mapped_count"]
-
-            text = (
-                f"⚠️ Замаплено <b>{mapped_count}</b> из <b>{mapped_count + unmapped_count}</b> позиций.\n"
-                f"<b>{unmapped_count}</b> — не распознано.\n\n"
-            )
-            if sheet_url:
-                text += (
-                    f"Откройте Google Таблицу и замапьте незамапленные товары (❌ в статусе):\n"
-                    f"🔗 <a href=\"{sheet_url}\">Открыть таблицу</a>\n\n"
-                )
-            text += "После маппинга нажмите «✅ Готово»."
-            await callback.message.edit_text(
-                text,
-                reply_markup=_mapping_kb(),
-                parse_mode="HTML",
-            )
-            await state.set_state(OcrStates.waiting_mapping)
+        # ═══ УПРОЩЁННЫЙ WORKFLOW: СРАЗУ БУХГАЛТЕРУ ═══
+        # (без маппинга товаров)
+        
+        await callback.message.edit_text(
+            "✅ Документ сохранён.\n⏳ Отправляю бухгалтеру...",
+        )
+        
+        # Отправляем на подтверждение бухгалтеру
+        await _send_to_accountant_simple(callback, state, doc, doc_id)
 
     except Exception as e:
         logger.exception("[%s] Confirm failed tg:%d: %s", LABEL, tg_id, e)
@@ -493,6 +512,81 @@ async def cb_check_mapping(callback: CallbackQuery, state: FSMContext) -> None:
     except Exception as e:
         logger.exception("[%s] Check mapping failed tg:%d: %s", LABEL, tg_id, e)
         await callback.message.edit_text(f"❌ Ошибка проверки маппинга: {e}")
+
+
+# ─────────────────────────────────────────────────────
+# Отправка на подтверждение бухгалтеру (упрощённая версия)
+# ─────────────────────────────────────────────────────
+
+async def _send_to_accountant_simple(
+    callback: CallbackQuery,
+    state: FSMContext,
+    doc: dict,
+    doc_id: int,
+) -> None:
+    """
+    Упрощённая отправка документа бухгалтеру.
+    БЕЗ маппинга товаров — просто показываем распознанные данные.
+    """
+    from use_cases.ocr_invoice import format_preview, update_ocr_status
+    from use_cases.permissions import get_accountant_ids
+
+    # Обновляем статус
+    await update_ocr_status(doc_id, "pending_approval")
+
+    preview = format_preview(doc)
+    accountants = await get_accountant_ids()
+
+    if not accountants:
+        from use_cases.permissions import get_admin_ids
+        accountants = await get_admin_ids()
+
+    if not accountants:
+        await callback.message.edit_text(
+            "⚠️ Нет бухгалтеров и админов для подтверждения.\n"
+            "Добавьте роль «📑 Бухгалтер» в Google Таблице."
+        )
+        await state.clear()
+        return
+
+    # Упрощённые кнопки (без отправки в iiko, пока только принять/отклонить)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Принято",
+                callback_data=f"ocr_ack:{doc_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=f"ocr_reject:{doc_id}",
+            ),
+        ],
+    ])
+
+    bot = callback.bot
+    sent = 0
+    for acc_id in accountants:
+        try:
+            await bot.send_message(
+                acc_id,
+                f"📄 <b>Новый документ на проверку</b>\n"
+                f"От: tg:{callback.from_user.id}\n\n"
+                f"{preview}",
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+            sent += 1
+        except Exception:
+            logger.warning("[%s] Не удалось отправить acc:%d", LABEL, acc_id)
+
+    await callback.message.edit_text(
+        f"✅ Документ отправлен бухгалтеру ({sent} чел.).\nОжидайте подтверждения.",
+    )
+    await state.clear()
+    await restore_menu_kb(
+        callback.bot, callback.message.chat.id, state,
+        "📦 Накладные:", invoices_keyboard(),
+    )
 
 
 # ─────────────────────────────────────────────────────

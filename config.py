@@ -124,3 +124,7 @@ LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 # ── Gemini Vision (OCR накладных) ──
 GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+
+# ── OCR ──
+# UUID склада для приходных накладных. Если не задан — авто-определение по buyer через fuzzy match
+OCR_DEFAULT_STORE_ID: str | None = os.getenv("OCR_DEFAULT_STORE_ID")

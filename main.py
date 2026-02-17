@@ -32,7 +32,6 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.global_commands import router as global_router, NavResetMiddleware
     from bot.handlers import router
     from bot.writeoff_handlers import router as writeoff_router
-    from bot.admin_handlers import router as admin_router
     from bot.min_stock_handlers import router as min_stock_router
     from bot.invoice_handlers import router as invoice_router
     from bot.request_handlers import router as request_router
@@ -43,7 +42,6 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     # Outer-middleware: сброс FSM при нажатии Reply-кнопки навигации
     dp.message.outer_middleware(NavResetMiddleware())
     dp.include_router(global_router)      # /cancel — первый, перехватывает всегда
-    dp.include_router(admin_router)
     dp.include_router(writeoff_router)
     dp.include_router(min_stock_router)
     dp.include_router(invoice_router)
@@ -62,12 +60,105 @@ async def _check_db() -> None:
     logger.info("DB connection OK")
 
 
+async def _init_db() -> None:
+    """Инициализация БД: создание таблиц + миграции (идемпотентно)."""
+    from db.init_db import create_tables
+    logger.info("Initializing database (tables + migrations)...")
+    await create_tables()
+    logger.info("Database initialized OK")
+
+
+async def _check_iiko() -> None:
+    """Startup self-check: iiko API доступен."""
+    try:
+        from iiko_auth import get_auth_token
+        token = await get_auth_token()
+        logger.info("iiko API OK (token len=%d)", len(token))
+    except Exception:
+        logger.warning("[startup] iiko API недоступен (не критично)", exc_info=True)
+
+
+async def _check_fintablo() -> None:
+    """Startup self-check: FinTablo API доступен."""
+    try:
+        from adapters.fintablo_api import fetch_categories
+        cats = await fetch_categories()
+        logger.info("FinTablo API OK (%d categories)", len(cats))
+    except Exception:
+        logger.warning("[startup] FinTablo API недоступен (не критично)", exc_info=True)
+
+
+async def _check_staleness() -> None:
+    """Staleness detection: предупреждение если последний SyncLog старше 24ч."""
+    try:
+        from db.engine import async_session_factory
+        from sqlalchemy import text
+        async with async_session_factory() as session:
+            row = await session.execute(
+                text("SELECT MAX(started_at) FROM iiko_sync_log")
+            )
+            last_sync = row.scalar()
+            if last_sync is None:
+                logger.warning("[startup] SyncLog пуст — синхронизация никогда не запускалась!")
+                return
+            from use_cases._helpers import now_kgd
+            age_hours = (now_kgd() - last_sync).total_seconds() / 3600
+            if age_hours > 24:
+                logger.warning(
+                    "[startup] ⚠️ Последняя синхронизация %.1f ч назад (>24ч)! last=%s",
+                    age_hours, last_sync,
+                )
+            else:
+                logger.info("[startup] Last sync %.1fч ago — OK", age_hours)
+    except Exception:
+        logger.warning("[startup] Не удалось проверить staleness", exc_info=True)
+
+
+async def _warmup_caches() -> None:
+    """Прогрев кешей при старте бота: permissions + user_context."""
+    import time as _time
+    t0 = _time.monotonic()
+    try:
+        from use_cases.permissions import _ensure_cache
+        await _ensure_cache()
+
+        from use_cases.user_context import get_user_context
+        from db.engine import async_session_factory
+        from sqlalchemy import text
+        async with async_session_factory() as session:
+            rows = await session.execute(
+                text("SELECT telegram_id FROM iiko_employee WHERE telegram_id IS NOT NULL")
+            )
+            tg_ids = [r[0] for r in rows]
+        for tg_id in tg_ids:
+            await get_user_context(tg_id)
+
+        elapsed = _time.monotonic() - t0
+        logger.info("[startup] Cache warmup done: %d users, %.1fs", len(tg_ids), elapsed)
+    except Exception:
+        logger.warning("[startup] Cache warmup failed (non-critical)", exc_info=True)
+
+
 async def _cleanup() -> None:
     from adapters.iiko_api import close_client as close_iiko
     from adapters.iiko_cloud_api import close_client as close_iiko_cloud
     from adapters.fintablo_api import close_client as close_ft
     from db.engine import dispose_engine
     from bot.middleware import cancel_tracked_tasks
+
+    # Логируем потерянные pending writeoffs (при shutdown они пропадут из RAM)
+    try:
+        from use_cases.pending_writeoffs import all_pending
+        pending = all_pending()
+        if pending:
+            logger.warning(
+                "[shutdown] ⚠️ Теряем %d pending writeoffs: %s",
+                len(pending),
+                [(d.doc_id, d.author_name, d.author_chat_id) for d in pending],
+            )
+    except Exception:
+        pass
+
     await cancel_tracked_tasks()
     await close_iiko()
     await close_iiko_cloud()
@@ -78,8 +169,24 @@ async def _cleanup() -> None:
 
 # ─── Webhook mode (Railway) ────────────────────────────────────────
 async def on_startup(bot: Bot) -> None:
-    # Проверка БД в том же event loop, где работает aiohttp
+    # Привязываем бот к Telegram-оповещениям об ошибках
+    from logging_config import get_telegram_handler
+    get_telegram_handler().attach_bot(bot)
+
+    # Инициализация БД: создание таблиц + миграции (идемпотентно)
     await _check_db()
+    await _init_db()
+
+    # Startup self-checks (не критичные — не блокируют старт)
+    await asyncio.gather(
+        _check_iiko(),
+        _check_fintablo(),
+        _check_staleness(),
+        return_exceptions=True,
+    )
+
+    # Прогрев кешей (permissions + user_context)
+    await _warmup_caches()
 
     from config import WEBHOOK_URL, WEBHOOK_PATH, WEBHOOK_SECRET
     url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
@@ -207,7 +314,25 @@ def run_webhook() -> None:
 # ─── Polling mode (local dev) ──────────────────────────────────────
 async def run_polling() -> None:
     bot, dp = _build_bot_and_dp()
+
+    # Привязываем бот к Telegram-оповещениям об ошибках
+    from logging_config import get_telegram_handler
+    get_telegram_handler().attach_bot(bot)
+
+    # Инициализация БД: создание таблиц + миграции (идемпотентно)
     await _check_db()
+    await _init_db()
+
+    # Startup self-checks (не критичные — не блокируют старт)
+    await asyncio.gather(
+        _check_iiko(),
+        _check_fintablo(),
+        _check_staleness(),
+        return_exceptions=True,
+    )
+
+    # Прогрев кешей
+    await _warmup_caches()
 
     # Снимаем вебхук, если остался с Railway
     await bot.delete_webhook(drop_pending_updates=True)

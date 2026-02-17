@@ -27,6 +27,106 @@ LABEL = "OCR"
 
 
 # ═══════════════════════════════════════════════════════
+# Проверка качества фото
+# ═══════════════════════════════════════════════════════
+
+def check_photo_quality(doc: dict[str, Any]) -> dict[str, Any]:
+    """
+    Проверить качество распознанного фото.
+
+    Returns:
+        {
+            "ok": bool,              # можно ли использовать это фото
+            "confidence": int,       # уверенность LLM (0-100)
+            "issues": list[str],     # список проблем
+            "needs_retake": bool,    # нужно ли переснимать
+            "retake_reason": str,    # что конкретно переснять
+        }
+    """
+    quality = doc.get("quality_check", {})
+    
+    # Извлекаем параметры
+    is_readable = quality.get("is_readable", True)
+    has_glare = quality.get("has_glare", False)
+    has_blur = quality.get("has_blur", False)
+    is_complete = quality.get("is_complete", True)
+    confidence = quality.get("confidence_score", 100)
+    issues = quality.get("issues", [])
+    needs_retake = quality.get("needs_retake", False)
+    retake_reason = quality.get("retake_reason", "")
+    
+    # Дополнительные эвристики если LLM не указал needs_retake
+    if not needs_retake:
+        # Критически низкая уверенность
+        if confidence < 70:
+            needs_retake = True
+            if not retake_reason:
+                retake_reason = f"Низкая уверенность распознавания ({confidence}%)"
+        
+        # Множественные проблемы
+        if len(issues) >= 3:
+            needs_retake = True
+            if not retake_reason:
+                retake_reason = "Множественные проблемы качества фото"
+        
+        # Критические флаги
+        if not is_readable or (has_glare and has_blur) or not is_complete:
+            needs_retake = True
+            if not retake_reason:
+                problems = []
+                if not is_readable:
+                    problems.append("нечитаемый текст")
+                if has_glare:
+                    problems.append("блики")
+                if has_blur:
+                    problems.append("размытость")
+                if not is_complete:
+                    problems.append("обрезаны края")
+                retake_reason = ", ".join(problems)
+    
+    return {
+        "ok": not needs_retake,
+        "confidence": confidence,
+        "issues": issues,
+        "needs_retake": needs_retake,
+        "retake_reason": retake_reason,
+    }
+
+
+def format_quality_message(quality_result: dict[str, Any]) -> str:
+    """
+    Сформировать сообщение о проблемах качества фото.
+    
+    Returns:
+        HTML-текст для отправки пользователю.
+    """
+    lines = ["⚠️ <b>Проблемы с качеством фото</b>\n"]
+    
+    confidence = quality_result.get("confidence", 0)
+    lines.append(f"🎯 Уверенность распознавания: <b>{confidence}%</b>")
+    
+    retake_reason = quality_result.get("retake_reason", "")
+    if retake_reason:
+        lines.append(f"\n❌ <b>Причина:</b> {retake_reason}")
+    
+    issues = quality_result.get("issues", [])
+    if issues:
+        lines.append("\n📋 <b>Обнаруженные проблемы:</b>")
+        for issue in issues[:5]:  # максимум 5
+            lines.append(f"  • {issue}")
+    
+    lines.append("\n💡 <b>Что делать:</b>")
+    lines.append("1. Убедитесь что нет бликов от лампы/окна")
+    lines.append("2. Держите камеру ровно над документом")
+    lines.append("3. Проверьте что весь документ в кадре")
+    lines.append("4. Сделайте фото заново в хорошо освещённом месте")
+    
+    lines.append("\n📸 Отправьте новое фото или нажмите «❌ Отменить»")
+    
+    return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════
 # Валидация и автоисправление
 # ═══════════════════════════════════════════════════════
 

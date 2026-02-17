@@ -10,7 +10,6 @@ Use-case: отправка OCR-документа в iiko как приходн�
 """
 
 import logging
-import os
 import re
 from datetime import datetime
 from typing import Any
@@ -19,6 +18,7 @@ from sqlalchemy import select
 from thefuzz import fuzz
 
 from adapters.iiko_api import send_incoming_invoice
+from config import OCR_DEFAULT_STORE_ID
 from db.engine import async_session_factory
 from db.models import OcrDocument, Store
 
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 LABEL = "OCR→iiko"
 
 # Если задан, используем как дефолтный склад для приходных
-DEFAULT_INCOMING_STORE_ID: str | None = os.getenv("OCR_DEFAULT_STORE_ID")
+DEFAULT_INCOMING_STORE_ID: str | None = OCR_DEFAULT_STORE_ID
 
 
 # ═══════════════════════════════════════════════════════

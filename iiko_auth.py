@@ -2,6 +2,7 @@
 import httpx
 import logging
 import asyncio
+import time
 from datetime import datetime, timedelta
 
 from config import IIKO_BASE_URL, IIKO_LOGIN, IIKO_SHA1_PASSWORD
@@ -10,13 +11,14 @@ from config import IIKO_BASE_URL, IIKO_LOGIN, IIKO_SHA1_PASSWORD
 AUTH_TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=None)
 AUTH_ATTEMPTS = 4
 AUTH_RETRY_DELAY = 3  # секунды
+_TOKEN_TTL_SEC = 10 * 60  # 10 минут
 
 logger = logging.getLogger(__name__)
 
-# Кеш токена
-_token_cache = {
+# Кеш токена (monotonic clock — не зависит от timezone / NTP скачков)
+_token_cache: dict[str, str | float | None] = {
     "token": None,
-    "expires_at": None
+    "expires_mono": None,  # time.monotonic() + TTL
 }
 
 
@@ -25,8 +27,8 @@ async def get_auth_token() -> str:
     """Получить токен авторизации от iiko (async) с кешированием."""
     
     # Проверяем кеш
-    if _token_cache["token"] and _token_cache["expires_at"]:
-        if datetime.now() < _token_cache["expires_at"]:
+    if _token_cache["token"] and _token_cache["expires_mono"]:
+        if time.monotonic() < _token_cache["expires_mono"]:
             logger.debug("✅ Используем кешированный токен")
             return _token_cache["token"]
     
@@ -61,7 +63,7 @@ async def get_auth_token() -> str:
             
             # Сохраняем в кеш на 10 минут
             _token_cache["token"] = token
-            _token_cache["expires_at"] = datetime.now() + timedelta(minutes=10)
+            _token_cache["expires_mono"] = time.monotonic() + _TOKEN_TTL_SEC
             logger.debug("🔑 Получен новый токен, кешируем на 10 минут")
             
             return token
