@@ -1,7 +1,7 @@
 """
-Адаптер OpenAI GPT-4o Vision для OCR российских бухгалтерских документов.
+Адаптер OpenAI GPT-5.2 Vision для OCR российских бухгалтерских документов.
 
-Фото → GPT-4o → структурированный JSON.
+Фото → GPT-5.2 → структурированный JSON.
 """
 
 import base64
@@ -18,11 +18,12 @@ import io
 from config import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
-LABEL = "GPT4o-OCR"
+LABEL = "GPT5.2-OCR"
 
-# OpenAI GPT-4o latest (paid tier) - 10,000 RPM, no daily limits
-# chatgpt-4o-latest всегда использует самую новую версию модели
-GPT_MODEL = "chatgpt-4o-latest"
+# OpenAI GPT-5.2 (December 2025 release)
+# Context: 400K tokens, Output: 128K tokens, Knowledge cutoff: Aug 2025
+# Pricing: $1.75/1M input, $14/1M output tokens
+GPT_MODEL = "gpt-5.2"
 
 
 # ═══════════════════════════════════════════════════════
@@ -275,12 +276,12 @@ async def recognize_document(
             }
         ],
         temperature=0.1,
-        max_tokens=4096,
+        max_completion_tokens=4096,
     )
 
     elapsed = time.monotonic() - t0
     raw_text = response.choices[0].message.content or ""
-    logger.info("[%s] Ответ GPT-4o за %.1f сек, len=%d", LABEL, elapsed, len(raw_text))
+    logger.info("[%s] Ответ GPT-5.2 за %.1f сек, len=%d", LABEL, elapsed, len(raw_text))
     logger.debug("[%s] Raw response:\n%s", LABEL, raw_text[:2000])
 
     # Парсим JSON
@@ -343,13 +344,13 @@ async def recognize_multiple_pages(
             }
         })
 
-    logger.info("[%s] Отправляю %d фото в GPT-4o (multi-page)", LABEL, len(images))
+    logger.info("[%s] Отправляю %d фото в GPT-5.2 (multi-page)", LABEL, len(images))
 
     response = await client.chat.completions.create(
         model=GPT_MODEL,
         messages=[{"role": "user", "content": content_parts}],
         temperature=0.1,
-        max_tokens=8192,  # больше токенов для multi-page
+        max_completion_tokens=8192,  # больше токенов для multi-page
     )
 
     elapsed = time.monotonic() - t0
@@ -444,7 +445,7 @@ async def extract_document_metadata(image_bytes: bytes) -> dict[str, Any]:
             }
         ],
         temperature=0.0,
-        max_tokens=512,
+        max_completion_tokens=512,
     )
     
     elapsed = time.monotonic() - t0
