@@ -645,13 +645,18 @@ async def save_ocr_result(
         id записи.
     """
     async with async_session_factory() as session:
+        # Получаем INN и конвертируем в строку, если он существует
+        supplier_inn = (doc.get("supplier") or {}).get("inn")
+        if supplier_inn is not None:
+            supplier_inn = str(supplier_inn)
+        
         row = OcrDocument(
             telegram_id=telegram_id,
             doc_type=doc.get("doc_type", "Неизвестный"),
             doc_number=doc.get("doc_number"),
             doc_date=doc.get("date"),
             supplier_name=(doc.get("supplier") or {}).get("name"),
-            supplier_inn=(doc.get("supplier") or {}).get("inn"),
+            supplier_inn=supplier_inn,
             buyer_name=(doc.get("buyer") or {}).get("name"),
             items_count=len(doc.get("items", [])),
             total_with_vat=doc.get("total_with_vat") or doc.get("_calc_total_with_vat"),
