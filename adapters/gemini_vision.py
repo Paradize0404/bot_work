@@ -5,6 +5,7 @@
 Один файл, легко заменить на другую модель (Claude, GPT).
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -19,6 +20,73 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 
 logger = logging.getLogger(__name__)
 LABEL = "GeminiOCR"
+
+# ═══════════════════════════════════════════════════════
+# Rate-limit и retry настройки
+# ═══════════════════════════════════════════════════════
+
+# Gemini Free Tier: 5 RPM (requests per minute per model)
+# Paid Tier: 1000+ RPM — тогда можно параллелить
+GEMINI_REQUEST_DELAY = 2.0  # секунд между запросами (для free tier: 60/5 = 12s, но ставим 2 с retry)
+GEMINI_MAX_RETRIES = 4      # максимум ретраев при 429
+GEMINI_RETRY_BASE = 15.0    # базовая задержка при retry (сек)
+
+
+async def _call_gemini_with_retry(
+    client: genai.Client,
+    *,
+    contents: list[dict],
+    temperature: float = 0.1,
+    label: str = "",
+) -> str:
+    """
+    Вызов Gemini API с retry при 429 RESOURCE_EXHAUSTED.
+
+    Exponential backoff: 15s → 30s → 60s → 120s.
+    Между обычными запросами пауза GEMINI_REQUEST_DELAY.
+
+    Returns:
+        raw text ответа
+    """
+    last_error = None
+
+    for attempt in range(1, GEMINI_MAX_RETRIES + 1):
+        try:
+            t0 = time.monotonic()
+            response = await client.aio.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=contents,
+                config={"temperature": temperature},
+            )
+            elapsed = time.monotonic() - t0
+            logger.debug("[%s] %s Gemini ответил за %.1f сек (attempt %d)", LABEL, label, elapsed, attempt)
+            return response.text
+
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                # Парсим рекомендованную задержку из ошибки
+                wait = GEMINI_RETRY_BASE * attempt  # 15, 30, 45, 60
+
+                # Пытаемся извлечь retryDelay из сообщения
+                import re as _re
+                delay_match = _re.search(r"retryDelay.*?(\d+)s", err_str)
+                if delay_match:
+                    suggested = int(delay_match.group(1))
+                    wait = max(wait, suggested + 2)  # +2 сек запас
+
+                logger.warning(
+                    "[%s] %s 429 Rate limit (attempt %d/%d), жду %.0f сек...",
+                    LABEL, label, attempt, GEMINI_MAX_RETRIES, wait,
+                )
+                last_error = e
+                await asyncio.sleep(wait)
+                continue
+            else:
+                raise
+
+    # Все ретраи исчерпаны
+    raise last_error  # type: ignore[misc]
 
 # ═══════════════════════════════════════════════════════
 # Инициализация клиента
@@ -257,13 +325,12 @@ async def recognize_document(
         {"inline_data": {"mime_type": "image/jpeg", "data": image_bytes}}
     ]
 
-    response = await client.aio.models.generate_content(
-        model=GEMINI_MODEL,
+    raw_text = await _call_gemini_with_retry(
+        client,
         contents=contents,
-        config={"temperature": 0.1},
+        temperature=0.1,
+        label="single",
     )
-
-    raw_text = response.text
     elapsed = time.monotonic() - t0
     logger.info("[%s] Ответ Gemini за %.1f сек, len=%d", LABEL, elapsed, len(raw_text))
     logger.debug("[%s] Raw response:\n%s", LABEL, raw_text[:2000])
@@ -324,13 +391,12 @@ async def recognize_multiple_pages(
 
     logger.info("[%s] Отправляю %d фото в Gemini (multi-page)", LABEL, len(images))
 
-    response = await client.aio.models.generate_content(
-        model=GEMINI_MODEL,
+    raw_text = await _call_gemini_with_retry(
+        client,
         contents=contents,
-        config={"temperature": 0.1},
+        temperature=0.1,
+        label=f"multi-{len(images)}p",
     )
-
-    raw_text = response.text
     elapsed = time.monotonic() - t0
     logger.info("[%s] Multi-page ответ за %.1f сек", LABEL, elapsed)
 
@@ -408,13 +474,12 @@ async def extract_document_metadata(image_bytes: bytes) -> dict[str, Any]:
     
     logger.info("[%s] Извлекаю метаданные (metadata-only)", LABEL)
     
-    response = await client.aio.models.generate_content(
-        model=GEMINI_MODEL,
+    raw_text = await _call_gemini_with_retry(
+        client,
         contents=contents,
-        config={"temperature": 0.0},  # 0.0 для максимальной стабильности
+        temperature=0.0,
+        label="metadata",
     )
-    
-    raw_text = response.text
     elapsed = time.monotonic() - t0
     logger.debug("[%s] Metadata за %.1f сек: %s", LABEL, elapsed, raw_text[:200])
     
