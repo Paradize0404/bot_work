@@ -12,7 +12,6 @@ import time
 from typing import Any
 
 from google import genai
-from google.genai import types
 from PIL import Image
 import io
 
@@ -261,9 +260,7 @@ async def recognize_document(
     response = await client.aio.models.generate_content(
         model=GEMINI_MODEL,
         contents=contents,
-        config=types.GenerateContentConfig(
-            temperature=0.1,
-        ),
+        config={"temperature": 0.1},
     )
 
     raw_text = response.text
@@ -330,9 +327,7 @@ async def recognize_multiple_pages(
     response = await client.aio.models.generate_content(
         model=GEMINI_MODEL,
         contents=contents,
-        config=types.GenerateContentConfig(
-            temperature=0.1,
-        ),
+        config={"temperature": 0.1},
     )
 
     raw_text = response.text
