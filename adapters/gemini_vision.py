@@ -11,7 +11,8 @@ import re
 import time
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from PIL import Image
 import io
 
@@ -24,18 +25,18 @@ LABEL = "GeminiOCR"
 # Инициализация клиента
 # ═══════════════════════════════════════════════════════
 
-_client_configured = False
+_client: genai.Client | None = None
 
 
-def _ensure_configured() -> None:
-    """Ленивая инициализация — конфигурируем при первом вызове."""
-    global _client_configured
-    if _client_configured:
-        return
+def _get_client() -> genai.Client:
+    """Ленивая инициализация — создаём клиента при первом вызове."""
+    global _client
+    if _client is not None:
+        return _client
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY не задан — OCR невозможен")
-    genai.configure(api_key=GEMINI_API_KEY)
-    _client_configured = True
+    _client = genai.Client(api_key=GEMINI_API_KEY)
+    return _client
 
 
 # ═══════════════════════════════════════════════════════
@@ -233,7 +234,7 @@ async def recognize_document(
         ValueError: если Gemini вернул не JSON
         RuntimeError: если GEMINI_API_KEY не задан
     """
-    _ensure_configured()
+    client = _get_client()
 
     t0 = time.monotonic()
 
@@ -247,24 +248,20 @@ async def recognize_document(
         known_buyers=known_buyers,
     )
 
-    # Создаём модель
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.1,
-        ),
-    )
-
     # Отправляем фото + промпт
     logger.info("[%s] Отправляю фото в Gemini (%s), size=%d bytes", LABEL, GEMINI_MODEL, len(image_bytes))
 
-    image_part = {
-        "mime_type": "image/jpeg",
-        "data": image_bytes,
-    }
+    contents = [
+        types.Part.from_text(prompt),
+        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+    ]
 
-    response = await model.generate_content_async(
-        [prompt, image_part],
+    response = await client.aio.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            temperature=0.1,
+        ),
     )
 
     raw_text = response.text
@@ -304,7 +301,7 @@ async def recognize_multiple_pages(
 
     Отправляем все фото в одном запросе — LLM сам объединит.
     """
-    _ensure_configured()
+    client = _get_client()
 
     t0 = time.monotonic()
 
@@ -319,24 +316,22 @@ async def recognize_multiple_pages(
         " В page_info укажи сколько страниц распознано."
     )
 
-    parts: list[Any] = [prompt]
-    for i, img_bytes in enumerate(images):
+    contents: list[types.Part] = [types.Part.from_text(prompt)]
+    for img_bytes in images:
         processed = preprocess_image(img_bytes)
-        parts.append({
-            "mime_type": "image/jpeg",
-            "data": processed,
-        })
-
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.1,
-        ),
-    )
+        contents.append(
+            types.Part.from_bytes(data=processed, mime_type="image/jpeg")
+        )
 
     logger.info("[%s] Отправляю %d фото в Gemini (multi-page)", LABEL, len(images))
 
-    response = await model.generate_content_async(parts)
+    response = await client.aio.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            temperature=0.1,
+        ),
+    )
 
     raw_text = response.text
     elapsed = time.monotonic() - t0
