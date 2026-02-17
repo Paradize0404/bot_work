@@ -112,6 +112,17 @@ async def _album_timer(
     mg_id: str,
     message: Message,
     state: FSMContext,
+    on_ready_callback,
+):
+    """Ждёт ALBUM_WAIT_SEC и запускает обработку альбома."""
+    await asyncio.sleep(ALBUM_WAIT_SEC)
+
+    async with _album_lock:
+        if mg_id not in _album_buffer:
+            return
+        buf = _album_buffer.pop(mg_id)
+
+    file_ids = buf["photos"]
     count = len(file_ids)
     status_msg = buf.get("status_message")
     
@@ -140,19 +151,7 @@ async def _album_timer(
         images.append(file_bytes.read())
 
     # Передаём status_message чтобы не создавать новое
-    await on_ready_callback(message, state, images, status_msg
-        "[%s] Альбом %s собран: %d фото, tg:%d",
-        LABEL, mg_id, len(file_ids), buf["user_id"],
-    )
-
-    # Скачиваем все фото
-    images: list[bytes] = []
-    for fid in file_ids:
-        file = await message.bot.get_file(fid)
-        file_bytes = await message.bot.download_file(file.file_path)
-        images.append(file_bytes.read())
-
-    await on_ready_callback(message, state, images)
+    await on_ready_callback(message, state, images, status_msg)
 
 
 # ─────────────────────────────────────────────────────
