@@ -12,6 +12,7 @@ Use-case: OCR-распознавание бухгалтерских докуме
 
 import asyncio
 import hashlib
+import html
 import json
 import logging
 import time
@@ -477,28 +478,29 @@ def _parse_vat_rate(rate_str: str | None) -> float | None:
 def format_preview(doc: dict[str, Any]) -> str:
     """
     Формируем текстовое превью распознанного документа для Telegram.
+    Все динамические значения экранируются для безопасного HTML.
     """
     lines: list[str] = []
 
     doc_type = doc.get("doc_type", "Неизвестный")
-    lines.append(f"📄 <b>{doc_type}</b>")
+    lines.append(f"📄 <b>{html.escape(doc_type)}</b>")
     if doc.get("doc_number"):
-        lines.append(f"№ {doc['doc_number']}")
+        lines.append(f"№ {html.escape(str(doc['doc_number']))}")
     if doc.get("date"):
-        lines.append(f"Дата: {doc['date']}")
+        lines.append(f"Дата: {html.escape(str(doc['date']))}")
 
     # Поставщик
     supplier = doc.get("supplier") or {}
     if supplier.get("name"):
-        s_line = f"\n🏢 <b>Поставщик:</b> {supplier['name']}"
+        s_line = f"\n🏢 <b>Поставщик:</b> {html.escape(supplier['name'])}"
         if supplier.get("inn"):
-            s_line += f" (ИНН {supplier['inn']})"
+            s_line += f" (ИНН {html.escape(str(supplier['inn']))})"
         lines.append(s_line)
 
     # Покупатель
     buyer = doc.get("buyer") or {}
     if buyer.get("name"):
-        lines.append(f"🏪 <b>Покупатель:</b> {buyer['name']}")
+        lines.append(f"🏪 <b>Покупатель:</b> {html.escape(buyer['name'])}")
 
     # Товары
     items = doc.get("items") or []
@@ -512,10 +514,10 @@ def format_preview(doc: dict[str, Any]) -> str:
             price = item.get("price", "?")
             sum_with = item.get("sum_with_vat") or item.get("sum_without_vat") or "?"
 
-            # Убираем маркер _sum_mismatch — доверяем документу
+            # Экранируем все значения для безопасности
             lines.append(
-                f"  {num}. {name}\n"
-                f"     {qty} {unit} × {price} = {sum_with}"
+                f"  {html.escape(str(num))}. {html.escape(name)}\n"
+                f"     {html.escape(str(qty))} {html.escape(unit)} × {html.escape(str(price))} = {html.escape(str(sum_with))}"
             )
 
     # Итоги
@@ -525,27 +527,27 @@ def format_preview(doc: dict[str, Any]) -> str:
     total_vat = doc.get("total_vat") or doc.get("_calc_total_vat")
 
     if total_wo:
-        lines.append(f"💰 Без НДС: <b>{total_wo}</b>")
+        lines.append(f"💰 Без НДС: <b>{html.escape(str(total_wo))}</b>")
     if total_vat:
-        lines.append(f"💰 НДС: <b>{total_vat}</b>")
+        lines.append(f"💰 НДС: <b>{html.escape(str(total_vat))}</b>")
     if total:
-        lines.append(f"💰 Итого: <b>{total}</b>")
+        lines.append(f"💰 Итого: <b>{html.escape(str(total))}</b>")
 
     # Предупреждения
     warnings = doc.get("_warnings", [])
     if warnings:
         lines.append("\n⚠️ <b>Предупреждения:</b>")
         for w in warnings[:5]:
-            lines.append(f"  • {w}")
+            lines.append(f"  • {html.escape(str(w))}")
 
     # Заметки от LLM
     notes = doc.get("notes")
     if notes:
-        lines.append(f"\n📝 {notes}")
+        lines.append(f"\n📝 {html.escape(notes)}")
 
     page_info = doc.get("page_info")
     if page_info and page_info != "единственная страница":
-        lines.append(f"📄 {page_info}")
+        lines.append(f"📄 {html.escape(page_info)}")
 
     return "\n".join(lines)
 

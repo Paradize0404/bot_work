@@ -17,6 +17,7 @@ Media-group (пачка фото):
 """
 
 import asyncio
+import html
 import logging
 
 from aiogram import Router, F
@@ -410,7 +411,10 @@ async def _run_ocr(
                     reason = issues[0][:50]
                 else:
                     reason = qr.get("retake_reason", "низкое качество")[:50]
-                summary_lines.append(f"  • {supplier}: {reason}")
+                # Экранируем HTML-символы
+                supplier_safe = html.escape(supplier)
+                reason_safe = html.escape(reason)
+                summary_lines.append(f"  • {supplier_safe}: {reason_safe}")
             summary_lines.append("\n📸 Если есть сомнения в качестве — переснимите и отправьте заново.")
 
         if err_docs:
@@ -418,7 +422,9 @@ async def _run_ocr(
                 f"\n❌ {len(err_docs)} фото не удалось распознать."
             )
             for _doc, err_preview in err_docs:
-                summary_lines.append(f"  • {err_preview[:100]}")
+                # Экранируем HTML-символы в превью ошибки
+                err_preview_safe = html.escape(err_preview[:100])
+                summary_lines.append(f"  • {err_preview_safe}")
 
         if not summary_lines:
             summary_lines.append("❌ Не удалось распознать ни одного документа.")
