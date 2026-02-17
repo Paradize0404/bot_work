@@ -402,19 +402,36 @@ async def _run_ocr(
             summary_lines.append(
                 f"\n⚠️ {len(bad_quality_docs)} документ(ов) с замечаниями по качеству фото:"
             )
-            for doc, _preview, qr in bad_quality_docs:
-                supplier = (doc.get("supplier") or {}).get("name", "?")
-                # Короткое описание вместо полного retake_reason
+            for doc, preview, qr in bad_quality_docs:
+                # Получаем название поставщика, используем fallback если None
+                supplier = (doc.get("supplier") or {}).get("name") or "Документ"
+                supplier_safe = html.escape(str(supplier))
+                
+                # Показываем тип документа и основную информацию
+                doc_type = doc.get("doc_type", "Неизвестный")
+                doc_info = f"<b>{supplier_safe}</b> ({doc_type}"
+                if doc.get("doc_number"):
+                    doc_info += f" №{doc.get('doc_number')}"
+                if doc.get("date"):
+                    doc_info += f" от {doc.get('date')}"
+                doc_info += ")"
+                
+                summary_lines.append(f"\n📄 {doc_info}")
+                
+                # Показываем ВСЕ проблемы из массива issues
                 issues = qr.get("issues", [])
                 if issues:
-                    # Берём первую проблему (макс 50 символов)
-                    reason = issues[0][:50]
+                    for issue in issues:
+                        issue_safe = html.escape(str(issue)[:150])
+                        summary_lines.append(f"   ⚠️ {issue_safe}")
                 else:
-                    reason = qr.get("retake_reason", "низкое качество")[:50]
-                # Экранируем HTML-символы
-                supplier_safe = html.escape(str(supplier))
-                reason_safe = html.escape(str(reason))
-                summary_lines.append(f"  • {supplier_safe}: {reason_safe}")
+                    reason = qr.get("retake_reason", "низкое качество")[:150]
+                    reason_safe = html.escape(str(reason))
+                    summary_lines.append(f"   ⚠️ {reason_safe}")
+                
+                # Показываем превью распознанного
+                summary_lines.append(f"\n{preview[:500]}...")  # Первые 500 символов превью
+                
             summary_lines.append("\n📸 Если есть сомнения в качестве — переснимите и отправьте заново.")
 
         if err_docs:
