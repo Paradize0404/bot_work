@@ -48,9 +48,17 @@ LABEL = "ocr"
 # Telegram присылает пачку фото как отдельные Message с одинаковым media_group_id.
 # Мы складываем file_id в буфер и через ALBUM_WAIT_SEC запускаем обработку.
 
-ALBUM_WAIT_SEC = 1.5  # ждём столько после последнего фото из группы
+ALBUM_WAIT_SEC = 2.0  # ждём столько после последнего фото из группы
 
-# {media_group_id: {"photos": [(file_id, file_unique_id), ...], "chat_id": int, "user_id": int, "timer": Task}}
+# {media_group_id: {
+#   "photos": [file_id, ...],
+#   "chat_id": int,
+#   "user_id": int,
+#   "message": Message,
+#   "state": FSMContext,
+#   "timer": Task,
+#   "status_message": Message  # сообщение-индикатор "⏳ Получаю фото..."
+# }}
 _album_buffer: dict[str, dict] = {}
 _album_lock = asyncio.Lock()
 
@@ -66,6 +74,8 @@ async def _collect_album_photo(
 
     async with _album_lock:
         if mg_id not in _album_buffer:
+            # Первое фото из альбома → показываем индикатор
+            status_msg = await message.answer("⏳ Получаю фото... (1)")
             _album_buffer[mg_id] = {
                 "photos": [],
                 "chat_id": message.chat.id,
@@ -73,10 +83,20 @@ async def _collect_album_photo(
                 "message": message,
                 "state": state,
                 "timer": None,
+                "status_message": status_msg,
             }
 
         buf = _album_buffer[mg_id]
         buf["photos"].append(photo.file_id)
+        
+        # Обновляем индикатор с количеством полученных фото
+        count = len(buf["photos"])
+        try:
+            await buf["status_message"].edit_text(
+                f"⏳ Получаю фото... ({count})"
+            )
+        except Exception:
+            pass  # сообщение могло быть удалено
 
         # Отменяем предыдущий таймер
         if buf["timer"] and not buf["timer"].done():
@@ -92,19 +112,35 @@ async def _album_timer(
     mg_id: str,
     message: Message,
     state: FSMContext,
-    on_ready_callback,
-) -> None:
-    """Подождать ALBUM_WAIT_SEC, затем вызвать callback со всеми фото."""
-    await asyncio.sleep(ALBUM_WAIT_SEC)
-
-    async with _album_lock:
-        buf = _album_buffer.pop(mg_id, None)
-
-    if not buf:
-        return
-
-    file_ids = buf["photos"]
+    count = len(file_ids)
+    status_msg = buf.get("status_message")
+    
     logger.info(
+        "[%s] Альбом %s собран: %d фото, tg:%d",
+        LABEL, mg_id, count, buf["user_id"],
+    )
+
+    # Обновляем индикатор на "Распознаю X страниц..."
+    if status_msg:
+        try:
+            await status_msg.edit_text(
+                f"⏳ Распознаю {'документ' if count == 1 else f'{count} страниц(ы)'}..."
+            )
+        except Exception:
+            # Если не удалось отредактировать, создаём новое
+            status_msg = await message.answer(
+                f"⏳ Распознаю {'документ' if count == 1 else f'{count} страниц(ы)'}..."
+            )
+
+    # Скачиваем все фото
+    images: list[bytes] = []
+    for fid in file_ids:
+        file = await message.bot.get_file(fid)
+        file_bytes = await message.bot.download_file(file.file_path)
+        images.append(file_bytes.read())
+
+    # Передаём status_message чтобы не создавать новое
+    await on_ready_callback(message, state, images, status_msg
         "[%s] Альбом %s собран: %d фото, tg:%d",
         LABEL, mg_id, len(file_ids), buf["user_id"],
     )
@@ -218,25 +254,38 @@ async def btn_start_ocr(message: Message, state: FSMContext) -> None:
 # Общая логика OCR (вынесена из хендлеров)
 # ─────────────────────────────────────────────────────
 
+async def _run_ocr_from_album(
+    message: Message,
+    state: FSMContext,
+    images: list[bytes],
+    status_message: Message,
+) -> None:
+    """Обёртка для вызова _run_ocr из сборщика альбомов."""
+    await _run_ocr(message, state, images, status_message)
+
+
 async def _run_ocr(
     message: Message,
     state: FSMContext,
     images: list[bytes],
+    status_message: Message | None = None,
 ) -> None:
     """Запустить OCR для одного или нескольких фото и показать превью."""
     tg_id = message.from_user.id
     count = len(images)
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    placeholder = await message.answer(
-        f"⏳ Распознаю {'документ' if count == 1 else f'{count} страниц(ы)'}..."
-    )
+    
+    # Используем существующее сообщение или создаём новое
+    if status_message:
+        placeholder = status_message
+    else:
+        placeholder = await message.answer(
+            f"⏳ Распознаю {'документ' if count == 1 else f'{count} страниц(ы)'}..."
+        )
 
-    # Сохраняем в state
-    data = await state.get_data()
-    photos: list[bytes] = data.get("ocr_photos", [])
-    photos.extend(images)
-    await state.update_data(ocr_photos=photos)
+    # ВАЖНО: НЕ добавляем к старым фото, а ЗАМЕНЯЕМ
+    await state.update_data(ocr_photos=images)
 
     try:
         from use_cases.ocr_invoice import (
@@ -254,19 +303,20 @@ async def _run_ocr(
             "known_buyers": buyers[:20] if buyers else None,
         }
 
-        if len(photos) == 1:
-            doc, preview = await process_photo(photos[0], tg_id, **kw)
+        # Используем ВСЕ собранные фото из state
+        if count == 1:
+            doc, preview = await process_photo(images[0], tg_id, **kw)
         else:
-            doc, preview = await process_multiple_photos(photos, tg_id, **kw)
+            doc, preview = await process_multiple_photos(images, tg_id, **kw)
 
         # ═══ ПРОВЕРКА КАЧЕСТВА ФОТО ═══
         quality_result = check_photo_quality(doc)
         
         if not quality_result["ok"]:
-            # Плохое качество → просим переснять
+            # Плохое качество → просим переснять КАССИРА
             quality_msg = format_quality_message(quality_result)
             await state.set_state(OcrStates.waiting_retake)
-            await state.update_data(ocr_bad_quality_doc=doc)  # сохраняем для истории
+            await state.update_data(ocr_bad_quality_doc=doc)
             
             await placeholder.edit_text(
                 quality_msg,
@@ -278,15 +328,27 @@ async def _run_ocr(
             )
             return
 
-        # ═══ КАЧЕСТВО OK → ПОКАЗЫВАЕМ ПРЕВЬЮ ═══
-        await state.update_data(ocr_doc=doc)
-        await state.set_state(OcrStates.preview)
+        # ═══ КАЧЕСТВО OK → СОХРАНЯЕМ БЕЗ ПРЕВЬЮ КАССИРУ ═══
+        from use_cases.ocr_invoice import save_ocr_result
 
+        # Сохраняем в БД
+        doc_id = await save_ocr_result(tg_id, doc)
+        
+        # Кассиру: короткое подтверждение
         await placeholder.edit_text(
-            preview,
-            reply_markup=_preview_kb(),
-            parse_mode="HTML",
+            f"✅ Загружено {'фото' if count == 1 else f'{count} фото'}.\n"
+            f"📄 Документ отправлен бухгалтеру на проверку.",
         )
+        
+        # Очищаем state
+        await state.clear()
+        await restore_menu_kb(
+            message.bot, message.chat.id, state,
+            "📦 Накладные:", invoices_keyboard(),
+        )
+        
+        # ═══ БУХГАЛТЕРУ: ПОЛНОЕ ПРЕВЬЮ ═══
+        await _send_to_accountant_with_preview(message.bot, doc, doc_id, tg_id)
 
     except Exception as e:
         logger.exception("[%s] OCR failed tg:%d: %s", LABEL, tg_id, e)
@@ -315,7 +377,7 @@ async def handle_photo(message: Message, state: FSMContext) -> None:
     # Пачка фото (media group)
     if message.media_group_id:
         logger.info("[%s] Фото из альбома %s tg:%d", LABEL, message.media_group_id, tg_id)
-        await _collect_album_photo(message, state, _run_ocr)
+        await _collect_album_photo(message, state, _run_ocr_from_album)
         return
 
     # Одиночное фото
@@ -325,7 +387,7 @@ async def handle_photo(message: Message, state: FSMContext) -> None:
     file_bytes = await message.bot.download_file(file.file_path)
     image_bytes = file_bytes.read()
 
-    await _run_ocr(message, state, [image_bytes])
+    await _run_ocr(message, state, [image_bytes], status_message=None)
 
 
 @router.message(OcrStates.waiting_more_pages, F.photo)
@@ -341,7 +403,7 @@ async def handle_additional_photo(message: Message, state: FSMContext) -> None:
     # Пачка фото (media group)
     if message.media_group_id:
         logger.info("[%s] Доп. альбом %s tg:%d", LABEL, message.media_group_id, tg_id)
-        await _collect_album_photo(message, state, _run_ocr)
+        await _collect_album_photo(message, state, _run_ocr_from_album)
         return
 
     # Одиночное фото
@@ -351,7 +413,7 @@ async def handle_additional_photo(message: Message, state: FSMContext) -> None:
     file_bytes = await message.bot.download_file(file.file_path)
     image_bytes = file_bytes.read()
 
-    await _run_ocr(message, state, [image_bytes])
+    await _run_ocr(message, state, [image_bytes], status_message=None)
 
 
 @router.message(OcrStates.waiting_retake, F.photo)
@@ -366,13 +428,10 @@ async def handle_retake_photo(message: Message, state: FSMContext) -> None:
 
     logger.info("[%s] Переснятое фото tg:%d", LABEL, tg_id)
 
-    # Очищаем старые фото, начинаем заново
-    await state.update_data(ocr_photos=[])
-
     # Пачка фото (media group)
     if message.media_group_id:
         logger.info("[%s] Переснятый альбом %s tg:%d", LABEL, message.media_group_id, tg_id)
-        await _collect_album_photo(message, state, _run_ocr)
+        await _collect_album_photo(message, state, _run_ocr_from_album)
         return
 
     # Одиночное фото
@@ -381,7 +440,7 @@ async def handle_retake_photo(message: Message, state: FSMContext) -> None:
     file_bytes = await message.bot.download_file(file.file_path)
     image_bytes = file_bytes.read()
 
-    await _run_ocr(message, state, [image_bytes])
+    await _run_ocr(message, state, [image_bytes], status_message=None)
 
 
 # ─────────────────────────────────────────────────────
@@ -512,6 +571,69 @@ async def cb_check_mapping(callback: CallbackQuery, state: FSMContext) -> None:
     except Exception as e:
         logger.exception("[%s] Check mapping failed tg:%d: %s", LABEL, tg_id, e)
         await callback.message.edit_text(f"❌ Ошибка проверки маппинга: {e}")
+
+
+# ─────────────────────────────────────────────────────
+# Отправка бухгалтеру с полным превью
+# ─────────────────────────────────────────────────────
+
+async def _send_to_accountant_with_preview(
+    bot,
+    doc: dict,
+    doc_id: int,
+    sender_tg_id: int,
+) -> None:
+    """
+    Отправить документ бухгалтеру с полным превью и предупреждениями.
+    Автоматически после успешного распознавания.
+    """
+    from use_cases.ocr_invoice import format_preview, update_ocr_status
+    from use_cases.permissions import get_accountant_ids
+
+    # Обновляем статус
+    await update_ocr_status(doc_id, "pending_approval")
+
+    preview = format_preview(doc)
+    accountants = await get_accountant_ids()
+
+    if not accountants:
+        from use_cases.permissions import get_admin_ids
+        accountants = await get_admin_ids()
+
+    if not accountants:
+        logger.error("[%s] Нет бухгалтеров для doc_id=%d", LABEL, doc_id)
+        return
+
+    # Кнопки для бухгалтера
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Принято",
+                callback_data=f"ocr_ack:{doc_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=f"ocr_reject:{doc_id}",
+            ),
+        ],
+    ])
+
+    sent = 0
+    for acc_id in accountants:
+        try:
+            await bot.send_message(
+                acc_id,
+                f"📄 <b>Новый документ</b>\n"
+                f"От: tg:{sender_tg_id}\n\n"
+                f"{preview}",
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+            sent += 1
+        except Exception:
+            logger.warning("[%s] Не удалось отправить acc:%d", LABEL, acc_id)
+
+    logger.info("[%s] Отправлено бухгалтерам doc_id=%d → %d чел.", LABEL, doc_id, sent)
 
 
 # ─────────────────────────────────────────────────────
