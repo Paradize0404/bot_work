@@ -125,6 +125,27 @@ async def _repush(
 
 
 # ════════════════════════════════════════════════════════
+#  Helpers: статус документов в БД
+# ════════════════════════════════════════════════════════
+
+async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
+    """Установить status='pending_mapping' для документов, ожидающих маппинг."""
+    if not doc_ids:
+        return
+    from db.engine import async_session_factory
+    from models.ocr import OcrDocument
+    from sqlalchemy import update
+    async with async_session_factory() as session:
+        await session.execute(
+            update(OcrDocument)
+            .where(OcrDocument.id.in_(doc_ids))
+            .values(status="pending_mapping")
+        )
+        await session.commit()
+    logger.info("[ocr] Статус pending_mapping: %d документов", len(doc_ids))
+
+
+# ════════════════════════════════════════════════════════
 #  FSM States
 # ════════════════════════════════════════════════════════
 
@@ -283,7 +304,8 @@ async def _do_process_photos(
     # Запоминаем IDs текущей сессии — чтобы «Маппинг готов» работал только с ними
     if saved_doc_ids:
         _pending_doc_ids[tg_id] = saved_doc_ids
-        # Добавляем в общий батч — бухгалтер увидит документы от всех пользователей
+        # Помечаем документы как ожидающие маппинг (персистентно в БД)
+        await _mark_docs_pending_mapping(saved_doc_ids)
         _transfer_batch_doc_ids.extend(saved_doc_ids)
 
     # ── Сводка пользователю ──
@@ -631,12 +653,10 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
         ctx     = await uctx.get_user_context(tg_id)
         dept_id = str(ctx.department_id) if ctx and ctx.department_id else None
 
-        # Загружаем документы текущего батча (все пользователи с последнего finalize)
-        # После использования — очищаем батч
-        batch_ids = list(_transfer_batch_doc_ids) or None
+        # Загружаем документы, ожидающие маппинг (персистентный статус в БД)
         _transfer_batch_doc_ids.clear()
-        _pending_doc_ids.pop(tg_id, None)  # per-user IDs больше не нужны
-        docs = await inv_uc.get_pending_ocr_documents(doc_ids=batch_ids)
+        _pending_doc_ids.pop(tg_id, None)
+        docs = await inv_uc.get_pending_ocr_documents(status="pending_mapping")
 
         if not docs:
             await _repush(
@@ -790,7 +810,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
 
         if ok_doc_ids:
             await inv_uc.mark_documents_imported(ok_doc_ids)
-        # Документы с ошибками остаются в статусе 'recognized' — можно повторить
+        # Документы с ошибками остаются в статусе pending — можно повторить
 
         result_text = inv_uc.format_send_result(results)
 
@@ -933,6 +953,8 @@ async def handle_json_receipt(message: Message, state: FSMContext) -> None:
         await mapping_uc.write_transfer(unmapped_sup, unmapped_prd)
 
         if saved_doc_ids:
+            # Помечаем документы как ожидающие маппинг (персистентно в БД)
+            await _mark_docs_pending_mapping(saved_doc_ids)
             _transfer_batch_doc_ids.extend(saved_doc_ids)
             _pending_doc_ids[tg_id] = saved_doc_ids
 

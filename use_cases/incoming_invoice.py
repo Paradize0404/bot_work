@@ -35,12 +35,18 @@ logger = logging.getLogger(__name__)
 #  1. Загрузка pending документов
 # ═══════════════════════════════════════════════════════
 
-async def get_pending_ocr_documents(doc_ids: list[str] | None = None) -> list[dict]:
+async def get_pending_ocr_documents(
+    doc_ids: list[str] | None = None,
+    status: str | None = None,
+) -> list[dict]:
     """
-    Загрузить OcrDocument со status='recognized'.
-    Если doc_ids передан — загружает только эти конкретные документы
-    (документы текущей сессии загрузки). Иначе — recognized за последние 24 ч.
+    Загрузить OcrDocument по фильтрам.
 
+    Параметры:
+        doc_ids — конкретные ID документов (сессия загрузки)
+        status  — искать по конкретному статусу (например 'pending_mapping')
+
+    Если ничего не передано — recognized за последние 24 ч.
     Возвращает list[dict] с вложенным полем «items».
     """
     import datetime as _dt
@@ -48,19 +54,27 @@ async def get_pending_ocr_documents(doc_ids: list[str] | None = None) -> list[di
     from sqlalchemy import and_
     from sqlalchemy.orm import selectinload
 
+    target_status = status or "recognized"
+
     async with async_session_factory() as session:
         if doc_ids:
             # Конкретная сессия: только эти IDs
             conditions = [
-                OcrDocument.status == "recognized",
+                OcrDocument.status == target_status,
                 OcrDocument.doc_type.in_(["upd", "act", "other"]),
                 OcrDocument.id.in_(doc_ids),
             ]
+        elif status:
+            # По статусу — без ограничения по времени
+            conditions = [
+                OcrDocument.status == target_status,
+                OcrDocument.doc_type.in_(["upd", "act", "other"]),
+            ]
         else:
-            # Нет сессии (рестарт) — загружаем только за последние 24 ч
+            # Фоллбек: recognized за последние 24 ч
             since = _dt.datetime.utcnow() - _dt.timedelta(hours=24)
             conditions = [
-                OcrDocument.status == "recognized",
+                OcrDocument.status == target_status,
                 OcrDocument.doc_type.in_(["upd", "act", "other"]),
                 OcrDocument.created_at >= since,
             ]
