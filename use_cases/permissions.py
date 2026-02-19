@@ -33,12 +33,13 @@ LABEL = "Permissions"
 
 # ─── Роли (не кнопки, а флаги) — первые столбцы ───
 ROLE_ADMIN = "👑 Админ"
+ROLE_SYSADMIN = "🔧 Сис.Админ"   # системные ошибки и технические алерты — только этой роли
 ROLE_RECEIVER = "📬 Получатель"
 ROLE_STOCK = "📦 Остатки"
 ROLE_STOPLIST = "🚫 Стоп-лист"
 ROLE_ACCOUNTANT = "📑 Бухгалтер"
 
-ROLE_KEYS: list[str] = [ROLE_ADMIN, ROLE_RECEIVER, ROLE_STOCK, ROLE_STOPLIST, ROLE_ACCOUNTANT]
+ROLE_KEYS: list[str] = [ROLE_ADMIN, ROLE_SYSADMIN, ROLE_RECEIVER, ROLE_STOCK, ROLE_STOPLIST, ROLE_ACCOUNTANT]
 
 # ─── Какие кнопки контролируются правами ───
 PERMISSION_KEYS: list[str] = [
@@ -172,6 +173,20 @@ async def get_accountant_ids() -> list[int]:
     """Список telegram_id пользователей с ролью «📑 Бухгалтер»."""
     cache = await _ensure_cache()
     return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_ACCOUNTANT, False)]
+
+
+async def get_sysadmin_ids() -> list[int]:
+    """
+    Список telegram_id сисадминов — получателей технических алертов (ERROR/CRITICAL из логов).
+    Если роль «🔧 Сис.Админ» не назначена ни одному пользователю — возвращает get_admin_ids()
+    (fallback: не терять алерты при первоначальной настройке).
+    """
+    cache = await _ensure_cache()
+    ids = [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_SYSADMIN, False)]
+    if ids:
+        return ids
+    # Fallback: сисадмин не назначен → шлём обычным админам
+    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_ADMIN, False)]
 
 
 # ═══════════════════════════════════════════════════════

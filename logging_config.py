@@ -56,9 +56,11 @@ class TelegramAlertHandler(logging.Handler):
 
     async def _send_alert(self, text: str) -> None:
         try:
-            from use_cases.permissions import get_admin_ids
-            admin_ids = await get_admin_ids()
-            for aid in admin_ids[:5]:  # макс 5 админов чтобы не спамить
+            # Технические алерты — только сисадминам (🔧 Сис.Админ).
+            # Если сисадмин не назначен — fallback на обычных админов.
+            from use_cases.permissions import get_sysadmin_ids
+            recipient_ids = await get_sysadmin_ids()
+            for aid in recipient_ids[:5]:  # макс 5 получателей чтобы не спамить
                 try:
                     await self._bot.send_message(aid, text, parse_mode="HTML")
                 except Exception:
