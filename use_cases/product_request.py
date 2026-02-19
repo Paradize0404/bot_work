@@ -77,15 +77,52 @@ async def sync_request_stores_sheet() -> int:
 # Авто-определение складов по типу + подразделению
 # ═══════════════════════════════════════════════════════
 
+# Алиасы для нормализации имён складов → канонические типы
+# (должны совпадать с _STORE_TYPES в adapters/google_sheets.py)
+_STORE_TYPE_ALIASES: dict[str, str] = {
+    "хоз. товары":          "хозы",
+    "хоз товары":           "хозы",
+    "хоз.товары":           "хозы",
+    "хозтовары":            "хозы",
+    "хоз-товары":           "хозы",
+    "хозяйственные товары": "хозы",
+}
+
+
+def _normalize_store_type(raw: str) -> str:
+    """
+    Нормализовать «сырое» название типа склада к каноническому значению
+    из списка ['бар', 'кухня', 'тмц', 'хозы'].
+
+    Примеры:
+        'хоз. товары'  → 'хозы'
+        'тмц сельма'   → 'тмц'
+        'бар'          → 'бар'
+        'кухня'        → 'кухня'
+    """
+    raw = raw.strip().lower()
+    if raw in _STORE_TYPE_ALIASES:
+        return _STORE_TYPE_ALIASES[raw]
+    # Prefix-match: «тмц сельма», «тмц (xxx)» → 'тмц'
+    if raw.startswith("тмц"):
+        return "тмц"
+    # Prefix-match: «хоз. ...» / «хоз ...»
+    if raw.startswith("хоз"):
+        return "хозы"
+    return raw
+
+
 def extract_store_type(store_name: str) -> str:
     """
-    Извлечь «тип» склада из полного имени.
+    Извлечь канонический тип склада из полного имени.
 
     Примеры:
         'PizzaYolo: Кухня (Московский)'  → 'кухня'
         'Кухня (Клиническая)'            → 'кухня'
         'Бар'                            → 'бар'
         'PizzaYolo: ТМЦ (Гайдара)'       → 'тмц'
+        'Хоз. товары (Московский)'       → 'хозы'
+        'ТМЦ Сельма'                     → 'тмц'
     """
     name = store_name.strip()
     # Убираем бренд-префикс до ':'
@@ -93,7 +130,7 @@ def extract_store_type(store_name: str) -> str:
         name = name.split(":", 1)[1].strip()
     # Убираем суффикс (подразделение) в скобках
     name = re.sub(r"\s*\([^)]+\)\s*$", "", name).strip()
-    return name.lower()
+    return _normalize_store_type(name)
 
 
 async def get_all_stores_for_department(department_id: str) -> list[dict[str, str]]:

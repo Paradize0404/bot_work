@@ -53,6 +53,10 @@ _ALBUM_DEBOUNCE_SEC = 1.5
 _album_buffer: dict[str, dict[str, Any]] = {}
 _album_tasks:  dict[str, asyncio.Task]   = {}
 
+# ── Pending invoices: накладные ожидающие отправки в iiko ──
+# tg_id → list[invoice_dict] (in-memory, теряется при рестарте)
+_pending_invoices: dict[int, list[dict]] = {}
+
 
 # ════════════════════════════════════════════════════════
 #  FSM States
@@ -268,6 +272,7 @@ async def _save_ocr_document(tg_id: int, result_data: dict) -> str | None:
                 doc_date=doc_date,
                 supplier_name=supplier.get("name"),
                 supplier_inn=supplier.get("inn"),
+                supplier_id=supplier.get("iiko_id"),  # сохраняем iiko UUID если уже замаплен
                 buyer_name=buyer.get("name"),
                 buyer_inn=buyer.get("inn"),
                 total_amount=result_data.get("total_amount"),
@@ -505,10 +510,199 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
             f"⚠️ Маппинг перенесён с ошибками.\n\n"
             f"Сохранено: {saved_count}\nОшибки:\n{err_lines}"
         )
-    else:
+        return
+
+    # ── Подготовка накладных к отправке в iiko ──
+    await placeholder.edit_text(
+        f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
+        "⏳ Подготавливаю накладные к загрузке в iiko...",
+        parse_mode="HTML",
+    )
+
+    try:
+        from use_cases import incoming_invoice as inv_uc
+
+        ctx     = await uctx.get_user_context(tg_id)
+        dept_id = str(ctx.department_id) if ctx and ctx.department_id else None
+
+        docs = await inv_uc.get_pending_ocr_documents()
+
+        if not docs:
+            await placeholder.edit_text(
+                f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
+                "ℹ️ Нет накладных ожидающих загрузки в iiko.",
+                parse_mode="HTML",
+            )
+            return
+
+        if not dept_id:
+            await placeholder.edit_text(
+                f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
+                f"⚠️ Не удалось определить подразделение — накладные в iiko не загружены.\n"
+                f"Выполните /start и повторите попытку.",
+                parse_mode="HTML",
+            )
+            return
+
+        invoices, warnings = await inv_uc.build_iiko_invoices(docs, dept_id)
+
+        if not invoices:
+            warn_text = "\n".join(f"• {w}" for w in warnings[:5])
+            await placeholder.edit_text(
+                f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
+                f"⚠️ Не удалось подготовить накладные для iiko:\n{warn_text}",
+                parse_mode="HTML",
+            )
+            return
+
+        # Сохраняем накладные в памяти для кнопки «Отправить»
+        _pending_invoices[tg_id] = invoices
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="📤 Отправить в iiko",
+                callback_data=f"iiko_invoice_send:{tg_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Отменить",
+                callback_data=f"iiko_invoice_cancel:{tg_id}",
+            ),
+        ]])
+
+        preview = inv_uc.format_invoice_preview(invoices, warnings)
         await placeholder.edit_text(
-            f"✅ Маппинг сохранён!\n\n"
-            f"Записей добавлено/обновлено: <b>{saved_count}</b>\n\n"
-            f"Таблица «Маппинг Импорт» очищена.",
+            f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n" + preview,
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
+
+    except Exception:
+        logger.exception("[ocr] Ошибка подготовки накладных tg:%d", tg_id)
+        await placeholder.edit_text(
+            f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
+            "⚠️ Ошибка при подготовке накладных к загрузке. "
+            "Обратитесь к администратору.",
             parse_mode="HTML",
         )
+
+
+# ════════════════════════════════════════════════════════
+#  Callback: «📤 Отправить в iiko»
+# ════════════════════════════════════════════════════════
+
+@router.callback_query(F.data.startswith("iiko_invoice_send:"))
+async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
+    """Отправить подготовленные накладные в iiko."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+    tg_id = callback.from_user.id
+    logger.info("[ocr] Отправка накладных в iiko tg:%d", tg_id)
+
+    try:
+        sender_tg_id = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        try:
+            await callback.message.edit_text("⚠️ Ошибка данных кнопки.")
+        except Exception:
+            pass
+        return
+
+    invoices = _pending_invoices.pop(sender_tg_id, None)
+    if not invoices:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.edit_text(
+                "⚠️ Накладные не найдены. Возможно, бот был перезапущен.\n\n"
+                "Нажмите «✅ Маппинг готов» снова для повторной подготовки.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        return
+
+    try:
+        await callback.message.edit_text(
+            f"⏳ Загружаю {len(invoices)} накладных в iiko...",
+            reply_markup=None,
+        )
+    except Exception:
+        pass
+
+    from use_cases import incoming_invoice as inv_uc
+
+    try:
+        results = await inv_uc.send_invoices_to_iiko(invoices)
+
+        # Обновляем статусы в БД
+        ok_doc_ids   = list({r["invoice"]["ocr_doc_id"] for r in results if r.get("ok")})
+        fail_doc_ids = list({r["invoice"]["ocr_doc_id"] for r in results if not r.get("ok")})
+
+        if ok_doc_ids:
+            await inv_uc.mark_documents_imported(ok_doc_ids)
+        # Документы с ошибками остаются в статусе 'recognized' — можно повторить
+
+        result_text = inv_uc.format_send_result(results)
+
+        if fail_doc_ids:
+            result_text += (
+                "\n\n⚠️ Документы с ошибками остаются в очереди.\n"
+                "После исправления нажмите «✅ Маппинг готов» снова."
+            )
+
+        try:
+            await callback.message.edit_text(result_text, parse_mode="HTML")
+        except Exception:
+            await callback.message.answer(result_text, parse_mode="HTML")
+
+    except Exception:
+        logger.exception("[ocr] Ошибка отправки накладных в iiko tg:%d", tg_id)
+        try:
+            await callback.message.edit_text(
+                "❌ Ошибка при отправке накладных в iiko.\n\n"
+                "Проверьте соединение с сервером iiko и повторите попытку.",
+                reply_markup=None,
+            )
+        except Exception:
+            pass
+
+
+# ════════════════════════════════════════════════════════
+#  Callback: «❌ Отменить» (отмена отправки накладных)
+# ════════════════════════════════════════════════════════
+
+@router.callback_query(F.data.startswith("iiko_invoice_cancel:"))
+async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
+    """Отменить загрузку накладных в iiko."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+    tg_id = callback.from_user.id
+    logger.info("[ocr] Отмена отправки накладных tg:%d", tg_id)
+
+    try:
+        sender_tg_id = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        sender_tg_id = tg_id
+
+    invoices = _pending_invoices.pop(sender_tg_id, None)
+    doc_ids  = list({inv["ocr_doc_id"] for inv in invoices}) if invoices else []
+
+    from use_cases import incoming_invoice as inv_uc
+    if doc_ids:
+        await inv_uc.mark_documents_cancelled(doc_ids)
+
+    try:
+        await callback.message.edit_text(
+            "❌ Загрузка накладных в iiko отменена.\n\n"
+            "Документы помечены как отменённые. "
+            "Если нужно отправить позже — загрузите фото снова.",
+            reply_markup=None,
+        )
+    except Exception:
+        pass
