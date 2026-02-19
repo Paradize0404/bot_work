@@ -132,9 +132,11 @@ async def _map_product_names(product_ids: list[str]) -> dict[str, str]:
 
 async def sync_and_diff(
     new_items: list[dict[str, Any]],
+    org_id: str | None = None,
 ) -> tuple[list[dict], list[dict], list[dict]]:
     """
     Сравнить новые данные с active_stoplist и обновить БД.
+    Фильтрует по organization_id — не затрагивает данные других организаций.
 
     Returns:
         (added, removed, existing)
@@ -144,8 +146,11 @@ async def sync_and_diff(
     """
     t0 = time.monotonic()
     async with async_session_factory() as session:
-        # Текущее состояние из БД
-        rows = await session.execute(select(ActiveStoplist))
+        # Текущее состояние из БД — фильтр по org_id
+        stmt = select(ActiveStoplist)
+        if org_id:
+            stmt = stmt.where(ActiveStoplist.organization_id == org_id)
+        rows = await session.execute(stmt)
         old_rows = rows.scalars().all()
 
     old_map: dict[str, dict] = {}
@@ -185,9 +190,12 @@ async def sync_and_diff(
     # Обновляем историю
     await _update_history(old_map, new_map)
 
-    # Перезаписываем active_stoplist
+    # Перезаписываем active_stoplist — только для этой org_id
     async with async_session_factory() as session:
-        await session.execute(sa_delete(ActiveStoplist))
+        del_stmt = sa_delete(ActiveStoplist)
+        if org_id:
+            del_stmt = del_stmt.where(ActiveStoplist.organization_id == org_id)
+        await session.execute(del_stmt)
         for key, item in new_map.items():
             session.add(ActiveStoplist(
                 product_id=item["product_id"],
@@ -401,7 +409,7 @@ async def run_stoplist_cycle(
     """
     try:
         items = await fetch_stoplist_items(org_id=org_id)
-        added, removed, existing = await sync_and_diff(items)
+        added, removed, existing = await sync_and_diff(items, org_id=org_id)
         has_changes = bool(added or removed)
 
         text = format_stoplist_message(added, removed, existing)

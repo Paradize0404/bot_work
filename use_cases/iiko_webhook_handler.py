@@ -146,27 +146,45 @@ async def _flush_stoplist() -> None:
     t0 = time.monotonic()
 
     try:
-        from use_cases.stoplist import run_stoplist_cycle
+        from use_cases.stoplist import (
+            fetch_stoplist_items, sync_and_diff, format_stoplist_message,
+        )
         from use_cases.pinned_stoplist_message import update_all_stoplist_messages
         from use_cases.cloud_org_mapping import get_all_cloud_org_ids
 
         if not org_ids:
             org_ids = set(await get_all_cloud_org_ids())
 
-        last_text: str | None = None
-        for oid in org_ids:
-            text, has_changes = await run_stoplist_cycle(org_id=oid)
-            if text:
-                last_text = text
+        # Накапливаем изменения по всем организациям
+        all_added: list[dict] = []
+        all_removed: list[dict] = []
+        all_existing: list[dict] = []
 
-        if last_text:
-            await update_all_stoplist_messages(bot, last_text)
+        for oid in org_ids:
+            items = await fetch_stoplist_items(org_id=oid)
+            added, removed, existing = await sync_and_diff(items, org_id=oid)
+            all_added.extend(added)
+            all_removed.extend(removed)
+            all_existing.extend(existing)
+
+        has_changes = bool(all_added or all_removed)
+
+        if not has_changes:
             logger.info(
-                "[%s] Стоп-лист обновлён и разослан (orgs: %s) за %.1f сек",
+                "[%s] Стоп-лист без изменений (orgs: %s), пропускаем обновление (%.1f сек)",
                 LABEL, org_ids, time.monotonic() - t0,
             )
-        else:
-            logger.warning("[%s] Не удалось получить текст стоп-листа", LABEL)
+            return
+
+        # Формируем единое сообщение с объединённым дифом
+        combined_text = format_stoplist_message(all_added, all_removed, all_existing)
+
+        await update_all_stoplist_messages(bot, combined_text)
+        logger.info(
+            "[%s] Стоп-лист обновлён и разослан (orgs: %s, +%d -%d =%d) за %.1f сек",
+            LABEL, org_ids, len(all_added), len(all_removed),
+            len(all_existing), time.monotonic() - t0,
+        )
     except Exception:
         logger.exception("[%s] Ошибка при flush стоп-листа", LABEL)
 
