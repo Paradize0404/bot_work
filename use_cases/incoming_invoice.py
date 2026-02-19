@@ -35,25 +35,43 @@ logger = logging.getLogger(__name__)
 #  1. Загрузка pending документов
 # ═══════════════════════════════════════════════════════
 
-async def get_pending_ocr_documents() -> list[dict]:
+async def get_pending_ocr_documents(doc_ids: list[str] | None = None) -> list[dict]:
     """
-    Загрузить все OcrDocument со status='recognized' (ещё не импортированные).
-    Включает только накладные (doc_type in upd/act/other), не услуги.
+    Загрузить OcrDocument со status='recognized'.
+    Если doc_ids передан — загружает только эти конкретные документы
+    (документы текущей сессии загрузки). Иначе — recognized за последние 24 ч.
 
     Возвращает list[dict] с вложенным полем «items».
     """
+    import datetime as _dt
     t0 = time.monotonic()
+    from sqlalchemy import and_
     from sqlalchemy.orm import selectinload
 
     async with async_session_factory() as session:
+        if doc_ids:
+            # Конкретная сессия: только эти IDs
+            conditions = [
+                OcrDocument.status == "recognized",
+                OcrDocument.doc_type.in_(["upd", "act", "other"]),
+                OcrDocument.id.in_(doc_ids),
+            ]
+        else:
+            # Нет сессии (рестарт) — загружаем только за последние 24 ч
+            since = _dt.datetime.utcnow() - _dt.timedelta(hours=24)
+            conditions = [
+                OcrDocument.status == "recognized",
+                OcrDocument.doc_type.in_(["upd", "act", "other"]),
+                OcrDocument.created_at >= since,
+            ]
+
         stmt = (
             select(OcrDocument)
-            .where(OcrDocument.status == "recognized")
-            .where(OcrDocument.doc_type.in_(["upd", "act", "other"]))
+            .where(and_(*conditions))
             .options(selectinload(OcrDocument.items))
             .order_by(OcrDocument.created_at)
         )
-        result  = await session.execute(stmt)
+        result   = await session.execute(stmt)
         doc_objs = result.scalars().all()
 
     docs: list[dict] = []

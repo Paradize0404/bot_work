@@ -56,6 +56,8 @@ _album_tasks:  dict[str, asyncio.Task]   = {}
 # ── Pending invoices: накладные ожидающие отправки в iiko ──
 # tg_id → list[invoice_dict] (in-memory, теряется при рестарте)
 _pending_invoices: dict[int, list[dict]] = {}
+# tg_id → list[doc_id]  — IDs документов из ТЕКУЩЕЙ сессии загрузки
+_pending_doc_ids: dict[int, list[str]] = {}
 
 
 # ════════════════════════════════════════════════════════
@@ -256,11 +258,18 @@ async def _do_process_photos(
     # ── Сохранение в БД ──
     if invoices:
         prompt_msg_id = await _push_progress(bot, chat_id, prompt_msg_id, "⏳ Сохраняю в базу данных...")
+    saved_doc_ids: list[str] = []
     for doc_data in invoices:
         try:
-            await _save_ocr_document(tg_id, doc_data, file_ids=file_ids or [])
+            doc_id = await _save_ocr_document(tg_id, doc_data, file_ids=file_ids or [])
+            if doc_id:
+                saved_doc_ids.append(doc_id)
         except Exception:
             logger.exception("[ocr] Ошибка сохранения документа tg:%d", tg_id)
+
+    # Запоминаем IDs текущей сессии — чтобы «Маппинг готов» работал только с ними
+    if saved_doc_ids:
+        _pending_doc_ids[tg_id] = saved_doc_ids
 
     # ── Сводка пользователю ──
     summary = _format_summary(invoices, services, rejected_qr, errors_list, elapsed)
@@ -607,7 +616,9 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
         ctx     = await uctx.get_user_context(tg_id)
         dept_id = str(ctx.department_id) if ctx and ctx.department_id else None
 
-        docs = await inv_uc.get_pending_ocr_documents()
+        # Загружаем только документы текущей сессии загрузки этого пользователя
+        session_doc_ids = _pending_doc_ids.pop(tg_id, None)
+        docs = await inv_uc.get_pending_ocr_documents(doc_ids=session_doc_ids)
 
         if not docs:
             await _repush(
