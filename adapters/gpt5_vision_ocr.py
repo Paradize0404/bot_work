@@ -164,22 +164,20 @@ SYSTEM_PROMPT = """
 
 def _auto_rotate(image_bytes: bytes) -> bytes:
     """
-    Исправить ориентацию изображения:
-      1. Применить EXIF-ориентацию (exif_transpose).
-      2. Если изображение горизонтальное (ширина > высота) — повернуть на 90° CCW,
-         чтобы документ стал вертикальным (портретным).
-    Возвращает JPEG-байты скорректированного изображения.
+    Исправить ориентацию изображения по EXIF-тегу.
+    Телефоны часто сохраняют фото повёрнутыми с EXIF-пометкой о повороте —
+    exif_transpose() физически поворачивает пиксели и убирает тег.
+    Горизонтальные документы НЕ трогаем: А4 может быть сфотографирован
+    в ландшафтной ориентации — это нормально.
     """
     try:
         img = Image.open(io.BytesIO(image_bytes))
-        img = ImageOps.exif_transpose(img)          # убираем EXIF-поворот
-        if img.width > img.height:                  # альбомная → переводим в портрет
-            img = img.rotate(90, expand=True)
+        img = ImageOps.exif_transpose(img)   # убираем EXIF-поворот, если есть
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=95)
         return buf.getvalue()
     except Exception:
-        return image_bytes                           # при ошибке возвращаем исходные байты
+        return image_bytes                   # при ошибке возвращаем исходные байты
 
 
 async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
