@@ -52,6 +52,7 @@ class OcrDocument(Base):
     # Файлы
     original_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)  # Путь к оригиналу в S3
     s3_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # S3 URL
+    tg_file_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)  # Telegram file_id[] для показа превью
     
     # Качество распознавания
     confidence_score: Mapped[float | None] = mapped_column(REAL, nullable=True)

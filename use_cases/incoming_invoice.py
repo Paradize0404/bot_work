@@ -79,6 +79,7 @@ async def get_pending_ocr_documents() -> list[dict]:
             "supplier_name": d.supplier_name or "",
             "supplier_id":   d.supplier_id or "",
             "department_id": d.department_id or "",
+            "tg_file_ids":   d.tg_file_ids or [],
             "items":         items,
         })
 

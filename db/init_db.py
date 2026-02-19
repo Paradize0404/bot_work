@@ -130,6 +130,7 @@ async def create_tables() -> None:
         "ALTER TABLE ocr_item ADD COLUMN IF NOT EXISTS iiko_id VARCHAR(36)",
         "ALTER TABLE ocr_item ADD COLUMN IF NOT EXISTS iiko_name TEXT",
         "ALTER TABLE ocr_item ADD COLUMN IF NOT EXISTS store_type VARCHAR(50)",
+        "ALTER TABLE ocr_document ADD COLUMN IF NOT EXISTS tg_file_ids JSON",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:
