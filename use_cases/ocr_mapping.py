@@ -202,12 +202,15 @@ async def finalize_transfer() -> tuple[int, list[str]]:
     if not rows:
         return 0, []
 
-    # Загружаем справочники для поиска ID
+    # Загружаем справочники для поиска ID.
+    # Для товаров используем _load_all_iiko_products() — БЕЗ фильтра по типу/группе,
+    # чтобы PREPARED/DISH и продукты вне gsheet_export_group тоже получали свой iiko_id.
     iiko_suppliers = await _load_iiko_suppliers()
-    iiko_products  = await _load_iiko_products()
+    iiko_products  = await _load_all_iiko_products()
 
-    sup_by_name = {s["name"].lower(): s for s in iiko_suppliers}
-    prd_by_name = {p["name"].lower(): p for p in iiko_products}
+    # Нормализуем ключи: strip() + lower() — не даём пробелам в БД ломать поиск
+    sup_by_name = {s["name"].strip().lower(): s for s in iiko_suppliers}
+    prd_by_name = {p["name"].strip().lower(): p for p in iiko_products}
 
     enriched: list[dict[str, str]] = []
     errors: list[str] = []
@@ -353,6 +356,28 @@ async def _load_iiko_suppliers() -> list[dict[str, str]]:
             return [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
     except Exception:
         logger.exception("[ocr_mapping] Ошибка загрузки поставщиков")
+        return []
+
+
+async def _load_all_iiko_products() -> list[dict[str, str]]:
+    """
+    Загрузить ВСЕ товары без ограничений по типу или группе.
+    Используется только для поиска iiko_id при финализации маппинга.
+    Так продукты типа PREPARED, DISH или вне gsheet_export_group тоже получат свой UUID.
+    """
+    from db.engine import async_session_factory
+    from db.models import Product
+
+    try:
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Product.id, Product.name)
+                .where(Product.deleted.is_(False))
+                .order_by(Product.name)
+            )
+            return [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
+    except Exception:
+        logger.exception("[ocr_mapping] Ошибка загрузки всех товаров")
         return []
 
 
