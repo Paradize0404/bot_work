@@ -16,3 +16,13 @@ authorized_key.json
 # Debug/temp data dumps
 raw_stock_*.json
 stock_named_*.json
+
+# OCR temp: test photos и артефакты прогонов
+new_photo/
+photo_test/
+*_ocr_results.json
+*_ocr_merged.json
+*_final_report.json
+ocr_run_*.txt
+photo_test_*.txt
+ocr_test_output.txt
