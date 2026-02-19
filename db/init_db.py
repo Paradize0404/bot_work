@@ -35,6 +35,24 @@ async def create_tables() -> None:
     # OCR-таблицы используют отдельный declarative_base из models/ocr.py
     try:
         from models.ocr import Base as OcrBase
+
+        # Если ocr_document уже существует со старой схемой (id INTEGER вместо VARCHAR),
+        # удаляем обе таблицы и пересоздаём с правильной структурой.
+        async with engine.begin() as conn:
+            result = await conn.execute(text(
+                """
+                SELECT data_type FROM information_schema.columns
+                WHERE table_name = 'ocr_document' AND column_name = 'id'
+                """
+            ))
+            row = result.fetchone()
+            if row and row[0] == 'integer':
+                logger.warning(
+                    "ocr_document.id has wrong type INTEGER — dropping OCR tables to recreate with UUID schema"
+                )
+                await conn.execute(text("DROP TABLE IF EXISTS ocr_item CASCADE"))
+                await conn.execute(text("DROP TABLE IF EXISTS ocr_document CASCADE"))
+
         async with engine.begin() as conn:
             await conn.run_sync(OcrBase.metadata.create_all)
         logger.info("OCR tables created / verified OK")
