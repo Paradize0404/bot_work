@@ -220,18 +220,26 @@ async def process_photo_batch(
     
     logger.info(f"[OCR Pipeline] {len(filtered)} photos passed QR check")
     
-    # Шаг 3: Группировка по group_key
+    # Шаг 3: Группировка по group_key (двухпроходная)
     logger.info("[OCR Pipeline] Grouping by group_key")
     groups: Dict[str, DocumentGroup] = {}
-    
+    orphan_items = []  # страницы 2+ без явного group_key
+
+    # Первый проход: items с group_key или страница 1
     for item in filtered:
         result = item["result"]
         group_key = result.get("group_key")
-        
+        page_number = result.get("page_number", 1)
+
+        if not group_key and page_number > 1:
+            # Страница 2+ без group_key — откладываем до второго прохода
+            orphan_items.append(item)
+            continue
+
         if not group_key:
             # Нет group_key → создаём уникальный
             group_key = f"single_{item['photo_index']}_{datetime.now().timestamp()}"
-        
+
         if group_key not in groups:
             groups[group_key] = DocumentGroup(
                 group_key=group_key,
@@ -241,13 +249,50 @@ async def process_photo_batch(
                 supplier_name=result.get("supplier", {}).get("name", ""),
                 supplier_inn=result.get("supplier", {}).get("inn", ""),
             )
-        
+
         groups[group_key].pages.append(result)
-        
+
         # Обновляем total_pages
         page_total = result.get("total_pages", 1)
         if page_total > groups[group_key].total_pages:
             groups[group_key].total_pages = page_total
+
+    # Второй проход: осиротевшие страницы 2+ — пробуем сопоставить по ИНН + дате
+    for item in orphan_items:
+        result = item["result"]
+        inn = (result.get("supplier") or {}).get("inn") or ""
+        date_val = result.get("date") or ""
+        matched_key = None
+
+        if inn and date_val:
+            for gk, grp in groups.items():
+                if grp.supplier_inn == inn and grp.doc_date == date_val:
+                    matched_key = gk
+                    logger.info(
+                        "[OCR Pipeline] Orphan page matched to group %s by INN=%s date=%s",
+                        gk, inn, date_val,
+                    )
+                    break
+
+        if not matched_key:
+            matched_key = f"single_{item['photo_index']}_{datetime.now().timestamp()}"
+            groups[matched_key] = DocumentGroup(
+                group_key=matched_key,
+                doc_type=result.get("doc_type", "unknown"),
+                doc_number=result.get("doc_number", ""),
+                doc_date=date_val,
+                supplier_name=(result.get("supplier") or {}).get("name", ""),
+                supplier_inn=inn,
+            )
+            logger.warning(
+                "[OCR Pipeline] Orphan page %d: no matching group found (INN=%s date=%s)",
+                item['photo_index'], inn, date_val,
+            )
+
+        groups[matched_key].pages.append(result)
+        page_total = result.get("total_pages", 1)
+        if page_total > groups[matched_key].total_pages:
+            groups[matched_key].total_pages = page_total
     
     # Шаг 4: Проверка полноты страниц
     logger.info("[OCR Pipeline] Checking page completeness")
@@ -435,6 +480,7 @@ def _normalize_invoice_result(result: Dict[str, Any]) -> Dict[str, Any]:
 _VAT_RATE_MAP: Dict[str, Decimal] = {
     "10%":      Decimal("0.10"),
     "20%":      Decimal("0.20"),
+    "22%":      Decimal("0.22"),  # OCR иногда читает 20% как 22%, плюс акцизы
     "5%":       Decimal("0.05"),
     "7%":       Decimal("0.07"),
     "без ндс":  Decimal("0.00"),
@@ -490,9 +536,9 @@ def _validate_invoice_document(
             p = Decimal(str(price))
             excl = (q * p).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)  # без НДС
 
-            vat_dec = _parse_vat(item.get("vat_rate")) if apply_vat_correction else Decimal("0")
-            if vat_dec is None:
-                vat_dec = Decimal("0")
+            raw_vat = _parse_vat(item.get("vat_rate")) if apply_vat_correction else Decimal("0")
+            vat_unknown = raw_vat is None  # ставка есть в документе но не в нашей таблице
+            vat_dec = raw_vat if raw_vat is not None else Decimal("0")
 
             if vat_dec > 0:
                 expected_incl = (excl * (1 + vat_dec)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -510,8 +556,10 @@ def _validate_invoice_document(
                 # GPT вернул сумму без НДС → корректируем
                 item["sum"] = incl_f
                 warnings.append(f"Позиция {idx}: сумма без НДС исправлена {row_sum} → {incl_f}.")
-            elif abs(row_sum - incl_f) > 0.51 and abs(row_sum - excl_f) > 0.51:
-                # Не совпадает ни с тем ни с тем — предупреждаем, оставляем
+            elif not vat_unknown and abs(row_sum - incl_f) > 0.51 and abs(row_sum - excl_f) > 0.51:
+                # Не совпадает ни с тем ни с тем — предупреждаем, оставляем.
+                # Если ставка НДС нам неизвестна — молчим: сумма из документа
+                # берётся как достоверная (столбец 9 «Стоимость с налогом»).
                 warnings.append(f"Позиция {idx}: сумма {row_sum} не совпадает с расчётной {incl_f}.")
 
         fixed_items.append(item)
