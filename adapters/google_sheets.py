@@ -2147,6 +2147,11 @@ def _get_mapping_worksheet(tab_name: str) -> gspread.Worksheet:
         return ws
 
 
+# Типы складов (нормализованные) — используются в dropdown маппинга
+# Должны соответствовать тому, что возвращает extract_store_type() в use_cases/product_request.py
+_STORE_TYPES: list[str] = ["бар", "кухня", "тмц", "хозы"]
+
+
 def _set_dropdown(spreadsheet, ws, start_row: int, end_row: int, col: int, options: list[str]) -> None:
     """Установить dropdown-валидацию для диапазона ячеек в столбце col (1-indexed)."""
     if not options:
@@ -2185,7 +2190,7 @@ def _set_dropdown(spreadsheet, ws, start_row: int, end_row: int, col: int, optio
 def read_base_mapping_sheet() -> list[dict[str, str]]:
     """
     Прочитать базовую таблицу маппинга «Маппинг».
-    Возвращает list[{type, ocr_name, iiko_name, iiko_id}].
+    Возвращает list[{type, ocr_name, iiko_name, iiko_id, store_type}].
     """
     ws = _get_mapping_worksheet(_MAPPING_BASE_TAB)
     rows = ws.get_all_values()
@@ -2200,12 +2205,14 @@ def read_base_mapping_sheet() -> list[dict[str, str]]:
         ocr_name   = (row[1] or "").strip()
         iiko_name  = (row[2] or "").strip()
         iiko_id    = (row[3] or "").strip() if len(row) > 3 else ""
+        store_type = (row[4] or "").strip() if len(row) > 4 else ""
         if ocr_name and (entry_type or iiko_name):
             result.append({
-                "type":      entry_type,
-                "ocr_name":  ocr_name,
-                "iiko_name": iiko_name,
-                "iiko_id":   iiko_id,
+                "type":       entry_type,
+                "ocr_name":   ocr_name,
+                "iiko_name":  iiko_name,
+                "iiko_id":    iiko_id,
+                "store_type": store_type,
             })
     return result
 
@@ -2234,20 +2241,20 @@ def write_mapping_import_sheet(
     # Полная очистка
     ws.clear()
 
-    header = [["Тип", "OCR Имя (что распознал GPT)", "iiko Имя (выберите из списка)"]]
+    header = [["Тип", "OCR Имя (что распознал GPT)", "iiko Имя (выберите из списка)", "Тип склада"]]
     rows: list[list[str]] = []
 
     sup_start_row = 2  # строка 1 = header
     for name in unmapped_suppliers:
-        rows.append(["поставщик", name, ""])
+        rows.append(["поставщик", name, "", ""])  # store_type ненужен для поставщика
 
     sep_row_idx = len(rows) + 2  # row after suppliers section
     if unmapped_suppliers and unmapped_products:
-        rows.append(["", "", ""])  # пустая разделительная строка
+        rows.append(["", "", "", ""])  # пустая разделительная строка
 
     prd_start_row = len(rows) + 2
     for name in unmapped_products:
-        rows.append(["товар", name, ""])
+        rows.append(["товар", name, "", ""])  # store_type заполни из dropdown
 
     all_rows = header + rows
     ws.update(range_name="A1", values=all_rows, value_input_option="RAW")
@@ -2262,7 +2269,7 @@ def write_mapping_import_sheet(
                     "startRowIndex": 0,
                     "endRowIndex": 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 3,
+                    "endColumnIndex": 4,
                 },
                 "cell": {
                     "userEnteredFormat": {
@@ -2286,6 +2293,11 @@ def write_mapping_import_sheet(
             "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 2, "endIndex": 3},
             "properties": {"pixelSize": 340}, "fields": "pixelSize",
         }},
+        # Тип склада
+        {"updateDimensionProperties": {
+            "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 3, "endIndex": 4},
+            "properties": {"pixelSize": 160}, "fields": "pixelSize",
+        }},
     ]
     try:
         spreadsheet.batch_update({"requests": fmt_requests})
@@ -2297,10 +2309,15 @@ def write_mapping_import_sheet(
         end_row = sup_start_row + len(unmapped_suppliers) - 1
         _set_dropdown(spreadsheet, ws, sup_start_row, end_row + 1, 3, iiko_supplier_names)
 
-    # ── Dropdown для товаров ──
+    # ── Dropdown для товаров (iiko Имя, кол. C) ──
     if unmapped_products and iiko_product_names:
         end_row = prd_start_row + len(unmapped_products) - 1
         _set_dropdown(spreadsheet, ws, prd_start_row, end_row + 1, 3, iiko_product_names)
+
+    # ── Dropdown типа склада (кол. D) — только для товаров ──
+    if unmapped_products:
+        end_row = prd_start_row + len(unmapped_products) - 1
+        _set_dropdown(spreadsheet, ws, prd_start_row, end_row + 1, 4, _STORE_TYPES)
 
     logger.info(
         "[%s] «%s» обновлён: %d поставщиков, %d товаров",
@@ -2325,11 +2342,13 @@ def read_mapping_import_sheet() -> list[dict[str, str]]:
         entry_type = (row[0] or "").strip()
         ocr_name   = (row[1] or "").strip()
         iiko_name  = (row[2] or "").strip() if len(row) > 2 else ""
+        store_type = (row[3] or "").strip() if len(row) > 3 else ""
         if ocr_name and entry_type:
             result.append({
-                "type":      entry_type,
-                "ocr_name":  ocr_name,
-                "iiko_name": iiko_name,
+                "type":       entry_type,
+                "ocr_name":   ocr_name,
+                "iiko_name":  iiko_name,
+                "store_type": store_type,
             })
     return result
 
@@ -2365,6 +2384,7 @@ def upsert_base_mapping(items: list[dict[str, str]]) -> int:
             item.get("ocr_name") or "",
             item.get("iiko_name") or "",
             item.get("iiko_id") or "",
+            item.get("store_type") or "",
         ]
         if key in existing_map:
             updates.append((existing_map[key], row_data))

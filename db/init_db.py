@@ -129,6 +129,7 @@ async def create_tables() -> None:
         # ocr_item: iiko маппинг из GSheet
         "ALTER TABLE ocr_item ADD COLUMN IF NOT EXISTS iiko_id VARCHAR(36)",
         "ALTER TABLE ocr_item ADD COLUMN IF NOT EXISTS iiko_name TEXT",
+        "ALTER TABLE ocr_item ADD COLUMN IF NOT EXISTS store_type VARCHAR(50)",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:

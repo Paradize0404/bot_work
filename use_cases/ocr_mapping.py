@@ -48,9 +48,10 @@ async def get_base_mapping() -> dict[str, dict[str, str]]:
             ocr_name = (row.get("ocr_name") or "").strip()
             if ocr_name:
                 result[ocr_name.lower()] = {
-                    "iiko_name": row.get("iiko_name") or "",
-                    "iiko_id":   row.get("iiko_id") or "",
-                    "type":      row.get("type") or "",
+                    "iiko_name":  row.get("iiko_name") or "",
+                    "iiko_id":    row.get("iiko_id") or "",
+                    "type":       row.get("type") or "",
+                    "store_type": row.get("store_type") or "",
                 }
         logger.info("[ocr_mapping] Загружен базовый маппинг: %d записей", len(result))
         return result
@@ -102,8 +103,9 @@ def apply_mapping(
                 continue
             match = base_mapping.get(item_name.lower())
             if match:
-                item["iiko_name"] = match["iiko_name"]
-                item["iiko_id"]   = match["iiko_id"]
+                item["iiko_name"]  = match["iiko_name"]
+                item["iiko_id"]    = match["iiko_id"]
+                item["store_type"] = match.get("store_type") or ""
             else:
                 unmapped_prd.add(item_name)
 
@@ -236,10 +238,11 @@ async def finalize_transfer() -> tuple[int, list[str]]:
                 iiko_id = found.get("id") or ""
 
         enriched.append({
-            "type":      entry_type,
-            "ocr_name":  ocr_name,
-            "iiko_name": iiko_name,
-            "iiko_id":   iiko_id,
+            "type":       entry_type,
+            "ocr_name":   ocr_name,
+            "iiko_name":  iiko_name,
+            "iiko_id":    iiko_id,
+            "store_type": (row.get("store_type") or "").strip(),
         })
 
     if not enriched:

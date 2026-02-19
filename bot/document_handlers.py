@@ -292,6 +292,7 @@ async def _save_ocr_document(tg_id: int, result_data: dict) -> str | None:
                     vat_rate=str(item.get("vat_rate")) if item.get("vat_rate") is not None else None,
                     iiko_name=item.get("iiko_name"),
                     iiko_id=item.get("iiko_id"),
+                    store_type=item.get("store_type"),
                 ))
 
             await session.commit()

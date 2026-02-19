@@ -101,6 +101,7 @@ class OcrItem(Base):
     product_name: Mapped[str | None] = mapped_column(Text, nullable=True)  # iiko product name
     iiko_id: Mapped[str | None] = mapped_column(String(36), nullable=True)   # iiko ID из GSheet маппинга
     iiko_name: Mapped[str | None] = mapped_column(Text, nullable=True)        # iiko имя из GSheet маппинга
+    store_type: Mapped[str | None] = mapped_column(String(50), nullable=True) # тип склада (бар/кухня/тмц/хозы)
     
     # Единицы измерения
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)  # кг, шт, л
