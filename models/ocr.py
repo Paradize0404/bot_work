@@ -258,6 +258,4 @@ class OcrConfidenceStats(Base):
         return f"<OcrConfidenceStats {self.date} {self.doc_type}>"
 
 
-# Индексы для ускорения поиска
-Index('ix_ocr_mapping_raw_trgm', OcrMapping.raw_name, postgresql_using='gin')
-Index('ix_ocr_supplier_mapping_raw_trgm', OcrSupplierMapping.raw_name, postgresql_using='gin')
+# Индексы для ускорения поиска (GIN-индексы создаются отдельно в init_db.py после CREATE EXTENSION pg_trgm)

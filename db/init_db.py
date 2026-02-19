@@ -56,9 +56,25 @@ async def create_tables() -> None:
         async with engine.begin() as conn:
             await conn.run_sync(OcrBase.metadata.create_all)
         logger.info("OCR tables created / verified OK")
+
+        # Пытаемся установить pg_trgm и создать GIN-индексы (не критично если не удастся)
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_ocr_mapping_raw_trgm "
+                    "ON ocr_mapping USING gin (raw_name gin_trgm_ops)"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_ocr_supplier_mapping_raw_trgm "
+                    "ON ocr_supplier_mapping USING gin (raw_name gin_trgm_ops)"
+                ))
+            logger.info("pg_trgm GIN-индексы созданы")
+        except Exception:
+            logger.warning("pg_trgm недоступен — GIN-индексы пропущены (поиск будет работать через LIKE)", exc_info=False)
     except Exception:
-        # GIN-индексы требуют расширения pg_trgm — если не установлено, таблицы всё равно создадутся
-        logger.warning("OCR tables: частичная ошибка создания (возможно, GIN-индексы без pg_trgm)", exc_info=True)
+        logger.error("OCR tables: ошибка создания", exc_info=True)
+        raise
 
     # Миграция: добавляем столбцы, которых нет в старых таблицах.
     # IF NOT EXISTS — безопасно при повторном запуске.
