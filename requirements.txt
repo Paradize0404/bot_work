@@ -26,4 +26,15 @@ tzdata>=2024.1
 # OpenAI (OCR / GPT vision)
 openai>=1.30.0
 
+# Image processing (OCR photo validation)
+Pillow>=10.0.0
+opencv-python-headless>=4.9.0
+numpy>=1.26.0
+
+# QR code detection
+pyzbar>=0.1.9
+
+# AWS S3 (document storage)
+boto3>=1.34.0
+
 # XML parsing (stdlib, no extra dep)
