@@ -5,12 +5,14 @@ GPT-5.2 Vision OCR — прямое распознавание документ�
 бухгалтерских документов (УПД, чеки, акты, ордера) напрямую из изображений.
 """
 
+import io
 import json
 import re
 import base64
 from typing import Dict, Any
 import httpx
 from openai import AsyncOpenAI
+from PIL import Image, ImageOps
 from config import OPENAI_API_KEY
 
 
@@ -151,6 +153,26 @@ SYSTEM_PROMPT = """
 """
 
 
+def _auto_rotate(image_bytes: bytes) -> bytes:
+    """
+    Исправить ориентацию изображения:
+      1. Применить EXIF-ориентацию (exif_transpose).
+      2. Если изображение горизонтальное (ширина > высота) — повернуть на 90° CCW,
+         чтобы документ стал вертикальным (портретным).
+    Возвращает JPEG-байты скорректированного изображения.
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img = ImageOps.exif_transpose(img)          # убираем EXIF-поворот
+        if img.width > img.height:                  # альбомная → переводим в портрет
+            img = img.rotate(90, expand=True)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=95)
+        return buf.getvalue()
+    except Exception:
+        return image_bytes                           # при ошибке возвращаем исходные байты
+
+
 async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
     """
     Распознать документ через GPT-5.2 Vision.
@@ -162,7 +184,10 @@ async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
         Словарь с распознанными данными
     """
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-    
+
+    # Авто-поворот: коррекция EXIF + горизонтальные → портрет
+    image_bytes = _auto_rotate(image_bytes)
+
     # Кодируем изображение в base64
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     

@@ -29,7 +29,7 @@ from aiogram import Bot, Router, F
 from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from bot._utils import ocr_keyboard
 from bot.middleware import (
@@ -437,7 +437,7 @@ async def handle_ocr_non_photo(message: Message, state: FSMContext) -> None:
 async def btn_mapping_done(message: Message, state: FSMContext) -> None:
     """Бухгалтер нажал «Маппинг готов» — финализируем трансфер."""
     tg_id = message.from_user.id
-    logger.info("[ocr] Маппинг готов tg:%d", tg_id)
+    logger.info("[ocr] Маппинг готов (reply kb) tg:%d", tg_id)
 
     try:
         await message.delete()
@@ -445,7 +445,29 @@ async def btn_mapping_done(message: Message, state: FSMContext) -> None:
         pass
 
     placeholder = await message.answer("⏳ Проверяю «Маппинг Импорт»...")
+    await _handle_mapping_done(placeholder, tg_id)
 
+
+@router.callback_query(F.data == "mapping_done")
+async def cb_mapping_done(callback: CallbackQuery) -> None:
+    """Бухгалтер нажал инлайн-кнопку «✅ Маппинг готов»."""
+    tg_id = callback.from_user.id
+    logger.info("[ocr] Маппинг готов (inline) tg:%d", tg_id)
+
+    await callback.answer()  # убрать «часики» на кнопке
+
+    # Редактируем само уведомление-сообщение, убирая кнопку
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    placeholder = await callback.message.answer("⏳ Проверяю «Маппинг Импорт»...")
+    await _handle_mapping_done(placeholder, tg_id)
+
+
+async def _handle_mapping_done(placeholder, tg_id: int) -> None:
+    """Общая логика проверки и финализации маппинга."""
     from use_cases import ocr_mapping as mapping_uc
 
     is_ready, total_count, missing = await mapping_uc.check_transfer_ready()

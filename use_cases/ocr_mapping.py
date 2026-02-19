@@ -314,17 +314,22 @@ async def notify_accountants(
 
     # ── Уведомление о маппинге ──
     if unmapped_count > 0:
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        mapping_kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Маппинг готов", callback_data="mapping_done"),
+        ]])
         mapping_text = (
             f"🗂 <b>Требуется маппинг!</b>\n\n"
             f"Обнаружено <b>{unmapped_count}</b> незамапленных позиций.\n\n"
             f"Откройте Google Таблицу, лист <b>«{sheet_name}»</b> — "
             f"назначьте каждому OCR-имени соответствующий справочник iiko "
             f"из выпадающего списка.\n\n"
-            f"После заполнения нажмите кнопку <b>✅ Маппинг готов</b> в боте."
+            f"После заполнения нажмите кнопку ниже. 👇"
         )
         for admin_id in admin_ids:
             try:
-                await bot.send_message(admin_id, mapping_text, parse_mode="HTML")
+                await bot.send_message(admin_id, mapping_text, parse_mode="HTML",
+                                       reply_markup=mapping_kb)
             except Exception:
                 logger.warning("[ocr_mapping] Не удалось уведомить admin %d о маппинге", admin_id)
 
@@ -352,21 +357,62 @@ async def _load_iiko_suppliers() -> list[dict[str, str]]:
 
 
 async def _load_iiko_products() -> list[dict[str, str]]:
-    """Загрузить список товаров из iiko_product (только GOODS)."""
+    """
+    Загрузить список товаров из iiko_product.
+
+    Используется тот же набор, что и в «Мин остатки»:
+      — типы GOODS + DISH
+      — только из групп, разрешённых в gsheet_export_group (BFS по дереву групп)
+    Если gsheet_export_group пуст — возвращает все GOODS+DISH без фильтра.
+    """
     from db.engine import async_session_factory
-    from db.models import Product
+    from db.models import Product, ProductGroup, GSheetExportGroup
 
     try:
         async with async_session_factory() as session:
-            result = await session.execute(
-                select(Product.id, Product.name)
-                .where(
-                    Product.deleted.is_(False),
-                    Product.product_type.in_(["GOODS", "PREPARED"]),
-                )
+            # ── Корневые группы ──
+            root_rows = (await session.execute(
+                select(GSheetExportGroup.group_id)
+            )).all()
+            root_ids = [str(r.group_id) for r in root_rows]
+
+            # ── BFS по дереву групп ──
+            allowed_groups: set[str] | None = None
+            if root_ids:
+                group_rows = (await session.execute(
+                    select(ProductGroup.id, ProductGroup.parent_id)
+                    .where(ProductGroup.deleted.is_(False))
+                )).all()
+                children_map: dict[str, list[str]] = {}
+                for g in group_rows:
+                    pid = str(g.parent_id) if g.parent_id else None
+                    if pid:
+                        children_map.setdefault(pid, []).append(str(g.id))
+                allowed_groups = set()
+                queue = list(root_ids)
+                while queue:
+                    gid = queue.pop()
+                    if gid in allowed_groups:
+                        continue
+                    allowed_groups.add(gid)
+                    queue.extend(children_map.get(gid, []))
+
+            # ── Товары GOODS + DISH ──
+            stmt = (
+                select(Product.id, Product.name, Product.parent_id)
+                .where(Product.product_type.in_(["GOODS", "DISH"]))
+                .where(Product.deleted.is_(False))
                 .order_by(Product.name)
             )
-            return [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
+            products_rows = (await session.execute(stmt)).all()
+
+            if allowed_groups is not None:
+                products_rows = [
+                    r for r in products_rows
+                    if r.parent_id and str(r.parent_id) in allowed_groups
+                ]
+
+            return [{"id": str(r.id), "name": r.name or ""} for r in products_rows if r.name]
     except Exception:
         logger.exception("[ocr_mapping] Ошибка загрузки товаров")
         return []
