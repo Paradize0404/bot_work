@@ -33,10 +33,66 @@ Use-case: обработка JSON-файлов с кассовыми чекам�
 
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════
+#  Фасовка: извлечение из названия товара
+# ═══════════════════════════════════════════════════════
+
+# Паттерн: число + единица измерения (шт, г, гр, кг)
+# Ищем ПОСЛЕДНЕЕ вхождение перед концом строки / скобками
+_FASOVKA_RE = re.compile(
+    r'(\d+(?:[.,]\d+)?)\s*(шт|штук|штуки|г|гр|грамм|грамма|граммов|кг)'
+    r'\.?(?:\s|,|$)',
+    re.IGNORECASE,
+)
+
+
+def extract_fasovka(name: str) -> tuple[float, str] | None:
+    """
+    Извлечь фасовку (кол-во в упаковке) из названия товара.
+
+    Берём ПОСЛЕДНЕЕ совпадение числа+единицы в названии — это обычно фасовка.
+    Пропускаем размерные единицы (мм, см, мкм, мл, л) — они описывают сам товар.
+
+    Примеры:
+        «Яйцо столовое биржевое С1 10шт»     → (10.0, 'шт')
+        «Колбаса Фуэт Альмак 120г»            → (0.12, 'кг')  — граммы → кг
+        «Стакан 350 мл крафт 25 шт»           → (25.0, 'шт')  — мл пропускается
+        «Пакет-майка 1 шт.»                   → (1.0, 'шт')   — ×1, без изменений
+        «Молоко 1кг»                          → (1.0, 'кг')
+
+    Возвращает (multiplier, base_unit) или None если фасовка не найдена.
+    multiplier уже переведён в базовую единицу (г→кг).
+    """
+    # Убираем скобочные суффиксы: (1000 шт./20 уп./кор.) (арт. 3002П)
+    clean = re.sub(r'\s*\(.*?\)\s*', ' ', name).strip()
+
+    matches = list(_FASOVKA_RE.finditer(clean))
+    if not matches:
+        return None
+
+    # Последнее совпадение — наиболее вероятная фасовка
+    m = matches[-1]
+    value = float(m.group(1).replace(',', '.'))
+    unit = m.group(2).lower()
+
+    if value <= 0:
+        return None
+
+    if unit in ('шт', 'штук', 'штуки'):
+        return (value, 'шт')
+    elif unit in ('г', 'гр', 'грамм', 'грамма', 'граммов'):
+        return (value / 1000, 'кг')  # граммы → килограммы
+    elif unit == 'кг':
+        return (value, 'кг')
+
+    return None
 
 
 def parse_receipt_json(raw_data: str | bytes) -> list[dict[str, Any]]:
@@ -119,22 +175,46 @@ def _parse_single_receipt(entry: dict, idx: int) -> dict[str, Any] | None:
     fiscal_doc_num = receipt.get("fiscalDocumentNumber")
     doc_number = f"ФД-{fiscal_doc_num}" if fiscal_doc_num else f"JSON-{idx + 1}"
 
-    # ── Позиции (цены в КОПЕЙКАХ → рубли) ──
+    # ── Позиции (цены в КОПЕЙКАХ → рубли + пересчёт фасовки) ──
     items: list[dict[str, Any]] = []
     for item_data in receipt.get("items") or []:
         name = (item_data.get("name") or "").strip()
         if not name:
             continue
-        qty = float(item_data.get("quantity") or 0)
+        qty_packs = float(item_data.get("quantity") or 0)
         price_kop = float(item_data.get("price") or 0)
         sum_kop = float(item_data.get("sum") or 0)
 
+        price_rub = round(price_kop / 100, 2)
+        sum_rub = round(sum_kop / 100, 2)
+        unit = "шт"
+
+        # Фасовка: «Яйцо С1 10шт» × qty=6 → 60 шт, цена за 1 шт
+        #          «Колбаса 120г»  × qty=2 → 0.24 кг, цена за 1 кг
+        fasovka = extract_fasovka(name)
+        if fasovka and fasovka[0] > 0:
+            multiplier, base_unit = fasovka
+            if multiplier != 1.0:  # фасовка ×1 — ничего не менять
+                actual_qty = round(qty_packs * multiplier, 4)
+                price_per_unit = round(price_rub / multiplier, 2)
+                logger.debug(
+                    "[json_receipt] Фасовка: '%s' → ×%.3f %s "
+                    "(qty: %.1f упак → %.4f %s, цена: %.2f → %.2f/%s)",
+                    name, multiplier, base_unit,
+                    qty_packs, actual_qty, base_unit,
+                    price_rub, price_per_unit, base_unit,
+                )
+                qty_packs = actual_qty
+                price_rub = price_per_unit
+            unit = base_unit
+        # Если фасовка = 1 шт — qty и price остаются без изменений
+
         items.append({
             "name": name,
-            "qty": qty,
-            "price": round(price_kop / 100, 2),
-            "sum": round(sum_kop / 100, 2),
-            "unit": "шт",
+            "qty": qty_packs,
+            "price": price_rub,
+            "sum": sum_rub,   # сумма не меняется (qty×price = sum)
+            "unit": unit,
         })
 
     if not items:
