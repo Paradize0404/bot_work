@@ -23,4 +23,7 @@ apscheduler>=3.10.0
 # Timezone data (нужен на Windows / Alpine для ZoneInfo)
 tzdata>=2024.1
 
+# OpenAI (OCR / GPT vision)
+openai>=1.30.0
+
 # XML parsing (stdlib, no extra dep)
