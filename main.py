@@ -36,8 +36,10 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.invoice_handlers import router as invoice_router
     from bot.request_handlers import router as request_router
     from bot.document_handlers import router as document_router
+    from bot.retry_session import RetryAiohttpSession
 
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    session = RetryAiohttpSession(max_retries=3, base_delay=1.0)
+    bot = Bot(token=TELEGRAM_BOT_TOKEN, session=session)
     dp = Dispatcher()
     # Outer-middleware: сброс FSM при нажатии Reply-кнопки навигации
     dp.message.outer_middleware(NavResetMiddleware())
@@ -48,6 +50,21 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp.include_router(request_router)
     dp.include_router(document_router)    # OCR распознавание накладных
     dp.include_router(router)
+
+    # Error handler: ловим оставшиеся сетевые ошибки (после retry)
+    from aiogram.exceptions import TelegramNetworkError, TelegramServerError
+
+    @dp.errors()
+    async def _on_network_error(event, exception):
+        if isinstance(exception, (TelegramNetworkError, TelegramServerError)):
+            logger.warning(
+                "[error-handler] %s suppressed after retries: %s",
+                type(exception).__name__, exception,
+            )
+            return True  # mark handled, don't crash
+        # all other exceptions — re-raise (default aiogram behaviour)
+        return False
+
     return bot, dp
 
 

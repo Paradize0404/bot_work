@@ -1,7 +1,7 @@
 """
 OCR Document handlers — загрузка и распознавание приходных накладных.
 
-Поток:
+Поток A (фото):
 1. Пользователь нажимает «📤 Загрузить накладные»
 2. Бот ждёт фото (до 10 штук, одиночно или альбомом)
 3. pipeline → классификация:
@@ -12,6 +12,14 @@ OCR Document handlers — загрузка и распознавание при�
 5. Незамапленные → записываются в «Маппинг Импорт» (Google Sheets)
 6. Бухгалтеру — уведомление об услугах и о маппинге
 7. Пользователю — сводка: что распознано, что отклонено
+
+Поток B (JSON-чек):
+1. Пользователь отправляет .json файл (без кнопок, в любой момент)
+2. Парсинг JSON → извлечение чеков (формат ФНС)
+3. Применяется базовый маппинг
+4. Если ВСЁ замаплено → автоматическая сборка приходных накладных →
+   превью бухгалтеру → «📤 Отправить в iiko» / «❌ Отменить»
+5. Если есть незамапленные → «Маппинг Импорт» + уведомление
 
 Маппинг (бухгалтер):
 8. Бухгалтер заполняет «Маппинг Импорт» в GSheet (dropdown-выпадающие списки iiko)
@@ -845,3 +853,253 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
         )
     except Exception:
         pass
+
+
+# ════════════════════════════════════════════════════════
+#  JSON-чек: автоматическая приходная накладная
+# ════════════════════════════════════════════════════════
+
+@router.message(F.document.file_name.endswith(".json"))
+@auth_required
+@permission_required("📑 Документы")
+async def handle_json_receipt(message: Message, state: FSMContext) -> None:
+    """Обработка JSON-файла с кассовыми чеками → приходная накладная.
+
+    Без FSM, без кнопок — просто отправил файл.
+    Если все позиции замаплены → автоматически формируем накладную
+    и отправляем бухгалтеру на подтверждение.
+    """
+    tg_id   = message.from_user.id
+    chat_id = message.chat.id
+    fname   = message.document.file_name or "receipt.json"
+    logger.info("[json] Получен JSON файл '%s' tg:%d", fname, tg_id)
+
+    # ── Скачиваем файл ──
+    placeholder = await message.answer("⏳ Обрабатываю JSON-файл...")
+
+    try:
+        file_info = await message.bot.get_file(message.document.file_id)
+        buf = BytesIO()
+        await message.bot.download_file(file_info.file_path, destination=buf)
+        raw_data = buf.getvalue()
+    except Exception as exc:
+        logger.warning("[json] Не удалось скачать файл tg:%d: %s", tg_id, exc)
+        await _repush(placeholder, "❌ Не удалось загрузить файл. Попробуйте ещё раз.")
+        return
+
+    # ── Парсинг JSON ──
+    from use_cases.json_receipt import parse_receipt_json
+
+    try:
+        receipts = parse_receipt_json(raw_data)
+    except ValueError as exc:
+        logger.warning("[json] Невалидный JSON tg:%d: %s", tg_id, exc)
+        await _repush(placeholder, f"❌ {exc}")
+        return
+    except Exception as exc:
+        logger.exception("[json] Ошибка парсинга JSON tg:%d", tg_id)
+        await _repush(placeholder, f"❌ Ошибка обработки файла: {exc}")
+        return
+
+    placeholder = await _repush(placeholder, f"⏳ Распознано {len(receipts)} чеков. Применяю маппинг...")
+
+    # ── Маппинг ──
+    from use_cases import ocr_mapping as mapping_uc
+
+    base_map = await mapping_uc.get_base_mapping()
+    receipts, unmapped_sup, unmapped_prd = mapping_uc.apply_mapping(
+        _receipts_to_ocr_format(receipts), base_map,
+    )
+    unmapped_total = len(unmapped_sup) + len(unmapped_prd)
+    fully_mapped = unmapped_total == 0
+
+    # ── Сохранение в БД ──
+    placeholder = await _repush(placeholder, "⏳ Сохраняю в базу данных...")
+    saved_doc_ids: list[str] = []
+    for doc_data in receipts:
+        try:
+            doc_id = await _save_ocr_document(tg_id, doc_data)
+            if doc_id:
+                saved_doc_ids.append(doc_id)
+        except Exception:
+            logger.exception("[json] Ошибка сохранения документа tg:%d", tg_id)
+
+    if not fully_mapped:
+        # ── Незамапленные: записать в трансфер + уведомить ──
+        placeholder = await _repush(
+            placeholder,
+            f"⏳ Записываю {unmapped_total} незамапленных позиций в таблицу маппинга...",
+        )
+        await mapping_uc.write_transfer(unmapped_sup, unmapped_prd)
+
+        if saved_doc_ids:
+            _transfer_batch_doc_ids.extend(saved_doc_ids)
+            _pending_doc_ids[tg_id] = saved_doc_ids
+
+        # Уведомить бухгалтеров о маппинге
+        asyncio.create_task(
+            mapping_uc.notify_accountants(message.bot, [], unmapped_total),
+            name=f"json_notify_{tg_id}",
+        )
+
+        # Сводка пользователю
+        from use_cases.json_receipt import format_json_receipt_preview
+        summary_parts: list[str] = []
+        for doc_data in receipts:
+            summary_parts.append(
+                format_json_receipt_preview(doc_data, [], False, unmapped_sup, unmapped_prd)
+            )
+        summary = "\n\n".join(summary_parts)
+        summary += (
+            "\n\n🗂 Незамапленные позиции записаны в <b>«Маппинг Импорт»</b>.\n"
+            "Бухгалтер заполнит соответствия и нажмёт <b>«✅ Маппинг готов»</b>."
+        )
+        await _repush(placeholder, summary, parse_mode="HTML")
+        return
+
+    # ── Всё замаплено → автоматическая сборка накладных ──
+    placeholder = await _repush(placeholder, "⏳ Все позиции замаплены! Собираю накладные...")
+
+    try:
+        await _build_and_send_json_invoices(
+            tg_id, chat_id, message.bot, placeholder,
+            receipts, saved_doc_ids, base_map,
+        )
+    except Exception:
+        logger.exception("[json] Ошибка сборки накладных tg:%d", tg_id)
+        await _repush(
+            placeholder,
+            "❌ Ошибка при подготовке накладных. Обратитесь к администратору.",
+        )
+
+
+def _receipts_to_ocr_format(receipts: list[dict]) -> list[dict]:
+    """Преобразовать JSON-чеки в формат, совместимый с apply_mapping().
+
+    apply_mapping() ожидает doc_type = 'upd'/'act'/'other'
+    и структуру supplier.name / items[].name.
+    """
+    for r in receipts:
+        # apply_mapping фильтрует по doc_type in (upd, act, other)
+        r["doc_type"] = "upd"
+    return receipts
+
+
+async def _build_and_send_json_invoices(
+    tg_id: int,
+    chat_id: int,
+    bot: Bot,
+    placeholder,
+    receipts: list[dict],
+    saved_doc_ids: list[str],
+    base_map: dict,
+) -> None:
+    """Собрать iiko-накладные из полностью замапленных JSON-чеков и отправить бухгалтеру."""
+    from use_cases import incoming_invoice as inv_uc
+    from use_cases.json_receipt import format_json_receipt_preview
+
+    ctx     = await uctx.get_user_context(tg_id)
+    dept_id = str(ctx.department_id) if ctx and ctx.department_id else None
+
+    if not dept_id:
+        await _repush(
+            placeholder,
+            "⚠️ Не удалось определить подразделение.\n"
+            "Выполните /start и повторите отправку файла.",
+            parse_mode="HTML",
+        )
+        return
+
+    # Загружаем сохранённые документы из БД для build_iiko_invoices
+    docs = await inv_uc.get_pending_ocr_documents(doc_ids=saved_doc_ids)
+    if not docs:
+        await _repush(
+            placeholder,
+            "⚠️ Не найдены документы для сборки накладных.",
+        )
+        return
+
+    invoices, warnings = await inv_uc.build_iiko_invoices(docs, dept_id, base_mapping=base_map)
+
+    if not invoices:
+        warn_text = "\n".join(f"• {w}" for w in warnings[:5]) if warnings else "Нет данных"
+        await _repush(
+            placeholder,
+            f"⚠️ Не удалось подготовить накладные для iiko:\n{warn_text}",
+            parse_mode="HTML",
+        )
+        return
+
+    # Сохраняем pending invoices
+    _pending_invoices[tg_id] = invoices
+
+    # ── Превью каждого чека ──
+    placeholder = await _repush(
+        placeholder,
+        f"✅ Подготовлено <b>{len(invoices)}</b> накладных из {len(receipts)} чеков:",
+        parse_mode="HTML",
+    )
+
+    for doc in docs:
+        doc_invoices = [inv for inv in invoices if inv["ocr_doc_id"] == doc["id"]]
+        await bot.send_message(
+            chat_id,
+            _format_doc_preview_text(doc, doc_invoices),
+            parse_mode="HTML",
+        )
+
+    # ── Итоговая кнопка бухгалтеру ──
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+    # Отправляем бухгалтерам (админам)
+    from use_cases.admin import get_admin_ids
+    admin_ids = await get_admin_ids()
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="📤 Отправить в iiko",
+                callback_data=f"iiko_invoice_send:{tg_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Отменить",
+                callback_data=f"iiko_invoice_cancel:{tg_id}",
+            ),
+        ]
+    ])
+
+    warn_text = ""
+    if warnings:
+        warn_text = "\n\n⚠️ " + "\n⚠️ ".join(warnings[:3])
+
+    summary_text = (
+        f"📋 <b>JSON-чек: готово к загрузке в iiko</b>\n\n"
+        f"Накладных: <b>{len(invoices)}</b>, "
+        f"позиций: <b>{sum(len(inv['items']) for inv in invoices)}</b>"
+        f"{warn_text}\n\n"
+        f"Подтвердите отправку в iiko:"
+    )
+
+    # Отправляем бухгалтерам
+    for admin_id in admin_ids:
+        if admin_id == tg_id:
+            continue  # не дублируем, пользователь уже видит превью
+        try:
+            # Превью документов
+            for doc in docs:
+                doc_invoices = [inv for inv in invoices if inv["ocr_doc_id"] == doc["id"]]
+                await bot.send_message(
+                    admin_id,
+                    _format_doc_preview_text(doc, doc_invoices),
+                    parse_mode="HTML",
+                )
+            await bot.send_message(
+                admin_id, summary_text, parse_mode="HTML", reply_markup=kb,
+            )
+        except Exception:
+            logger.warning("[json] Не удалось уведомить admin %d", admin_id)
+
+    # Кнопки и для пользователя
+    await bot.send_message(
+        chat_id, summary_text, parse_mode="HTML", reply_markup=kb,
+    )
