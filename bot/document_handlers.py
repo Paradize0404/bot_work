@@ -58,6 +58,11 @@ _album_tasks:  dict[str, asyncio.Task]   = {}
 _pending_invoices: dict[int, list[dict]] = {}
 # tg_id → list[doc_id]  — IDs документов из ТЕКУЩЕЙ сессии загрузки
 _pending_doc_ids: dict[int, list[str]] = {}
+# Общий батч: IDs всех документов накопленных С МОМЕНТА последнего finalize_transfer.
+# Любой пользователь кто загружал фото добавляет сюда свои doc_ids.
+# Бухгалтер при «Маппинг готов» видит именно эту пачку.
+# Очищается после успешного finalize_transfer.
+_transfer_batch_doc_ids: list[str] = []
 
 
 # ════════════════════════════════════════════════════════
@@ -270,6 +275,8 @@ async def _do_process_photos(
     # Запоминаем IDs текущей сессии — чтобы «Маппинг готов» работал только с ними
     if saved_doc_ids:
         _pending_doc_ids[tg_id] = saved_doc_ids
+        # Добавляем в общий батч — бухгалтер увидит документы от всех пользователей
+        _transfer_batch_doc_ids.extend(saved_doc_ids)
 
     # ── Сводка пользователю ──
     summary = _format_summary(invoices, services, rejected_qr, errors_list, elapsed)
@@ -616,9 +623,12 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
         ctx     = await uctx.get_user_context(tg_id)
         dept_id = str(ctx.department_id) if ctx and ctx.department_id else None
 
-        # Загружаем только документы текущей сессии загрузки этого пользователя
-        session_doc_ids = _pending_doc_ids.pop(tg_id, None)
-        docs = await inv_uc.get_pending_ocr_documents(doc_ids=session_doc_ids)
+        # Загружаем документы текущего батча (все пользователи с последнего finalize)
+        # После использования — очищаем батч
+        batch_ids = list(_transfer_batch_doc_ids) or None
+        _transfer_batch_doc_ids.clear()
+        _pending_doc_ids.pop(tg_id, None)  # per-user IDs больше не нужны
+        docs = await inv_uc.get_pending_ocr_documents(doc_ids=batch_ids)
 
         if not docs:
             await _repush(
