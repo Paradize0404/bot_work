@@ -130,7 +130,7 @@ async def write_transfer(
 
     # Загружаем iiko-справочники из БД для dropdown
     iiko_suppliers = await _load_iiko_suppliers()
-    iiko_products  = await _load_iiko_products()
+    iiko_products  = await _load_all_iiko_products()
 
     from adapters.google_sheets import write_mapping_import_sheet
     try:
