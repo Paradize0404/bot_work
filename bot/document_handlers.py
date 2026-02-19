@@ -59,6 +59,57 @@ _pending_invoices: dict[int, list[dict]] = {}
 
 
 # ════════════════════════════════════════════════════════
+#  Прогресс-хелперы: удалить старое → отправить новое снизу
+# ════════════════════════════════════════════════════════
+
+async def _push_progress(
+    bot: Bot,
+    chat_id: int,
+    old_msg_id: int | None,
+    text: str,
+    parse_mode: str | None = None,
+) -> int:
+    """Удалить старое сообщение прогресса и отправить свежее внизу.
+
+    Возвращает message_id нового сообщения.
+    """
+    if old_msg_id:
+        try:
+            await bot.delete_message(chat_id, old_msg_id)
+        except Exception:
+            pass
+    kw: dict = {"text": text}
+    if parse_mode:
+        kw["parse_mode"] = parse_mode
+    msg = await bot.send_message(chat_id, **kw)
+    return msg.message_id
+
+
+async def _repush(
+    msg,          # Message
+    text: str,
+    parse_mode: str | None = None,
+    reply_markup=None,
+):
+    """Удалить старое сообщение-плейсхолдер и отправить новое внизу.
+
+    Возвращает новый объект Message.
+    """
+    bot     = msg.bot
+    chat_id = msg.chat.id
+    try:
+        await bot.delete_message(chat_id, msg.message_id)
+    except Exception:
+        pass
+    kw: dict = {"text": text}
+    if parse_mode:
+        kw["parse_mode"] = parse_mode
+    if reply_markup:
+        kw["reply_markup"] = reply_markup
+    return await bot.send_message(chat_id, **kw)
+
+
+# ════════════════════════════════════════════════════════
 #  FSM States
 # ════════════════════════════════════════════════════════
 
@@ -133,13 +184,10 @@ async def _do_process_photos(
     """Запустить OCR pipeline, применить маппинг, уведомить, показать сводку."""
     logger.info("[ocr] Обработка %d фото tg:%d", len(photos), tg_id)
 
-    try:
-        await bot.edit_message_text(
-            f"⏳ Обрабатываю {len(photos)} фото, подождите...",
-            chat_id=chat_id, message_id=prompt_msg_id,
-        )
-    except Exception:
-        pass
+    prompt_msg_id = await _push_progress(
+        bot, chat_id, prompt_msg_id,
+        f"⏳ Обрабатываю {len(photos)} фото, подождите...",
+    )
 
     start_t = time.monotonic()
 
@@ -147,13 +195,7 @@ async def _do_process_photos(
         results: list[OCRResult] = await process_photo_batch(photos, user_id=tg_id)
     except Exception as exc:
         logger.exception("[ocr] process_photo_batch failed tg:%d", tg_id)
-        try:
-            await bot.edit_message_text(
-                f"❌ Ошибка обработки:\n{exc}\n\nПопробуйте ещё раз.",
-                chat_id=chat_id, message_id=prompt_msg_id,
-            )
-        except Exception:
-            await bot.send_message(chat_id, f"❌ Ошибка обработки: {exc}")
+        await _push_progress(bot, chat_id, prompt_msg_id, f"❌ Ошибка обработки:\n{exc}\n\nПопробуйте ещё раз.")
         await state.clear()
         return
 
@@ -186,13 +228,7 @@ async def _do_process_photos(
     unmapped_prd: list[str] = []
 
     if invoices:
-        try:
-            await bot.edit_message_text(
-                "⏳ Применяю маппинг iiko...",
-                chat_id=chat_id, message_id=prompt_msg_id,
-            )
-        except Exception:
-            pass
+        prompt_msg_id = await _push_progress(bot, chat_id, prompt_msg_id, "⏳ Применяю маппинг iiko...")
 
         from use_cases import ocr_mapping as mapping_uc
         base_map = await mapping_uc.get_base_mapping()
@@ -200,13 +236,10 @@ async def _do_process_photos(
         unmapped_total = len(unmapped_sup) + len(unmapped_prd)
 
         if unmapped_total > 0:
-            try:
-                await bot.edit_message_text(
-                    f"⏳ Записываю {unmapped_total} позиций в таблицу маппинга...",
-                    chat_id=chat_id, message_id=prompt_msg_id,
-                )
-            except Exception:
-                pass
+            prompt_msg_id = await _push_progress(
+                bot, chat_id, prompt_msg_id,
+                f"⏳ Записываю {unmapped_total} позиций в таблицу маппинга...",
+            )
             await mapping_uc.write_transfer(unmapped_sup, unmapped_prd)
 
         asyncio.create_task(
@@ -221,6 +254,8 @@ async def _do_process_photos(
         )
 
     # ── Сохранение в БД ──
+    if invoices:
+        prompt_msg_id = await _push_progress(bot, chat_id, prompt_msg_id, "⏳ Сохраняю в базу данных...")
     for doc_data in invoices:
         try:
             await _save_ocr_document(tg_id, doc_data, file_ids=file_ids or [])
@@ -229,12 +264,7 @@ async def _do_process_photos(
 
     # ── Сводка пользователю ──
     summary = _format_summary(invoices, services, rejected_qr, errors_list, elapsed)
-    try:
-        await bot.edit_message_text(
-            summary, chat_id=chat_id, message_id=prompt_msg_id, parse_mode="HTML",
-        )
-    except Exception:
-        await bot.send_message(chat_id, summary, parse_mode="HTML")
+    await _push_progress(bot, chat_id, prompt_msg_id, summary, parse_mode="HTML")
 
     await state.clear()
 
@@ -330,6 +360,9 @@ async def _process_album_debounce(
     buffer_data = _album_buffer.pop(group_id, None)
     _album_tasks.pop(group_id, None)
     if buffer_data:
+        # Берём актуальный prompt_msg_id из стейта (мог обновиться при первом фото альбома)
+        fresh = await state.get_data()
+        prompt_msg_id = fresh.get("prompt_msg_id", prompt_msg_id)
         await _do_process_photos(tg_id, chat_id, buffer_data["photos"], bot, state, prompt_msg_id,
                                  file_ids=buffer_data.get("file_ids", []))
 
@@ -395,10 +428,11 @@ async def handle_ocr_photo(message: Message, state: FSMContext) -> None:
 
         if len(buf_data["photos"]) == 1 and prompt_msg_id:
             try:
-                await message.bot.edit_message_text(
-                    "📥 Получаю фото альбома...",
-                    chat_id=chat_id, message_id=prompt_msg_id,
+                new_id = await _push_progress(
+                    message.bot, chat_id, prompt_msg_id, "📥 Получаю фото альбома...",
                 )
+                await state.update_data(prompt_msg_id=new_id)
+                prompt_msg_id = new_id
             except Exception:
                 pass
 
@@ -532,15 +566,14 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
     is_ready, total_count, missing = await mapping_uc.check_transfer_ready()
 
     if total_count == 0:
-        await placeholder.edit_text(
-            "ℹ️ Таблица «Маппинг Импорт» пуста — нечего переносить."
-        )
+        await _repush(placeholder, "ℹ️ Таблица «Маппинг Импорт» пуста — нечего переносить.")
         return
 
     if not is_ready:
         missing_str = "\n".join(f"• {m}" for m in missing[:10])
         suffix = f"\n... и ещё {len(missing) - 10}" if len(missing) > 10 else ""
-        await placeholder.edit_text(
+        await _repush(
+            placeholder,
             f"⚠️ Не все позиции заполнены!\n\n"
             f"Незаполнено: {len(missing)} из {total_count}\n\n"
             f"{missing_str}{suffix}\n\n"
@@ -548,19 +581,21 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
         )
         return
 
-    await placeholder.edit_text("⏳ Переношу маппинг в базу...")
+    placeholder = await _repush(placeholder, "⏳ Переношу маппинг в базу...")
     saved_count, errors = await mapping_uc.finalize_transfer()
 
     if errors:
         err_lines = "\n".join(f"• {e}" for e in errors[:5])
-        await placeholder.edit_text(
+        await _repush(
+            placeholder,
             f"⚠️ Маппинг перенесён с ошибками.\n\n"
             f"Сохранено: {saved_count}\nОшибки:\n{err_lines}"
         )
         return
 
     # ── Подготовка накладных к отправке в iiko ──
-    await placeholder.edit_text(
+    placeholder = await _repush(
+        placeholder,
         f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
         "⏳ Подготавливаю накладные к загрузке в iiko...",
         parse_mode="HTML",
@@ -575,7 +610,8 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
         docs = await inv_uc.get_pending_ocr_documents()
 
         if not docs:
-            await placeholder.edit_text(
+            await _repush(
+                placeholder,
                 f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
                 "ℹ️ Нет накладных ожидающих загрузки в iiko.",
                 parse_mode="HTML",
@@ -583,7 +619,8 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
             return
 
         if not dept_id:
-            await placeholder.edit_text(
+            await _repush(
+                placeholder,
                 f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
                 f"⚠️ Не удалось определить подразделение — накладные в iiko не загружены.\n"
                 f"Выполните /start и повторите попытку.",
@@ -595,7 +632,8 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
 
         if not invoices:
             warn_text = "\n".join(f"• {w}" for w in warnings[:5])
-            await placeholder.edit_text(
+            await _repush(
+                placeholder,
                 f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
                 f"⚠️ Не удалось подготовить накладные для iiko:\n{warn_text}",
                 parse_mode="HTML",
@@ -603,7 +641,8 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
             return
 
         # ── Обновляем placeholder ──
-        await placeholder.edit_text(
+        placeholder = await _repush(
+            placeholder,
             f"✅ Маппинг сохранён: <b>{saved_count}</b> записей. "
             f"Подготовлено <b>{len(invoices)}</b> накладных — проверьте ниже:",
             parse_mode="HTML",
@@ -657,7 +696,8 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
 
     except Exception:
         logger.exception("[ocr] Ошибка подготовки накладных tg:%d", tg_id)
-        await placeholder.edit_text(
+        await _repush(
+            placeholder,
             f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
             "⚠️ Ошибка при подготовке накладных к загрузке. "
             "Обратитесь к администратору.",
