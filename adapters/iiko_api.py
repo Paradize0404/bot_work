@@ -545,7 +545,7 @@ def _build_incoming_invoice_xml(document: dict[str, Any]) -> str:
 
     root = ET.Element("document")
 
-    doc_number = document.get("documentNumber") or f"OCR-{uuid4().hex[:8].upper()}"
+    doc_number = document.get("documentNumber") or f"INC-{uuid4().hex[:8].upper()}"
     ET.SubElement(root, "documentNumber").text = doc_number
     ET.SubElement(root, "dateIncoming").text = document.get("dateIncoming", "")
     ET.SubElement(root, "useDefaultDocumentTime").text = "false"

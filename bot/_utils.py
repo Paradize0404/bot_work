@@ -52,3 +52,12 @@ def reports_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="✏️ Изменить мин. остаток")],
         [KeyboardButton(text="◀️ Назад")],
     ], resize_keyboard=True)
+
+
+def ocr_keyboard() -> ReplyKeyboardMarkup:
+    """Подменю 'Документы' (OCR распознавание накладных)."""
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="📤 Загрузить накладные")],
+        [KeyboardButton(text="✅ Маппинг готов")],
+        [KeyboardButton(text="◀️ Назад")],
+    ], resize_keyboard=True)

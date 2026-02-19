@@ -82,6 +82,7 @@ def _main_keyboard(allowed: set[str] | None = None, dept_name: str | None = None
         ("📦 Накладные", "📦 Накладные"),
         ("📋 Заявки", "📋 Заявки"),
         ("📊 Отчёты", "📊 Отчёты"),
+        ("📑 Документы", "📑 Документы"),
     ]
     # Фильтруем по правам
     visible = []
@@ -114,6 +115,7 @@ from bot._utils import (
     invoices_keyboard as _invoices_keyboard,
     requests_keyboard as _requests_keyboard,
     reports_keyboard as _reports_keyboard,
+    ocr_keyboard as _ocr_keyboard,
 )
 
 
@@ -522,6 +524,14 @@ async def btn_reports_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Отчёты'."""
     logger.info("[nav] Меню Отчёты tg:%d", message.from_user.id)
     await reply_menu(message, state, "📊 Отчёты:", _reports_keyboard())
+
+
+@router.message(F.text == "📑 Документы")
+@permission_required("📑 Документы")
+async def btn_documents_menu(message: Message, state: FSMContext) -> None:
+    """Подменю 'Документы' (OCR распознавание накладных)."""
+    logger.info("[nav] Меню Документы tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📑 Документы:", _ocr_keyboard())
 
 
 @router.message(F.text == "💰 Прайс-лист")

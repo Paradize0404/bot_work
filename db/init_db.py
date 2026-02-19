@@ -18,6 +18,8 @@ from db.engine import engine
 from db.models import Base
 # Импортируем ft_models чтобы SQLAlchemy увидел таблицы ft_*
 import db.ft_models  # noqa: F401
+# Импортируем OCR модели
+import models.ocr  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,16 @@ async def create_tables() -> None:
     logger.info("Creating tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # OCR-таблицы используют отдельный declarative_base из models/ocr.py
+    try:
+        from models.ocr import Base as OcrBase
+        async with engine.begin() as conn:
+            await conn.run_sync(OcrBase.metadata.create_all)
+        logger.info("OCR tables created / verified OK")
+    except Exception:
+        # GIN-индексы требуют расширения pg_trgm — если не установлено, таблицы всё равно создадутся
+        logger.warning("OCR tables: частичная ошибка создания (возможно, GIN-индексы без pg_trgm)", exc_info=True)
 
     # Миграция: добавляем столбцы, которых нет в старых таблицах.
     # IF NOT EXISTS — безопасно при повторном запуске.
@@ -77,19 +89,12 @@ async def create_tables() -> None:
         "CREATE INDEX IF NOT EXISTS ix_stoplist_history_product ON stoplist_history (product_id)",
         "CREATE INDEX IF NOT EXISTS ix_stoplist_history_tg ON stoplist_history (terminal_group_id)",
         "CREATE INDEX IF NOT EXISTS ix_stoplist_history_date ON stoplist_history (date)",
-        # ocr_document — OCR распознанные документы
-        "CREATE INDEX IF NOT EXISTS ix_ocr_document_tg ON ocr_document (telegram_id)",
-        "CREATE INDEX IF NOT EXISTS ix_ocr_document_status ON ocr_document (status)",
-        # ocr_item_mapping — маппинг товаров OCR → iiko
-        "CREATE INDEX IF NOT EXISTS ix_ocr_item_mapping_raw ON ocr_item_mapping (raw_name)",
-        # ocr_supplier_mapping — маппинг поставщиков OCR → iiko
-        "CREATE INDEX IF NOT EXISTS ix_ocr_supplier_mapping_raw ON ocr_supplier_mapping (raw_name)",
-        # ocr: добавление колонки category (goods/service)
-        "ALTER TABLE ocr_document ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'goods'",
-        "ALTER TABLE ocr_supplier_mapping ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'goods'",
         # price_product: склад отгрузки (из прайс-листа)
         "ALTER TABLE price_product ADD COLUMN IF NOT EXISTS store_id UUID",
         "ALTER TABLE price_product ADD COLUMN IF NOT EXISTS store_name VARCHAR(500)",
+        # ocr_item: iiko маппинг из GSheet
+        "ALTER TABLE ocr_item ADD COLUMN IF NOT EXISTS iiko_id VARCHAR(36)",
+        "ALTER TABLE ocr_item ADD COLUMN IF NOT EXISTS iiko_name TEXT",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:

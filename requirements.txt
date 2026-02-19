@@ -23,14 +23,4 @@ apscheduler>=3.10.0
 # Timezone data (нужен на Windows / Alpine для ZoneInfo)
 tzdata>=2024.1
 
-# OCR via OpenAI GPT-4o Vision
-openai>=1.51.0
-
-# Fuzzy matching (маппинг распознанных названий → номенклатура)
-thefuzz>=0.22.0
-python-Levenshtein>=0.25.0
-
-# Image preprocessing
-Pillow>=10.0.0
-
 # XML parsing (stdlib, no extra dep)

@@ -7,6 +7,7 @@ venv/
 logs/
 pizzayolo-ocr-3898e5dddcff.json
 docs (4).json
+authorized_key.json
 
 # IDE
 .idea/

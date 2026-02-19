@@ -2124,3 +2124,282 @@ async def sync_cloud_org_mapping_to_sheet(
         LABEL, count, elapsed,
     )
     return count
+
+
+# ═══════════════════════════════════════════════════════
+# Маппинг: базовая таблица и трансфер (OCR ↔ iiko)
+# ═══════════════════════════════════════════════════════
+
+_MAPPING_BASE_TAB    = "Маппинг"
+_MAPPING_IMPORT_TAB  = "Маппинг Импорт"
+_MAPPING_MAX_DROPDOWN = 500   # лимит ONE_OF_LIST в Sheets API
+
+
+def _get_mapping_worksheet(tab_name: str) -> gspread.Worksheet:
+    """Получить (или создать) лист маппинга в таблице MIN_STOCK_SHEET_ID."""
+    client = _get_client()
+    spreadsheet = client.open_by_key(MIN_STOCK_SHEET_ID)
+    try:
+        return spreadsheet.worksheet(tab_name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=tab_name, rows=2000, cols=5)
+        logger.info("[%s] Лист «%s» создан", LABEL, tab_name)
+        return ws
+
+
+def _set_dropdown(spreadsheet, ws, start_row: int, end_row: int, col: int, options: list[str]) -> None:
+    """Установить dropdown-валидацию для диапазона ячеек в столбце col (1-indexed)."""
+    if not options:
+        return
+    truncated = options[:_MAPPING_MAX_DROPDOWN]
+    sheet_id = ws.id
+    body = {
+        "requests": [
+            {
+                "setDataValidation": {
+                    "range": {
+                        "sheetId":          sheet_id,
+                        "startRowIndex":    start_row - 1,  # 0-indexed
+                        "endRowIndex":      end_row,        # exclusive
+                        "startColumnIndex": col - 1,
+                        "endColumnIndex":   col,
+                    },
+                    "rule": {
+                        "condition": {
+                            "type": "ONE_OF_LIST",
+                            "values": [{"userEnteredValue": v} for v in truncated],
+                        },
+                        "showCustomUi": True,
+                        "strict": False,
+                    },
+                }
+            }
+        ]
+    }
+    try:
+        spreadsheet.batch_update(body)
+    except Exception:
+        logger.warning("[%s] Ошибка установки dropdown", LABEL, exc_info=True)
+
+
+def read_base_mapping_sheet() -> list[dict[str, str]]:
+    """
+    Прочитать базовую таблицу маппинга «Маппинг».
+    Возвращает list[{type, ocr_name, iiko_name, iiko_id}].
+    """
+    ws = _get_mapping_worksheet(_MAPPING_BASE_TAB)
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return []
+
+    result = []
+    for row in rows[1:]:  # пропускаем заголовок
+        if len(row) < 3:
+            continue
+        entry_type = (row[0] or "").strip()
+        ocr_name   = (row[1] or "").strip()
+        iiko_name  = (row[2] or "").strip()
+        iiko_id    = (row[3] or "").strip() if len(row) > 3 else ""
+        if ocr_name and (entry_type or iiko_name):
+            result.append({
+                "type":      entry_type,
+                "ocr_name":  ocr_name,
+                "iiko_name": iiko_name,
+                "iiko_id":   iiko_id,
+            })
+    return result
+
+
+def write_mapping_import_sheet(
+    unmapped_suppliers: list[str],
+    unmapped_products:  list[str],
+    iiko_supplier_names: list[str],
+    iiko_product_names:  list[str],
+) -> None:
+    """
+    Записать незамапленные имена в «Маппинг Импорт».
+
+    Структура:
+      Строка 1: заголовок [Тип | OCR Имя | iiko Имя]
+      Секция поставщиков: [поставщик | OCR_имя | ← dropdown iiko_supplier]
+      Пустая строка
+      Секция товаров:     [товар     | OCR_имя | ← dropdown iiko_product]
+    Предыдущее содержимое листа полностью перезаписывается.
+    """
+    from config import MIN_STOCK_SHEET_ID
+    client = _get_client()
+    spreadsheet = client.open_by_key(MIN_STOCK_SHEET_ID)
+    ws = _get_mapping_worksheet(_MAPPING_IMPORT_TAB)
+
+    # Полная очистка
+    ws.clear()
+
+    header = [["Тип", "OCR Имя (что распознал GPT)", "iiko Имя (выберите из списка)"]]
+    rows: list[list[str]] = []
+
+    sup_start_row = 2  # строка 1 = header
+    for name in unmapped_suppliers:
+        rows.append(["поставщик", name, ""])
+
+    sep_row_idx = len(rows) + 2  # row after suppliers section
+    if unmapped_suppliers and unmapped_products:
+        rows.append(["", "", ""])  # пустая разделительная строка
+
+    prd_start_row = len(rows) + 2
+    for name in unmapped_products:
+        rows.append(["товар", name, ""])
+
+    all_rows = header + rows
+    ws.update(range_name="A1", values=all_rows, value_input_option="RAW")
+
+    # ── Форматирование заголовка ──
+    sheet_id = ws.id
+    fmt_requests = [
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 3,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": {"red": 0.23, "green": 0.47, "blue": 0.85},
+                        "textFormat":      {"bold": True, "foregroundColor": {"red": 1, "green": 1, "blue": 1}},
+                    }
+                },
+                "fields": "userEnteredFormat(backgroundColor,textFormat)",
+            }
+        },
+        # Ширина столбцов
+        {"updateDimensionProperties": {
+            "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1},
+            "properties": {"pixelSize": 120}, "fields": "pixelSize",
+        }},
+        {"updateDimensionProperties": {
+            "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 2},
+            "properties": {"pixelSize": 340}, "fields": "pixelSize",
+        }},
+        {"updateDimensionProperties": {
+            "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 2, "endIndex": 3},
+            "properties": {"pixelSize": 340}, "fields": "pixelSize",
+        }},
+    ]
+    try:
+        spreadsheet.batch_update({"requests": fmt_requests})
+    except Exception:
+        logger.warning("[%s] Ошибка форматирования листа маппинга", LABEL, exc_info=True)
+
+    # ── Dropdown для поставщиков ──
+    if unmapped_suppliers and iiko_supplier_names:
+        end_row = sup_start_row + len(unmapped_suppliers) - 1
+        _set_dropdown(spreadsheet, ws, sup_start_row, end_row + 1, 3, iiko_supplier_names)
+
+    # ── Dropdown для товаров ──
+    if unmapped_products and iiko_product_names:
+        end_row = prd_start_row + len(unmapped_products) - 1
+        _set_dropdown(spreadsheet, ws, prd_start_row, end_row + 1, 3, iiko_product_names)
+
+    logger.info(
+        "[%s] «%s» обновлён: %d поставщиков, %d товаров",
+        LABEL, _MAPPING_IMPORT_TAB, len(unmapped_suppliers), len(unmapped_products),
+    )
+
+
+def read_mapping_import_sheet() -> list[dict[str, str]]:
+    """
+    Прочитать «Маппинг Импорт».
+    Возвращает list[{type, ocr_name, iiko_name}] (только непустые строки данных).
+    """
+    ws = _get_mapping_worksheet(_MAPPING_IMPORT_TAB)
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return []
+
+    result = []
+    for row in rows[1:]:  # пропускаем заголовок
+        if not row or not any(row):
+            continue
+        entry_type = (row[0] or "").strip()
+        ocr_name   = (row[1] or "").strip()
+        iiko_name  = (row[2] or "").strip() if len(row) > 2 else ""
+        if ocr_name and entry_type:
+            result.append({
+                "type":      entry_type,
+                "ocr_name":  ocr_name,
+                "iiko_name": iiko_name,
+            })
+    return result
+
+
+def upsert_base_mapping(items: list[dict[str, str]]) -> int:
+    """
+    UPSERT записей в базовую таблицу маппинга «Маппинг».
+    Ключ: (type, ocr_name). Перезаписывает существующие, добавляет новые.
+    Возвращает итоговое количество записей.
+    """
+    ws = _get_mapping_worksheet(_MAPPING_BASE_TAB)
+    existing_rows = ws.get_all_values()
+
+    # Создаём словарь существующих: (type, ocr_name_lower) → row_index (1-indexed)
+    existing_map: dict[tuple[str, str], int] = {}
+    if len(existing_rows) >= 2:
+        for i, row in enumerate(existing_rows[1:], start=2):
+            if len(row) >= 2:
+                key = ((row[0] or "").strip().lower(), (row[1] or "").strip().lower())
+                existing_map[key] = i
+
+    # Заголовок если пустой лист
+    if not existing_rows or not existing_rows[0]:
+        ws.update(range_name="A1", values=[["Тип", "OCR Имя", "iiko Имя", "iiko ID"]])
+
+    updates: list[tuple[int, list[str]]] = []
+    new_rows: list[list[str]] = []
+
+    for item in items:
+        key = ((item.get("type") or "").lower(), (item.get("ocr_name") or "").lower())
+        row_data = [
+            item.get("type") or "",
+            item.get("ocr_name") or "",
+            item.get("iiko_name") or "",
+            item.get("iiko_id") or "",
+        ]
+        if key in existing_map:
+            updates.append((existing_map[key], row_data))
+        else:
+            new_rows.append(row_data)
+
+    # Обновление существующих строк
+    if updates:
+        cells_to_update = []
+        for row_idx, row_data in updates:
+            for col_idx, val in enumerate(row_data, start=1):
+                cells_to_update.append(
+                    gspread.Cell(row=row_idx, col=col_idx, value=val)
+                )
+        ws.update_cells(cells_to_update, value_input_option="RAW")
+
+    # Добавление новых строк
+    if new_rows:
+        ws.append_rows(new_rows, value_input_option="RAW")
+
+    total = max(len(existing_rows) - 1, 0) + len(new_rows)
+    logger.info(
+        "[%s] upsert_base_mapping: обновлено %d, добавлено %d",
+        LABEL, len(updates), len(new_rows),
+    )
+    return total
+
+
+def clear_mapping_import_sheet() -> None:
+    """Очистить «Маппинг Импорт», сохранив строку заголовка."""
+    ws = _get_mapping_worksheet(_MAPPING_IMPORT_TAB)
+    all_rows = ws.get_all_values()
+    if not all_rows:
+        return
+    # Оставляем только заголовок (строка 1)
+    ws.clear()
+    ws.update(range_name="A1", values=[all_rows[0]], value_input_option="RAW")
+    logger.info("[%s] «%s» очищен (заголовок сохранён)", LABEL, _MAPPING_IMPORT_TAB)

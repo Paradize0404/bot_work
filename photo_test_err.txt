@@ -1,0 +1,2 @@
+C:\Users\Lenovo\Desktop\folder\test\config.py:109: UserWarning: IIKO_CLOUD_WEBHOOK_SECRET не задан — сгенерирован случайный. При рестарте зарегистрированный вебхук перестанет работать! Задайте фиксированное значение в переменных окружения.
+  warnings.warn(

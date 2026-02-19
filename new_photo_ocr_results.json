@@ -1,0 +1,543 @@
+[
+  {
+    "photo": "photo_2026-02-19_06-09-29.jpg",
+    "status": "recognized",
+    "doc_type": "upd",
+    "has_qr": false,
+    "doc_number": "227",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Рахимкулов Данияр Кыдырович",
+      "inn": "390521270428"
+    },
+    "buyer": {
+      "name": "ИП Мерзляков Егор Андреевич",
+      "inn": "390511847466"
+    },
+    "items": [
+      {
+        "name": "Шампиньоны вес кг",
+        "unit": "кг",
+        "qty": 3.0,
+        "price": 414.29,
+        "sum": 1242.86,
+        "vat_rate": "5%"
+      }
+    ],
+    "total_amount": 3594.62,
+    "page_number": 2,
+    "total_pages": 2,
+    "group_key": "390521270428_227_2026-02-13",
+    "confidence_score": 87,
+    "warnings": [],
+    "errors": [],
+    "elapsed_sec": 21.08
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-31.jpg",
+    "status": "recognized",
+    "doc_type": "upd",
+    "has_qr": false,
+    "doc_number": "227",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Рзаева Джейран Тахир Кызы",
+      "inn": "39052170428"
+    },
+    "buyer": {
+      "name": "ИП Мерзляков Егор Андреевич",
+      "inn": "390511847466"
+    },
+    "items": [
+      {
+        "name": "Салат Романо вес кг",
+        "unit": "кг",
+        "qty": 4.0,
+        "price": 285.72,
+        "sum": 1142.86,
+        "vat_rate": "5%"
+      },
+      {
+        "name": "Помидор черри вес кг",
+        "unit": "кг",
+        "qty": 1.54,
+        "price": 475.24,
+        "sum": 731.87,
+        "vat_rate": "5%"
+      },
+      {
+        "name": "Морковь вес кг",
+        "unit": "кг",
+        "qty": 2.24,
+        "price": 56.19,
+        "sum": 125.87,
+        "vat_rate": "5%"
+      },
+      {
+        "name": "Петрушка вес кг",
+        "unit": "кг",
+        "qty": 0.54,
+        "price": 333.33,
+        "sum": 180.0,
+        "vat_rate": "5%"
+      }
+    ],
+    "total_amount": 2289.62,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "39052170428_227_2026-02-13",
+    "confidence_score": 95,
+    "warnings": [],
+    "errors": [],
+    "elapsed_sec": 21.92
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-32.jpg",
+    "status": "rejected_qr",
+    "doc_type": "receipt",
+    "has_qr": true,
+    "doc_number": "265",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ООО \"ЕВРОРИТЕЙЛ\"",
+      "inn": "3906321175"
+    },
+    "buyer": null,
+    "items": [
+      {
+        "name": "КОЛБАСА С/К ЛИТОВСКАЯ",
+        "unit": "шт",
+        "qty": 4.0,
+        "price": 399.99,
+        "sum": 1599.96,
+        "vat_rate": "10%"
+      }
+    ],
+    "total_amount": 1599.96,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "3906321175_265_2026-02-13",
+    "confidence_score": 95,
+    "warnings": [
+      "Кассовый чек с QR — используйте приложение ФНС"
+    ],
+    "errors": [],
+    "elapsed_sec": 16.39
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-33.jpg",
+    "status": "recognized",
+    "doc_type": "upd",
+    "has_qr": false,
+    "doc_number": "38",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ООО \"ПИЦЦАРЕЛЛА ТРЕЙД\"",
+      "inn": "3900033727"
+    },
+    "buyer": {
+      "name": "ИП Мерзляков Егор Андреевич",
+      "inn": "390511847466"
+    },
+    "items": [
+      {
+        "name": "Сыр полутвердый \"Моцарелла Павлина\" с м.д.ж. в сухом веществе от 36 до 50%",
+        "unit": "кг",
+        "qty": 37.4,
+        "price": 500.0,
+        "sum": 18700.0,
+        "vat_rate": "10%"
+      }
+    ],
+    "total_amount": 20570.0,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "3900033727_38_2026-02-13",
+    "confidence_score": 94,
+    "warnings": [],
+    "errors": [],
+    "elapsed_sec": 15.19
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-34.jpg",
+    "status": "rejected_qr",
+    "doc_type": "receipt",
+    "has_qr": true,
+    "doc_number": "125",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ООО \"Мариленд\"",
+      "inn": "3906095286"
+    },
+    "buyer": null,
+    "items": [
+      {
+        "name": "Соус соевый Кейсан Премиум 0,25л пл/б",
+        "unit": "шт.",
+        "qty": 2.0,
+        "price": 59.99,
+        "sum": 119.98,
+        "vat_rate": "22%"
+      }
+    ],
+    "total_amount": 119.98,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "3906095286_125_2026-02-13",
+    "confidence_score": 95,
+    "warnings": [
+      "Кассовый чек с QR — используйте приложение ФНС"
+    ],
+    "errors": [],
+    "elapsed_sec": 31.5
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-35.jpg",
+    "status": "rejected_qr",
+    "doc_type": "receipt",
+    "has_qr": true,
+    "doc_number": "264",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ООО \"ЕВРОРИТЕЙЛ\"",
+      "inn": "3906321175"
+    },
+    "buyer": null,
+    "items": [
+      {
+        "name": "КРЕВЕТКА ВАННАМЕЙ С/М",
+        "unit": "шт",
+        "qty": 2.0,
+        "price": 799.99,
+        "sum": 1599.98,
+        "vat_rate": "10%"
+      },
+      {
+        "name": "ТОМАТЫ ЧЕРРИ 250Г ЭК",
+        "unit": "шт",
+        "qty": 3.0,
+        "price": 259.99,
+        "sum": 779.97,
+        "vat_rate": "10%"
+      },
+      {
+        "name": "ПАКЕТ ФИРМЕННЫЙ SPAR",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 9.99,
+        "sum": 9.99,
+        "vat_rate": "22%"
+      }
+    ],
+    "total_amount": 2389.94,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "3906321175_264_2026-02-13",
+    "confidence_score": 95,
+    "warnings": [
+      "Кассовый чек с QR — используйте приложение ФНС"
+    ],
+    "errors": [],
+    "elapsed_sec": 37.66
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-37.jpg",
+    "status": "rejected_qr",
+    "doc_type": "receipt",
+    "has_qr": true,
+    "doc_number": "000026009",
+    "date": "2023-02-13",
+    "supplier": {
+      "name": "ИП Аннин Егор Ильич",
+      "inn": "390514520913"
+    },
+    "buyer": null,
+    "items": [
+      {
+        "name": "TUSOUT Коробка 500 мл с пластиковой крышкой OSQ OPSalad 500 (SL)",
+        "unit": "шт",
+        "qty": 2.0,
+        "price": 974.0,
+        "sum": 1948.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Полотенца бумаж. Professional STYLE без втулки с центр вытяжкой, Стандарт 120м 1сл макул.(12) Вывод",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 231.0,
+        "sum": 231.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Скотч 48*60м/66м КК и каучук прозрачный (72,36) TP5-0037W",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 102.0,
+        "sum": 102.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Стакан бум. д/гор двухслойный 350 мл крафт 1/25 (16,20,30)",
+        "unit": "шт",
+        "qty": 4.0,
+        "price": 328.0,
+        "sum": 1312.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Стакан бум. д/гор двухслойный 250 мл крафт 1/25 (16,20,36)",
+        "unit": "шт",
+        "qty": 3.0,
+        "price": 246.0,
+        "sum": 738.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Майка-пакет 43*80 металик",
+        "unit": "шт",
+        "qty": 2.0,
+        "price": 14.0,
+        "sum": 28.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Маркер перм. 1мм BRAUBERG черный 150296 (10/20)",
+        "unit": "шт",
+        "qty": 33.0,
+        "price": 7.0,
+        "sum": 231.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "TUSOUT Коробка б/бургера 102/108*102/118*60 OSQ BURGER M (50/300)",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 461.0,
+        "sum": 461.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Пакет бум. корич. с плос. ручками 280*150*320 1/25",
+        "unit": "шт",
+        "qty": 3.0,
+        "price": 483.06,
+        "sum": 1449.18,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Пленка пищевая 45см тип 200 Р, 8 мкм (12)",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 233.0,
+        "sum": 233.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Мешки д/мусора ПВД 70*110 120л 80 р, арт. 000000003",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 155.0,
+        "sum": 155.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Вилка \"Премиум\" прозр. 180мм 1/50 (30), 401-571",
+        "unit": "шт",
+        "qty": 2.0,
+        "price": 172.0,
+        "sum": 344.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Нож \"Премиум\" прозр. 180мм 1/50 (50), 401-573",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 172.0,
+        "sum": 172.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Ложка столовая \"Премиум\" прозр. 180мм 1/50 (30), 401-572",
+        "unit": "шт",
+        "qty": 2.0,
+        "price": 172.0,
+        "sum": 344.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Контейнер PP 200мл (179*132) 1/50 (10) P186",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 1322.0,
+        "sum": 1322.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Крышка контейнера P186*136 1/50 (для контейнера 179*132) прозрачная",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 409.0,
+        "sum": 409.0,
+        "vat_rate": "22%"
+      },
+      {
+        "name": "Полотенца бум. Protissue с центр вытяжкой 1сл. 275м (6) лист ТО",
+        "unit": "шт",
+        "qty": 2.0,
+        "price": 364.0,
+        "sum": 728.0,
+        "vat_rate": "22%"
+      }
+    ],
+    "total_amount": 10207.18,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "390514520913_000026009_2023-02-13",
+    "confidence_score": 87,
+    "warnings": [
+      "Кассовый чек с QR — используйте приложение ФНС"
+    ],
+    "errors": [],
+    "elapsed_sec": 68.73
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-39.jpg",
+    "status": "recognized",
+    "doc_type": "cash_order",
+    "has_qr": false,
+    "doc_number": null,
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Мерзляков ЕН",
+      "inn": null
+    },
+    "buyer": null,
+    "items": [],
+    "total_amount": 750.0,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "null_null_2026-02-13",
+    "confidence_score": 88,
+    "warnings": [],
+    "errors": [],
+    "elapsed_sec": 32.58
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-40.jpg",
+    "status": "recognized",
+    "doc_type": "cash_order",
+    "has_qr": false,
+    "doc_number": null,
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Мерзляков Е.Н.",
+      "inn": null
+    },
+    "buyer": {
+      "name": "Мерзляков Егор",
+      "inn": null
+    },
+    "items": [],
+    "total_amount": 501.0,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "null_null_2026-02-13",
+    "confidence_score": 87,
+    "warnings": [],
+    "errors": [],
+    "elapsed_sec": 43.62
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-41.jpg",
+    "status": "recognized",
+    "doc_type": "cash_order",
+    "has_qr": false,
+    "doc_number": null,
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Мерзляков ЕА",
+      "inn": null
+    },
+    "buyer": {
+      "name": "Вязовой Денис",
+      "inn": null
+    },
+    "items": [],
+    "total_amount": 4500.0,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "null_null_2026-02-13",
+    "confidence_score": 85,
+    "warnings": [],
+    "errors": [],
+    "elapsed_sec": 43.94
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-43.jpg",
+    "status": "rejected_qr",
+    "doc_type": "receipt",
+    "has_qr": true,
+    "doc_number": "2185",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Агаев Аладдин Нуру оглы",
+      "inn": "390614809381"
+    },
+    "buyer": null,
+    "items": [
+      {
+        "name": "Сухофрукты",
+        "unit": "шт",
+        "qty": 1.0,
+        "price": 950.0,
+        "sum": 950.0,
+        "vat_rate": "без НДС"
+      }
+    ],
+    "total_amount": 950.0,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "390614809381_2185_2026-02-13",
+    "confidence_score": 95,
+    "warnings": [
+      "Кассовый чек с QR — используйте приложение ФНС"
+    ],
+    "errors": [],
+    "elapsed_sec": 52.92
+  },
+  {
+    "photo": "photo_2026-02-19_06-09-45.jpg",
+    "status": "recognized",
+    "doc_type": "other",
+    "has_qr": false,
+    "doc_number": null,
+    "date": null,
+    "supplier": {
+      "name": "Центральный рынок",
+      "inn": null
+    },
+    "buyer": {
+      "name": "ИП Мерзликов ЕА",
+      "inn": null
+    },
+    "items": [
+      {
+        "name": "лист салата",
+        "unit": "гр",
+        "qty": 1672.0,
+        "price": null,
+        "sum": 1330.0,
+        "vat_rate": null
+      }
+    ],
+    "total_amount": 1330.0,
+    "page_number": 1,
+    "total_pages": 1,
+    "group_key": "null_null_null",
+    "confidence_score": 70,
+    "warnings": [],
+    "errors": [],
+    "elapsed_sec": 60.14
+  }
+]

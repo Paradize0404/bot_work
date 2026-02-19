@@ -1,0 +1,271 @@
+"""
+GPT-5.2 Vision OCR — прямое распознавание документов через GPT-5.2 Vision.
+
+Использует OpenAI GPT-5.2 Vision API для распознавания российских
+бухгалтерских документов (УПД, чеки, акты, ордера) напрямую из изображений.
+"""
+
+import json
+import re
+import base64
+from typing import Dict, Any
+import httpx
+from openai import AsyncOpenAI
+from config import OPENAI_API_KEY
+
+
+# Модель GPT-5.2
+OCR_MODEL = "gpt-5.2-chat-latest"
+
+
+# Системный промпт для распознавания документов
+SYSTEM_PROMPT = """
+Ты — эксперт по российским бухгалтерским документам.
+
+ЗАДАЧА:
+Распознай этот документ и извлеки ВСЕ данные в структурированном JSON.
+
+ТИПЫ ДОКУМЕНТОВ:
+- upd — Универсальный передаточный документ (УПД, счёт-фактура)
+- receipt — Кассовый чек (фискальный, с QR-кодом)
+- act — Акт выполненных работ/услуг
+- cash_order — Расходный кассовый ордер (форма КО-2)
+- other — Другой документ
+
+ВАЖНО ПРО QR-КОД:
+- Осмотри изображение внимательно
+- QR-код обычно находится в нижней части чека (квадратный штрих-код)
+- Все кассовые чеки в России имеют QR-код (требование 54-ФЗ)
+- УПД, акты, ордера обычно НЕ имеют QR-кода (но могут иметь QR для верификации)
+
+ВАЖНО ПРО МНОГОСТРАНИЧНОСТЬ:
+- Ищи признаки многостраничного документа:
+  
+  **Явные признаки:**
+  - "Лист X" или "Лист X из Y" вверху справа
+  - "Документ составлен на Y листах" слева внизу
+  - "Страница X из Y"
+  
+  **Косвенные признаки (Страница 2+):**
+  - Вверху только номер документа (нет продавца/покупателя)
+  - Таблица с товарами без полной шапки
+  - Подписи и печати внизу
+  
+  **Признаки Страницы 1:**
+  - Полная шапка с продавцом и покупателем
+  - Нет "Лист 2" или "Лист 3" вверху
+  - Дата и номер документа в начале
+  
+- Если найден "Документ составлен на Y листах" → total_pages = Y
+- Если найден "Лист X" → page_number = X
+- Если нет явных признаков → page_number = 1, total_pages = 1
+- is_multistage = true если total_pages > 1
+
+**ВАЖНО:**
+- Если видишь "Документ составлен на Y листах" но не видишь "Лист X" → это Страница 1
+  - page_number = 1, total_pages = Y, is_multistage = true
+- Если видишь "Лист X" но не видишь "Документ составлен на Y листах" → 
+  - page_number = X, total_pages = X (предполагаем что это последняя)
+
+**КЛЮЧ ДЛЯ ГРУППИРОВКИ:**
+- Для многостраничных документов создай group_key:
+  - group_key = "{supplier_inn}_{doc_number}_{date}"
+  - Пример: "422373281150_УТ-41076_2025-11-28"
+- Этот ключ одинаковый для всех страниц одного документа
+
+ИЗВЛЕКИ ПОЛЯ:
+
+1. Для ВСЕХ документов:
+   - doc_type: тип документа (upd/receipt/act/cash_order/other)
+   - has_qr: true/false (есть ли QR-код на изображении)
+   - doc_number: номер документа
+   - date: дата в формате YYYY-MM-DD
+   - supplier: { name, inn } — ТОЛЬКО имя и ИНН (без адреса)
+   - buyer: { name, inn } — ТОЛЬКО имя и ИНН (без адреса, null если нет)
+   - total_amount: итоговая сумма (числом)
+   - page_number: номер текущей страницы (1, 2, 3...)
+   - total_pages: общее количество страниц (1 если одностраничный)
+   - is_multistage: true если total_pages > 1
+
+2. Для документов с товарами (upd, receipt, act):
+   - items: массив [{
+       name: наименование (ТОЧНО как в документе),
+       unit: ед.изм. (кг, шт, л),
+       qty: количество (числом),
+       price: цена за единицу БЕЗ НДС (числом) — столбец "Цена" или "Цена без НДС",
+       sum: СТОИМОСТЬ С УЧЁТОМ НДС (числом) — ПОСЛЕДНИЙ числовой столбец таблицы
+            ("Стоимость товаров с налогом" / "Итоговая стоимость с НДС").
+            НЕ путать с "Стоимостью без НДС"! Берётся именно финальная сумма по строке.
+       vat_rate: ставка НДС ("10%", "20%", "5%", "без НДС", null)
+     }]
+
+3. Для кассового чека (receipt):
+   - fiscal_sign: фискальный признак (ФПД)
+   - kkt_number: номер ККТ
+   - shift_number: номер смены
+
+4. Для расходного кассового ордера (cash_order):
+   - recipient: кому выдать (поле "Выдать" — рукописное ФИО или имя)
+   - purpose: основание/назначение (поле "Основание" или "Назначение" — рукописный текст)
+   Рукописный текст читай максимально точно, даже если кажется неразборчивым.
+
+ВАЖНО:
+- Цифры пиши ЧИСЛАМИ (не строками): 1234.56 а не "1 234.56"
+- Разделитель дробной части: ТОЧКА (не запятая)
+- Даты: ТОЛЬКО YYYY-MM-DD
+- Названия товаров: ТОЧНО как в документе (не сокращай)
+- Если поле не читается: null (не выдумывай)
+- Рукописный текст: распознавай максимально точно
+- supplier и buyer: ТОЛЬКО name и inn (адрес не нужен)
+- buyer может отсутствовать (например, в чеках) — тогда null
+- page_number и total_pages: определяй по тексту "Лист X из Y" или "Составлен на Y листах"
+
+ПРОВЕРКА:
+- qty × price ≈ стоимость БЕЗ НДС (не поле sum!)
+- sum = стоимость С НДС (последний столбец) = qty × price × (1 + ставка НДС)
+- Сумма всех items[sum] должна равняться total_amount (допуск ±5)
+
+ФОРМАТ ОТВЕТА:
+ТОЛЬКО JSON (без markdown, без обратных кавычек):
+{
+  "doc_type": "...",
+  "has_qr": true/false,
+  "doc_number": "...",
+  "date": "YYYY-MM-DD",
+  "supplier": {"name": "...", "inn": "..."},
+  "buyer": {"name": "...", "inn": "..."} или null,
+  "recipient": null,
+  "purpose": null,
+  "items": [...],
+  "total_amount": 0.00,
+  "page_number": 1,
+  "total_pages": 1,
+  "is_multistage": false,
+  "group_key": "supplier_inn_doc-number_date",
+  "quality_check": {
+    "confidence_score": 85,
+    "warnings": ["рукописный текст", "печать закрывает текст"],
+    "missing_pages_warning": false
+  }
+}
+"""
+
+
+async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
+    """
+    Распознать документ через GPT-5.2 Vision.
+    
+    Args:
+        image_bytes: Изображение в формате JPEG/PNG
+    
+    Returns:
+        Словарь с распознанными данными
+    """
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    
+    # Кодируем изображение в base64
+    base64_image = base64.b64encode(image_bytes).decode('utf-8')
+    
+    # Вызываем GPT-5.2 Vision
+    response = await client.chat.completions.create(
+        model=OCR_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Распознай этот документ и извлеки все данные в JSON формате."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                            "detail": "auto"
+                        }
+                    }
+                ]
+            }
+        ],
+        max_completion_tokens=4096  # GPT-5.2 использует этот параметр
+        # temperature не поддерживается (только 1 по умолчанию)
+    )
+    
+    # Парсим ответ
+    content = response.choices[0].message.content.strip()
+    
+    # Извлекаем JSON (если есть markdown-обёртка)
+    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+    if json_match:
+        content = json_match.group()
+    
+    result = json.loads(content)
+    
+    # Добавляем метаинформацию
+    result['_raw_response'] = content
+    result['_model'] = OCR_MODEL
+    result['_usage'] = {
+        'prompt_tokens': response.usage.prompt_tokens,
+        'completion_tokens': response.usage.completion_tokens,
+        'total_tokens': response.usage.total_tokens,
+    }
+    
+    return result
+
+
+async def classify_document(image_bytes: bytes) -> str:
+    """
+    Классифицировать тип документа.
+    
+    Args:
+        image_bytes: Изображение в формате JPEG/PNG
+    
+    Returns:
+        Тип документа: 'upd', 'receipt', 'act', 'cash_order', 'other'
+    """
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    base64_image = base64.b64encode(image_bytes).decode('utf-8')
+    
+    prompt = """
+Классифицируй тип российского бухгалтерского документа.
+
+Варианты:
+- upd — Универсальный передаточный документ (таблица с товарами, подписи, печати)
+- receipt — Кассовый чек (длинная узкая лента, фискальные данные, QR-код)
+- act — Акт выполненных работ/услуг (таблица с услугами, подписи)
+- cash_order — Кассовый ордер (форма КО-2, рукописные данные)
+- other — Другой документ
+
+Верни ТОЛЬКО одно слово (upd/receipt/act/cash_order/other).
+"""
+    
+    response = await client.chat.completions.create(
+        model=OCR_MODEL,
+        messages=[
+            {"role": "system", "content": "Ты эксперт по российским документам."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                            "detail": "low"
+                        }
+                    }
+                ]
+            }
+        ],
+        max_completion_tokens=10
+    )
+    
+    doc_type = response.choices[0].message.content.strip().lower()
+    
+    # Валидация
+    valid_types = ['upd', 'receipt', 'act', 'cash_order', 'other']
+    if doc_type not in valid_types:
+        doc_type = 'other'
+    
+    return doc_type

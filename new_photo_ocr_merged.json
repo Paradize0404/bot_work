@@ -1,0 +1,206 @@
+[
+  {
+    "group_key": "390521270428_227_2026-02-13",
+    "status": "incomplete",
+    "doc_type": "upd",
+    "doc_number": "227",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Рахимкулов Данияр Кыдырович",
+      "inn": "390521270428"
+    },
+    "buyer": {
+      "name": "ИП Мерзляков Егор Андреевич",
+      "inn": "390511847466"
+    },
+    "items": [
+      {
+        "name": "Шампиньоны вес кг",
+        "unit": "кг",
+        "qty": 3.0,
+        "price": 414.29,
+        "sum": 1242.86,
+        "vat_rate": "5%"
+      }
+    ],
+    "total_amount": 1242.86,
+    "page_count": 1,
+    "total_pages": 2,
+    "is_complete": false,
+    "is_merged": false,
+    "source_photos": [
+      "photo_2026-02-19_06-09-29.jpg"
+    ],
+    "warnings": [
+      "Документ неполный: загружено 1 из 2 стр. Не хватает 1 стр."
+    ],
+    "errors": [],
+    "confidence_score": 87
+  },
+  {
+    "group_key": "39052170428_227_2026-02-13",
+    "status": "success",
+    "doc_type": "upd",
+    "doc_number": "227",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Рзаева Джейран Тахир Кызы",
+      "inn": "39052170428"
+    },
+    "buyer": {
+      "name": "ИП Мерзляков Егор Андреевич",
+      "inn": "390511847466"
+    },
+    "items": [
+      {
+        "name": "Салат Романо вес кг",
+        "unit": "кг",
+        "qty": 4.0,
+        "price": 285.72,
+        "sum": 1142.86,
+        "vat_rate": "5%"
+      },
+      {
+        "name": "Помидор черри вес кг",
+        "unit": "кг",
+        "qty": 1.54,
+        "price": 475.24,
+        "sum": 731.87,
+        "vat_rate": "5%"
+      },
+      {
+        "name": "Морковь вес кг",
+        "unit": "кг",
+        "qty": 2.24,
+        "price": 56.19,
+        "sum": 125.87,
+        "vat_rate": "5%"
+      },
+      {
+        "name": "Петрушка вес кг",
+        "unit": "кг",
+        "qty": 0.54,
+        "price": 333.33,
+        "sum": 180.0,
+        "vat_rate": "5%"
+      }
+    ],
+    "total_amount": 2180.6,
+    "page_count": 1,
+    "total_pages": 1,
+    "is_complete": true,
+    "is_merged": false,
+    "source_photos": [
+      "photo_2026-02-19_06-09-31.jpg"
+    ],
+    "warnings": [],
+    "errors": [],
+    "confidence_score": 95
+  },
+  {
+    "group_key": "3900033727_38_2026-02-13",
+    "status": "success",
+    "doc_type": "upd",
+    "doc_number": "38",
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ООО \"ПИЦЦАРЕЛЛА ТРЕЙД\"",
+      "inn": "3900033727"
+    },
+    "buyer": {
+      "name": "ИП Мерзляков Егор Андреевич",
+      "inn": "390511847466"
+    },
+    "items": [
+      {
+        "name": "Сыр полутвердый \"Моцарелла Павлина\" с м.д.ж. в сухом веществе от 36 до 50%",
+        "unit": "кг",
+        "qty": 37.4,
+        "price": 500.0,
+        "sum": 18700.0,
+        "vat_rate": "10%"
+      }
+    ],
+    "total_amount": 18700.0,
+    "page_count": 1,
+    "total_pages": 1,
+    "is_complete": true,
+    "is_merged": false,
+    "source_photos": [
+      "photo_2026-02-19_06-09-33.jpg"
+    ],
+    "warnings": [],
+    "errors": [],
+    "confidence_score": 94
+  },
+  {
+    "group_key": "null_null_2026-02-13",
+    "status": "needs_review",
+    "doc_type": "cash_order",
+    "doc_number": null,
+    "date": "2026-02-13",
+    "supplier": {
+      "name": "ИП Мерзляков ЕН",
+      "inn": null
+    },
+    "buyer": null,
+    "items": [],
+    "total_amount": 0,
+    "page_count": 3,
+    "total_pages": 1,
+    "is_complete": true,
+    "is_merged": true,
+    "source_photos": [
+      "photo_2026-02-19_06-09-39.jpg",
+      "photo_2026-02-19_06-09-40.jpg",
+      "photo_2026-02-19_06-09-41.jpg"
+    ],
+    "warnings": [],
+    "errors": [
+      "Не найден ИНН поставщика.",
+      "Не найден номер документа.",
+      "Не найдены товарные позиции."
+    ],
+    "confidence_score": 85
+  },
+  {
+    "group_key": "null_null_null",
+    "status": "needs_review",
+    "doc_type": "other",
+    "doc_number": null,
+    "date": null,
+    "supplier": {
+      "name": "Центральный рынок",
+      "inn": null
+    },
+    "buyer": {
+      "name": "ИП Мерзликов ЕА",
+      "inn": null
+    },
+    "items": [
+      {
+        "name": "лист салата",
+        "unit": "гр",
+        "qty": 1672.0,
+        "price": null,
+        "sum": 1330.0,
+        "vat_rate": null
+      }
+    ],
+    "total_amount": 1330.0,
+    "page_count": 1,
+    "total_pages": 1,
+    "is_complete": true,
+    "is_merged": false,
+    "source_photos": [
+      "photo_2026-02-19_06-09-45.jpg"
+    ],
+    "warnings": [],
+    "errors": [
+      "Не найден ИНН поставщика.",
+      "Не найден номер документа.",
+      "Не найдена дата документа."
+    ],
+    "confidence_score": 70
+  }
+]
