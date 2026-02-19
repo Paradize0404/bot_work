@@ -110,17 +110,20 @@ async def process_photo_batch(
     )
     
     results: List[OCRResult] = []
-    
-    # Шаг 1: Проверка качества и распознавание каждого фото
-    recognized = []
-    for i, photo in enumerate(photos):
-        logger.info(f"[OCR Pipeline] Processing photo {i+1}/{len(photos)}")
-        
+
+    # ── Шаг 1: Параллельная проверка качества + OCR всех фото ──
+    # Каждый вызов GPT Vision независим → запускаем все одновременно.
+
+    async def _process_one(idx: int, photo: bytes):
+        """Проверить качество + распознать одно фото. Возвращает (idx, outcome).
+        outcome — либо dict с recognized-данными, либо OCRResult с ошибкой/отклонением."""
+        logger.info("[OCR Pipeline] Processing photo %d/%d", idx + 1, len(photos))
+
         # 1.1 Проверка качества
         quality = await validate_photo(photo)
         if not quality.is_good:
-            logger.warning(f"[OCR Pipeline] Photo {i+1} failed quality check: {quality.issues}")
-            results.append(OCRResult(
+            logger.warning("[OCR Pipeline] Photo %d failed quality check: %s", idx + 1, quality.issues)
+            return idx, OCRResult(
                 status="error",
                 doc_type="unknown",
                 doc_number=None,
@@ -131,11 +134,10 @@ async def process_photo_batch(
                 total_amount=None,
                 page_count=0,
                 total_pages=0,
-                errors=[f"Плохое качество фото: {', '.join(quality.issues)}"]
-            ))
-            continue
-        
-        # 1.2 Распознавание через GPT-5.2
+                errors=[f"Плохое качество фото: {', '.join(quality.issues)}"],
+            )
+
+        # 1.2 Распознавание через GPT Vision
         try:
             result = await recognize_document(photo)
             result = _normalize_invoice_result(result)
@@ -143,10 +145,9 @@ async def process_photo_batch(
             if invoices_only and result.get("doc_type") not in ALLOWED_INVOICE_TYPES:
                 logger.info(
                     "[OCR Pipeline] Photo %d rejected: doc_type=%s is not invoice",
-                    i + 1,
-                    result.get("doc_type"),
+                    idx + 1, result.get("doc_type"),
                 )
-                results.append(OCRResult(
+                return idx, OCRResult(
                     status=STATUS_REJECTED_NON_INVOICE,
                     doc_type=result.get("doc_type", "unknown"),
                     doc_number=result.get("doc_number"),
@@ -158,18 +159,14 @@ async def process_photo_batch(
                     page_count=1,
                     total_pages=1,
                     warnings=["Документ не является накладной/УПД и не будет загружен в систему."],
-                ))
-                continue
+                )
 
-            recognized.append({
-                "photo_index": i,
-                "result": result,
-                "image_bytes": photo
-            })
-            logger.info(f"[OCR Pipeline] Photo {i+1} recognized: {result.get('doc_type')}")
+            logger.info("[OCR Pipeline] Photo %d recognized: %s", idx + 1, result.get("doc_type"))
+            return idx, {"photo_index": idx, "result": result, "image_bytes": photo}
+
         except Exception as e:
-            logger.error(f"[OCR Pipeline] Photo {i+1} recognition failed: {e}")
-            results.append(OCRResult(
+            logger.error("[OCR Pipeline] Photo %d recognition failed: %s", idx + 1, e)
+            return idx, OCRResult(
                 status="error",
                 doc_type="unknown",
                 doc_number=None,
@@ -180,8 +177,19 @@ async def process_photo_batch(
                 total_amount=None,
                 page_count=0,
                 total_pages=0,
-                errors=[f"Ошибка распознавания: {str(e)}"]
-            ))
+                errors=[f"Ошибка распознавания: {str(e)}"],
+            )
+
+    # Запускаем все фото параллельно
+    outcomes = await asyncio.gather(*[_process_one(i, p) for i, p in enumerate(photos)])
+
+    # Разбираем результаты, сохраняя порядок
+    recognized = []
+    for _idx, outcome in sorted(outcomes, key=lambda x: x[0]):
+        if isinstance(outcome, OCRResult):
+            results.append(outcome)
+        else:
+            recognized.append(outcome)
     
     # Шаг 2: Проверка QR-кодов (чеки с QR → отклонять)
     logger.info("[OCR Pipeline] Checking QR codes")
