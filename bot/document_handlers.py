@@ -454,9 +454,15 @@ async def cb_mapping_done(callback: CallbackQuery) -> None:
     tg_id = callback.from_user.id
     logger.info("[ocr] Маппинг готов (inline) tg:%d", tg_id)
 
-    await callback.answer()  # убрать «часики» на кнопке
+    # Telegram требует ответить на callback в течение 30 сек.
+    # Если апдейт пролежал в очереди дольше (напр. за OCR-задачей) —
+    # отвечаем молча, не роняя хендлер.
+    try:
+        await callback.answer()
+    except Exception:
+        logger.debug("[ocr] callback.answer() опоздал (query too old) tg:%d", tg_id)
 
-    # Редактируем само уведомление-сообщение, убирая кнопку
+    # Убираем инлайн-кнопку с сообщения-уведомления
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
