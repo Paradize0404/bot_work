@@ -548,12 +548,14 @@ async def calculate_dish_cost_prices(
     """
     Себестоимость DISH (блюд) по технологическим картам.
 
-    Запрашивает getAll с includePreparedCharts=true.
-    Считает рекурсивно:
-      1. Сначала себестоимость всех PREPARED (полуфабрикатов)
-      2. Затем себестоимость DISH, используя рассчитанную cost для PREPARED
+    API возвращает два массива с разными структурами ингредиентов:
+      assemblyCharts  — DISH-рецепты,    поле количества = "amountOut"
+      preparedCharts  — PREPARED (п/ф),  поле количества = "amount"
 
-    Возвращает {product_id: cost_price}.
+    Алгоритм:
+      1. Строим общую карту техкарт из обоих массивов
+      2. Итеративно считаем себестоимость (сначала PREPARED, потом DISH)
+      3. Возвращаем только DISH {product_id: cost_price}
     """
     from adapters import iiko_api
     from use_cases._helpers import now_kgd
@@ -566,84 +568,99 @@ async def calculate_dish_cost_prices(
     logger.info("[invoice] Расчёт себестоимости DISH по техкартам (дата=%s)...", today)
 
     chart_data = await iiko_api.fetch_assembly_charts(today, today, include_prepared=True)
-    all_charts = chart_data.get("assemblyCharts") or []
-    
-    # Создаём карту техкарт: {assembledProductId: chart}
-    chart_map = {c.get("assembledProductId"): c for c in all_charts if c.get("assembledProductId")}
-    
-    # Получаем типы продуктов из БД для определения PREPARED vs DISH
+    assembly_charts = chart_data.get("assemblyCharts") or []   # DISH,     amount = amountOut
+    prepared_charts = chart_data.get("preparedCharts") or []   # PREPARED, amount = amount
+
+    # Общая карта: {assembledProductId: (chart, amount_field)}
+    # Для каждого продукта берём самую свежую действующую версию (dateFrom ≤ today, dateTo is null или ≥ today)
+    def _pick_effective(charts: list[dict], amount_field: str) -> dict[str, tuple[dict, str]]:
+        best: dict[str, tuple[str, dict]] = {}  # pid → (dateFrom_str, chart)
+        for c in charts:
+            pid = c.get("assembledProductId")
+            if not pid:
+                continue
+            date_from = (c.get("dateFrom") or "")[:10]
+            date_to   = (c.get("dateTo")   or "")[:10]
+            # датаTo = null значит бессрочно; если указана — должна быть ≥ today
+            if date_to and date_to < today:
+                continue
+            # Берём самую позднюю dateFrom ≤ today
+            if date_from > today:
+                continue
+            if pid not in best or date_from > best[pid][0]:
+                best[pid] = (date_from, c)
+        return {pid: (entry[1], amount_field) for pid, entry in best.items()}
+
+    chart_map: dict[str, tuple[dict, str]] = {}
+    chart_map.update(_pick_effective(prepared_charts, "amount"))
+    chart_map.update(_pick_effective(assembly_charts, "amountOut"))
+
+    # Получаем типы продуктов из БД
     product_types: dict[str, str] = {}
     async with get_session() as sess:
-        stmt = select(Product.id, Product.product_type)
-        result = await sess.execute(stmt)
+        result = await sess.execute(select(Product.id, Product.product_type))
         for row in result.all():
             product_types[str(row.id)] = row.product_type
 
-    # Объединяем goods_costs с рассчитанными cost для PREPARED
-    # Итеративно считаем PREPARED до тех пор, пока есть изменения
+    # Итеративный расчёт: начинаем с goods_costs, добавляем PREPARED, потом DISH
     all_costs: dict[str, float] = dict(goods_costs)
-    
-    max_iterations = 10  # Защита от циклических зависимостей
+
+    max_iterations = 10  # защита от циклических зависимостей
     for iteration in range(max_iterations):
         changes = False
-        
-        for chart in all_charts:
-            dish_id = chart.get("assembledProductId")
-            if not dish_id:
-                continue
-            
-            # Пропускаем, если уже рассчитано
+
+        for dish_id, (chart, amount_field) in chart_map.items():
             if dish_id in all_costs:
-                continue
-            
+                continue  # уже рассчитано
+
             items = chart.get("items") or []
             if not items:
                 continue
-            
+
             total_cost = 0.0
             all_ingredients_ready = True
-            
+
             for item in items:
                 ingredient_id = item.get("productId")
-                amount = float(item.get("amountOut", 0))
-                
-                # Проверяем, есть ли цена ингредиента
+                if not ingredient_id:
+                    continue
+                try:
+                    amount = float(item.get(amount_field, 0))
+                except (TypeError, ValueError):
+                    amount = 0.0
+
                 ingr_cost = all_costs.get(ingredient_id)
-                
                 if ingr_cost is None:
-                    # Проверяем, есть ли у ингредиента своя техкарта
                     if ingredient_id in chart_map:
-                        # У ингредиента есть техкарта, но она ещё не рассчитана
+                        # ингредиент — п/ф, ещё не рассчитан → ждём следующей итерации
                         all_ingredients_ready = False
                         break
-                    else:
-                        # Нет техкарты и нет цены — пропускаем
-                        continue
-                
+                    # нет ни цены, ни техкарты — пропускаем ингредиент
+                    continue
+
                 total_cost += amount * ingr_cost
-            
-            # Если все ингредиенты готовы и стоимость > 0 — записываем
+
             if all_ingredients_ready and total_cost > 0:
                 all_costs[dish_id] = round(total_cost, 2)
                 changes = True
-        
-        # Если за итерацию ничего не изменилось — выходим
+
         if not changes:
             break
-    
-    # Извлекаем только DISH (не PREPARED)
-    dish_costs: dict[str, float] = {}
-    for pid, cost in all_costs.items():
-        if product_types.get(pid) == "DISH":
-            dish_costs[pid] = cost
-    
-    # Статистика
+
+    # Возвращаем только DISH (PREPARED остаётся в all_costs для расчёта, в таблицу не идёт)
+    dish_costs: dict[str, float] = {
+        pid: cost
+        for pid, cost in all_costs.items()
+        if product_types.get(pid) == "DISH"
+    }
+
     logger.info(
-        "[invoice] DISH: %d блюд с себестоимостью (из %d техкарт, итераций=%d)",
-        len(dish_costs), len(all_charts), iteration + 1,
+        "[invoice] DISH: %d блюд с себестоимостью (%d assembly + %d prepared техкарт, итераций=%d)",
+        len(dish_costs), len(assembly_charts), len(prepared_charts), iteration + 1,
     )
-    
+
     return dish_costs
+
 
 
 async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
