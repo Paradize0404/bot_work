@@ -139,7 +139,7 @@ async def write_transfer(
             unmapped_suppliers,
             unmapped_products,
             [s["name"] for s in iiko_suppliers],
-            [p["name"] for p in iiko_products],
+            [p["display_name"] for p in iiko_products],  # без «т_»/«п/ф» для видимости в поиске
         )
         logger.info(
             "[ocr_mapping] Записано в трансфер: %d поставщиков, %d товаров",
@@ -213,6 +213,19 @@ async def finalize_transfer() -> tuple[int, list[str]]:
     # Нормализуем ключи: strip() + lower() — не даём пробелам в БД ломать поиск
     sup_by_name = {s["name"].strip().lower(): s for s in iiko_suppliers}
     prd_by_name = {p["name"].strip().lower(): p for p in iiko_products}
+
+    # Добавляем алиасы по display_name (без «т_», «п/ф» и т.д.).
+    # Нужно, потому что в дропдауне теперь хранятся display_name,
+    # и при финализации iiko_name из таблицы — это уже stripped-имя.
+    _aliases: dict = {}
+    for real_key, product in prd_by_name.items():
+        for prefix in ("т_", "п/ф ", "п/ф_", "п/ф"):
+            if real_key.startswith(prefix):
+                alias = real_key[len(prefix):]
+                if alias not in prd_by_name:
+                    _aliases[alias] = product
+                break
+    prd_by_name = {**prd_by_name, **_aliases}
 
     enriched: list[dict[str, str]] = []
     errors: list[str] = []
@@ -354,7 +367,9 @@ async def refresh_ref_sheet() -> int:
     if not iiko_products:
         logger.warning("[ocr_mapping] refresh_ref_sheet: список товаров пуст")
         return 0
-    names = [p["name"] for p in iiko_products]
+    # В справочный лист пишем display_name (без т_/п/ф), чтобы поиск Google Sheets
+    # находил «бутылка» при вводе «бут» даже для «т_бутылка ...»
+    names = [p["display_name"] for p in iiko_products]
 
     def _do_write():
         from adapters.google_sheets import refresh_import_sheet_dropdown
@@ -372,6 +387,19 @@ async def refresh_ref_sheet() -> int:
 # ═══════════════════════════════════════════════════════
 #  Загрузка iiko-справочников из БД
 # ═══════════════════════════════════════════════════════
+
+# Технические префиксы, которые скрываем в дропдауне для удобного поиска
+_TECH_PREFIXES = ("т_", "п/ф ", "п/ф_", "п/ф")
+
+
+def _strip_tech_prefix(name: str) -> str:
+    """Убирает технический префикс (т_, п/ф и т.д.) из имени — для отображения в дропдауне."""
+    lo = name.lower()
+    for p in _TECH_PREFIXES:
+        if lo.startswith(p):
+            return name[len(p):]
+    return name
+
 
 async def _load_iiko_suppliers() -> list[dict[str, str]]:
     """Загрузить список поставщиков из iiko_supplier."""
@@ -395,19 +423,15 @@ async def _load_iiko_goods_products() -> list[dict[str, str]]:
     """
     Загрузить только товары типа GOODS (без блюд, п/ф и прочего).
     Используется для выпадающего списка в «Маппинг Импорт».
-    Сортировка — по имени без учёта технических префиксов (т_, п/ф и т.д.),
-    чтобы «т_бутылка» стояла рядом с «Бутылка» в дропдауне.
+
+    Каждый элемент содержит:
+      name         — реальное имя в iiko (с префиксом, используется при поиске ID)
+      display_name — имя без технического префикса (т_, п/ф и т.д.) — пишется в дропдаун,
+                     чтобы поиск по «бут» находил «т_бутылка 2л ПЭТ с крышкой».
+    Сортировка по display_name (регистр игнорируется).
     """
     from db.engine import async_session_factory
     from db.models import Product
-
-    def _sort_key(name: str) -> str:
-        """Убираем технические префиксы для сортировки, приводим к нижнему регистру."""
-        n = name.lower()
-        for prefix in ("т_", "п/ф ", "п/ф_", "п/ф"):
-            if n.startswith(prefix):
-                n = n[len(prefix):]
-        return n
 
     try:
         async with async_session_factory() as session:
@@ -416,9 +440,16 @@ async def _load_iiko_goods_products() -> list[dict[str, str]]:
                 .where(Product.product_type == "GOODS")
                 .where(Product.deleted.is_(False))
             )
-            rows = [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
-        # Сортируем в Python по нормализованному имени
-        rows.sort(key=lambda x: _sort_key(x["name"]))
+            rows = [
+                {
+                    "id":           str(r.id),
+                    "name":         r.name or "",
+                    "display_name": _strip_tech_prefix(r.name or ""),
+                }
+                for r in result if r.name
+            ]
+        # Сортируем по отображаемому имени без учёта регистра
+        rows.sort(key=lambda x: x["display_name"].lower())
         return rows
     except Exception:
         logger.exception("[ocr_mapping] Ошибка загрузки товаров GOODS")
