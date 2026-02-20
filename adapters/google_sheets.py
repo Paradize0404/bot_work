@@ -2397,10 +2397,10 @@ def write_mapping_import_sheet(
         _set_dropdown(spreadsheet, ws, sup_start_row, end_row + 1, 3, iiko_supplier_names)
 
     # ── Dropdown для товаров: записываем все в справочный лист + ONE_OF_RANGE (без лимита 500) ──
-    if unmapped_products and iiko_product_names:
-        end_row = prd_start_row + len(unmapped_products) - 1
+    if iiko_product_names:
         ref_sheet_id, _, ref_count = _write_ref_column(spreadsheet, col_index=0, values=iiko_product_names)
-        _set_range_dropdown(spreadsheet, ws, prd_start_row, end_row + 1, 3, ref_sheet_id, 0, ref_count)
+        # Применяем до 1000 строк — чтобы дропдаун работал в любой строке секции товаров
+        _set_range_dropdown(spreadsheet, ws, prd_start_row, prd_start_row + 1000, 3, ref_sheet_id, 0, ref_count)
 
     # ── Dropdown типа склада (кол. D) — только для товаров ──
     if unmapped_products:
@@ -2411,6 +2411,34 @@ def write_mapping_import_sheet(
         "[%s] «%s» обновлён: %d поставщиков, %d товаров",
         LABEL, _MAPPING_IMPORT_TAB, len(unmapped_suppliers), len(unmapped_products),
     )
+
+
+def refresh_import_sheet_dropdown(iiko_product_names: list[str]) -> int:
+    """
+    Обновить справочный лист + перезаписать валидацию столбца C в «Маппинг Импорт».
+    Возвращает кол-во товаров в справочнике.
+    """
+    from config import MIN_STOCK_SHEET_ID
+    client = _get_client()
+    spreadsheet = client.open_by_key(MIN_STOCK_SHEET_ID)
+    ws = _get_mapping_worksheet(_MAPPING_IMPORT_TAB)
+
+    # Записываем справочник
+    ref_sheet_id, _, ref_count = _write_ref_column(spreadsheet, col_index=0, values=iiko_product_names)
+
+    # Находим первую строку с 'товар' в столбце A
+    all_a = ws.col_values(1)
+    prd_start_row = 2
+    for idx, cell in enumerate(all_a, start=1):
+        if str(cell).strip().lower() == "товар":
+            prd_start_row = idx
+            break
+
+    # Применяем валидацию на весь диапазон товаров
+    _set_range_dropdown(spreadsheet, ws, prd_start_row, prd_start_row + 1000, 3, ref_sheet_id, 0, ref_count)
+    logger.info("[%s] Дропдаун товаров обновлён: %d позиций, строки %d–%d",
+                LABEL, ref_count, prd_start_row, prd_start_row + 1000)
+    return ref_count
 
 
 def read_mapping_import_sheet() -> list[dict[str, str]]:

@@ -350,8 +350,6 @@ async def refresh_ref_sheet() -> int:
     Перезаписать столбец товаров в «Маппинг Справочник» актуальными GOODS-позициями.
     Возвращает кол-во записанных строк.
     """
-    from adapters.google_sheets import _get_client, _write_ref_column
-    from config import MIN_STOCK_SHEET_ID
     iiko_products = await _load_iiko_goods_products()
     if not iiko_products:
         logger.warning("[ocr_mapping] refresh_ref_sheet: список товаров пуст")
@@ -359,9 +357,8 @@ async def refresh_ref_sheet() -> int:
     names = [p["name"] for p in iiko_products]
 
     def _do_write():
-        spreadsheet = _get_client().open_by_key(MIN_STOCK_SHEET_ID)
-        _write_ref_column(spreadsheet, 0, names)
-        return len(names)
+        from adapters.google_sheets import refresh_import_sheet_dropdown
+        return refresh_import_sheet_dropdown(names)
 
     try:
         count = await _run_sync(_do_write)
