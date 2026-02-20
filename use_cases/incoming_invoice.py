@@ -58,9 +58,8 @@ async def get_pending_ocr_documents(
 
     async with async_session_factory() as session:
         if doc_ids:
-            # Конкретная сессия: только эти IDs
+            # Конкретная сессия: только эти IDs — статус не фильтруем (docs могут быть pending_mapping)
             conditions = [
-                OcrDocument.status == target_status,
                 OcrDocument.doc_type.in_(["upd", "act", "other"]),
                 OcrDocument.id.in_(doc_ids),
             ]

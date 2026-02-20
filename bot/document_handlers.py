@@ -370,11 +370,11 @@ async def _save_ocr_document(tg_id: int, result_data: dict, file_ids: list[str] 
             _doc_number = result_data.get("doc_number")
             _doc_type   = result_data.get("doc_type") or "unknown"
             if _doc_number:
-                from sqlalchemy import delete as _sa_delete, and_ as _sa_and
+                from sqlalchemy import select as _sa_select, delete as _sa_delete, and_ as _sa_and
                 from models.ocr import OcrItem as _OcrItem
                 dup_ids = (
                     await session.execute(
-                        select(OcrDocument.id)
+                        _sa_select(OcrDocument.id)
                         .where(_sa_and(
                             OcrDocument.doc_number == _doc_number,
                             OcrDocument.doc_type   == _doc_type,
@@ -733,10 +733,18 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
         ctx     = await uctx.get_user_context(tg_id)
         dept_id = str(ctx.department_id) if ctx and ctx.department_id else None
 
-        # Загружаем документы, ожидающие маппинг (персистентный статус в БД)
+        # Загружаем только документы текущей сессии этого пользователя
+        current_doc_ids = _pending_doc_ids.pop(tg_id, None) or []
         _transfer_batch_doc_ids.clear()
-        _pending_doc_ids.pop(tg_id, None)
-        docs = await inv_uc.get_pending_ocr_documents(status="pending_mapping")
+        if not current_doc_ids:
+            await _repush(
+                placeholder,
+                f"✅ Маппинг сохранён: <b>{saved_count}</b> записей\n\n"
+                "ℹ️ Нет накладных ожидающих загрузки в iiko.",
+                parse_mode="HTML",
+            )
+            return
+        docs = await inv_uc.get_pending_ocr_documents(doc_ids=current_doc_ids)
 
         if not docs:
             await _repush(
