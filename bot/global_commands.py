@@ -4,6 +4,8 @@
 /cancel — сброс ЛЮБОГО FSM-состояния из любой точки.
 NavResetMiddleware — outer-middleware, сбрасывает FSM при нажатии
 навигационной Reply-кнопки, пока пользователь в каком-либо состоянии.
+PermissionMiddleware — outer-middleware, автоматическая проверка прав
+на Reply-кнопки и Callback-кнопки по централизованной карте (permission_map.py).
 
 Этот роутер должен быть подключён к Dispatcher ДО всех остальных,
 чтобы команда /cancel перехватывалась раньше остальных хэндлеров.
@@ -15,7 +17,13 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, TelegramObject
+from aiogram.types import CallbackQuery, Message, TelegramObject
+
+from bot.permission_map import (
+    TEXT_PERMISSIONS,
+    CALLBACK_PERMISSIONS,
+    CALLBACK_ADMIN_ONLY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +129,77 @@ class NavResetMiddleware(BaseMiddleware):
                     event.from_user.id,
                 )
                 await _cleanup_state_messages(event.bot, event.chat.id, state)
+        return await handler(event, data)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Outer-middleware: автоматическая проверка прав по permission_map
+# ═══════════════════════════════════════════════════════════════
+
+class PermissionMiddleware(BaseMiddleware):
+    """
+    Централизованная проверка прав доступа.
+
+    Для Message:
+      Если текст кнопки есть в TEXT_PERMISSIONS → проверяем has_permission.
+      Блокируем ДО вызова хэндлера → даже если декоратор забыт, доступ закрыт.
+
+    Для CallbackQuery:
+      Если callback_data начинается с ключа из CALLBACK_PERMISSIONS → has_permission.
+      Если callback_data начинается с ключа из CALLBACK_ADMIN_ONLY → is_admin.
+    """
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        from use_cases import permissions as perm_uc
+
+        # ── Reply-кнопки (Message) ──
+        if isinstance(event, Message) and event.text:
+            perm_key = TEXT_PERMISSIONS.get(event.text)
+            if perm_key:
+                tg_id = event.from_user.id
+                if not await perm_uc.has_permission(tg_id, perm_key):
+                    await event.answer("⛔ У вас нет доступа к этому разделу")
+                    logger.warning(
+                        "[perm-mw] Заблокирован tg:%d text='%s' perm='%s'",
+                        tg_id, event.text, perm_key,
+                    )
+                    return  # хэндлер НЕ вызывается
+
+        # ── Inline-кнопки (CallbackQuery) ──
+        if isinstance(event, CallbackQuery) and event.data:
+            cb_data = event.data
+
+            # Проверка perm_key
+            for prefix, perm_key in CALLBACK_PERMISSIONS.items():
+                if cb_data == prefix or cb_data.startswith(prefix):
+                    tg_id = event.from_user.id
+                    if not await perm_uc.has_permission(tg_id, perm_key):
+                        await event.answer("⛔ Нет доступа", show_alert=True)
+                        logger.warning(
+                            "[perm-mw] Callback заблокирован tg:%d data='%s' perm='%s'",
+                            tg_id, cb_data, perm_key,
+                        )
+                        return
+                    break  # нашли совпадение — дальше не ищем
+
+            # Проверка admin-only
+            for prefix in CALLBACK_ADMIN_ONLY:
+                if cb_data.startswith(prefix):
+                    tg_id = event.from_user.id
+                    if not await perm_uc.is_admin(tg_id):
+                        await event.answer("⛔ Только для администраторов", show_alert=True)
+                        logger.warning(
+                            "[perm-mw] Admin callback заблокирован tg:%d data='%s'",
+                            tg_id, cb_data,
+                        )
+                        return
+                    break
+
         return await handler(event, data)
 
 

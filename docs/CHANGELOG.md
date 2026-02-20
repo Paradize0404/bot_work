@@ -4,6 +4,82 @@
 
 ---
 
+### 2026-02-21 — Гранулярные права + PermissionMiddleware + auto-sync GSheet
+
+**Файлы:** `bot/permission_map.py` (новый), `bot/global_commands.py`, `use_cases/permissions.py`, `adapters/google_sheets.py`, `bot/handlers.py`, `bot/document_handlers.py`, `main.py`
+
+#### Что сделано
+
+Полная переработка системы прав доступа: вместо бинарных ✅ на целые разделы — гранулярные операции.
+
+**Архитектурные изменения:**
+1. **`bot/permission_map.py`** — единственный источник истины: 6 ролей, 13 гранулярных perm_key, маппинги text→perm и callback→perm
+2. **`PermissionMiddleware`** (outer-middleware) — автоматическая проверка прав ДО вызова хэндлера:
+   - Reply-кнопки: `TEXT_PERMISSIONS[message.text]` → `has_permission()`
+   - Inline-кнопки: `CALLBACK_PERMISSIONS[prefix]` → `has_permission()`, `CALLBACK_ADMIN_ONLY` → `is_admin()`
+3. **Auto-sync GSheet столбцов**: при добавлении/удалении perm_key в `permission_map.py` → столбец автоматически появляется/удаляется из GSheet «Права доступа» при следующей синхронизации
+4. **Удалён `@permission_required`** из всех хэндлеров — middleware делает это централизованно
+
+**Новые гранулярные perm_key (13 вместо 5):**
+- Списания: Создать, История, Одобрение
+- Накладные: Создать шаблон, Создать накладную
+- Заявки: Создать, История, Одобрение
+- Отчёты: Просмотр, Изменение мин.остатков
+- Документы OCR: Загрузка, Отправка в iiko
+- Настройки
+
+**Принцип для разработчика:** добавляешь кнопку → добавь строку в `permission_map.py` → GSheet получит столбец автоматически. Middleware заблокирует доступ без прав.
+
+---
+
+### 2026-02-20 — Авто-перемещение расходных материалов (23:00)
+
+**Файлы:** `use_cases/negative_transfer.py` (новый), `use_cases/scheduler.py`, `adapters/iiko_api.py`, `config.py`
+
+#### Что сделано
+
+Ежедневное автоматическое перемещение товаров с отрицательными остатками из группы
+«Расходные материалы» с хозяйственного склада на барные/кухонные.
+
+**Принцип:**
+1. В 23:00 по Калининграду APScheduler запускает `use_cases/negative_transfer.py`
+2. Из БД загружаются все активные склады (`iiko_store`)
+3. Паттерн имени `"TYPE (РЕСТОРАН)"` → авто-сборка карты ресторанов без хардкода
+4. Один OLAP v1 GET-запрос: `/resto/api/reports/olap?report=TRANSACTIONS&from=...&groupRow=Account.Name&groupRow=Product.TopParent&...`
+5. Фильтр: `Product.TopParent == "Расходные материалы"` + `FinalBalance.Amount < 0`
+6. Для каждой пары склад-источник → склад-цель: POST `/resto/api/v2/documents/internalTransfer`
+7. Запись в `iiko_sync_log`, уведомление админам в Telegram
+
+**Авто-масштабирование:** при добавлении нового ресторана (нового склада «Хоз. товары (НОВЫЙ)»
+и «Бар (НОВЫЙ)»/«Кухня (НОВЫЙ)» в iiko) — перемещения начинаются автоматически без изменений кода.
+
+#### Новые env-переменные (все с дефолтами, менять не нужно при стандартных именах складов)
+- `NEGATIVE_TRANSFER_SOURCE_PREFIX` — дефолт `"Хоз. товары"`
+- `NEGATIVE_TRANSFER_TARGET_PREFIXES` — дефолт `"Бар,Кухня"`
+- `NEGATIVE_TRANSFER_PRODUCT_GROUP` — дефолт `"Расходные материалы"`
+
+#### Новые функции в `adapters/iiko_api.py`
+- `fetch_olap_transactions_v1(date_from, date_to)` — GET OLAP v1, поддержка JSON и XML ответов
+- `send_internal_transfer(document)` — POST `/resto/api/v2/documents/internalTransfer`
+
+#### Результаты теста (20.02.2026)
+- Рестораны обнаружены: Клиническая, Московский
+- OLAP-запрос: 14 340 строк
+- Отрицательных позиций: 59 по 4 складам (Бар/Кухня × 2 ресторана)
+- Найдено в БД: 25/29 товаров (4 не найдены — разное написание в iiko OLAP и iiko номенклатуре)
+
+#### Баг найден и исправлен в ходе code-review
+`_collect_negative_items`: `safe_float()` может вернуть `None` если поле отсутствует.
+`if amount >= 0` при `amount=None` → `TypeError`. Исправлено на `if amount is None or amount >= 0`.
+
+#### Диагностика
+```bash
+python test_negative_transfer.py           # preview без отправки
+python test_negative_transfer.py --execute # реальный запуск
+```
+
+---
+
 ### 2026-02-20 — Расчёт себестоимости: 3 критических бага + фильтр складов подразделения
 
 **Файлы:** `use_cases/outgoing_invoice.py`

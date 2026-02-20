@@ -1098,9 +1098,15 @@ async def sync_permissions_to_sheet(
     Защита от «дурака»:
       - Новые сотрудники добавляются с пустыми правами
       - Новые столбцы добавляются пустыми
-      - Существующие ✅/❌ НЕ перезаписываются
+      - Существующие ✅/❌ НЕ перезаписываются (для оставшихся ключей)
       - Строки уволенных НЕ удаляются (но и не добавляются новые)
       - НЕ стирает лист целиком (в отличие от номенклатуры)
+
+    Auto-sync столбцов:
+      Столбцы прав целиком определяются `permission_keys` (из bot/permission_map.py).
+      - Новая кнопка в permission_map → столбец появится при синхронизации.
+      - Кнопка удалена из permission_map → столбец удаляется из GSheet.
+      ⚠️ Данные ✅/❌ удалённых столбцов теряются ( → завести тикет, если нужен аудит).
 
     Возвращает кол-во строк сотрудников.
     """
@@ -1148,11 +1154,17 @@ async def sync_permissions_to_sheet(
             LABEL, len(old_perms), len(old_perm_keys),
         )
 
-        # ── 3. Объединяем ключи прав (старые + новые, сохраняя порядок) ──
-        merged_keys: list[str] = list(old_perm_keys)
-        for key in permission_keys:
-            if key not in merged_keys:
-                merged_keys.append(key)
+        # ── 3. Столбцы прав = ТОЛЬКО permission_keys (единственный источник истины) ──
+        # Новые столбцы появляются автоматически; удалённые из permission_map.py
+        # пропадают из GSheet при следующей синхронизации (auto-sync).
+        # ⚠️ Значения ✅ сохраняются для тех ключей, которые остались.
+        merged_keys: list[str] = list(permission_keys)
+        removed_keys = set(old_perm_keys) - set(permission_keys)
+        added_keys = set(permission_keys) - set(old_perm_keys)
+        if removed_keys:
+            logger.info("[%s] Удалены столбцы прав: %s", LABEL, removed_keys)
+        if added_keys:
+            logger.info("[%s] Добавлены столбцы прав: %s", LABEL, added_keys)
 
         # ── 4. Объединяем сотрудников (старые + новые) ──
         # Сохраняем порядок старых, добавляем новых в конец (отсортированных по имени)

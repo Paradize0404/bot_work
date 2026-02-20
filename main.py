@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from config import TELEGRAM_BOT_TOKEN
-    from bot.global_commands import router as global_router, NavResetMiddleware
+    from bot.global_commands import router as global_router, NavResetMiddleware, PermissionMiddleware
     from bot.handlers import router
     from bot.writeoff_handlers import router as writeoff_router
     from bot.min_stock_handlers import router as min_stock_router
@@ -47,6 +47,9 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp = Dispatcher(storage=storage)
     # Outer-middleware: сброс FSM при нажатии Reply-кнопки навигации
     dp.message.outer_middleware(NavResetMiddleware())
+    # Outer-middleware: централизованная проверка прав (permission_map.py)
+    dp.message.outer_middleware(PermissionMiddleware())
+    dp.callback_query.outer_middleware(PermissionMiddleware())
     dp.include_router(global_router)      # /cancel — первый, перехватывает всегда
     dp.include_router(writeoff_router)
     dp.include_router(min_stock_router)

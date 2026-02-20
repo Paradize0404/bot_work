@@ -41,7 +41,7 @@ from use_cases import reports as reports_uc
 from use_cases import permissions as perm_uc
 from use_cases import price_list as price_uc
 from bot.middleware import (
-    admin_required, auth_required, permission_required,
+    admin_required, auth_required,
     sync_with_progress, track_task, get_sync_lock,
     reply_menu,
     validate_callback_uuid, truncate_input, MAX_TEXT_NAME,
@@ -74,20 +74,24 @@ def _main_keyboard(allowed: set[str] | None = None, dept_name: str | None = None
     """
     Главное меню: документы по типам + отчёты + настройки.
     Показываются только кнопки, на которые у пользователя есть права.
+    allowed — множество текстов кнопок главного меню (из get_allowed_keys).
     allowed = None → показать все (для обратной совместимости).
     """
-    # Определяем кнопки с привязкой к perm_key
-    perm_buttons: list[tuple[str, str]] = [
-        ("📝 Списания", "📝 Списания"),
-        ("📦 Накладные", "📦 Накладные"),
-        ("📋 Заявки", "📋 Заявки"),
-        ("📊 Отчёты", "📊 Отчёты"),
-        ("📑 Документы", "📑 Документы"),
+    from bot.permission_map import MENU_BUTTON_GROUPS
+
+    # Кнопки главного меню в нужном порядке (текст = ключ MENU_BUTTON_GROUPS)
+    menu_buttons: list[str] = [
+        "📝 Списания",
+        "📦 Накладные",
+        "📋 Заявки",
+        "📊 Отчёты",
+        "📑 Документы",
     ]
+
     # Фильтруем по правам
     visible = []
-    for text, key in perm_buttons:
-        if allowed is None or key in allowed:
+    for text in menu_buttons:
+        if allowed is None or text in allowed:
             visible.append(KeyboardButton(text=text))
 
     # Собираем строки по 2 кнопки
@@ -479,7 +483,7 @@ async def _guard_change_dept(message: Message) -> None:
 # ─────────────────────────────────────────────────────
 
 @router.message(F.text == "📝 Списания")
-@permission_required("📝 Списания")
+@auth_required
 async def btn_writeoffs_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Списания' + фоновый прогрев кеша."""
     logger.info("[nav] Меню Списания tg:%d", message.from_user.id)
@@ -493,7 +497,7 @@ async def btn_writeoffs_menu(message: Message, state: FSMContext) -> None:
 
 
 @router.message(F.text == "📦 Накладные")
-@permission_required("📦 Накладные")
+@auth_required
 async def btn_invoices_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Накладные' + фоновый прогрев кеша."""
     logger.info("[nav] Меню Накладные tg:%d", message.from_user.id)
@@ -508,7 +512,7 @@ async def btn_invoices_menu(message: Message, state: FSMContext) -> None:
 
 
 @router.message(F.text == "📋 Заявки")
-@permission_required("📋 Заявки")
+@auth_required
 async def btn_requests_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Заявки'."""
     logger.info("[nav] Меню Заявки tg:%d", message.from_user.id)
@@ -519,7 +523,7 @@ async def btn_requests_menu(message: Message, state: FSMContext) -> None:
 
 
 @router.message(F.text == "📊 Отчёты")
-@permission_required("📊 Отчёты")
+@auth_required
 async def btn_reports_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Отчёты'."""
     logger.info("[nav] Меню Отчёты tg:%d", message.from_user.id)
@@ -527,7 +531,7 @@ async def btn_reports_menu(message: Message, state: FSMContext) -> None:
 
 
 @router.message(F.text == "📑 Документы")
-@permission_required("📑 Документы")
+@auth_required
 async def btn_documents_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Документы' (OCR распознавание накладных)."""
     logger.info("[nav] Меню Документы tg:%d", message.from_user.id)
@@ -560,7 +564,7 @@ async def btn_price_list(message: Message, state: FSMContext) -> None:
 
 
 @router.message(F.text == "⚙️ Настройки")
-@permission_required("⚙️ Настройки")
+@auth_required
 async def btn_settings_menu(message: Message, state: FSMContext) -> None:
     """Подменю 'Настройки' (только для админов)."""
     logger.info("[nav] Меню Настройки tg:%d", message.from_user.id)

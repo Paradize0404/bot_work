@@ -42,7 +42,7 @@ from aiogram.types import CallbackQuery, Message
 from bot._utils import ocr_keyboard
 from bot.middleware import (
     auth_required,
-    permission_required,
+
     set_cancel_kb,
     track_task,
 )
@@ -469,7 +469,6 @@ async def _process_album_debounce(
 
 @router.message(F.text == "📤 Загрузить накладные")
 @auth_required
-@permission_required("📑 Документы")
 async def btn_ocr_start(message: Message, state: FSMContext) -> None:
     """Начать сессию загрузки накладных."""
     logger.info("[ocr] Начало загрузки tg:%d", message.from_user.id)
@@ -618,7 +617,6 @@ def _format_doc_preview_text(doc: dict, invoices: list[dict]) -> str:
 
 @router.message(F.text == "✅ Маппинг готов")
 @auth_required
-@permission_required("📑 Документы")
 async def btn_mapping_done(message: Message, state: FSMContext) -> None:
     """Бухгалтер нажал «Маппинг готов» — финализируем трансфер."""
     tg_id = message.from_user.id
@@ -999,7 +997,6 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
 
 @router.message(F.document.file_name.endswith(".json"))
 @auth_required
-@permission_required("📑 Документы")
 async def handle_json_receipt(message: Message, state: FSMContext) -> None:
     """Обработка JSON-файла с кассовыми чеками → приходная накладная.
 

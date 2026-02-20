@@ -212,7 +212,7 @@ def _collect_negative_items(
         if top_parent != product_group_filter:
             continue
         amount = safe_float(row.get("FinalBalance.Amount"))
-        if amount >= 0:
+        if amount is None or amount >= 0:
             continue
         product_name = (row.get("Product.Name") or "").strip()
         if not product_name:
