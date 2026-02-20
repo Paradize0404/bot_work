@@ -623,7 +623,7 @@ async def sync_invoice_prices_to_sheet(
             for row in existing_data[2:]:
                 if len(row) < 2 or not row[1].strip():
                     continue
-                pid = row[1].strip()
+                pid = row[1].strip().lower()  # нормализуем UUID к lowercase
                 # Себестоимость
                 if len(row) > cost_col_idx and row[cost_col_idx].strip():
                     old_costs[pid] = row[cost_col_idx].strip()
@@ -666,7 +666,7 @@ async def sync_invoice_prices_to_sheet(
         prev_type = None  # Отслеживаем переходы между типами
         
         for prod in products:
-            pid = prod["id"]
+            pid = prod["id"].lower()  # нормализуем — cost_prices и old_costs ключи lowercase
             current_type = prod.get("product_type", "")
             
             # Добавляем заголовок блока при смене типа

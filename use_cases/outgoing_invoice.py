@@ -608,7 +608,7 @@ async def calculate_dish_cost_prices(
     def _pick_effective(charts: list[dict], amount_field: str) -> dict[str, tuple[dict, str]]:
         best: dict[str, tuple[str, dict]] = {}  # pid → (dateFrom_str, chart)
         for c in charts:
-            pid = c.get("assembledProductId")
+            pid = (c.get("assembledProductId") or "").lower()  # нормализуем к lowercase
             if not pid:
                 continue
             date_from = (c.get("dateFrom") or "")[:10]
@@ -627,12 +627,12 @@ async def calculate_dish_cost_prices(
     chart_map.update(_pick_effective(prepared_charts, "amount"))
     chart_map.update(_pick_effective(assembly_charts, "amountOut"))
 
-    # Получаем типы продуктов из БД
+    # Получаем типы продуктов из БД (ключи lowercase)
     product_types: dict[str, str] = {}
     async with get_session() as sess:
         result = await sess.execute(select(Product.id, Product.product_type))
         for row in result.all():
-            product_types[str(row.id)] = row.product_type
+            product_types[str(row.id).lower()] = row.product_type
 
     # Итеративный расчёт: начинаем с goods_costs, добавляем PREPARED, потом DISH
     all_costs: dict[str, float] = dict(goods_costs)
@@ -653,7 +653,7 @@ async def calculate_dish_cost_prices(
             all_ingredients_ready = True
 
             for item in items:
-                ingredient_id = item.get("productId")
+                ingredient_id = (item.get("productId") or "").lower()  # нормализуем
                 if not ingredient_id:
                     continue
                 try:

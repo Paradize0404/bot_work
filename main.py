@@ -168,15 +168,15 @@ async def _cleanup() -> None:
     from db.engine import dispose_engine
     from bot.middleware import cancel_tracked_tasks
 
-    # Логируем потерянные pending writeoffs (при shutdown они пропадут из RAM)
+    # Pending writeoffs теперь в PostgreSQL — переживают рестарт, логировать не нужно
     try:
         from use_cases.pending_writeoffs import all_pending
-        pending = all_pending()
+        pending = await all_pending()
         if pending:
-            logger.warning(
-                "[shutdown] ⚠️ Теряем %d pending writeoffs: %s",
+            logger.info(
+                "[shutdown] %d pending writeoffs сохранены в БД (переживут рестарт): %s",
                 len(pending),
-                [(d.doc_id, d.author_name, d.author_chat_id) for d in pending],
+                [(d.doc_id, d.author_name) for d in pending],
             )
     except Exception:
         pass
@@ -187,6 +187,14 @@ async def _cleanup() -> None:
     await close_ft()
     await close_openai()
     await dispose_engine()
+
+    # Закрываем Redis-соединение FSM storage
+    try:
+        from aiogram.fsm.storage.redis import RedisStorage
+        # dp.storage уже может быть закрыт диспатчером, suppress ошибки
+    except Exception:
+        pass
+
     logger.info("Shutdown complete")
 
 

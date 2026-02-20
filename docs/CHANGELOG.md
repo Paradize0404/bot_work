@@ -4,6 +4,38 @@
 
 ---
 
+### 2026-02-20 — Redis FSM + Persistent Pending Writeoffs
+
+**Цель:** Бот переживает рестарт без потери пользовательских сессий и ожидающих актов списания.
+
+#### 1. FSM Storage → Redis (`RedisStorage`)
+
+**Было:** `Dispatcher()` — `MemoryStorage` по умолчанию. При рестарте все FSM-состояния
+(шаг диалога, накопленные данные) терялись. Пользователь «зависал» без ответа.
+
+**Стало:** `Dispatcher(storage=RedisStorage.from_url(REDIS_URL))`. FSM-состояния хранятся
+в Redis на Railway → переживают рестарт. Пользователь продолжает flow с того же шага.
+
+**Файлы:** `config.py` (+`REDIS_URL`), `main.py` (RedisStorage), `requirements.txt` (+`redis>=5.0.0`)
+
+#### 2. Pending Writeoffs → PostgreSQL
+
+**Было:** `_pending: dict[str, PendingWriteoff] = {}` в RAM. При рестарте акты,
+ожидающие проверки админом, терялись безвозвратно (был warning в логах).
+
+**Стало:** Таблица `pending_writeoff` в PostgreSQL с полями: `doc_id`, `author_chat_id`,
+`store_id`, `account_id`, `items` (JSONB), `admin_msg_ids` (JSONB), `is_locked` (атомарный лок).
+TTL 24ч — автоочистка expired документов. Конкурентность: `UPDATE ... WHERE is_locked = false`.
+
+**Файлы:** `db/models.py` (+`PendingWriteoffDoc`), `use_cases/pending_writeoffs.py` (полный рерайт sync→async),
+`bot/writeoff_handlers.py` (+`await` на ~40 вызовах), `db/init_db.py` (+индексы)
+
+#### 3. Документация
+
+Обновлены: `PROJECT_MAP.md` (секции 5, 10), `SECURITY_AND_RELIABILITY.md` (секция 7, чеклист), `DATABASE.md`
+
+---
+
 ### 2026-02-20 — OCR маппинг: дропдаун, дедупликация, UX-исправления
 
 **Коммиты:** `4892cc3` → `b7ce77d`

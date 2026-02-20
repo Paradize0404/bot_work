@@ -235,10 +235,11 @@ app.router.add_get("/health", health_check)
 
 ## 7. Graceful Shutdown
 
-### Текущая проблема
-- `_pending` writeoffs хранятся в RAM → потеря при рестарте
-- Background tasks не отслеживаются → могут держать connections
-- Railway шлёт SIGTERM, polling-режим может не поймать
+### Текущее решение
+- Pending writeoffs хранятся в PostgreSQL (`pending_writeoff` таблица) → **переживают рестарт**
+- FSM-состояния хранятся в Redis (`RedisStorage`) → **переживают рестарт**
+- Background tasks отслеживаются → graceful shutdown
+- Railway шлёт SIGTERM, polling-режим обрабатывает
 
 ### Паттерн: tracked tasks + shutdown
 
@@ -265,11 +266,11 @@ async def graceful_shutdown():
     if _background_tasks:
         await asyncio.gather(*_background_tasks, return_exceptions=True)
     
-    # 2. Логировать потерянные pending writeoffs
-    from use_cases.pending_writeoffs import get_all_pending
-    pending = get_all_pending()
+    # 2. Pending writeoffs в PostgreSQL — переживают рестарт
+    from use_cases.pending_writeoffs import all_pending
+    pending = await all_pending()
     if pending:
-        logger.warning("[shutdown] LOSING %d pending writeoffs: %s",
+        logger.info("[shutdown] %d pending writeoffs сохранены в БД (переживут рестарт): %s",
                        len(pending), [d.doc_id for d in pending])
     
     # 3. Cleanup connections
@@ -463,7 +464,8 @@ except Exception as e:
 | Admin self-removal защита | 🔴 Нет | MEDIUM |
 | Config URL validation | 🔴 Нет | MEDIUM |
 | SIGTERM handler (polling) | 🟡 Частично | MEDIUM |
-| Pending writeoffs persistence | 🟡 RAM only | MEDIUM |
+| Pending writeoffs persistence | ✅ PostgreSQL | — |
+| FSM state persistence | ✅ Redis | — |
 | Token masking в логах | 🟡 Частично | MEDIUM |
 | Alerting (Telegram) | 🔴 Нет | MEDIUM |
 | Startup self-check | 🟡 Частично (DB only) | LOW |

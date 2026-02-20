@@ -291,12 +291,13 @@ test/
 │   │                         #   build_history_summary() — текст для Telegram
 │   │                         #   _detect_store_type() — «бар»/«кухня»/NULL
 │   │                         #   _cleanup_old_records() — MAX_HISTORY_PER_USER=200
-│   ├── pending_writeoffs.py # In-memory хранилище документов на проверке
-│   │                         #   PendingWriteoff (dataclass): doc_id, author, store, account, items, admin_msg_ids
-│   │                         #   create(), get(), remove()
-│   │                         #   try_lock()/unlock() — конкурентность (один админ за раз)
-│   │                         #   build_summary_text(), admin_keyboard()
-│   │                         #   TTL: 86400с (24ч) автоочистка
+│   ├── pending_writeoffs.py # PostgreSQL хранилище документов на проверке
+│   │                         #   PendingWriteoff (dataclass DTO): doc_id, author, store, account, items, admin_msg_ids
+│   │                         #   async: create(), get(), remove()
+│   │                         #   async: try_lock()/unlock() — атомарный лок через UPDATE WHERE
+│   │                         #   async: save_admin_msg_ids(), update_items(), update_store(), update_account()
+│   │                         #   sync: build_summary_text(), admin_keyboard()
+│   │                         #   TTL: 24ч автоочистка, таблица: pending_writeoff
 │   ├── admin.py             # Управление администраторами бота (CRUD + кеш)
 │   │                         #   get_admin_ids() — из БД + in-memory кеш (инвалид. при add/remove)
 │   │                         #   is_admin(), list_admins()
@@ -661,12 +662,13 @@ _cache: dict[int, UserContext] = {}
 | `HistoryStates.editing_items` | Выбор позиции для редактирования |
 | `HistoryStates.editing_quantity` | Ввод нового количества позиции |
 
-### Pending writeoffs (in-memory)
+### Pending writeoffs (PostgreSQL)
 
-```python
-_pending: dict[str, PendingWriteoff] = {}   # doc_id → документ
-_lock_set: set[str] = set()                  # залоченные документы
-TTL = 86400с (24ч) — автоочистка
+```
+Таблица: pending_writeoff
+Атомарный лок: UPDATE ... WHERE is_locked = false
+TTL = 24ч — автоочистка expired при create()/all_pending()
+admin_msg_ids: JSONB {chat_id: msg_id}
 ```
 
 ---
