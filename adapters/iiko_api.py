@@ -558,12 +558,14 @@ def _build_incoming_invoice_xml(document: dict[str, Any]) -> str:
     ET.SubElement(root, "defaultStore").text = document["storeId"]
     ET.SubElement(root, "supplier").text = document["supplierId"]
 
+    store_id = document["storeId"]
     items_el = ET.SubElement(root, "items")
     for idx, item in enumerate(document.get("items", []), 1):
         item_el = ET.SubElement(items_el, "item")
         ET.SubElement(item_el, "num").text = str(idx)
         ET.SubElement(item_el, "product").text = item["productId"]
         ET.SubElement(item_el, "productArticle").text = item.get("productArticle", "")
+        ET.SubElement(item_el, "store").text = store_id
         ET.SubElement(item_el, "amount").text = str(round(item["amount"], 4))
         unit_id = item.get("measureUnitId", "")
         if unit_id:
