@@ -128,9 +128,9 @@ async def write_transfer(
     if not unmapped_suppliers and not unmapped_products:
         return True
 
-    # Загружаем iiko-справочники из БД для dropdown
+    # Загружаем iiko-справочники из БД для dropdown (только GOODS)
     iiko_suppliers = await _load_iiko_suppliers()
-    iiko_products  = await _load_all_iiko_products()
+    iiko_products  = await _load_iiko_goods_products()
 
     from adapters.google_sheets import write_mapping_import_sheet
     try:
@@ -359,6 +359,28 @@ async def _load_iiko_suppliers() -> list[dict[str, str]]:
             return [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
     except Exception:
         logger.exception("[ocr_mapping] Ошибка загрузки поставщиков")
+        return []
+
+
+async def _load_iiko_goods_products() -> list[dict[str, str]]:
+    """
+    Загрузить только товары типа GOODS (без блюд, п/ф и прочего).
+    Используется для выпадающего списка в «Маппинг Импорт».
+    """
+    from db.engine import async_session_factory
+    from db.models import Product
+
+    try:
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Product.id, Product.name)
+                .where(Product.product_type == "GOODS")
+                .where(Product.deleted.is_(False))
+                .order_by(Product.name)
+            )
+            return [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
+    except Exception:
+        logger.exception("[ocr_mapping] Ошибка загрузки товаров GOODS")
         return []
 
 
