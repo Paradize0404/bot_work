@@ -23,6 +23,7 @@ from bot.permission_map import (
     TEXT_PERMISSIONS,
     CALLBACK_PERMISSIONS,
     CALLBACK_ADMIN_ONLY,
+    CALLBACK_RECEIVER_OR_ADMIN,
 )
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,19 @@ class PermissionMiddleware(BaseMiddleware):
                         await event.answer("⛔ Только для администраторов", show_alert=True)
                         logger.warning(
                             "[perm-mw] Admin callback заблокирован tg:%d data='%s'",
+                            tg_id, cb_data,
+                        )
+                        return
+                    break
+
+            # Проверка receiver OR admin (заявки)
+            for prefix in CALLBACK_RECEIVER_OR_ADMIN:
+                if cb_data.startswith(prefix):
+                    tg_id = event.from_user.id
+                    if not await perm_uc.is_receiver(tg_id) and not await perm_uc.is_admin(tg_id):
+                        await event.answer("⛔ Нет доступа", show_alert=True)
+                        logger.warning(
+                            "[perm-mw] Receiver/admin callback заблокирован tg:%d data='%s'",
                             tg_id, cb_data,
                         )
                         return

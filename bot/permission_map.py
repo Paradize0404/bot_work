@@ -185,3 +185,15 @@ CALLBACK_ADMIN_ONLY: set[str] = {
     "woa_reject:",
     "woa_edit:",
 }
+
+# ═══════════════════════════════════════════════════════
+# Callback-prefix'ы → receiver OR admin
+# ═══════════════════════════════════════════════════════
+# Middleware проверяет is_receiver() OR is_admin() для этих callback'ов.
+# Заявки: получатели и админы могут одобрять/редактировать/отклонять.
+
+CALLBACK_RECEIVER_OR_ADMIN: set[str] = {
+    "req_approve:",
+    "req_edit:",
+    "req_reject:",
+}
