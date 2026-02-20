@@ -395,9 +395,19 @@ async def _load_iiko_goods_products() -> list[dict[str, str]]:
     """
     Загрузить только товары типа GOODS (без блюд, п/ф и прочего).
     Используется для выпадающего списка в «Маппинг Импорт».
+    Сортировка — по имени без учёта технических префиксов (т_, п/ф и т.д.),
+    чтобы «т_бутылка» стояла рядом с «Бутылка» в дропдауне.
     """
     from db.engine import async_session_factory
     from db.models import Product
+
+    def _sort_key(name: str) -> str:
+        """Убираем технические префиксы для сортировки, приводим к нижнему регистру."""
+        n = name.lower()
+        for prefix in ("т_", "п/ф ", "п/ф_", "п/ф"):
+            if n.startswith(prefix):
+                n = n[len(prefix):]
+        return n
 
     try:
         async with async_session_factory() as session:
@@ -405,9 +415,11 @@ async def _load_iiko_goods_products() -> list[dict[str, str]]:
                 select(Product.id, Product.name)
                 .where(Product.product_type == "GOODS")
                 .where(Product.deleted.is_(False))
-                .order_by(Product.name)
             )
-            return [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
+            rows = [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
+        # Сортируем в Python по нормализованному имени
+        rows.sort(key=lambda x: _sort_key(x["name"]))
+        return rows
     except Exception:
         logger.exception("[ocr_mapping] Ошибка загрузки товаров GOODS")
         return []
