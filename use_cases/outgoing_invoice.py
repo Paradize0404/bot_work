@@ -527,29 +527,46 @@ async def calculate_goods_cost_prices(
         {sid.lower() for sid in store_ids} if store_ids else None
     )
 
-    product_sum: dict[str, float] = {}
-    product_amt: dict[str, float] = {}
-    for entry in balances:
-        store_id = (entry.get("store") or "").lower().strip()
-        # Если задан фильтр по складам — пропускаем чужие
-        if store_ids_lower and store_id not in store_ids_lower:
-            continue
-        pid = (entry.get("product") or "").lower().strip()
-        amt = float(entry.get("amount") or 0)
-        sm  = float(entry.get("sum")    or 0)
-        if pid and amt > 0 and sm > 0:
-            product_sum[pid] = product_sum.get(pid, 0.0) + sm
-            product_amt[pid] = product_amt.get(pid, 0.0) + amt
+    def _build_ccs(entries, filter_stores=None) -> dict[str, float]:
+        p_sum: dict[str, float] = {}
+        p_amt: dict[str, float] = {}
+        for entry in entries:
+            sid = (entry.get("store") or "").lower().strip()
+            if filter_stores and sid not in filter_stores:
+                continue
+            pid = (entry.get("product") or "").lower().strip()
+            amt = float(entry.get("amount") or 0)
+            sm  = float(entry.get("sum")    or 0)
+            if pid and amt > 0 and sm > 0:
+                p_sum[pid] = p_sum.get(pid, 0.0) + sm
+                p_amt[pid] = p_amt.get(pid, 0.0) + amt
+        return {pid: p_sum[pid] / p_amt[pid] for pid in p_sum if p_amt[pid] > 0}
 
-    cost_map: dict[str, float] = {}
-    for pid in product_sum:
-        if product_amt[pid] > 0:
-            cost_map[pid] = product_sum[pid] / product_amt[pid]
+    # Всегда считаем СЦС по ВСЕМ складам (используется как fallback-уровень 1)
+    cost_map_all = _build_ccs(balances)
 
-    logger.info(
-        "[invoice] СЦС из остатков: %d товаров из %d записей за %.2f сек",
-        len(cost_map), len(balances), time.monotonic() - t0,
-    )
+    if store_ids_lower:
+        # Считаем СЦС только по складам подразделения
+        cost_map_dept = _build_ccs(balances, store_ids_lower)
+        # Начинаем с цен подразделения, дополняем all-stores для отсутствующих
+        cost_map = dict(cost_map_dept)
+        all_stores_fallback = 0
+        for pid, price in cost_map_all.items():
+            if pid not in cost_map:
+                cost_map[pid] = price
+                all_stores_fallback += 1
+        logger.info(
+            "[invoice] СЦС из остатков: %d товаров "
+            "(подразделение: %d, all-stores fallback: %d) из %d записей за %.2f сек",
+            len(cost_map), len(cost_map_dept), all_stores_fallback,
+            len(balances), time.monotonic() - t0,
+        )
+    else:
+        cost_map = cost_map_all
+        logger.info(
+            "[invoice] СЦС из остатков: %d товаров из %d записей за %.2f сек",
+            len(cost_map), len(balances), time.monotonic() - t0,
+        )
 
     # ── 2. Fallback: последняя накладная для товаров без остатка ─────────────
     date_to   = today.strftime("%Y-%m-%d")
@@ -602,9 +619,12 @@ async def calculate_dish_cost_prices(
     """
     Себестоимость DISH (блюд) по технологическим картам.
 
-    API возвращает два массива с разными структурами ингредиентов:
+    API возвращает два массива, оба используют одинаковое поле количества:
       assemblyCharts  — DISH-рецепты,    поле количества = "amountOut"
-      preparedCharts  — PREPARED (п/ф),  поле количества = "amount"
+      preparedCharts  — PREPARED (п/ф),  поле количества = "amountOut"
+
+    Себестоимость на ЕДИНИЦУ = sum(ингредиент × цена) / assembledAmount.
+    assembledAmount — сколько единиц выходного продукта производит рецепт.
 
     Алгоритм:
       1. Строим общую карту техкарт из обоих массивов
@@ -623,7 +643,7 @@ async def calculate_dish_cost_prices(
 
     chart_data = await iiko_api.fetch_assembly_charts(today, today, include_prepared=True)
     assembly_charts = chart_data.get("assemblyCharts") or []   # DISH,     amount = amountOut
-    prepared_charts = chart_data.get("preparedCharts") or []   # PREPARED, amount = amount
+    prepared_charts = chart_data.get("preparedCharts") or []   # PREPARED, amount = amountOut (same!)
 
     # Общая карта: {assembledProductId: (chart, amount_field)}
     # Для каждого продукта берём самую свежую действующую версию (dateFrom ≤ today, dateTo is null или ≥ today)
@@ -646,7 +666,7 @@ async def calculate_dish_cost_prices(
         return {pid: (entry[1], amount_field) for pid, entry in best.items()}
 
     chart_map: dict[str, tuple[dict, str]] = {}
-    chart_map.update(_pick_effective(prepared_charts, "amount"))
+    chart_map.update(_pick_effective(prepared_charts, "amountOut"))
     chart_map.update(_pick_effective(assembly_charts, "amountOut"))
 
     # Получаем типы продуктов из БД (ключи lowercase)
@@ -702,7 +722,12 @@ async def calculate_dish_cost_prices(
                 total_cost += amount * ingr_cost
 
             if all_ingredients_ready and total_cost > 0:
-                all_costs[dish_id] = round(total_cost, 2)
+                # Делим на assembledAmount: рецепт может производить != 1 единицу
+                # (например, 0.165 кг гренок из 140 г хлеба + 25 г масла)
+                assembled_amount = float(chart.get("assembledAmount") or 1.0)
+                if assembled_amount <= 0:
+                    assembled_amount = 1.0
+                all_costs[dish_id] = round(total_cost / assembled_amount, 4)
                 changes = True
 
         if not changes:
