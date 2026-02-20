@@ -612,9 +612,13 @@ async def send_incoming_invoice(document: dict[str, Any]) -> dict[str, Any]:
         body = resp.text[:500] if resp.text else ""
         logger.error(
             "[API] POST incomingInvoice FAIL — HTTP %d, %.1f сек, body=%s\nXML sent:\n%s",
-            resp.status_code, elapsed, body, xml_body[:1000],
+            resp.status_code, elapsed, body, xml_body,
         )
-        resp.raise_for_status()
+        # Не бросаем исключение — возвращаем структурированную ошибку
+        return {
+            "ok": False,
+            "error": f"iiko HTTP {resp.status_code}: {body}" if body else f"iiko HTTP {resp.status_code}",
+        }
 
     resp_body = resp.text[:500] if resp.text else ""
     logger.info(

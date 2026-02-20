@@ -209,14 +209,14 @@ async def build_iiko_invoices(
                 sup_name, doc["id"],
             )
 
-        # ── Дата ──
+        # ── Дата (iiko ожидает ISO: YYYY-MM-DDTHH:MM:SS) ──
         if doc_date:
-            date_incoming = doc_date.strftime("%d.%m.%Y")
+            date_incoming = doc_date.strftime("%Y-%m-%dT%H:%M:%S")
         else:
             from use_cases._helpers import now_kgd
             today         = now_kgd()
-            date_incoming = today.strftime("%d.%m.%Y")
-            warnings.append(f"№{doc_num}: дата не распознана — используем сегодня ({date_incoming})")
+            date_incoming = today.strftime("%Y-%m-%dT%H:%M:%S")
+            warnings.append(f"№{doc_num}: дата не распознана — используем сегодня ({today.strftime('%d.%m.%Y')})")
 
         # ── Группировка товаров по store_type ──
         store_groups: dict[str, list[dict]] = {}
@@ -284,6 +284,20 @@ async def build_iiko_invoices(
             multi      = len(store_groups) > 1
             inv_number = f"{doc_num}-{suffix}" if (multi and store_type) else doc_num
 
+            if not store_id:
+                warnings.append(
+                    f"№{doc_num}: тип склада «{store_type or '—'}» не привязан к складу iiko — "
+                    "накладная пропущена. Проверьте настройки складов."
+                )
+                continue
+
+            if not supplier_iiko_id:
+                warnings.append(
+                    f"№{doc_num}: поставщик «{sup_name}» не найден в iiko — "
+                    "накладная пропущена."
+                )
+                continue
+
             invoices.append({
                 "ocr_doc_id":     doc["id"],
                 "ocr_doc_number": doc_num,
@@ -334,8 +348,11 @@ def format_invoice_preview(
 
     for idx, inv in enumerate(invoices, 1):
         total_sum = sum(float(it.get("sum") or 0) for it in inv["items"])
+        # dateIncoming в ISO (2026-02-16T09:00:00) → красиво для пользователя
+        raw_date = inv.get("dateIncoming") or ""
+        display_date = raw_date[:10] if "T" in raw_date else raw_date
         lines.append(
-            f"<b>{idx}. №{inv['documentNumber']}</b> от {inv['dateIncoming']}"
+            f"<b>{idx}. №{inv['documentNumber']}</b> от {display_date}"
         )
         lines.append(f"   📋 Поставщик: {inv['supplier_name'] or '—'}")
         lines.append(f"   🏪 Склад: {inv['store_name']}")
@@ -409,7 +426,11 @@ async def send_invoices_to_iiko(invoices: list[dict]) -> list[dict]:
             logger.exception(
                 "[incoming_invoice] Ошибка отправки №%s", inv["documentNumber"],
             )
-            results.append({"invoice": inv, "ok": False, "error": str(exc)})
+            err_msg = str(exc)
+            # Сокращаем HTTP-ошибки — пользователю не нужен полный URL с ключом
+            if "for url" in err_msg:
+                err_msg = err_msg.split(" for url")[0]
+            results.append({"invoice": inv, "ok": False, "error": err_msg})
 
     ok_count = sum(1 for r in results if r["ok"])
     logger.info(
