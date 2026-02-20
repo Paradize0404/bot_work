@@ -33,6 +33,7 @@ async def main():
     from adapters.iiko_api import (
         fetch_assembly_charts,
         fetch_incoming_invoices,
+        fetch_stock_balances,
     )
     from db.engine import get_session
     from db.models import Product
@@ -108,10 +109,10 @@ async def main():
             rows = await session.execute(select(Product))
             products = rows.scalars().all()
             for p in products:
-                uid = str(p.iiko_id or "").lower()
+                uid = str(p.id or "").lower()
                 product_info[uid] = {
                     "name": p.name,
-                    "type": getattr(p, "product_type", None) or getattr(p, "type", None),
+                    "type": p.product_type,
                 }
         print(f"  В БД продуктов: {len(product_info)}")
     except Exception as e:
@@ -126,15 +127,32 @@ async def main():
         for uid in sorted(involved_ids)
     }
 
-    # ── 6. Загружаем накладные для получения цен ───────────────────────────────
-    print("Загружаем накладные (приходные)...")
-    invoices_raw = await fetch_incoming_invoices(
-        date_from=DATE_FROM,
-        date_to=DATE_TO,
-    )
+    # ── 6. Загружаем остатки склада для СЦС ───────────────────────────────────
+    print("Загружаем остатки склада (СЦС)...")
+    balances = await fetch_stock_balances()
+    print(f"  Записей остатков: {len(balances)}")
+
+    product_sum: dict[str, float] = {}
+    product_amt: dict[str, float] = {}
+    for entry in balances:
+        pid = (entry.get("product") or "").lower().strip()
+        amt = float(entry.get("amount") or 0)
+        sm  = float(entry.get("sum")    or 0)
+        if pid and amt > 0 and sm > 0:
+            product_sum[pid] = product_sum.get(pid, 0.0) + sm
+            product_amt[pid] = product_amt.get(pid, 0.0) + amt
+
+    goods_costs_scs: dict[str, float] = {
+        pid: product_sum[pid] / product_amt[pid]
+        for pid in product_sum if product_amt[pid] > 0
+    }
+    print(f"  Товаров с СЦС: {len(goods_costs_scs)}")
+
+    # ── 7. Загружаем накладные (fallback для товаров без остатка) ──────────────
+    print("Загружаем накладные (fallback)...")
+    invoices_raw = await fetch_incoming_invoices(date_from=DATE_FROM, date_to=DATE_TO)
     print(f"  Накладных загружено: {len(invoices_raw)}")
 
-    # Строим: productId → список (date, price_per_unit)
     invoice_history: dict[str, list[dict]] = {}
     for inv in invoices_raw:
         inv_date = (inv.get("incomingDate") or inv.get("date") or "")[:10]
@@ -152,15 +170,21 @@ async def main():
                     "invoice_id": inv.get("id") or inv.get("invoiceNumber"),
                 })
 
-    # Сортируем по дате, оставляем последнюю цену
-    goods_costs: dict[str, float] = {}
+    goods_costs_inv: dict[str, float] = {}
     for pid, entries in invoice_history.items():
         entries.sort(key=lambda x: x["date"])
-        goods_costs[pid] = entries[-1]["price"]
+        goods_costs_inv[pid] = entries[-1]["price"]
+
+    # Объединяем: СЦС приоритетнее
+    goods_costs: dict[str, float] = {**goods_costs_inv, **goods_costs_scs}
 
     # Фильтруем историю только по нужным продуктам
     output["invoice_price_history"] = {
         uid: invoice_history.get(uid.lower(), [])
+        for uid in sorted(involved_ids)
+    }
+    output["scs_prices"] = {
+        uid: goods_costs_scs.get(uid.lower())
         for uid in sorted(involved_ids)
     }
 

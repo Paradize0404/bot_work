@@ -49,84 +49,12 @@
     "productSizeAssemblyStrategy": "COMMON",
     "items": [
       {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d13",
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1e",
         "sortWeight": 0.0,
-        "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
         "productSizeSpecification": null,
         "storeSpecification": null,
-        "amount": 0.010227273
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d14",
-        "sortWeight": 0.0,
-        "productId": "920968b7-b2ac-4ea0-831e-1e29f99a2bb6",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.003428571
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d15",
-        "sortWeight": 0.0,
-        "productId": "79862119-2047-49ac-ae3a-6b4eb4e4e13c",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.003272727
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d16",
-        "sortWeight": 0.0,
-        "productId": "3753d7d1-e4f8-4027-9814-e98a46096881",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.226004464
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d17",
-        "sortWeight": 0.0,
-        "productId": "f02137f0-78be-48b0-abcd-c2590fe545ca",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.014792412
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d18",
-        "sortWeight": 0.0,
-        "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.000545455
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d19",
-        "sortWeight": 0.0,
-        "productId": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.011940299
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1a",
-        "sortWeight": 0.0,
-        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.035313139
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1b",
-        "sortWeight": 0.0,
-        "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.013728201
-      },
-      {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1c",
-        "sortWeight": 0.0,
-        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
-        "productSizeSpecification": null,
-        "storeSpecification": null,
-        "amount": 0.016371433
+        "amount": 0.03814262
       },
       {
         "id": "abc1d454-1db3-d717-019b-b0fbd6926d1d",
@@ -137,71 +65,143 @@
         "amount": 0.000146939
       },
       {
-        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1e",
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1c",
         "sortWeight": 0.0,
-        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
+        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
         "productSizeSpecification": null,
         "storeSpecification": null,
-        "amount": 0.03814262
+        "amount": 0.016371433
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1b",
+        "sortWeight": 0.0,
+        "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.013728201
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1a",
+        "sortWeight": 0.0,
+        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.035313139
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d19",
+        "sortWeight": 0.0,
+        "productId": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.011940299
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d18",
+        "sortWeight": 0.0,
+        "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.000545455
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d17",
+        "sortWeight": 0.0,
+        "productId": "f02137f0-78be-48b0-abcd-c2590fe545ca",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.014792412
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d16",
+        "sortWeight": 0.0,
+        "productId": "3753d7d1-e4f8-4027-9814-e98a46096881",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.226004464
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d15",
+        "sortWeight": 0.0,
+        "productId": "79862119-2047-49ac-ae3a-6b4eb4e4e13c",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.003272727
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d14",
+        "sortWeight": 0.0,
+        "productId": "920968b7-b2ac-4ea0-831e-1e29f99a2bb6",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.003428571
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d13",
+        "sortWeight": 0.0,
+        "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.010227273
       }
     ]
   },
   "product_info": {
     "259a72d7-2f41-49e9-84ec-b13b7a58fafe": {
-      "name": "???",
-      "type": "???"
+      "name": "Лимонная кислота",
+      "type": "GOODS"
     },
     "2dddfe23-0a95-45d5-8dbb-56067c23f99f": {
-      "name": "???",
-      "type": "???"
+      "name": "Желток паст.",
+      "type": "GOODS"
     },
     "3753d7d1-e4f8-4027-9814-e98a46096881": {
-      "name": "???",
-      "type": "???"
+      "name": "Яйцо",
+      "type": "GOODS"
     },
     "53742a20-5f14-4f36-accf-33773fe8a1d7": {
-      "name": "???",
-      "type": "???"
+      "name": "Шу меренга цех",
+      "type": "DISH"
     },
     "554e702e-3769-4cf9-8433-e3381ff9c1b8": {
-      "name": "???",
-      "type": "???"
+      "name": "Соль ",
+      "type": "GOODS"
     },
     "5a98a152-21be-4cd0-b76f-5c87c4672537": {
-      "name": "???",
-      "type": "???"
+      "name": "Лимоны",
+      "type": "GOODS"
     },
     "79862119-2047-49ac-ae3a-6b4eb4e4e13c": {
-      "name": "???",
-      "type": "???"
+      "name": "Сахар тросниковый",
+      "type": "GOODS"
     },
     "920968b7-b2ac-4ea0-831e-1e29f99a2bb6": {
-      "name": "???",
-      "type": "???"
+      "name": "Молоко",
+      "type": "GOODS"
     },
     "b1912863-0e7c-4ad0-80fb-6a98c716bc21": {
-      "name": "???",
-      "type": "???"
+      "name": "Масло сливочное",
+      "type": "GOODS"
     },
     "cc4b73ec-3395-4767-97a0-3effadb08728": {
-      "name": "???",
-      "type": "???"
+      "name": "п/ф Шу с меренгой",
+      "type": "PREPARED"
     },
     "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7": {
-      "name": "???",
-      "type": "???"
+      "name": "Вода из под крана",
+      "type": "GOODS"
     },
     "dcc37f95-0d63-44c6-8d3b-a59871e73806": {
-      "name": "???",
-      "type": "???"
+      "name": "Белок паст.",
+      "type": "GOODS"
     },
     "dfc9d89b-18a2-49ea-85f0-0a2ed0083849": {
-      "name": "???",
-      "type": "???"
+      "name": "Сахар",
+      "type": "GOODS"
     },
     "f02137f0-78be-48b0-abcd-c2590fe545ca": {
-      "name": "???",
-      "type": "???"
+      "name": "Мука пшеничная",
+      "type": "GOODS"
     }
   },
   "invoice_price_history": {
@@ -1442,150 +1442,166 @@
       }
     ]
   },
+  "scs_prices": {
+    "259a72d7-2f41-49e9-84ec-b13b7a58fafe": null,
+    "2dddfe23-0a95-45d5-8dbb-56067c23f99f": null,
+    "3753d7d1-e4f8-4027-9814-e98a46096881": 10.401835774621759,
+    "53742a20-5f14-4f36-accf-33773fe8a1d7": 44.99428571428571,
+    "554e702e-3769-4cf9-8433-e3381ff9c1b8": 29.424340212281567,
+    "5a98a152-21be-4cd0-b76f-5c87c4672537": 238.64041026980087,
+    "79862119-2047-49ac-ae3a-6b4eb4e4e13c": 345.4257282211779,
+    "920968b7-b2ac-4ea0-831e-1e29f99a2bb6": 104.34190430874874,
+    "b1912863-0e7c-4ad0-80fb-6a98c716bc21": 857.7752525553171,
+    "cc4b73ec-3395-4767-97a0-3effadb08728": null,
+    "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7": null,
+    "dcc37f95-0d63-44c6-8d3b-a59871e73806": 366.3056040770761,
+    "dfc9d89b-18a2-49ea-85f0-0a2ed0083849": 95.63151634350935,
+    "f02137f0-78be-48b0-abcd-c2590fe545ca": 73.59000031528595
+  },
   "step_A_pf_calculation": {
     "pf_id": "cc4b73ec-3395-4767-97a0-3effadb08728",
-    "pf_name": "cc4b73ec-3395-4767-97a0-3effadb08728",
+    "pf_name": "п/ф Шу с меренгой",
     "assembledAmount": 1.0,
     "items": [
       {
-        "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-        "name": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-        "amount": 0.010227273,
-        "unit_cost": 349.0,
-        "line_cost": 3.5693,
+        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
+        "name": "Лимоны",
+        "amount": 0.03814262,
+        "unit_cost": 238.64041026980087,
+        "line_cost": 9.1024,
         "has_price": true
       },
       {
-        "productId": "920968b7-b2ac-4ea0-831e-1e29f99a2bb6",
-        "name": "920968b7-b2ac-4ea0-831e-1e29f99a2bb6",
-        "amount": 0.003428571,
-        "unit_cost": 109.0,
-        "line_cost": 0.3737,
+        "productId": "554e702e-3769-4cf9-8433-e3381ff9c1b8",
+        "name": "Соль ",
+        "amount": 0.000146939,
+        "unit_cost": 29.424340212281567,
+        "line_cost": 0.0043,
         "has_price": true
       },
       {
-        "productId": "79862119-2047-49ac-ae3a-6b4eb4e4e13c",
-        "name": "79862119-2047-49ac-ae3a-6b4eb4e4e13c",
-        "amount": 0.003272727,
-        "unit_cost": 404.43,
-        "line_cost": 1.3236,
-        "has_price": true
-      },
-      {
-        "productId": "3753d7d1-e4f8-4027-9814-e98a46096881",
-        "name": "3753d7d1-e4f8-4027-9814-e98a46096881",
-        "amount": 0.226004464,
-        "unit_cost": 10.5,
-        "line_cost": 2.373,
-        "has_price": true
-      },
-      {
-        "productId": "f02137f0-78be-48b0-abcd-c2590fe545ca",
-        "name": "f02137f0-78be-48b0-abcd-c2590fe545ca",
-        "amount": 0.014792412,
-        "unit_cost": 53.0,
-        "line_cost": 0.784,
-        "has_price": true
-      },
-      {
-        "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
-        "name": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
-        "amount": 0.000545455,
-        "unit_cost": 192.5,
-        "line_cost": 0.105,
-        "has_price": true
-      },
-      {
-        "productId": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
-        "name": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
-        "amount": 0.011940299,
-        "unit_cost": 541.13,
-        "line_cost": 6.4613,
-        "has_price": true
-      },
-      {
-        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-        "name": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-        "amount": 0.035313139,
-        "unit_cost": 65.49,
-        "line_cost": 2.3127,
+        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
+        "name": "Масло сливочное",
+        "amount": 0.016371433,
+        "unit_cost": 857.7752525553171,
+        "line_cost": 14.043,
         "has_price": true
       },
       {
         "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
-        "name": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
+        "name": "Вода из под крана",
         "amount": 0.013728201,
         "unit_cost": 0.0,
         "line_cost": 0.0,
         "has_price": false
       },
       {
-        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
-        "name": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
-        "amount": 0.016371433,
-        "unit_cost": 1142.8,
-        "line_cost": 18.7093,
-        "has_price": true
-      },
-      {
-        "productId": "554e702e-3769-4cf9-8433-e3381ff9c1b8",
-        "name": "554e702e-3769-4cf9-8433-e3381ff9c1b8",
-        "amount": 0.000146939,
-        "unit_cost": 25.99,
-        "line_cost": 0.0038,
-        "has_price": true
-      },
-      {
-        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
-        "name": "5a98a152-21be-4cd0-b76f-5c87c4672537",
-        "amount": 0.03814262,
-        "unit_cost": 294.0,
-        "line_cost": 11.2139,
-        "has_price": true
-      }
-    ],
-    "total_batch_cost": 47.2296,
-    "cost_per_unit": 47.2296
-  },
-  "step_B_dish_calculation": {
-    "dish_id": "53742a20-5f14-4f36-accf-33773fe8a1d7",
-    "dish_name": "53742a20-5f14-4f36-accf-33773fe8a1d7",
-    "items": [
-      {
-        "productId": "cc4b73ec-3395-4767-97a0-3effadb08728",
-        "name": "cc4b73ec-3395-4767-97a0-3effadb08728",
-        "amount": 1.0,
-        "unit_cost": 47.2296,
-        "line_cost": 47.2296,
-        "is_pf": true
-      }
-    ],
-    "total_cost": 47.2296
-  },
-  "comparison": {
-    "our_calculation": 47.2296,
-    "iiko_reference": 43.0,
-    "difference": 4.2296,
-    "top_expensive_pf_ingredients": [
-      {
-        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
-        "name": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
-        "amount": 0.016371433,
-        "unit_cost": 1142.8,
-        "line_cost": 18.7093,
-        "has_price": true
-      },
-      {
-        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
-        "name": "5a98a152-21be-4cd0-b76f-5c87c4672537",
-        "amount": 0.03814262,
-        "unit_cost": 294.0,
-        "line_cost": 11.2139,
+        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+        "name": "Сахар",
+        "amount": 0.035313139,
+        "unit_cost": 95.63151634350935,
+        "line_cost": 3.377,
         "has_price": true
       },
       {
         "productId": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
-        "name": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
+        "name": "Желток паст.",
+        "amount": 0.011940299,
+        "unit_cost": 541.13,
+        "line_cost": 6.4613,
+        "has_price": true
+      },
+      {
+        "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
+        "name": "Лимонная кислота",
+        "amount": 0.000545455,
+        "unit_cost": 192.5,
+        "line_cost": 0.105,
+        "has_price": true
+      },
+      {
+        "productId": "f02137f0-78be-48b0-abcd-c2590fe545ca",
+        "name": "Мука пшеничная",
+        "amount": 0.014792412,
+        "unit_cost": 73.59000031528595,
+        "line_cost": 1.0886,
+        "has_price": true
+      },
+      {
+        "productId": "3753d7d1-e4f8-4027-9814-e98a46096881",
+        "name": "Яйцо",
+        "amount": 0.226004464,
+        "unit_cost": 10.401835774621759,
+        "line_cost": 2.3509,
+        "has_price": true
+      },
+      {
+        "productId": "79862119-2047-49ac-ae3a-6b4eb4e4e13c",
+        "name": "Сахар тросниковый",
+        "amount": 0.003272727,
+        "unit_cost": 345.4257282211779,
+        "line_cost": 1.1305,
+        "has_price": true
+      },
+      {
+        "productId": "920968b7-b2ac-4ea0-831e-1e29f99a2bb6",
+        "name": "Молоко",
+        "amount": 0.003428571,
+        "unit_cost": 104.34190430874874,
+        "line_cost": 0.3577,
+        "has_price": true
+      },
+      {
+        "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "name": "Белок паст.",
+        "amount": 0.010227273,
+        "unit_cost": 366.3056040770761,
+        "line_cost": 3.7463,
+        "has_price": true
+      }
+    ],
+    "total_batch_cost": 41.767,
+    "cost_per_unit": 41.767
+  },
+  "step_B_dish_calculation": {
+    "dish_id": "53742a20-5f14-4f36-accf-33773fe8a1d7",
+    "dish_name": "Шу меренга цех",
+    "items": [
+      {
+        "productId": "cc4b73ec-3395-4767-97a0-3effadb08728",
+        "name": "п/ф Шу с меренгой",
+        "amount": 1.0,
+        "unit_cost": 41.767,
+        "line_cost": 41.767,
+        "is_pf": true
+      }
+    ],
+    "total_cost": 41.767
+  },
+  "comparison": {
+    "our_calculation": 41.767,
+    "iiko_reference": 43.0,
+    "difference": -1.233,
+    "top_expensive_pf_ingredients": [
+      {
+        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
+        "name": "Масло сливочное",
+        "amount": 0.016371433,
+        "unit_cost": 857.7752525553171,
+        "line_cost": 14.043,
+        "has_price": true
+      },
+      {
+        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
+        "name": "Лимоны",
+        "amount": 0.03814262,
+        "unit_cost": 238.64041026980087,
+        "line_cost": 9.1024,
+        "has_price": true
+      },
+      {
+        "productId": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
+        "name": "Желток паст.",
         "amount": 0.011940299,
         "unit_cost": 541.13,
         "line_cost": 6.4613,
@@ -1593,18 +1609,18 @@
       },
       {
         "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-        "name": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "name": "Белок паст.",
         "amount": 0.010227273,
-        "unit_cost": 349.0,
-        "line_cost": 3.5693,
+        "unit_cost": 366.3056040770761,
+        "line_cost": 3.7463,
         "has_price": true
       },
       {
-        "productId": "3753d7d1-e4f8-4027-9814-e98a46096881",
-        "name": "3753d7d1-e4f8-4027-9814-e98a46096881",
-        "amount": 0.226004464,
-        "unit_cost": 10.5,
-        "line_cost": 2.373,
+        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+        "name": "Сахар",
+        "amount": 0.035313139,
+        "unit_cost": 95.63151634350935,
+        "line_cost": 3.377,
         "has_price": true
       }
     ]

@@ -488,42 +488,65 @@ async def preload_for_invoice(department_id: str) -> None:
 
 async def calculate_goods_cost_prices(days_back: int = 90) -> dict[str, float]:
     """
-    Себестоимость GOODS по последнему приходу.
+    Себестоимость GOODS по средневзвешенной цене остатка (СЦС).
 
-    Забирает приходные накладные за последние `days_back` дней,
-    для каждого товара берёт price из самого свежего прихода.
+    Основной источник: GET /resto/api/v2/reports/balance/stores
+    Для каждого продукта: СЦС = sum(sum_по_складам) / sum(amount_по_складам).
 
-    Возвращает {product_id: cost_price}.
+    Fallback (для товаров с нулевым/отсутствующим остатком):
+    последняя цена из приходных накладных за `days_back` дней.
+
+    Возвращает {product_id_lower: cost_price}.
     """
     from datetime import timedelta
     from adapters import iiko_api
     from use_cases._helpers import now_kgd
 
     today = now_kgd()
-    date_to = today.strftime("%Y-%m-%d")
-    date_from = (today - timedelta(days=days_back)).strftime("%Y-%m-%d")
-
     t0 = time.monotonic()
+    logger.info("[invoice] Расчёт себестоимости GOODS: СЦС из остатков склада")
+
+    # ── 1. Остатки склада → СЦС ─────────────────────────────────────────────
+    balances = await iiko_api.fetch_stock_balances()
+
+    product_sum: dict[str, float] = {}
+    product_amt: dict[str, float] = {}
+    for entry in balances:
+        pid = (entry.get("product") or "").lower().strip()
+        amt = float(entry.get("amount") or 0)
+        sm  = float(entry.get("sum")    or 0)
+        if pid and amt > 0 and sm > 0:
+            product_sum[pid] = product_sum.get(pid, 0.0) + sm
+            product_amt[pid] = product_amt.get(pid, 0.0) + amt
+
+    cost_map: dict[str, float] = {}
+    for pid in product_sum:
+        if product_amt[pid] > 0:
+            cost_map[pid] = product_sum[pid] / product_amt[pid]
+
     logger.info(
-        "[invoice] Расчёт себестоимости GOODS: приходные накладные %s..%s",
-        date_from, date_to,
+        "[invoice] СЦС из остатков: %d товаров из %d записей за %.2f сек",
+        len(cost_map), len(balances), time.monotonic() - t0,
     )
 
+    # ── 2. Fallback: последняя накладная для товаров без остатка ─────────────
+    date_to   = today.strftime("%Y-%m-%d")
+    date_from = (today - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    logger.info(
+        "[invoice] Fallback: приходные накладные %s..%s", date_from, date_to
+    )
     invoices = await iiko_api.fetch_incoming_invoices(date_from, date_to)
 
-    # Сортируем по дате (свежие в конце), чтобы при итерации
-    # последняя запись перезаписывала предыдущую → получим самую свежую цену
     def _parse_date(inv: dict) -> str:
         return inv.get("dateIncoming") or ""
 
     invoices.sort(key=_parse_date)
 
-    cost_map: dict[str, float] = {}
-    total_items = 0
+    fallback_map: dict[str, float] = {}
     for inv in invoices:
         for item in inv.get("items", []):
-            pid = item.get("productId", "").strip()
-            price_str = item.get("price", "").strip()
+            pid = item.get("productId", "").strip().lower()
+            price_str = str(item.get("price") or "").strip()
             if not pid or not price_str:
                 continue
             try:
@@ -531,13 +554,22 @@ async def calculate_goods_cost_prices(days_back: int = 90) -> dict[str, float]:
             except ValueError:
                 continue
             if price > 0:
-                cost_map[pid] = price
-                total_items += 1
+                fallback_map[pid] = price
+
+    # Применяем fallback только там, где нет СЦС
+    fallback_applied = 0
+    for pid, price in fallback_map.items():
+        if pid not in cost_map:
+            cost_map[pid] = price
+            fallback_applied += 1
 
     logger.info(
-        "[invoice] Себестоимость GOODS: %d уник. товаров из %d позиций "
-        "(%d накладных) за %.2f сек",
-        len(cost_map), total_items, len(invoices), time.monotonic() - t0,
+        "[invoice] Себестоимость GOODS итого: %d товаров "
+        "(СЦС: %d, fallback-накладные: %d) за %.2f сек",
+        len(cost_map),
+        len(cost_map) - fallback_applied,
+        fallback_applied,
+        time.monotonic() - t0,
     )
     return cost_map
 
