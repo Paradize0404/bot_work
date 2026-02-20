@@ -549,7 +549,8 @@ def _build_incoming_invoice_xml(document: dict[str, Any]) -> str:
     ET.SubElement(root, "documentNumber").text = doc_number
     ET.SubElement(root, "dateIncoming").text = document.get("dateIncoming", "")
     ET.SubElement(root, "useDefaultDocumentTime").text = "false"
-    ET.SubElement(root, "status").text = document.get("status", "NEW")
+    # CLOSED = накладная проводится автоматически при импорте
+    ET.SubElement(root, "status").text = document.get("status", "CLOSED")
 
     comment = document.get("comment", "")
     if comment:

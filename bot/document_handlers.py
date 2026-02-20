@@ -64,6 +64,9 @@ _album_tasks:  dict[str, asyncio.Task]   = {}
 # ── Pending invoices: накладные ожидающие отправки в iiko ──
 # tg_id → list[invoice_dict] (in-memory, теряется при рестарте)
 _pending_invoices: dict[int, list[dict]] = {}
+# tg_id → list[(chat_id, message_id)] — все сообщения с кнопками подтверждения
+# чтобы при нажатии одного убрать кнопки у всех получателей
+_pending_invoice_messages: dict[int, list[tuple[int, int]]] = {}
 # tg_id → list[doc_id]  — IDs документов из ТЕКУЩЕЙ сессии загрузки
 _pending_doc_ids: dict[int, list[str]] = {}
 # Общий батч: IDs всех документов накопленных С МОМЕНТА последнего finalize_transfer.
@@ -127,6 +130,22 @@ async def _repush(
 # ════════════════════════════════════════════════════════
 #  Helpers: статус документов в БД
 # ════════════════════════════════════════════════════════
+
+async def _disable_all_invoice_buttons(bot, sender_tg_id: int, result_text: str) -> None:
+    """Убрать кнопки и обновить текст у ВСЕХ сообщений подтверждения накладной."""
+    locations = _pending_invoice_messages.pop(sender_tg_id, [])
+    for chat_id, msg_id in locations:
+        try:
+            await bot.edit_message_text(
+                result_text,
+                chat_id=chat_id,
+                message_id=msg_id,
+                parse_mode="HTML",
+                reply_markup=None,
+            )
+        except Exception:
+            pass
+
 
 async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
     """Установить status='pending_mapping' для документов, ожидающих маппинг."""
@@ -725,6 +744,7 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
 
         # ── Итоговое сообщение с кнопками ──
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        from use_cases.permissions import get_accountant_ids
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
                 text="📤 Отправить в iiko",
@@ -738,12 +758,28 @@ async def _handle_mapping_done(placeholder, tg_id: int) -> None:
         warn_text = ""
         if warnings:
             warn_text = "\n\n⚠️ " + "\n⚠️ ".join(warnings[:3])
-        await bot_.send_message(
-            chat_id_,
-            f"📋 <b>Все накладные проверены.</b>{warn_text}\n\nПодтвердите отправку в iiko:",
-            parse_mode="HTML",
-            reply_markup=kb,
-        )
+        summary_text = f"📋 <b>Все накладные проверены.</b>{warn_text}\n\nПодтвердите отправку в iiko:"
+
+        # Сохраняем все сообщения с кнопками чтобы убрать кнопки у всех при нажатии
+        _pending_invoice_messages[tg_id] = []
+
+        # Отправляем отправителю
+        sent = await bot_.send_message(chat_id_, summary_text, parse_mode="HTML", reply_markup=kb)
+        _pending_invoice_messages[tg_id].append((sent.chat.id, sent.message_id))
+
+        # Отправляем бухгалтерам
+        accountant_ids = await get_accountant_ids()
+        for acc_id in accountant_ids:
+            if acc_id == tg_id:
+                continue
+            try:
+                for doc in docs:
+                    doc_invoices = [inv for inv in invoices if inv["ocr_doc_id"] == doc["id"]]
+                    await bot_.send_message(acc_id, _format_doc_preview_text(doc, doc_invoices), parse_mode="HTML")
+                acc_msg = await bot_.send_message(acc_id, summary_text, parse_mode="HTML", reply_markup=kb)
+                _pending_invoice_messages[tg_id].append((acc_msg.chat.id, acc_msg.message_id))
+            except Exception:
+                logger.warning("[ocr] Не удалось уведомить бухгалтера %d", acc_id)
 
     except Exception:
         logger.exception("[ocr] Ошибка подготовки накладных tg:%d", tg_id)
@@ -769,72 +805,75 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
         pass
 
     tg_id = callback.from_user.id
-    logger.info("[ocr] Отправка накладных в iiko tg:%d", tg_id)
 
     try:
         sender_tg_id = int(callback.data.split(":", 1)[1])
     except (ValueError, IndexError):
         try:
-            await callback.message.edit_text("⚠️ Ошибка данных кнопки.")
+            await callback.message.edit_text("⚠️ Ошибка данных кнопки.", reply_markup=None)
         except Exception:
             pass
         return
+
+    # ── Только отправитель или бухгалтер может нажать ──
+    from use_cases.permissions import get_accountant_ids
+    accountant_ids = await get_accountant_ids()
+    if tg_id != sender_tg_id and tg_id not in accountant_ids:
+        await callback.answer("⛔ У вас нет прав на это действие.", show_alert=True)
+        return
+
+    logger.info("[ocr] Отправка накладных в iiko tg:%d sender:%d", tg_id, sender_tg_id)
 
     invoices = _pending_invoices.pop(sender_tg_id, None)
     if not invoices:
-        try:
-            await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.edit_text(
-                "⚠️ Накладные не найдены. Возможно, бот был перезапущен.\n\n"
-                "Нажмите «✅ Маппинг готов» снова для повторной подготовки.",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await _disable_all_invoice_buttons(
+            callback.bot, sender_tg_id,
+            "⚠️ Накладные уже были обработаны или бот был перезапущен."
+        )
         return
 
-    try:
-        await callback.message.edit_text(
-            f"⏳ Загружаю {len(invoices)} накладных в iiko...",
-            reply_markup=None,
-        )
-    except Exception:
-        pass
+    # Первым делом убираем кнопки у ВСЕХ сообщений
+    await _disable_all_invoice_buttons(
+        callback.bot, sender_tg_id,
+        f"⏳ Загружаю {len(invoices)} накладных в iiko..."
+    )
 
     from use_cases import incoming_invoice as inv_uc
 
     try:
         results = await inv_uc.send_invoices_to_iiko(invoices)
 
-        # Обновляем статусы в БД
         ok_doc_ids   = list({r["invoice"]["ocr_doc_id"] for r in results if r.get("ok")})
         fail_doc_ids = list({r["invoice"]["ocr_doc_id"] for r in results if not r.get("ok")})
 
         if ok_doc_ids:
             await inv_uc.mark_documents_imported(ok_doc_ids)
-        # Документы с ошибками остаются в статусе pending — можно повторить
 
         result_text = inv_uc.format_send_result(results)
-
         if fail_doc_ids:
             result_text += (
                 "\n\n⚠️ Документы с ошибками остаются в очереди.\n"
                 "После исправления нажмите «✅ Маппинг готов» снова."
             )
 
+        # Отправляем итог — одним сообщением в чат нажавшего
         try:
-            await callback.message.edit_text(result_text, parse_mode="HTML")
-        except Exception:
             await callback.message.answer(result_text, parse_mode="HTML")
+        except Exception:
+            pass
+
+        # Если нажал бухгалтер — уведомить отправителя тоже
+        if tg_id != sender_tg_id:
+            try:
+                await callback.bot.send_message(sender_tg_id, result_text, parse_mode="HTML")
+            except Exception:
+                pass
 
     except Exception:
         logger.exception("[ocr] Ошибка отправки накладных в iiko tg:%d", tg_id)
+        err_text = "❌ Ошибка при отправке накладных в iiko. Обратитесь к администратору."
         try:
-            await callback.message.edit_text(
-                "❌ Ошибка при отправке накладных в iiko.\n\n"
-                "Проверьте соединение с сервером iiko и повторите попытку.",
-                reply_markup=None,
-            )
+            await callback.message.answer(err_text)
         except Exception:
             pass
 
@@ -852,29 +891,40 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
         pass
 
     tg_id = callback.from_user.id
-    logger.info("[ocr] Отмена отправки накладных tg:%d", tg_id)
 
     try:
         sender_tg_id = int(callback.data.split(":", 1)[1])
     except (ValueError, IndexError):
         sender_tg_id = tg_id
 
+    # ── Только отправитель или бухгалтер может нажать ──
+    from use_cases.permissions import get_accountant_ids
+    accountant_ids = await get_accountant_ids()
+    if tg_id != sender_tg_id and tg_id not in accountant_ids:
+        await callback.answer("⛔ У вас нет прав на это действие.", show_alert=True)
+        return
+
+    logger.info("[ocr] Отмена отправки накладных tg:%d sender:%d", tg_id, sender_tg_id)
+
     invoices = _pending_invoices.pop(sender_tg_id, None)
     doc_ids  = list({inv["ocr_doc_id"] for inv in invoices}) if invoices else []
+
+    cancel_text = (
+        "❌ Загрузка накладных в iiko отменена.\n\n"
+        "Документы помечены как отменённые. "
+        "Если нужно отправить позже — загрузите файл снова."
+    )
+    await _disable_all_invoice_buttons(callback.bot, sender_tg_id, cancel_text)
 
     from use_cases import incoming_invoice as inv_uc
     if doc_ids:
         await inv_uc.mark_documents_cancelled(doc_ids)
 
-    try:
-        await callback.message.edit_text(
-            "❌ Загрузка накладных в iiko отменена.\n\n"
-            "Документы помечены как отменённые. "
-            "Если нужно отправить позже — загрузите фото снова.",
-            reply_markup=None,
-        )
-    except Exception:
-        pass
+    if tg_id != sender_tg_id:
+        try:
+            await callback.bot.send_message(sender_tg_id, cancel_text)
+        except Exception:
+            pass
 
 
 # ════════════════════════════════════════════════════════
@@ -1075,10 +1125,6 @@ async def _build_and_send_json_invoices(
     # ── Итоговая кнопка бухгалтеру ──
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-    # Отправляем бухгалтерам (админам)
-    from use_cases.admin import get_admin_ids
-    admin_ids = await get_admin_ids()
-
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -1104,26 +1150,23 @@ async def _build_and_send_json_invoices(
         f"Подтвердите отправку в iiko:"
     )
 
-    # Отправляем бухгалтерам
-    for admin_id in admin_ids:
-        if admin_id == tg_id:
-            continue  # не дублируем, пользователь уже видит превью
+    # Отправляем бухгалтерам (только роль «📑 Бухгалтер»)
+    from use_cases.permissions import get_accountant_ids
+    accountant_ids = await get_accountant_ids()
+    _pending_invoice_messages[tg_id] = []
+
+    for acc_id in accountant_ids:
+        if acc_id == tg_id:
+            continue
         try:
-            # Превью документов
             for doc in docs:
                 doc_invoices = [inv for inv in invoices if inv["ocr_doc_id"] == doc["id"]]
-                await bot.send_message(
-                    admin_id,
-                    _format_doc_preview_text(doc, doc_invoices),
-                    parse_mode="HTML",
-                )
-            await bot.send_message(
-                admin_id, summary_text, parse_mode="HTML", reply_markup=kb,
-            )
+                await bot.send_message(acc_id, _format_doc_preview_text(doc, doc_invoices), parse_mode="HTML")
+            acc_msg = await bot.send_message(acc_id, summary_text, parse_mode="HTML", reply_markup=kb)
+            _pending_invoice_messages[tg_id].append((acc_msg.chat.id, acc_msg.message_id))
         except Exception:
-            logger.warning("[json] Не удалось уведомить admin %d", admin_id)
+            logger.warning("[json] Не удалось уведомить бухгалтера %d", acc_id)
 
     # Кнопки и для пользователя
-    await bot.send_message(
-        chat_id, summary_text, parse_mode="HTML", reply_markup=kb,
-    )
+    sender_msg = await bot.send_message(chat_id, summary_text, parse_mode="HTML", reply_markup=kb)
+    _pending_invoice_messages[tg_id].append((sender_msg.chat.id, sender_msg.message_id))
