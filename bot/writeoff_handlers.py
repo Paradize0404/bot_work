@@ -234,8 +234,8 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
     logger.info("[writeoff] Старт. user=%d, dept=%s (%s), role=%s",
                 message.from_user.id, ctx.department_id, ctx.department_name, ctx.role_name)
 
-    # Фоновый прогрев кеша номенклатуры (если ещё не прогрет)
-    asyncio.create_task(wo_uc.preload_products())
+    # Фоновый прогрев кеша номенклатуры с фильтрацией по папкам подразделения
+    asyncio.create_task(wo_uc.preload_products(ctx.department_id))
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     # Параллельно: is_admin + prepare_writeoff
@@ -433,7 +433,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    products = await wo_uc.search_products(query)
+    products = await wo_uc.search_products(query, department_id=data.get("department_id"))
     if not products:
         await _send_prompt(message.bot, message.chat.id, state,
                            "🔎 Ничего не найдено. Попробуйте другой запрос:",
@@ -1164,7 +1164,7 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    products = await wo_uc.search_products(query)
+    products = await wo_uc.search_products(query, department_id=data.get("department_id"))
     if not products:
         if edit_prompt_id:
             try:

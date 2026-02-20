@@ -20,7 +20,10 @@ from uuid import UUID
 from sqlalchemy import select, func, or_
 
 from db.engine import async_session_factory
-from db.models import Store, Product, Entity
+from db.models import (
+    Store, Product, Entity,
+    GSheetExportGroup, WriteoffRequestStoreGroup, ProductGroup,
+)
 from adapters import iiko_api
 from use_cases import writeoff_cache as _cache
 
@@ -189,33 +192,111 @@ async def get_writeoff_accounts(store_name: str = "") -> list[dict]:
 
 
 # ─────────────────────────────────────────────────────
+# Вспомогательные функции: фильтрация по папкам
+# ─────────────────────────────────────────────────────
+
+async def _is_request_department(department_id: str) -> bool:
+    """Проверить, является ли подразделение точкой-получателем заявок."""
+    from use_cases.product_request import get_request_stores
+    stores = await get_request_stores()
+    return any(s["id"] == department_id for s in stores)
+
+
+async def _bfs_allowed_groups(session, group_model_class) -> set[str]:
+    """
+    BFS по iiko_product_group: вернуть множество UUID всех групп-потомков
+    корневых записей из таблицы group_model_class (gsheet_export_group
+    или writeoff_request_store_group).
+
+    Возвращает пустое множество, если таблица пуста.
+    """
+    root_rows = (await session.execute(
+        select(group_model_class.group_id)
+    )).all()
+    root_ids = [str(r.group_id) for r in root_rows]
+
+    if not root_ids:
+        return set()
+
+    group_rows = (await session.execute(
+        select(ProductGroup.id, ProductGroup.parent_id)
+        .where(ProductGroup.deleted.is_(False))
+    )).all()
+
+    children_map: dict[str, list[str]] = {}
+    for g in group_rows:
+        pid = str(g.parent_id) if g.parent_id else None
+        if pid:
+            children_map.setdefault(pid, []).append(str(g.id))
+
+    allowed: set[str] = set()
+    queue = list(root_ids)
+    while queue:
+        gid = queue.pop()
+        if gid in allowed:
+            continue
+        allowed.add(gid)
+        queue.extend(children_map.get(gid, []))
+
+    return allowed
+
+
+# ─────────────────────────────────────────────────────
 # Кеш и поиск номенклатуры
 # ─────────────────────────────────────────────────────
 
-async def preload_products() -> None:
+async def preload_products(department_id: str | None = None) -> None:
     """
-    Загрузить все GOODS/PREPARED товары + единицы измерения в in-memory кеш.
-    Вызывается фоново при входе в «Документы».
+    Загрузить товары для списания в in-memory кеш.
+
+    Логика фильтрации (если department_id задан):
+      - Точка-получатель заявок → GOODS из writeoff_request_store_group (BFS) + все PREPARED
+      - Все остальные точки     → GOODS из gsheet_export_group (BFS) + все PREPARED
+    Если таблица папок пуста → показываем только PREPARED.
+
+    Если department_id не задан → загружает все GOODS+PREPARED (без фильтрации, fallback).
     ~1942 товара × ~200 байт ≈ 400 КБ RAM. TTL = 10 мин.
     После загрузки search_products ищет за 0 мс вместо ~2 сек (DB round-trip).
     """
-    if _cache.get_products() is not None:
+    cache_key = department_id or "all"
+    if _cache.get_products(cache_key) is not None:
         return  # уже прогрет
 
     t0 = time.monotonic()
+
     async with async_session_factory() as session:
+        # Определяем набор разрешённых групп (если dept задан)
+        allowed_groups: set[str] | None = None
+        if department_id is not None:
+            is_req = await _is_request_department(department_id)
+            group_model = WriteoffRequestStoreGroup if is_req else GSheetExportGroup
+            allowed_groups = await _bfs_allowed_groups(session, group_model)
+            logger.info(
+                "[writeoff] Прогрев кеша для dept=%s (%s): %d разрешённых групп",
+                department_id, group_model.__tablename__, len(allowed_groups),
+            )
+
         stmt = (
-            select(Product.id, Product.name, Product.main_unit, Product.product_type)
+            select(Product.id, Product.name, Product.parent_id,
+                   Product.main_unit, Product.product_type)
             .where(Product.product_type.in_(["GOODS", "PREPARED"]))
-            .where(Product.deleted == False)
+            .where(Product.deleted.is_(False))
             .order_by(Product.name)
         )
         result = await session.execute(stmt)
         rows = result.all()
 
+        # Фильтр папок: GOODS — только из разрешённых групп, PREPARED — всегда
+        if allowed_groups is not None:
+            rows = [
+                r for r in rows
+                if r.product_type == "PREPARED"
+                or (r.product_type == "GOODS" and r.parent_id
+                    and str(r.parent_id) in allowed_groups)
+            ]
+
         # Батч-резолв единиц: собираем уникальные UUID → один запрос
-        unit_ids = {r[2] for r in rows if r[2]}
-        # Разделяем: что уже в кеше, что нужно догрузить
+        unit_ids = {r.main_unit for r in rows if r.main_unit}
         unit_map: dict[str, str] = {}
         missing_ids = []
         for uid in unit_ids:
@@ -241,46 +322,55 @@ async def preload_products() -> None:
 
     # Формируем список
     items: list[dict] = []
-    for pid, pname, pmain_unit, ptype in rows:
-        uid_str = str(pmain_unit) if pmain_unit else None
+    for r in rows:
+        uid_str = str(r.main_unit) if r.main_unit else None
         uname = unit_map.get(uid_str, "шт") if uid_str else "шт"
         unorm = normalize_unit(uname)
         items.append({
-            "id": str(pid),
-            "name": pname,
-            "name_lower": pname.lower() if pname else "",
+            "id": str(r.id),
+            "name": r.name,
+            "name_lower": r.name.lower() if r.name else "",
             "main_unit": uid_str,
-            "product_type": ptype,
+            "product_type": r.product_type,
             "unit_name": uname,
             "unit_norm": unorm,
         })
 
-    _cache.set_products(items)
+    _cache.set_products(items, cache_key)
     logger.info(
-        "[writeoff] Прогрев кеша номенклатуры: %d товаров за %.2f сек",
-        len(items), time.monotonic() - t0,
+        "[writeoff] Прогрев кеша номенклатуры (dept=%s): %d товаров за %.2f сек",
+        cache_key, len(items), time.monotonic() - t0,
     )
 
 
-async def search_products(query: str, limit: int = 15) -> list[dict]:
+async def search_products(
+    query: str,
+    limit: int = 15,
+    department_id: str | None = None,
+) -> list[dict]:
     """
     Поиск товаров по подстроке названия.
-    Только GOODS и PREPARED, не удалённые.
-    Возвращает [{id, name, main_unit, product_type, unit_name, unit_norm}, ...].
 
-    Стратегия:
-      1. Если в кеше есть products → поиск in-memory (0 мс)
-      2. Иначе → запрос в БД (fallback, ~2 сек)
+    Фильтрация зависит от подразделения (department_id):
+      - Точка-получатель заявок → GOODS из writeoff_request_store_group + все PREPARED
+      - Все остальные точки     → GOODS из gsheet_export_group + все PREPARED
+      - department_id=None      → все GOODS+PREPARED (без фильтрации, fallback)
+
+    Стратегия поиска:
+      1. Если в кеше есть products для данного dept → поиск in-memory (0 мс)
+      2. Иначе → прогреть кеш + повторить
+      3. Если кеш пуст (таблицы групп пусты) → fallback-запрос в БД
     """
     t0 = time.monotonic()
     pattern = query.strip().lower()
     if not pattern:
         return []
 
-    logger.info("[writeoff] Поиск товаров по «%s»...", pattern)
+    cache_key = department_id or "all"
+    logger.info("[writeoff] Поиск товаров по «%s» (dept=%s)...", pattern, cache_key)
 
     # --- Попытка поиска в кеше ---
-    cached_products = _cache.get_products()
+    cached_products = _cache.get_products(cache_key)
     if cached_products is not None:
         results = [
             {k: v for k, v in p.items() if k != "name_lower"}
@@ -288,20 +378,36 @@ async def search_products(query: str, limit: int = 15) -> list[dict]:
             if pattern in p["name_lower"]
         ][:limit]
         logger.info(
-            "[writeoff] Поиск «%s» → %d результатов за %.4f сек (кеш)",
-            pattern, len(results), time.monotonic() - t0,
+            "[writeoff] Поиск «%s» → %d результатов за %.4f сек (кеш, dept=%s)",
+            pattern, len(results), time.monotonic() - t0, cache_key,
         )
         return results
 
-    # --- Fallback: запрос в БД ---
-    logger.debug("[writeoff] Кеш номенклатуры пуст, ищу в БД...")
+    # --- Прогреваем кеш и повторяем ---
+    logger.debug("[writeoff] Кеш пуст (dept=%s), прогреваю...", cache_key)
+    await preload_products(department_id)
+    cached_products = _cache.get_products(cache_key)
+    if cached_products is not None:
+        results = [
+            {k: v for k, v in p.items() if k != "name_lower"}
+            for p in cached_products
+            if pattern in p["name_lower"]
+        ][:limit]
+        logger.info(
+            "[writeoff] Поиск «%s» → %d результатов за %.4f сек (после прогрева, dept=%s)",
+            pattern, len(results), time.monotonic() - t0, cache_key,
+        )
+        return results
+
+    # --- Fallback: запрос в БД без фильтрации по папкам ---
+    logger.debug("[writeoff] Fallback: ищу в БД без фильтра папок...")
 
     async with async_session_factory() as session:
         stmt = (
             select(Product)
             .where(func.lower(Product.name).contains(pattern))
             .where(Product.product_type.in_(["GOODS", "PREPARED"]))
-            .where(Product.deleted == False)
+            .where(Product.deleted.is_(False))
             .order_by(Product.name)
             .limit(limit)
         )
@@ -310,8 +416,7 @@ async def search_products(query: str, limit: int = 15) -> list[dict]:
 
         # Батч-резолв единиц измерения в той же сессии (один RT вместо N)
         unit_ids = {p.main_unit for p in products if p.main_unit}
-        # Сначала смотрим кеш, потом догружаем оставшиеся из БД
-        unit_map: dict[str, str] = {}  # uuid_str → unit_name
+        unit_map: dict[str, str] = {}
         missing_ids = []
         for uid in unit_ids:
             uid_str = str(uid)
@@ -349,7 +454,7 @@ async def search_products(query: str, limit: int = 15) -> list[dict]:
         })
 
     logger.info(
-        "[writeoff] Поиск «%s» → %d результатов за %.2f сек (БД)",
+        "[writeoff] Поиск «%s» → %d результатов за %.2f сек (БД fallback)",
         pattern, len(items), time.monotonic() - t0,
     )
     return items
@@ -483,7 +588,7 @@ async def preload_for_user(department_id: str) -> None:
         stores, _, _ = await asyncio.gather(
             get_stores_for_department(department_id),
             _admin_uc.get_admin_ids(),
-            preload_products(),
+            preload_products(department_id),
         )
         # параллельно грузим счета для всех складов
         await asyncio.gather(

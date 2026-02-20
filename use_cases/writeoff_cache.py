@@ -53,13 +53,16 @@ def set_unit(unit_id: str, name: str) -> None:
     _cache.set(f"unit:{unit_id}", name)
 
 
-def get_products() -> list[dict] | None:
-    """Все товары (GOODS/PREPARED) из кеша (или None если нет/протухли)."""
-    return _cache.get("products:all")
+def get_products(department_id: str = "all") -> list[dict] | None:
+    """Товары из кеша для данного подразделения (или None если нет/протухли).
+
+    department_id="all" — старый глобальный ключ (fallback для обратной совместимости).
+    """
+    return _cache.get(f"products:{department_id}")
 
 
-def set_products(products: list[dict]) -> None:
-    _cache.set("products:all", products)
+def set_products(products: list[dict], department_id: str = "all") -> None:
+    _cache.set(f"products:{department_id}", products)
 
 
 def invalidate() -> None:

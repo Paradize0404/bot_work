@@ -395,6 +395,39 @@ class GSheetExportGroup(Base):
 
 
 # ─────────────────────────────────────────────────────
+# 13b. Разрешённые папки для списания на точке-получателе заявок
+# ─────────────────────────────────────────────────────
+
+class WriteoffRequestStoreGroup(Base):
+    """
+    Корневые группы номенклатуры, разрешённые при поиске товаров для
+    списания на подразделении, которое принимает заявки (request store).
+
+    Аналог gsheet_export_group — применяется только к точке-получателю.
+    При поиске: GOODS из папок этой таблицы (BFS) + все PREPARED.
+
+    Инициализация (пример):
+        INSERT INTO writeoff_request_store_group (group_id, group_name)
+        VALUES ('uuid-здесь', 'Товары ЦК');
+    """
+    __tablename__ = "writeoff_request_store_group"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    group_id = Column(
+        UUID(as_uuid=True), nullable=False, unique=True,
+        comment="UUID группы из iiko_product_group",
+    )
+    group_name = Column(
+        String(500), nullable=True,
+        comment="Название группы (денормализовано, для удобства)",
+    )
+    added_at = Column(
+        DateTime, default=_utcnow, server_default="now()", nullable=False,
+        comment="Когда добавлена",
+    )
+
+
+# ─────────────────────────────────────────────────────
 # 14. История списаний (writeoff_history)
 # ─────────────────────────────────────────────────────
 
@@ -845,7 +878,7 @@ class StoplistHistory(Base):
 
 
 # ─────────────────────────────────────────────────────
-# Итого 25 таблиц:
+# Итого 26 таблиц:
 #   iiko_entity        — все справочники (1 кнопка)
 #   iiko_department    — подразделения
 #   iiko_store         — склады
@@ -859,7 +892,8 @@ class StoplistHistory(Base):
 #   bot_admin          — администраторы бота
 #   iiko_stock_balance — остатки по складам (OLAP)
 #   min_stock_level    — мин/макс остатки (из Google Таблицы)
-#   gsheet_export_group — корневые группы для экспорта в GSheet
+#   gsheet_export_group — корневые группы для экспорта в GSheet (прайс / накладные)
+#   writeoff_request_store_group — разрешённые папки для списания на точке-получателе
 #   writeoff_history   — история отправленных списаний
 #   invoice_template   — шаблоны расходных накладных
 #   price_product      — прайс-лист: товары + себестоимость
