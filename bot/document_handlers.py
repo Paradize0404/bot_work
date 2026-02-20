@@ -109,22 +109,27 @@ async def _repush(
     parse_mode: str | None = None,
     reply_markup=None,
 ):
-    """Удалить старое сообщение-плейсхолдер и отправить новое внизу.
+    """Отредактировать сообщение-плейсхолдер на месте.
+    Если редактирование не поддерживается (напр. слишком старое), удаляет и создаёт новое внизу.
 
-    Возвращает новый объект Message.
+    Возвращает новый/отредактированный объект Message.
     """
-    bot     = msg.bot
-    chat_id = msg.chat.id
-    try:
-        await bot.delete_message(chat_id, msg.message_id)
-    except Exception:
-        pass
     kw: dict = {"text": text}
     if parse_mode:
         kw["parse_mode"] = parse_mode
-    if reply_markup:
+    if reply_markup is not None:
         kw["reply_markup"] = reply_markup
-    return await bot.send_message(chat_id, **kw)
+    # Пытаемся отредактировать на месте
+    try:
+        return await msg.edit_text(**kw)
+    except Exception:
+        pass
+    # Fallback: удалить + отправить новым сообщением
+    try:
+        await msg.delete()
+    except Exception:
+        pass
+    return await msg.bot.send_message(msg.chat.id, **kw)
 
 
 # ════════════════════════════════════════════════════════
@@ -659,6 +664,10 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
         return
 
     if not is_ready:
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        retry_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Маппинг готов", callback_data="mapping_done")],
+        ])
         missing_str = "\n".join(f"• {m}" for m in missing[:10])
         suffix = f"\n... и ещё {len(missing) - 10}" if len(missing) > 10 else ""
         await _repush(
@@ -666,7 +675,8 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
             f"⚠️ Не все позиции заполнены!\n\n"
             f"Незаполнено: {len(missing)} из {total_count}\n\n"
             f"{missing_str}{suffix}\n\n"
-            f"Откройте Google Таблицу, заполните строки и нажмите «✅ Маппинг готов» снова."
+            f"Откройте Google Таблицу, заполните строки и нажмите кнопку ниже:",
+            reply_markup=retry_kb,
         )
         return
 
