@@ -98,9 +98,9 @@ async def get_pending_ocr_documents(
                 "iiko_id":    item.iiko_id or "",
                 "iiko_name":  item.iiko_name or "",
                 "store_type": item.store_type or "",
-                "qty":        item.qty,
-                "price":      item.price,
-                "sum":        item.sum,
+                "qty":        round(item.qty, 4)  if item.qty  else item.qty,
+                "price":      round(item.price, 2) if item.price else item.price,
+                "sum":        round(item.sum, 2)   if item.sum   else item.sum,
                 "unit":       item.unit or "",
             })
         docs.append({
@@ -266,9 +266,9 @@ async def build_iiko_invoices(
             iiko_items: list[dict] = []
             for item in group_items:
                 pid   = item["iiko_id"]
-                qty   = float(item.get("qty") or 0.0)
-                price = float(item.get("price") or 0.0)
-                total = float(item.get("sum") or round(qty * price, 2))
+                qty   = round(float(item.get("qty") or 0.0), 4)
+                price = round(float(item.get("price") or 0.0), 2)
+                total = round(float(item.get("sum") or round(qty * price, 2)), 2)
                 iiko_items.append({
                     "productId":     pid,
                     "raw_name":      item.get("raw_name") or "",

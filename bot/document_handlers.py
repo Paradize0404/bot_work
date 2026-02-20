@@ -552,9 +552,11 @@ def _format_doc_preview_text(doc: dict, invoices: list[dict]) -> str:
         lines.append(f"\n🏪 <b>{label}</b>  №{doc_num}  —  {len(items)} поз.")
         for item in items[:10]:
             name  = item.get("iiko_name") or item.get("raw_name") or "?"
-            qty   = item.get("amount") or 0
-            price = item.get("price") or 0
-            lines.append(f"  • {name} — {qty} × {price:,.2f} ₽".replace(",", "\u202f"))
+            qty   = round(float(item.get("amount") or 0), 4)
+            price = round(float(item.get("price") or 0), 2)
+            # Убираем лишние нули: 60.0 → 60, 0.24 → 0.24
+            qty_s = f"{qty:g}"
+            lines.append(f"  • {name} — {qty_s} × {price:,.2f} ₽".replace(",", "\u202f"))
         if len(items) > 10:
             lines.append(f"  … ещё {len(items) - 10} позиций")
     return "\n".join(lines)
