@@ -46,6 +46,7 @@ async def _daily_full_sync() -> None:
       2. FinTablo: все 13 справочников
       3. Остатки по складам (sync_stock_balances)
       4. Min/max из Google Таблицы (sync_min_stock)
+      5. Обновить «Маппинг Справочник» в Google Таблице (GOODS-товары)
     """
     t0 = time.monotonic()
     started = now_kgd()
@@ -83,6 +84,15 @@ async def _daily_full_sync() -> None:
     except Exception:
         logger.exception("[scheduler] Ошибка sync min/max GSheet")
         report_lines.append("📋 Min/max GSheet: ❌ ошибка")
+
+    # ── 4. Обновить справочник товаров для маппинга ──
+    try:
+        from use_cases.ocr_mapping import refresh_ref_sheet
+        ref_count = await refresh_ref_sheet()
+        report_lines.append(f"🗂 Маппинг справочник: ✅ {ref_count} товаров")
+    except Exception:
+        logger.exception("[scheduler] Ошибка обновления справочника маппинга")
+        report_lines.append("🗂 Маппинг справочник: ❌ ошибка")
 
     elapsed = time.monotonic() - t0
     report_lines.append(f"\n⏱ Время: {elapsed:.1f} сек")
