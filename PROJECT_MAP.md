@@ -1,6 +1,6 @@
 # 🗂 Карта проекта iiko + FinTablo Sync Bot
 
-> Последнее обновление: 2026-02-18
+> Последнее обновление: 2026-02-20
 > Язык общения с разработчиком: **русский**
 
 ---
@@ -426,13 +426,13 @@ iikoCloud POST /iiko-webhook
 ```
 ✅ Маппинг готов
   └─ check_transfer_ready() → проверяем, у всех ли строк заполнена колонка C («Маппинг Импорт»)
-      ├─ Не готово → сообщение с перечнем незаполненных
+      ├─ Не готово → сообщение с перечнем незаполненных + кнопка «✅ Маппинг готов» для повтора
       └─ Готово → finalize_transfer()
           ├─ Читаем «Маппинг Импорт»
-          ├─ Обогащаем iiko_id из БД (iiko_supplier / iiko_product)
+          ├─ Обогащаем iiko_id из БД (iiko_supplier / iiko_product + reverse-алиасы display→real)
           ├─ UPSERT в «Маппинг» (база)
           ├─ Очищаем «Маппинг Импорт»
-          └─ build_iiko_invoices() → превью + кнопки
+          └─ build_iiko_invoices(doc_ids текущей сессии) → превью + кнопки
               ├─ [📤 Отправить в iiko] → send_invoices_to_iiko() → POST XML → mark_imported
               └─ [❌ Отменить] → mark_cancelled
 ```
@@ -443,8 +443,11 @@ iikoCloud POST /iiko-webhook
 |------|-----------|-----------|
 | «Маппинг» | База маппинга (постоянная) | A: тип (поставщик/товар), B: OCR-имя, C: iiko-имя, D: iiko-id |
 | «Маппинг Импорт» | Трансфер для бухгалтера | A: тип, B: OCR-имя, C: iiko-имя (dropdown) — очищается после finalize |
+| «Маппинг Справочник» | Скрытый ref-лист для dropdown | A: display_name товаров GOODS (без тех. префиксов), обновляется ежедневно + по кнопке |
 
-- Dropdown в колонке C: `ONE_OF_LIST` — список из БД (поставщики или товары iiko, макс 500)
+- Dropdown в колонке C товарных строк: `ONE_OF_RANGE` → `='Маппинг Справочник'!$A$1:$A$N` — весь список GOODS без ограничения 500
+- **Display_name:** `т_бутылка 2л ПЭТ с крышкой` хранится в ref-листе как `бутылка 2л ПЭТ с крышкой` — поиск «бут» находит все варианты
+- При финализации: reverse-алиас `бутылка 2л...` → `т_бутылка 2л...` для поиска iiko_id в БД
 - Строки разделены: сначала поставщики (header синий), потом пустая строка, потом товары (header синий)
 
 ### Классификация doc_type
@@ -462,10 +465,11 @@ iikoCloud POST /iiko-webhook
 
 | Модуль | Роль |
 |--------|------|
-| `bot/document_handlers.py` | FSM-хэндлеры: btn_ocr_start, handle_ocr_photo, btn_mapping_done |
-| `use_cases/ocr_mapping.py` | get_base_mapping, apply_mapping, write_transfer, check_transfer_ready, finalize_transfer, notify_accountants |
+| `bot/document_handlers.py` | FSM-хэндлеры: btn_ocr_start, handle_ocr_photo, btn_mapping_done, cb_mapping_done, cb_refresh_mapping_ref |
+| `use_cases/ocr_mapping.py` | get_base_mapping, apply_mapping, write_transfer, check_transfer_ready, finalize_transfer, notify_accountants, refresh_ref_sheet, _strip_tech_prefix, _load_iiko_goods_products |
 | `use_cases/ocr_pipeline.py` | process_photo_batch — OCR + VAT-коррекция |
-| `adapters/google_sheets.py` | read_base_mapping_sheet, write_mapping_import_sheet, read_mapping_import_sheet, upsert_base_mapping, clear_mapping_import_sheet |
+| `use_cases/incoming_invoice.py` | get_pending_ocr_documents, build_iiko_invoices, send_invoices_to_iiko, mark_documents_imported, mark_documents_cancelled |
+| `adapters/google_sheets.py` | read_base_mapping_sheet, write_mapping_import_sheet, refresh_import_sheet_dropdown, read_mapping_import_sheet, upsert_base_mapping, clear_mapping_import_sheet |
 | `models/ocr.py` | OcrDocument, OcrItem (+ iiko_id, iiko_name columns) |
 
 ---
