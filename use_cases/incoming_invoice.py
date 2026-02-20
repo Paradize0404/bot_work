@@ -88,6 +88,13 @@ async def get_pending_ocr_documents(
         result   = await session.execute(stmt)
         doc_objs = result.scalars().all()
 
+    # Дедупликация: по паре (doc_number, doc_type) оставляем только последний документ
+    _seen: dict = {}
+    for d in doc_objs:
+        key = (d.doc_number or d.id, d.doc_type)
+        _seen[key] = d  # поздний перезаписывает раннее (doc_objs сортирован по created_at)
+    doc_objs = list(_seen.values())
+
     docs: list[dict] = []
     for d in doc_objs:
         items: list[dict] = []

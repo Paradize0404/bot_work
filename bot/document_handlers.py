@@ -109,27 +109,29 @@ async def _repush(
     parse_mode: str | None = None,
     reply_markup=None,
 ):
-    """Отредактировать сообщение-плейсхолдер на месте.
-    Если редактирование не поддерживается (напр. слишком старое), удаляет и создаёт новое внизу.
-
-    Возвращает новый/отредактированный объект Message.
+    """Отредактировать сообщение-плейсхолдер на месте (через edit_message_text).
+    Если редактирование не удалось, удаляет и создаёт новое внизу.
+    Возвращает отредактированный/новый объект Message.
     """
+    bot_     = msg.bot
+    chat_id  = msg.chat.id
+    msg_id   = msg.message_id
     kw: dict = {"text": text}
     if parse_mode:
         kw["parse_mode"] = parse_mode
     if reply_markup is not None:
         kw["reply_markup"] = reply_markup
-    # Пытаемся отредактировать на месте
+    # Пытаемся отредактировать на месте через API Bot напрямую
     try:
-        return await msg.edit_text(**kw)
+        return await bot_.edit_message_text(chat_id=chat_id, message_id=msg_id, **kw)
     except Exception:
         pass
-    # Fallback: удалить + отправить новым сообщением
+    # Fallback: удалить + отправить новым
     try:
-        await msg.delete()
+        await bot_.delete_message(chat_id, msg_id)
     except Exception:
         pass
-    return await msg.bot.send_message(msg.chat.id, **kw)
+    return await bot_.send_message(chat_id, **kw)
 
 
 # ════════════════════════════════════════════════════════
@@ -364,12 +366,37 @@ async def _save_ocr_document(tg_id: int, result_data: dict, file_ids: list[str] 
         buyer    = result_data.get("buyer") or {}
 
         async with async_session_factory() as session:
+            # Удаляем дубликаты с тем же номером/типом, которые ещё не финализированы
+            _doc_number = result_data.get("doc_number")
+            _doc_type   = result_data.get("doc_type") or "unknown"
+            if _doc_number:
+                from sqlalchemy import delete as _sa_delete, and_ as _sa_and
+                from models.ocr import OcrItem as _OcrItem
+                dup_ids = (
+                    await session.execute(
+                        select(OcrDocument.id)
+                        .where(_sa_and(
+                            OcrDocument.doc_number == _doc_number,
+                            OcrDocument.doc_type   == _doc_type,
+                            OcrDocument.status.in_(["recognized", "pending_mapping"]),
+                        ))
+                    )
+                ).scalars().all()
+                if dup_ids:
+                    # Сначала удаляем дочерние items, затем сам документ
+                    await session.execute(
+                        _sa_delete(_OcrItem).where(_OcrItem.document_id.in_(dup_ids))
+                    )
+                    await session.execute(
+                        _sa_delete(OcrDocument).where(OcrDocument.id.in_(dup_ids))
+                    )
+                    logger.info("[ocr] Удалены дубликаты документа %s (%d шт.)", _doc_number, len(dup_ids))
             doc = OcrDocument(
                 telegram_id=str(tg_id),
                 user_id=str(ctx.employee_id)     if ctx and ctx.employee_id   else None,
                 department_id=str(ctx.department_id) if ctx and ctx.department_id else None,
-                doc_type=result_data.get("doc_type") or "unknown",
-                doc_number=result_data.get("doc_number"),
+                doc_type=_doc_type,
+                doc_number=_doc_number,
                 doc_date=doc_date,
                 supplier_name=supplier.get("name"),
                 supplier_inn=supplier.get("inn"),
