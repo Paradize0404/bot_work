@@ -722,18 +722,6 @@ async def sync_invoice_prices_to_sheet(
             except json.JSONDecodeError:
                 logger.debug("[%s] update() вернул пустой body (ОК)", LABEL)
 
-        # ── 8. Очистка валидации с колонки D (Себестоимость) ──
-        # Удаляем старую валидацию, чтобы колонка D была обычным значением
-        try:
-            from gspread.worksheet import ValidationConditionType
-
-            # Очищаем валидацию со всей колонки D (строки 3 до конца)
-            cost_range = f"D3:D{2 + len(data_rows)}"
-            ws.clear_validation(cost_range)
-            logger.info("[%s] Очищена валидация колонки D (Себестоимость)", LABEL)
-        except Exception:
-            logger.debug("[%s] Очистка валидации D не удалась (ОК)", LABEL, exc_info=True)
-
         # ── 9. Dropdown складов в колонке C (строки 3+) ──
         try:
             from gspread.worksheet import ValidationConditionType
@@ -887,6 +875,19 @@ async def sync_invoice_prices_to_sheet(
                         },
                         "properties": {"pixelSize": 130},
                         "fields": "pixelSize",
+                    }
+                },
+                # Очистка валидации колонки D (Себестоимость) — пустое правило = удаление
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "startRowIndex": 2,
+                            "endRowIndex": 2 + len(data_rows),
+                            "startColumnIndex": 3,
+                            "endColumnIndex": 4,
+                        },
+                        # rule отсутствует → валидация снимается
                     }
                 },
             ]
