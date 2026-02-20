@@ -2132,7 +2132,8 @@ async def sync_cloud_org_mapping_to_sheet(
 
 _MAPPING_BASE_TAB    = "Маппинг"
 _MAPPING_IMPORT_TAB  = "Маппинг Импорт"
-_MAPPING_MAX_DROPDOWN = 500   # лимит ONE_OF_LIST в Sheets API
+_MAPPING_REF_TAB     = "Маппинг Справочник"   # скрытый лист с полным списком товаров/поставщиков
+_MAPPING_MAX_DROPDOWN = 500   # лимит ONE_OF_LIST (для коротких списков — типы складов, поставщики)
 
 
 def _get_mapping_worksheet(tab_name: str) -> gspread.Worksheet:
@@ -2153,7 +2154,9 @@ _STORE_TYPES: list[str] = ["бар", "кухня", "тмц", "хозы"]
 
 
 def _set_dropdown(spreadsheet, ws, start_row: int, end_row: int, col: int, options: list[str]) -> None:
-    """Установить dropdown-валидацию для диапазона ячеек в столбце col (1-indexed)."""
+    """Установить dropdown-валидацию для диапазона ячеек в столбце col (1-indexed).
+    Использует ONE_OF_LIST — только для коротких списков (типы складов, поставщики).
+    """
     if not options:
         return
     truncated = options[:_MAPPING_MAX_DROPDOWN]
@@ -2185,6 +2188,90 @@ def _set_dropdown(spreadsheet, ws, start_row: int, end_row: int, col: int, optio
         spreadsheet.batch_update(body)
     except Exception:
         logger.warning("[%s] Ошибка установки dropdown", LABEL, exc_info=True)
+
+
+def _write_ref_column(spreadsheet, col_index: int, values: list[str]) -> None:
+    """Записать все значения в столбец col_index (0-indexed) справочного листа 'Маппинг Справочник'.
+    Возвращает (sheet_id, имя_листа, кол-во записанных строк).
+    """
+    try:
+        ws = spreadsheet.worksheet(_MAPPING_REF_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=_MAPPING_REF_TAB, rows=max(len(values) + 10, 3000), cols=4)
+        logger.info("[%s] Лист «%s» создан", LABEL, _MAPPING_REF_TAB)
+
+    # Скрыть лист (не виден пользователю)
+    try:
+        spreadsheet.batch_update({"requests": [{
+            "updateSheetProperties": {
+                "properties": {"sheetId": ws.id, "hidden": True},
+                "fields": "hidden",
+            }
+        }]})
+    except Exception:
+        pass
+
+    # Определяем букву столбца (A, B, C …)
+    col_letter = chr(ord("A") + col_index)
+
+    # Очистить столбец
+    ws.batch_clear([f"{col_letter}1:{col_letter}{ws.row_count}"])
+
+    # Записать значения
+    if values:
+        ws.update(
+            range_name=f"{col_letter}1",
+            values=[[v] for v in values],
+            value_input_option="RAW",
+        )
+    return ws.id, _MAPPING_REF_TAB, len(values)
+
+
+def _set_range_dropdown(
+    spreadsheet,
+    target_ws,
+    start_row: int,
+    end_row: int,
+    col: int,
+    ref_sheet_id: int,
+    ref_col_index: int,
+    ref_count: int,
+) -> None:
+    """Установить dropdown-валидацию через ONE_OF_RANGE — без ограничения на 500 элементов.
+
+    С䐛ылается на столбец в листе _MAPPING_REF_TAB.
+    """
+    body = {
+        "requests": [{
+            "setDataValidation": {
+                "range": {
+                    "sheetId":          target_ws.id,
+                    "startRowIndex":    start_row - 1,
+                    "endRowIndex":      end_row,
+                    "startColumnIndex": col - 1,
+                    "endColumnIndex":   col,
+                },
+                "rule": {
+                    "condition": {
+                        "type": "ONE_OF_RANGE",
+                        "values": [{
+                            "userEnteredValue": (
+                                f"='{_MAPPING_REF_TAB}'"
+                                f"!${chr(ord('A') + ref_col_index)}$1"
+                                f":${chr(ord('A') + ref_col_index)}${ref_count}"
+                            )
+                        }],
+                    },
+                    "showCustomUi": True,
+                    "strict": False,
+                },
+            }
+        }]
+    }
+    try:
+        spreadsheet.batch_update(body)
+    except Exception:
+        logger.warning("[%s] Ошибка установки range dropdown", LABEL, exc_info=True)
 
 
 def read_base_mapping_sheet() -> list[dict[str, str]]:
@@ -2309,10 +2396,11 @@ def write_mapping_import_sheet(
         end_row = sup_start_row + len(unmapped_suppliers) - 1
         _set_dropdown(spreadsheet, ws, sup_start_row, end_row + 1, 3, iiko_supplier_names)
 
-    # ── Dropdown для товаров (iiko Имя, кол. C) ──
+    # ── Dropdown для товаров: записываем все в справочный лист + ONE_OF_RANGE (без лимита 500) ──
     if unmapped_products and iiko_product_names:
         end_row = prd_start_row + len(unmapped_products) - 1
-        _set_dropdown(spreadsheet, ws, prd_start_row, end_row + 1, 3, iiko_product_names)
+        ref_sheet_id, _, ref_count = _write_ref_column(spreadsheet, col_index=0, values=iiko_product_names)
+        _set_range_dropdown(spreadsheet, ws, prd_start_row, end_row + 1, 3, ref_sheet_id, 0, ref_count)
 
     # ── Dropdown типа склада (кол. D) — только для товаров ──
     if unmapped_products:
