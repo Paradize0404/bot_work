@@ -4,12 +4,11 @@ OCR модели для хранения распознанных докумен
 
 from datetime import datetime
 from sqlalchemy import String, Text, REAL, Boolean, ForeignKey, Index, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship, declarative_base
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from uuid import uuid4
 
+from db.models import Base
 from use_cases._helpers import now_kgd
-
-Base = declarative_base()
 
 
 class OcrDocument(Base):

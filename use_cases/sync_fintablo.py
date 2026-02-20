@@ -1,10 +1,10 @@
-"""
-Use-cases: синхронизация справочников FinTablo → PostgreSQL.
+﻿"""
+Use-cases: СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ СЃРїСЂР°РІРѕС‡РЅРёРєРѕРІ FinTablo в†’ PostgreSQL.
 
-Архитектура как у iiko sync:
-  _run_ft_sync()  — единый шаблон: fetch API → map → batch upsert → sync_log
-  _batch_upsert() — переиспользуем из use_cases.sync
-  _map_*()        — маппинг dict из API → dict для таблицы
+РђСЂС…РёС‚РµРєС‚СѓСЂР° РєР°Рє Сѓ iiko sync:
+  _run_ft_sync()  вЂ” РµРґРёРЅС‹Р№ С€Р°Р±Р»РѕРЅ: fetch API в†’ map в†’ batch upsert в†’ sync_log
+  batch_upsert()  вЂ” РїРµСЂРµРёСЃРїРѕР»СЊР·СѓРµРј РёР· use_cases.sync
+  _map_*()        вЂ” РјР°РїРїРёРЅРі dict РёР· API в†’ dict РґР»СЏ С‚Р°Р±Р»РёС†С‹
 """
 
 import asyncio
@@ -16,9 +16,8 @@ from typing import Any, Callable, Coroutine
 from adapters import fintablo_api
 from db.engine import async_session_factory
 from db.models import SyncLog
-from use_cases.sync import _batch_upsert, _mirror_delete, _safe_decimal  # DRY: shared helpers
-from use_cases._helpers import safe_int as _safe_int  # DRY: вместо локального дубликата
-from use_cases._helpers import now_kgd
+from use_cases.sync import batch_upsert, mirror_delete
+from use_cases._helpers import safe_int as _safe_int, safe_decimal, now_kgd
 from db.ft_models import (
     FTCategory,
     FTMoneybag,
@@ -40,9 +39,9 @@ logger = logging.getLogger(__name__)
 FTRowMapper = Callable[[dict, datetime], dict | None]
 
 
-# ═══════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # Generic sync runner
-# ═══════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 async def _run_ft_sync(
     label: str,
@@ -53,33 +52,33 @@ async def _run_ft_sync(
     triggered_by: str | None = None,
 ) -> int:
     """
-    Единый шаблон синхронизации FinTablo:
-      1. await fetch_coro      — получить данные из FinTablo API
-      2. mapper()              — dict API → dict БД (None = пропустить)
-      3. _batch_upsert()       — batch INSERT ON CONFLICT
-      4. SyncLog               — аудит
+    Р•РґРёРЅС‹Р№ С€Р°Р±Р»РѕРЅ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё FinTablo:
+      1. await fetch_coro      вЂ” РїРѕР»СѓС‡РёС‚СЊ РґР°РЅРЅС‹Рµ РёР· FinTablo API
+      2. mapper()              вЂ” dict API в†’ dict Р‘Р” (None = РїСЂРѕРїСѓСЃС‚РёС‚СЊ)
+      3. batch_upsert()       вЂ” batch INSERT ON CONFLICT
+      4. SyncLog               вЂ” Р°СѓРґРёС‚
     """
     started = now_kgd()
     t0 = time.monotonic()
-    logger.info("[FT:%s] Начинаю синхронизацию...", label)
+    logger.info("[FT:%s] РќР°С‡РёРЅР°СЋ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЋ...", label)
 
     try:
         items = await fetch_coro
         t_api = time.monotonic() - t0
-        logger.info("[FT:%s] API: %d записей за %.1f сек", label, len(items), t_api)
+        logger.info("[FT:%s] API: %d Р·Р°РїРёСЃРµР№ Р·Р° %.1f СЃРµРє", label, len(items), t_api)
 
         now = now_kgd()
         rows = [r for item in items if (r := mapper(item, now)) is not None]
         skipped = len(items) - len(rows)
         if skipped:
-            logger.warning("[FT:%s] Пропущено %d (невалидный id)", label, skipped)
+            logger.warning("[FT:%s] РџСЂРѕРїСѓС‰РµРЅРѕ %d (РЅРµРІР°Р»РёРґРЅС‹Р№ id)", label, skipped)
 
         t1 = time.monotonic()
         async with async_session_factory() as session:
-            count = await _batch_upsert(table, rows, conflict_target, f"FT:{label}", session)
-            # Mirror-delete: удалить записи, которых больше нет в API
+            count = await batch_upsert(table, rows, conflict_target, f"FT:{label}", session)
+            # Mirror-delete: СѓРґР°Р»РёС‚СЊ Р·Р°РїРёСЃРё, РєРѕС‚РѕСЂС‹С… Р±РѕР»СЊС€Рµ РЅРµС‚ РІ API
             valid_ids = {r["id"] for r in rows if r.get("id") is not None}
-            deleted = await _mirror_delete(table, "id", valid_ids, f"FT:{label}", session)
+            deleted = await mirror_delete(table, "id", valid_ids, f"FT:{label}", session)
             session.add(SyncLog(
                 entity_type=f"ft_{label}",
                 started_at=started,
@@ -90,12 +89,12 @@ async def _run_ft_sync(
             ))
             await session.commit()
 
-        logger.info("[FT:%s] БД: upsert %d, удалено %d за %.1f сек | Итого %.1f сек",
+        logger.info("[FT:%s] Р‘Р”: upsert %d, СѓРґР°Р»РµРЅРѕ %d Р·Р° %.1f СЃРµРє | РС‚РѕРіРѕ %.1f СЃРµРє",
                     label, count, deleted, time.monotonic() - t1, time.monotonic() - t0)
         return count
 
     except Exception as exc:
-        logger.exception("[FT:%s] ОШИБКА: %s", label, exc)
+        logger.exception("[FT:%s] РћРЁРР‘РљРђ: %s", label, exc)
         try:
             async with async_session_factory() as session:
                 session.add(SyncLog(
@@ -108,13 +107,13 @@ async def _run_ft_sync(
                 ))
                 await session.commit()
         except Exception:
-            logger.exception("[FT:%s] Не удалось записать ошибку в sync_log", label)
+            logger.exception("[FT:%s] РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РїРёСЃР°С‚СЊ РѕС€РёР±РєСѓ РІ sync_log", label)
         raise
 
 
-# ═══════════════════════════════════════════════════════
-# Row mappers (dict API → dict DB; None = skip)
-# ═══════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# Row mappers (dict API в†’ dict DB; None = skip)
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _map_category(item: dict, now: datetime) -> dict | None:
     fid = _safe_int(item.get("id"))
@@ -139,8 +138,8 @@ def _map_moneybag(item: dict, now: datetime) -> dict | None:
         "id": fid, "name": item.get("name"),
         "type": item.get("type"), "number": item.get("number"),
         "currency": item.get("currency"),
-        "balance": _safe_decimal(item.get("balance")),
-        "surplus": _safe_decimal(item.get("surplus")),
+        "balance": safe_decimal(item.get("balance")),
+        "surplus": safe_decimal(item.get("surplus")),
         "surplus_timestamp": _safe_int(item.get("surplusTimestamp")),
         "group_id": _safe_int(item.get("groupId")),
         "archived": _safe_int(item.get("archived")),
@@ -193,11 +192,11 @@ def _map_goods(item: dict, now: datetime) -> dict | None:
         return None
     return {
         "id": fid, "name": item.get("name"),
-        "cost": _safe_decimal(item.get("cost")),
+        "cost": safe_decimal(item.get("cost")),
         "comment": item.get("comment"),
-        "quantity": _safe_decimal(item.get("quantity")),
-        "start_quantity": _safe_decimal(item.get("startQuantity")),
-        "avg_cost": _safe_decimal(item.get("avgCost")),
+        "quantity": safe_decimal(item.get("quantity")),
+        "start_quantity": safe_decimal(item.get("startQuantity")),
+        "avg_cost": safe_decimal(item.get("avgCost")),
         "synced_at": now, "raw_json": item,
     }
 
@@ -210,13 +209,13 @@ def _map_obtaining(item: dict, now: datetime) -> dict | None:
         "id": fid,
         "goods_id": _safe_int(item.get("goodsId")),
         "partner_id": _safe_int(item.get("partnerId")),
-        "amount": _safe_decimal(item.get("amount")),
-        "cost": _safe_decimal(item.get("cost")),
+        "amount": safe_decimal(item.get("amount")),
+        "cost": safe_decimal(item.get("cost")),
         "quantity": _safe_int(item.get("quantity")),
         "currency": item.get("currency"),
         "comment": item.get("comment"),
         "date": item.get("date"),
-        "nds": _safe_decimal(item.get("nds")),
+        "nds": safe_decimal(item.get("nds")),
         "synced_at": now, "raw_json": item,
     }
 
@@ -227,7 +226,7 @@ def _map_job(item: dict, now: datetime) -> dict | None:
         return None
     return {
         "id": fid, "name": item.get("name"),
-        "cost": _safe_decimal(item.get("cost")),
+        "cost": safe_decimal(item.get("cost")),
         "comment": item.get("comment"),
         "direction_id": _safe_int(item.get("directionId")),
         "synced_at": now, "raw_json": item,
@@ -241,9 +240,9 @@ def _map_deal(item: dict, now: datetime) -> dict | None:
     return {
         "id": fid, "name": item.get("name"),
         "direction_id": _safe_int(item.get("directionId")),
-        "amount": _safe_decimal(item.get("amount")),
+        "amount": safe_decimal(item.get("amount")),
         "currency": item.get("currency"),
-        "custom_cost_price": _safe_decimal(item.get("customCostPrice")),
+        "custom_cost_price": safe_decimal(item.get("customCostPrice")),
         "status_id": _safe_int(item.get("statusId")),
         "partner_id": _safe_int(item.get("partnerId")),
         "responsible_id": _safe_int(item.get("responsibleId")),
@@ -251,7 +250,7 @@ def _map_deal(item: dict, now: datetime) -> dict | None:
         "start_date": item.get("startDate"),
         "end_date": item.get("endDate"),
         "act_date": item.get("actDate"),
-        "nds": _safe_decimal(item.get("nds")),
+        "nds": safe_decimal(item.get("nds")),
         "synced_at": now, "raw_json": item,
     }
 
@@ -275,13 +274,13 @@ def _map_obligation(item: dict, now: datetime) -> dict | None:
         "category_id": _safe_int(item.get("categoryId")),
         "direction_id": _safe_int(item.get("directionId")),
         "deal_id": _safe_int(item.get("dealId")),
-        "amount": _safe_decimal(item.get("amount")),
+        "amount": safe_decimal(item.get("amount")),
         "currency": item.get("currency"),
         "status_id": _safe_int(item.get("statusId")),
         "partner_id": _safe_int(item.get("partnerId")),
         "comment": item.get("comment"),
         "act_date": item.get("actDate"),
-        "nds": _safe_decimal(item.get("nds")),
+        "nds": safe_decimal(item.get("nds")),
         "synced_at": now, "raw_json": item,
     }
 
@@ -308,9 +307,9 @@ def _map_employee(item: dict, now: datetime) -> dict | None:
         "id": fid, "name": item.get("name"),
         "date": item.get("date"),
         "currency": item.get("currency"),
-        "regularfix": _safe_decimal(item.get("regularfix")),
-        "regularfee": _safe_decimal(item.get("regularfee")),
-        "regulartax": _safe_decimal(item.get("regulartax")),
+        "regularfix": safe_decimal(item.get("regularfix")),
+        "regularfee": safe_decimal(item.get("regularfee")),
+        "regulartax": safe_decimal(item.get("regulartax")),
         "inn": item.get("inn"),
         "hired": item.get("hired"),
         "fired": item.get("fired"),
@@ -319,9 +318,9 @@ def _map_employee(item: dict, now: datetime) -> dict | None:
     }
 
 
-# ═══════════════════════════════════════════════════════
-# Public API (1 функция = 1 кнопка бота)
-# ═══════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# Public API (1 С„СѓРЅРєС†РёСЏ = 1 РєРЅРѕРїРєР° Р±РѕС‚Р°)
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 async def sync_ft_categories(triggered_by: str | None = None) -> int:
     return await _run_ft_sync(
@@ -414,32 +413,32 @@ async def sync_ft_employees(triggered_by: str | None = None) -> int:
     )
 
 
-# ═══════════════════════════════════════════════════════
-# Параллельная синхронизация всего FinTablo
-# ═══════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# РџР°СЂР°Р»Р»РµР»СЊРЅР°СЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РІСЃРµРіРѕ FinTablo
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
-# Порядок: сначала справочники (от которых зависят другие), потом бизнес-данные
+# РџРѕСЂСЏРґРѕРє: СЃРЅР°С‡Р°Р»Р° СЃРїСЂР°РІРѕС‡РЅРёРєРё (РѕС‚ РєРѕС‚РѕСЂС‹С… Р·Р°РІРёСЃСЏС‚ РґСЂСѓРіРёРµ), РїРѕС‚РѕРј Р±РёР·РЅРµСЃ-РґР°РЅРЅС‹Рµ
 _FT_SYNC_TASKS = [
-    ("📊 Статьи ДДС", sync_ft_categories),
-    ("💰 Счета", sync_ft_moneybags),
-    ("🤝 Контрагенты", sync_ft_partners),
-    ("🎯 Направления", sync_ft_directions),
-    ("📁 Группы счетов", sync_ft_moneybag_groups),
-    ("📦 Товары", sync_ft_goods),
-    ("🛒 Закупки", sync_ft_obtainings),
-    ("🔧 Услуги", sync_ft_jobs),
-    ("📝 Сделки", sync_ft_deals),
-    ("🏷 Статусы обяз.", sync_ft_obligation_statuses),
-    ("📋 Обязательства", sync_ft_obligations),
-    ("📈 Статьи ПиУ", sync_ft_pnl_categories),
-    ("👤 Сотрудники FT", sync_ft_employees),
+    ("рџ“Љ РЎС‚Р°С‚СЊРё Р”Р”РЎ", sync_ft_categories),
+    ("рџ’° РЎС‡РµС‚Р°", sync_ft_moneybags),
+    ("рџ¤ќ РљРѕРЅС‚СЂР°РіРµРЅС‚С‹", sync_ft_partners),
+    ("рџЋЇ РќР°РїСЂР°РІР»РµРЅРёСЏ", sync_ft_directions),
+    ("рџ“Ѓ Р“СЂСѓРїРїС‹ СЃС‡РµС‚РѕРІ", sync_ft_moneybag_groups),
+    ("рџ“¦ РўРѕРІР°СЂС‹", sync_ft_goods),
+    ("рџ›’ Р—Р°РєСѓРїРєРё", sync_ft_obtainings),
+    ("рџ”§ РЈСЃР»СѓРіРё", sync_ft_jobs),
+    ("рџ“ќ РЎРґРµР»РєРё", sync_ft_deals),
+    ("рџЏ· РЎС‚Р°С‚СѓСЃС‹ РѕР±СЏР·.", sync_ft_obligation_statuses),
+    ("рџ“‹ РћР±СЏР·Р°С‚РµР»СЊСЃС‚РІР°", sync_ft_obligations),
+    ("рџ“€ РЎС‚Р°С‚СЊРё РџРёРЈ", sync_ft_pnl_categories),
+    ("рџ‘¤ РЎРѕС‚СЂСѓРґРЅРёРєРё FT", sync_ft_employees),
 ]
 
 
 async def sync_all_fintablo(triggered_by: str | None = None) -> list[tuple[str, int | str]]:
-    """Параллельная синхронизация всех 13 справочников FinTablo."""
+    """РџР°СЂР°Р»Р»РµР»СЊРЅР°СЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РІСЃРµС… 13 СЃРїСЂР°РІРѕС‡РЅРёРєРѕРІ FinTablo."""
     t0 = time.monotonic()
-    logger.info("=== FinTablo: запускаю %d синхронизаций параллельно ===", len(_FT_SYNC_TASKS))
+    logger.info("=== FinTablo: Р·Р°РїСѓСЃРєР°СЋ %d СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёР№ РїР°СЂР°Р»Р»РµР»СЊРЅРѕ ===", len(_FT_SYNC_TASKS))
 
     coros = [func(triggered_by=triggered_by) for _, func in _FT_SYNC_TASKS]
     results = await asyncio.gather(*coros, return_exceptions=True)
@@ -447,15 +446,15 @@ async def sync_all_fintablo(triggered_by: str | None = None) -> list[tuple[str, 
     report: list[tuple[str, int | str]] = []
     for (label, _), result in zip(_FT_SYNC_TASKS, results):
         if isinstance(result, BaseException):
-            logger.error("[FT] %s: ошибка — %s", label, result)
-            report.append((label, f"❌ {result}"))
+            logger.error("[FT] %s: РѕС€РёР±РєР° вЂ” %s", label, result)
+            report.append((label, f"вќЊ {result}"))
         else:
             report.append((label, result))
 
     ok = sum(1 for _, r in report if isinstance(r, int))
     total_records = sum(r for _, r in report if isinstance(r, int))
     logger.info(
-        "=== FinTablo: %d ok, %d err | %d записей | %.1f сек ===",
+        "=== FinTablo: %d ok, %d err | %d Р·Р°РїРёСЃРµР№ | %.1f СЃРµРє ===",
         ok, len(report) - ok, total_records, time.monotonic() - t0,
     )
     return report

@@ -3,6 +3,7 @@
 Все секреты и настройки читаются из .env — никакого хардкода.
 """
 
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -123,3 +124,7 @@ LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
 # ── OpenAI GPT-5.2 (OCR) ──
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    logging.getLogger(__name__).warning(
+        "OPENAI_API_KEY не задан — OCR функции будут недоступны"
+    )

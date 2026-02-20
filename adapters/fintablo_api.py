@@ -79,6 +79,7 @@ async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any
     t0 = time.monotonic()
 
     async with _semaphore:
+        resp = None
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
                 resp = await client.get(
@@ -97,6 +98,12 @@ async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any
                     await asyncio.sleep(delay)
                 else:
                     raise
+        else:
+            # Все попытки исчерпаны (все 429)
+            raise httpx.HTTPStatusError(
+                f"[FT-API] {endpoint} — 429 после {_MAX_RETRIES} попыток",
+                request=resp.request, response=resp,
+            )
 
     data = resp.json()
     items = data.get("items", [])

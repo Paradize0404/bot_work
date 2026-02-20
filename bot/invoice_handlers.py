@@ -29,7 +29,12 @@ from uuid import UUID
 from aiogram import Bot, Router, F
 from aiogram.enums import ChatAction
 from bot.middleware import set_cancel_kb, restore_menu_kb
-from bot._utils import invoices_keyboard
+from bot._utils import (
+    invoices_keyboard,
+    items_inline_kb,
+    send_prompt_msg,
+    update_summary_msg,
+)
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import (
@@ -78,30 +83,15 @@ class InvoiceFromTemplateStates(StatesGroup):
 # ══════════════════════════════════════════════════════
 
 def _stores_kb(stores: list[dict]) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text=s["name"], callback_data=f"inv_store:{s['id']}")]
-        for s in stores
-    ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return items_inline_kb(stores, prefix="inv_store", cancel_data="inv_cancel")
 
 
 def _suppliers_kb(suppliers: list[dict]) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text=s["name"], callback_data=f"inv_sup:{s['id']}")]
-        for s in suppliers
-    ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return items_inline_kb(suppliers, prefix="inv_sup", cancel_data="inv_cancel")
 
 
 def _products_kb(products: list[dict]) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text=p["name"], callback_data=f"inv_prod:{p['id']}")]
-        for p in products
-    ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return items_inline_kb(products, prefix="inv_prod", cancel_data="inv_cancel")
 
 
 def _add_more_kb() -> InlineKeyboardMarkup:
@@ -160,45 +150,14 @@ def _build_summary(data: dict) -> str:
 
 
 async def _update_summary(bot: Bot, chat_id: int, state: FSMContext) -> None:
-    """Обновить summary-сообщение (edit_text)."""
-    data = await state.get_data()
-    header_id = data.get("header_msg_id")
-    text = _build_summary(data)
-    if header_id:
-        try:
-            await bot.edit_message_text(
-                chat_id=chat_id, message_id=header_id,
-                text=text, parse_mode="HTML",
-            )
-            return
-        except Exception as exc:
-            if "message is not modified" in str(exc).lower():
-                return
-            logger.warning("[invoice] summary edit fail: %s", exc)
-    msg = await bot.send_message(chat_id, text, parse_mode="HTML")
-    await state.update_data(header_msg_id=msg.message_id)
+    await update_summary_msg(bot, chat_id, state, _build_summary, log_tag="invoice")
 
 
 async def _send_prompt(
     bot: Bot, chat_id: int, state: FSMContext,
     text: str, reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
-    """Отправить/обновить prompt-сообщение с кнопками."""
-    data = await state.get_data()
-    prompt_id = data.get("prompt_msg_id")
-    if prompt_id:
-        try:
-            await bot.edit_message_text(
-                chat_id=chat_id, message_id=prompt_id,
-                text=text, reply_markup=reply_markup, parse_mode="HTML",
-            )
-            return
-        except Exception as exc:
-            if "message is not modified" in str(exc).lower():
-                return
-            logger.warning("[invoice] prompt edit fail: %s", exc)
-    msg = await bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode="HTML")
-    await state.update_data(prompt_msg_id=msg.message_id)
+    await send_prompt_msg(bot, chat_id, state, text, reply_markup, log_tag="invoice")
 
 
 # ══════════════════════════════════════════════════════

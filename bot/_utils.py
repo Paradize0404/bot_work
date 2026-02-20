@@ -1,9 +1,23 @@
 """
-Shared bot utilities — DRY вместо дублей _escape_md в каждом хэндлере.
-Клавиатуры подменю — общие для handlers.py и других handler-файлов.
+Shared bot utilities — DRY вместо дублей в каждом хэндлере.
+Клавиатуры подменю, inline-KB фабрики, send_prompt / update_summary.
 """
 
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from __future__ import annotations
+
+import logging
+from typing import Callable
+
+from aiogram import Bot
+from aiogram.fsm.context import FSMContext
+from aiogram.types import (
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def escape_md(s: str) -> str:
@@ -61,3 +75,94 @@ def ocr_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="✅ Маппинг готов")],
         [KeyboardButton(text="◀️ Назад")],
     ], resize_keyboard=True)
+
+
+# ═══════════════════════════════════════════════════════
+# Inline-keyboard фабрики (параметризованы префиксом)
+# ═══════════════════════════════════════════════════════
+
+def items_inline_kb(
+    items: list[dict],
+    *,
+    text_key: str = "name",
+    id_key: str = "id",
+    prefix: str,
+    cancel_data: str,
+) -> InlineKeyboardMarkup:
+    """Inline-клавиатура из списка элементов с кнопкой отмены."""
+    buttons = [
+        [InlineKeyboardButton(
+            text=item[text_key],
+            callback_data=f"{prefix}:{item[id_key]}",
+        )]
+        for item in items
+    ]
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=cancel_data)])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+# ═══════════════════════════════════════════════════════
+# FSM prompt / summary — одна логика, разные state_key
+# ═══════════════════════════════════════════════════════
+
+async def send_prompt_msg(
+    bot: Bot,
+    chat_id: int,
+    state: FSMContext,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    *,
+    state_key: str = "prompt_msg_id",
+    log_tag: str = "bot",
+) -> None:
+    """Отправить или обновить prompt-сообщение (edit если возможно)."""
+    data = await state.get_data()
+    msg_id = data.get(state_key)
+    if msg_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=msg_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode="HTML",
+            )
+            return
+        except Exception as exc:
+            if "message is not modified" in str(exc).lower():
+                return
+            logger.warning("[%s] prompt edit fail: %s", log_tag, exc)
+    msg = await bot.send_message(
+        chat_id, text, reply_markup=reply_markup, parse_mode="HTML",
+    )
+    await state.update_data(**{state_key: msg.message_id})
+
+
+async def update_summary_msg(
+    bot: Bot,
+    chat_id: int,
+    state: FSMContext,
+    build_fn: Callable[[dict], str],
+    *,
+    state_key: str = "header_msg_id",
+    log_tag: str = "bot",
+) -> None:
+    """Обновить summary-сообщение (edit или новое)."""
+    data = await state.get_data()
+    header_id = data.get(state_key)
+    text = build_fn(data)
+    if header_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=header_id,
+                text=text,
+                parse_mode="HTML",
+            )
+            return
+        except Exception as exc:
+            if "message is not modified" in str(exc).lower():
+                return
+            logger.warning("[%s] summary edit fail: %s", log_tag, exc)
+    msg = await bot.send_message(chat_id, text, parse_mode="HTML")
+    await state.update_data(**{state_key: msg.message_id})

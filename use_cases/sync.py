@@ -3,7 +3,7 @@ Use-cases: синхронизация справочников iiko → PostgreS
 
 Архитектура:
   _run_sync()     — единый шаблон: fetch API → map → batch upsert → sync_log
-  _batch_upsert() — generic INSERT … ON CONFLICT DO UPDATE батчами по BATCH_SIZE
+  batch_upsert()  — generic INSERT … ON CONFLICT DO UPDATE батчами по BATCH_SIZE
   _map_*()        — маппинг dict из API → dict для таблицы
 """
 
@@ -40,15 +40,12 @@ BATCH_SIZE = 500
 
 RowMapper = Callable[[dict, Any], dict | None]
 
-# Backward-compatible alias (used by sync_fintablo.py)
-_safe_decimal = safe_decimal
-
 
 # ═══════════════════════════════════════════════════════
 # Generic batch upsert
 # ═══════════════════════════════════════════════════════
 
-async def _batch_upsert(
+async def batch_upsert(
     table,
     rows: list[dict],
     conflict_target: list[str] | str,
@@ -94,7 +91,7 @@ async def _batch_upsert(
     return len(rows)
 
 
-async def _mirror_delete(
+async def mirror_delete(
     table,
     id_column: str,
     valid_ids: set,
@@ -168,7 +165,7 @@ async def _run_sync(
     Единый шаблон синхронизации:
       1. await fetch_coro      — получить данные из iiko API
       2. mapper()              — dict API → dict БД  (None = пропустить)
-      3. _batch_upsert()       — batch INSERT ON CONFLICT
+      3. batch_upsert()        — batch INSERT ON CONFLICT
       4. SyncLog               — в той же сессии (0 лишних round-trip)
     """
     started = now_kgd()
@@ -188,10 +185,10 @@ async def _run_sync(
 
         t1 = time.monotonic()
         async with async_session_factory() as session:
-            count = await _batch_upsert(table, rows, conflict_target, label, session)
+            count = await batch_upsert(table, rows, conflict_target, label, session)
             # Mirror-delete: удалить записи, которых больше нет в API
             valid_ids = {r[pk_column] for r in rows if r.get(pk_column) is not None}
-            deleted = await _mirror_delete(
+            deleted = await mirror_delete(
                 table, pk_column, valid_ids, label, session, mirror_scope,
             )
             # sync_log в той же сессии — экономим 1 round-trip
@@ -396,7 +393,7 @@ async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
     # 3) Один batch INSERT + sync_log для всех — 1 COMMIT
     t1 = time.monotonic()
     async with async_session_factory() as session:
-        total = await _batch_upsert(
+        total = await batch_upsert(
             Entity.__table__, all_rows, "uq_entity_id_root_type", "entities_all", session,
         )
         # Mirror-delete: удалить записи по root_type, которых больше нет в API
@@ -407,7 +404,7 @@ async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
                 continue
             rt_ids = {safe_uuid(item.get("id")) for item in raw} - {None}
             if rt_ids:
-                total_deleted += await _mirror_delete(
+                total_deleted += await mirror_delete(
                     Entity.__table__, "id", rt_ids,
                     f"entity:{rt}", session,
                     extra_filters={"root_type": rt},

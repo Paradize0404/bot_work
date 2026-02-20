@@ -14,8 +14,8 @@ In-memory TTL-кеш для writeoff flow.
 """
 
 import logging
-import time
-from typing import Any
+
+from use_cases._ttl_cache import TtlCache
 
 logger = logging.getLogger(__name__)
 
@@ -23,74 +23,52 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 600        # 10 минут для складов / счетов
 UNIT_CACHE_TTL = 1800  # 30 минут для единиц измерения
 
-# Хранилище: {key: (data, timestamp)}
-_store: dict[str, tuple[Any, float]] = {}
-
-
-def _get(key: str, ttl: float = CACHE_TTL) -> Any | None:
-    """Получить значение из кеша, если не протухло."""
-    entry = _store.get(key)
-    if entry is None:
-        return None
-    data, ts = entry
-    if time.monotonic() - ts > ttl:
-        del _store[key]
-        return None
-    return data
-
-
-def _set(key: str, data: Any) -> None:
-    """Положить значение в кеш."""
-    _store[key] = (data, time.monotonic())
+_cache = TtlCache(default_ttl=CACHE_TTL)
 
 
 def get_stores(department_id: str) -> list[dict] | None:
     """Склады из кеша (или None если протухли)."""
-    return _get(f"stores:{department_id}")
+    return _cache.get(f"stores:{department_id}")
 
 
 def set_stores(department_id: str, stores: list[dict]) -> None:
-    _set(f"stores:{department_id}", stores)
+    _cache.set(f"stores:{department_id}", stores)
 
 
 def get_accounts(store_name: str) -> list[dict] | None:
     """Счета из кеша (или None если протухли)."""
-    return _get(f"accounts:{store_name.lower()}")
+    return _cache.get(f"accounts:{store_name.lower()}")
 
 
 def set_accounts(store_name: str, accounts: list[dict]) -> None:
-    _set(f"accounts:{store_name.lower()}", accounts)
+    _cache.set(f"accounts:{store_name.lower()}", accounts)
 
 
 def get_unit(unit_id: str) -> str | None:
     """Единица измерения из кеша (длинный TTL)."""
-    return _get(f"unit:{unit_id}", ttl=UNIT_CACHE_TTL)
+    return _cache.get(f"unit:{unit_id}", ttl=UNIT_CACHE_TTL)
 
 
 def set_unit(unit_id: str, name: str) -> None:
-    _set(f"unit:{unit_id}", name)
+    _cache.set(f"unit:{unit_id}", name)
 
 
 def get_products() -> list[dict] | None:
     """Все товары (GOODS/PREPARED) из кеша (или None если нет/протухли)."""
-    return _get("products:all")
+    return _cache.get("products:all")
 
 
 def set_products(products: list[dict]) -> None:
-    _set("products:all", products)
+    _cache.set("products:all", products)
 
 
 def invalidate() -> None:
     """Полный сброс кеша (кроме единиц измерения)."""
-    keys_to_drop = [k for k in _store if not k.startswith("unit:")]
-    for k in keys_to_drop:
-        del _store[k]
-    if keys_to_drop:
-        logger.debug("[wo_cache] Сброшено %d ключей", len(keys_to_drop))
+    dropped = _cache.drop_matching(lambda k: not k.startswith("unit:"))
+    if dropped:
+        logger.debug("[wo_cache] Сброшено %d ключей", dropped)
 
 
 def stats() -> dict:
     """Статистика кеша (для отладки)."""
-    now = time.monotonic()
-    alive = sum(1 for _, (__, ts) in _store.items() if now - ts < CACHE_TTL)
-    return {"total_keys": len(_store), "alive": alive}
+    return _cache.stats()

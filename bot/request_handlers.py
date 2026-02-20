@@ -30,7 +30,7 @@ from uuid import UUID
 from aiogram import Bot, Router, F
 from aiogram.enums import ChatAction
 from bot.middleware import set_cancel_kb, restore_menu_kb
-from bot._utils import requests_keyboard
+from bot._utils import requests_keyboard, items_inline_kb, send_prompt_msg
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import (
@@ -104,22 +104,12 @@ class DuplicateRequestStates(StatesGroup):
 # ══════════════════════════════════════════════════════
 
 def _suppliers_kb(suppliers: list[dict]) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text=s["name"], callback_data=f"req_sup:{s['id']}")]
-        for s in suppliers
-    ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return items_inline_kb(suppliers, prefix="req_sup", cancel_data="req_cancel")
 
 
 def _req_products_kb(products: list[dict]) -> InlineKeyboardMarkup:
     """Клавиатура найденных товаров для заявки."""
-    buttons = [
-        [InlineKeyboardButton(text=p["name"], callback_data=f"reqp:{p['id']}")]
-        for p in products
-    ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return items_inline_kb(products, prefix="reqp", cancel_data="req_cancel")
 
 
 def _req_add_more_kb(items_count: int = 0) -> InlineKeyboardMarkup:
@@ -230,21 +220,10 @@ async def _send_prompt(
     text: str, reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
     """Отправить/обновить prompt-сообщение (edit если возможно, иначе — новое)."""
-    data = await state.get_data()
-    msg_id = data.get("_bot_msg_id")
-    if msg_id:
-        try:
-            await bot.edit_message_text(
-                chat_id=chat_id, message_id=msg_id,
-                text=text, reply_markup=reply_markup, parse_mode="HTML",
-            )
-            return
-        except Exception as exc:
-            if "message is not modified" in str(exc).lower():
-                return
-            logger.warning("[request] prompt edit fail: %s", exc)
-    msg = await bot.send_message(chat_id, text, reply_markup=reply_markup, parse_mode="HTML")
-    await state.update_data(_bot_msg_id=msg.message_id)
+    await send_prompt_msg(
+        bot, chat_id, state, text, reply_markup,
+        state_key="_bot_msg_id", log_tag="request",
+    )
 
 
 # ══════════════════════════════════════════════════════

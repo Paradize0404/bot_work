@@ -18,7 +18,7 @@ from db.engine import engine
 from db.models import Base
 # Импортируем ft_models чтобы SQLAlchemy увидел таблицы ft_*
 import db.ft_models  # noqa: F401
-# Импортируем OCR модели
+# Импортируем OCR модели (теперь используют общий Base из db.models)
 import models.ocr  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -31,50 +31,7 @@ async def create_tables() -> None:
     logger.info("Creating tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-    # OCR-таблицы используют отдельный declarative_base из models/ocr.py
-    try:
-        from models.ocr import Base as OcrBase
-
-        # Если ocr_document уже существует со старой схемой (id INTEGER вместо VARCHAR),
-        # удаляем обе таблицы и пересоздаём с правильной структурой.
-        async with engine.begin() as conn:
-            result = await conn.execute(text(
-                """
-                SELECT data_type FROM information_schema.columns
-                WHERE table_name = 'ocr_document' AND column_name = 'id'
-                """
-            ))
-            row = result.fetchone()
-            if row and row[0] == 'integer':
-                logger.warning(
-                    "ocr_document.id has wrong type INTEGER — dropping OCR tables to recreate with UUID schema"
-                )
-                await conn.execute(text("DROP TABLE IF EXISTS ocr_item CASCADE"))
-                await conn.execute(text("DROP TABLE IF EXISTS ocr_document CASCADE"))
-
-        async with engine.begin() as conn:
-            await conn.run_sync(OcrBase.metadata.create_all)
-        logger.info("OCR tables created / verified OK")
-
-        # Пытаемся установить pg_trgm и создать GIN-индексы (не критично если не удастся)
-        try:
-            async with engine.begin() as conn:
-                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-                await conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS ix_ocr_mapping_raw_trgm "
-                    "ON ocr_mapping USING gin (raw_name gin_trgm_ops)"
-                ))
-                await conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS ix_ocr_supplier_mapping_raw_trgm "
-                    "ON ocr_supplier_mapping USING gin (raw_name gin_trgm_ops)"
-                ))
-            logger.info("pg_trgm GIN-индексы созданы")
-        except Exception:
-            logger.warning("pg_trgm недоступен — GIN-индексы пропущены (поиск будет работать через LIKE)", exc_info=False)
-    except Exception:
-        logger.error("OCR tables: ошибка создания", exc_info=True)
-        raise
+    logger.info("All tables created / verified OK")
 
     # Миграция: добавляем столбцы, которых нет в старых таблицах.
     # IF NOT EXISTS — безопасно при повторном запуске.
@@ -83,8 +40,6 @@ async def create_tables() -> None:
         "CREATE INDEX IF NOT EXISTS ix_iiko_employee_telegram_id ON iiko_employee (telegram_id)",
         "ALTER TABLE iiko_employee ADD COLUMN IF NOT EXISTS department_id UUID",
         "CREATE INDEX IF NOT EXISTS ix_iiko_employee_department_id ON iiko_employee (department_id)",
-        # bot_admin — таблица создаётся через create_all, но индекс на всякий случай
-        "CREATE INDEX IF NOT EXISTS ix_bot_admin_telegram_id ON bot_admin (telegram_id)",
         # iiko_stock_balance — индексы для быстрых выборок по store/product
         "CREATE INDEX IF NOT EXISTS ix_stock_balance_store ON iiko_stock_balance (store_id)",
         "CREATE INDEX IF NOT EXISTS ix_stock_balance_product ON iiko_stock_balance (product_id)",
@@ -106,8 +61,6 @@ async def create_tables() -> None:
         # price_supplier_price — цены поставщиков
         "CREATE INDEX IF NOT EXISTS ix_price_supplier_price_product ON price_supplier_price (product_id)",
         "CREATE INDEX IF NOT EXISTS ix_price_supplier_price_supplier ON price_supplier_price (supplier_id)",
-        # request_receiver — получатели заявок
-        "CREATE INDEX IF NOT EXISTS ix_request_receiver_telegram_id ON request_receiver (telegram_id)",
         # product_request — заявки на товары
         "CREATE INDEX IF NOT EXISTS ix_product_request_requester ON product_request (requester_tg)",
         "CREATE INDEX IF NOT EXISTS ix_product_request_dept ON product_request (department_id)",

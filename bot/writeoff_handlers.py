@@ -39,7 +39,12 @@ from bot.middleware import (
     validate_callback_uuid, validate_callback_int, extract_callback_value,
     MAX_TEXT_SEARCH, truncate_input,
 )
-from bot._utils import writeoffs_keyboard
+from bot._utils import (
+    writeoffs_keyboard,
+    items_inline_kb,
+    send_prompt_msg,
+    update_summary_msg,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,12 +101,7 @@ class HistoryStates(StatesGroup):
 # ══════════════════════════════════════════════════════
 
 def _stores_kb(stores: list[dict]) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text=s["name"], callback_data=f"wo_store:{s['id']}")]
-        for s in stores
-    ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="wo_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return items_inline_kb(stores, prefix="wo_store", cancel_data="wo_cancel")
 
 
 ACC_PAGE_SIZE = 10
@@ -145,12 +145,7 @@ def _accounts_kb(accounts: list[dict], page: int = 0) -> InlineKeyboardMarkup:
 
 
 def _products_kb(products: list[dict]) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(text=p["name"], callback_data=f"wo_prod:{p['id']}")]
-        for p in products
-    ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="wo_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return items_inline_kb(products, prefix="wo_prod", cancel_data="wo_cancel")
 
 
 def _add_more_kb() -> InlineKeyboardMarkup:
@@ -188,39 +183,14 @@ def _build_summary(data: dict) -> str:
 
 
 async def _update_summary(bot: Bot, chat_id: int, state: FSMContext) -> None:
-    data = await state.get_data()
-    header_id = data.get("header_msg_id")
-    text = _build_summary(data)
-    if header_id:
-        try:
-            await bot.edit_message_text(chat_id=chat_id, message_id=header_id,
-                                        text=text, parse_mode="HTML")
-            return
-        except Exception as exc:
-            if "message is not modified" in str(exc).lower():
-                return
-            logger.warning("[writeoff] summary edit fail: %s", exc)
-    msg = await bot.send_message(chat_id, text, parse_mode="HTML")
-    await state.update_data(header_msg_id=msg.message_id)
+    await update_summary_msg(bot, chat_id, state, _build_summary, log_tag="writeoff")
 
 
 async def _send_prompt(
     bot: Bot, chat_id: int, state: FSMContext,
     text: str, reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
-    data = await state.get_data()
-    prompt_id = data.get("prompt_msg_id")
-    if prompt_id:
-        try:
-            await bot.edit_message_text(chat_id=chat_id, message_id=prompt_id,
-                                        text=text, reply_markup=reply_markup)
-            return
-        except Exception as exc:
-            if "message is not modified" in str(exc).lower():
-                return
-            logger.warning("[writeoff] prompt edit fail: %s", exc)
-    msg = await bot.send_message(chat_id, text, reply_markup=reply_markup)
-    await state.update_data(prompt_msg_id=msg.message_id)
+    await send_prompt_msg(bot, chat_id, state, text, reply_markup, log_tag="writeoff")
 
 
 # ══════════════════════════════════════════════════════
@@ -1194,17 +1164,6 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    products = await wo_uc.search_products(query)
-    if not products:
-        if edit_prompt_id:
-            try:
-                await message.bot.edit_message_text(
-                    "🔎 Ничего. Попробуйте другой запрос:",
-                    chat_id=message.chat.id, message_id=edit_prompt_id)
-            except Exception:
-                pass
-        return
-
     products = await wo_uc.search_products(query)
     if not products:
         if edit_prompt_id:
