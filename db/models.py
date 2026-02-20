@@ -878,7 +878,70 @@ class StoplistHistory(Base):
 
 
 # ─────────────────────────────────────────────────────
-# Итого 26 таблиц:
+# 27. pending_writeoff — акты списания, ожидающие проверки админом
+# ─────────────────────────────────────────────────────
+
+class PendingWriteoffDoc(Base):
+    """
+    Акт списания, ожидающий одобрения/редактирования/отклонения админом.
+    Хранится в PostgreSQL вместо RAM → переживает рестарт бота.
+    """
+    __tablename__ = "pending_writeoff"
+
+    doc_id = Column(
+        String(16), primary_key=True,
+        comment="Уникальный короткий ID документа (hex)",
+    )
+    created_at = Column(
+        DateTime, nullable=False, default=_utcnow,
+        comment="Время создания (Калининград)",
+    )
+    author_chat_id = Column(
+        BigInteger, nullable=False,
+        comment="Telegram chat_id автора",
+    )
+    author_name = Column(
+        String(500), nullable=False,
+        comment="ФИО автора",
+    )
+    store_id = Column(
+        String(36), nullable=False,
+        comment="UUID склада",
+    )
+    store_name = Column(
+        String(500), nullable=False, default="",
+    )
+    account_id = Column(
+        String(36), nullable=False,
+        comment="UUID счёта списания",
+    )
+    account_name = Column(
+        String(500), nullable=False, default="",
+    )
+    reason = Column(
+        Text, nullable=False, default="",
+        comment="Причина списания",
+    )
+    department_id = Column(
+        String(36), nullable=False, default="",
+        comment="UUID подразделения",
+    )
+    items = Column(
+        JSONB, nullable=False,
+        comment="Позиции: [{id, name, quantity, user_quantity, unit_label, main_unit}, ...]",
+    )
+    admin_msg_ids = Column(
+        JSONB, nullable=False, default=dict,
+        comment="{admin_chat_id: message_id} — для удаления/обновления кнопок",
+    )
+    is_locked = Column(
+        Boolean, nullable=False, default=False,
+        comment="True если документ сейчас обрабатывается админом",
+    )
+
+
+# ─────────────────────────────────────────────────────
+# Итого 27 таблиц:
 #   iiko_entity        — все справочники (1 кнопка)
 #   iiko_department    — подразделения
 #   iiko_store         — склады
@@ -905,4 +968,5 @@ class StoplistHistory(Base):
 #   active_stoplist    — стоп-лист: текущее состояние
 #   stoplist_message   — стоп-лист: закреплённые сообщения
 #   stoplist_history   — стоп-лист: история (вход/выход)
+#   pending_writeoff   — акты списания, ожидающие проверки
 # ─────────────────────────────────────────────────────

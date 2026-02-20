@@ -640,7 +640,7 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
             return
 
         # Создаём pending-документ
-        doc = pending.create(
+        doc = await pending.create(
             author_chat_id=callback.message.chat.id,
             author_name=data.get("user_fullname", "—"),
             store_id=data["store_id"],
@@ -670,6 +670,7 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
             except Exception as exc:
                 logger.warning("[writeoff] Не удалось отправить админу %d: %s", admin_id, exc)
 
+        await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
         logger.info("[writeoff] Документ %s отправлен %d админам",
                     doc.doc_id, len(doc.admin_msg_ids))
     finally:
@@ -710,12 +711,12 @@ async def admin_approve(callback: CallbackQuery) -> None:
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
         return
     logger.info("[writeoff] Одобрение tg:%d, doc=%s", callback.from_user.id, doc_id)
-    doc = pending.get(doc_id)
+    doc = await pending.get(doc_id)
     if not doc:
         await callback.answer("⚠️ Документ уже обработан или не найден.", show_alert=True)
         return
 
-    if not pending.try_lock(doc_id):
+    if not await pending.try_lock(doc_id):
         await callback.answer("⏳ Другой админ уже обрабатывает этот документ.", show_alert=True)
         return
 
@@ -751,7 +752,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
             )
         except Exception:
             pass
-        pending.unlock(doc_id)
+        await pending.unlock(doc_id)
         return
 
     # Сохраняем в историю при успешной отправке
@@ -787,7 +788,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
     except Exception:
         pass
 
-    pending.remove(doc_id)
+    await pending.remove(doc_id)
     logger.info("[writeoff] Документ %s одобрен admin %d (%s)", doc_id, admin_id, admin_name)
 
 
@@ -805,11 +806,11 @@ async def admin_reject(callback: CallbackQuery) -> None:
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
         return
     logger.info("[writeoff] Отклонение tg:%d, doc=%s", callback.from_user.id, doc_id)
-    doc = pending.get(doc_id)
+    doc = await pending.get(doc_id)
     if not doc:
         await callback.answer("⚠️ Документ уже обработан.", show_alert=True)
         return
-    if not pending.try_lock(doc_id):
+    if not await pending.try_lock(doc_id):
         await callback.answer("⏳ Другой админ уже обрабатывает.", show_alert=True)
         return
 
@@ -833,7 +834,7 @@ async def admin_reject(callback: CallbackQuery) -> None:
     except Exception:
         pass
 
-    pending.remove(doc_id)
+    await pending.remove(doc_id)
     logger.info("[writeoff] Документ %s отклонён admin %d", doc_id, callback.from_user.id)
 
 
@@ -854,11 +855,11 @@ async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
         return
     logger.info("[writeoff-edit] Начало редактирования tg:%d, doc=%s", callback.from_user.id, doc_id)
-    doc = pending.get(doc_id)
+    doc = await pending.get(doc_id)
     if not doc:
         await callback.answer("⚠️ Документ не найден.", show_alert=True)
         return
-    if not pending.try_lock(doc_id):
+    if not await pending.try_lock(doc_id):
         await callback.answer("⏳ Другой админ уже редактирует.", show_alert=True)
         return
 
@@ -900,8 +901,8 @@ async def admin_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
 
     if doc_id:
-        pending.unlock(doc_id)
-        doc = pending.get(doc_id)
+        await pending.unlock(doc_id)
+        doc = await pending.get(doc_id)
         if doc:
             # Перерассылаем кнопки заново
             text = pending.build_summary_text(doc)
@@ -914,6 +915,7 @@ async def admin_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
                     doc.admin_msg_ids[admin_id] = msg.message_id
                 except Exception:
                     pass
+            await pending.save_admin_msg_ids(doc_id, doc.admin_msg_ids)
 
     try: await callback.message.edit_text("❌ Редактирование отменено.")
     except Exception: pass
@@ -928,7 +930,7 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[writeoff-edit] Выбор поля tg:%d, field=%s", callback.from_user.id, field)
     data = await state.get_data()
     doc_id = data.get("edit_doc_id")
-    doc = pending.get(doc_id) if doc_id else None
+    doc = (await pending.get(doc_id)) if doc_id else None
     if not doc:
         await state.clear()
         await callback.answer("⚠️ Документ не найден.", show_alert=True)
@@ -1011,7 +1013,7 @@ async def admin_edit_store(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[writeoff-edit] Новый склад tg:%d, store_id=%s", callback.from_user.id, store_id)
     data = await state.get_data()
     doc_id = data.get("edit_doc_id")
-    doc = pending.get(doc_id) if doc_id else None
+    doc = (await pending.get(doc_id)) if doc_id else None
     if not doc:
         await state.clear()
         return
@@ -1024,6 +1026,7 @@ async def admin_edit_store(callback: CallbackQuery, state: FSMContext) -> None:
 
     doc.store_id = store_id
     doc.store_name = store["name"]
+    await pending.update_store(doc.doc_id, store_id, store["name"])
     logger.info("[writeoff-edit] Склад изменён на %s (%s)", store["name"], store_id)
 
     await _finish_edit(callback, state, doc)
@@ -1040,7 +1043,7 @@ async def admin_edit_account(callback: CallbackQuery, state: FSMContext) -> None
     logger.info("[writeoff-edit] Новый счёт tg:%d, acc_id=%s", callback.from_user.id, account_id)
     data = await state.get_data()
     doc_id = data.get("edit_doc_id")
-    doc = pending.get(doc_id) if doc_id else None
+    doc = (await pending.get(doc_id)) if doc_id else None
     if not doc:
         await state.clear()
         return
@@ -1053,6 +1056,7 @@ async def admin_edit_account(callback: CallbackQuery, state: FSMContext) -> None
 
     doc.account_id = account_id
     doc.account_name = account["name"]
+    await pending.update_account(doc.doc_id, account_id, account["name"])
     logger.info("[writeoff-edit] Счёт изменён на %s (%s)", account["name"], account_id)
 
     await _finish_edit(callback, state, doc)
@@ -1068,7 +1072,7 @@ async def admin_edit_item_idx(callback: CallbackQuery, state: FSMContext) -> Non
         return
     logger.info("[writeoff-edit] Выбор позиции tg:%d, idx=%d", callback.from_user.id, idx)
     data = await state.get_data()
-    doc = pending.get(data.get("edit_doc_id", ""))
+    doc = await pending.get(data.get("edit_doc_id", ""))
     if not doc or idx >= len(doc.items):
         await callback.answer("❌ Позиция не найдена", show_alert=True)
         return
@@ -1098,7 +1102,7 @@ async def admin_edit_item_action(callback: CallbackQuery, state: FSMContext) -> 
     action = callback.data.split(":", 1)[1]
     logger.info("[writeoff-edit] Действие с позицией tg:%d, action=%s", callback.from_user.id, action)
     data = await state.get_data()
-    doc = pending.get(data.get("edit_doc_id", ""))
+    doc = await pending.get(data.get("edit_doc_id", ""))
     idx = data.get("edit_item_idx", -1)
 
     if not doc or idx < 0 or idx >= len(doc.items):
@@ -1107,6 +1111,7 @@ async def admin_edit_item_action(callback: CallbackQuery, state: FSMContext) -> 
 
     if action == "delete":
         removed = doc.items.pop(idx)
+        await pending.update_items(doc.doc_id, doc.items)
         logger.info("[writeoff-edit] Удалена позиция #%d: %s", idx+1, removed.get("name"))
         await _finish_edit(callback, state, doc)
         return
@@ -1203,7 +1208,7 @@ async def admin_pick_new_product(callback: CallbackQuery, state: FSMContext) -> 
         return
     logger.info("[writeoff-edit] Выбран новый товар tg:%d, prod_id=%s", callback.from_user.id, pid)
     data = await state.get_data()
-    doc = pending.get(data.get("edit_doc_id", ""))
+    doc = await pending.get(data.get("edit_doc_id", ""))
     idx = data.get("edit_item_idx", -1)
     cache = data.get("_edit_product_cache", {})
     product = cache.get(pid)
@@ -1227,6 +1232,7 @@ async def admin_pick_new_product(callback: CallbackQuery, state: FSMContext) -> 
         "user_quantity": old_uq,
         "unit_label": old_ul,
     }
+    await pending.update_items(doc.doc_id, doc.items)
     logger.info("[writeoff-edit] Позиция #%d: %s → %s", idx+1, old_name, product["name"])
     await _finish_edit(callback, state, doc)
 
@@ -1265,7 +1271,7 @@ async def admin_set_new_quantity(message: Message, state: FSMContext) -> None:
             except Exception:
                 pass
         return
-    doc = pending.get(data.get("edit_doc_id", ""))
+    doc = await pending.get(data.get("edit_doc_id", ""))
     idx = data.get("edit_item_idx", -1)
     if not doc or idx < 0 or idx >= len(doc.items):
         await state.clear()
@@ -1278,6 +1284,7 @@ async def admin_set_new_quantity(message: Message, state: FSMContext) -> None:
 
     item["quantity"] = converted
     item["user_quantity"] = qty
+    await pending.update_items(doc.doc_id, doc.items)
     logger.info("[writeoff-edit] Позиция #%d кол-во: %s → %s", idx+1, qty, converted)
 
     await _finish_edit_msg(message, state, doc)
@@ -1291,7 +1298,7 @@ async def _finish_edit(callback: CallbackQuery, state: FSMContext,
     doc_id = doc.doc_id
     logger.info("[writeoff-edit] Завершение редактирования tg:%d, doc=%s", callback.from_user.id, doc_id)
     await state.clear()
-    pending.unlock(doc_id)
+    await pending.unlock(doc_id)
 
     text = pending.build_summary_text(doc)
     kb = pending.admin_keyboard(doc_id)
@@ -1332,6 +1339,7 @@ async def _finish_edit(callback: CallbackQuery, state: FSMContext,
             logger.warning("[writeoff-edit] Не удалось отправить сообщение админу tg:%d: %s", admin_id, exc)
     
     doc.admin_msg_ids = new_msg_ids
+    await pending.save_admin_msg_ids(doc_id, new_msg_ids)
 
 
 async def _finish_edit_msg(message: Message, state: FSMContext,
@@ -1340,7 +1348,7 @@ async def _finish_edit_msg(message: Message, state: FSMContext,
     doc_id = doc.doc_id
     logger.info("[writeoff-edit] Завершение редактирования (msg) tg:%d, doc=%s", message.from_user.id, doc_id)
     await state.clear()
-    pending.unlock(doc_id)
+    await pending.unlock(doc_id)
 
     text = pending.build_summary_text(doc)
     kb = pending.admin_keyboard(doc_id)
@@ -1381,6 +1389,7 @@ async def _finish_edit_msg(message: Message, state: FSMContext,
             logger.warning("[writeoff-edit] Не удалось отправить сообщение админу tg:%d: %s", admin_id, exc)
     
     doc.admin_msg_ids = new_msg_ids
+    await pending.save_admin_msg_ids(doc_id, new_msg_ids)
 
 
 # ══════════════════════════════════════════════════════
@@ -1713,7 +1722,7 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
             return
 
         # Создаём pending-документ
-        doc = pending.create(
+        doc = await pending.create(
             author_chat_id=callback.message.chat.id,
             author_name=ctx.employee_name,
             store_id=entry.store_id,
@@ -1742,6 +1751,7 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
             except Exception as exc:
                 logger.warning("[wo_history] Не удалось отправить админу %d: %s", admin_id, exc)
 
+        await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
         logger.info("[wo_history] Повтор из истории pk=%d → doc %s, %d админов",
                     pk, doc.doc_id, len(doc.admin_msg_ids))
         await restore_menu_kb(callback.bot, callback.message.chat.id, state,
@@ -2245,7 +2255,7 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
                                   "📝 Списания:", writeoffs_keyboard())
             return
 
-        doc = pending.create(
+        doc = await pending.create(
             author_chat_id=callback.message.chat.id,
             author_name=ctx.employee_name,
             store_id=store_id,
@@ -2273,6 +2283,7 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
             except Exception as exc:
                 logger.warning("[wo_history] Не удалось отправить админу %d: %s", admin_id, exc)
 
+        await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
         logger.info("[wo_history] Отредакт. повтор → doc %s, %d админов",
                     doc.doc_id, len(doc.admin_msg_ids))
         await restore_menu_kb(callback.bot, callback.message.chat.id, state,

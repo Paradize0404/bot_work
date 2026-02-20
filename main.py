@@ -38,9 +38,13 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.document_handlers import router as document_router
     from bot.retry_session import RetryAiohttpSession
 
+    from aiogram.fsm.storage.redis import RedisStorage
+    from config import REDIS_URL
+
     session = RetryAiohttpSession(max_retries=3, base_delay=1.0)
     bot = Bot(token=TELEGRAM_BOT_TOKEN, session=session)
-    dp = Dispatcher()
+    storage = RedisStorage.from_url(REDIS_URL)
+    dp = Dispatcher(storage=storage)
     # Outer-middleware: сброс FSM при нажатии Reply-кнопки навигации
     dp.message.outer_middleware(NavResetMiddleware())
     dp.include_router(global_router)      # /cancel — первый, перехватывает всегда

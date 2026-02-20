@@ -1,30 +1,41 @@
 """
-In-memory хранилище документов, ожидающих проверки админом.
+Хранилище документов, ожидающих проверки админом — PostgreSQL.
 
 Документ создаётся сотрудником → отправляется всем админам → один админ
 одобряет/редактирует/отклоняет → остальные видят «обработано».
 
-Конкурентность: _lock_set гарантирует, что два админа не обрабатывают
-один документ одновременно.
+Конкурентность: is_locked (UPDATE ... WHERE is_locked = false)
+гарантирует, что два админа не обрабатывают один документ одновременно.
 
-~2 КБ на документ, при 100 ожидающих ≈ 200 КБ RAM. Без Redis.
+Все данные хранятся в таблице pending_writeoff → переживают рестарт бота.
 """
 
 import logging
 import secrets
-import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import select, delete, update
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+from db.engine import async_session_factory
+from db.models import PendingWriteoffDoc
+
 logger = logging.getLogger(__name__)
+
+_KGD_TZ = ZoneInfo("Europe/Kaliningrad")
+
+# TTL: удаляем документы старше 24 часов (на случай если все забили)
+_TTL = timedelta(hours=24)
 
 
 @dataclass
 class PendingWriteoff:
-    """Один ожидающий документ списания."""
+    """DTO: один ожидающий документ списания."""
     doc_id: str                      # уникальный короткий ID
-    created_at: float                # monotonic timestamp
+    created_at: datetime             # время создания (Калининград)
     author_chat_id: int              # chat_id создателя (для уведомления о результате)
     author_name: str                 # ФИО автора
     store_id: str
@@ -38,15 +49,40 @@ class PendingWriteoff:
     # {admin_chat_id: message_id} — для удаления/обновления кнопок у всех
 
 
-# ─── Хранилище ───
-_pending: dict[str, PendingWriteoff] = {}   # doc_id → PendingWriteoff
-_lock_set: set[str] = set()                  # doc_id залоченных документов
+def _row_to_dto(row: PendingWriteoffDoc) -> PendingWriteoff:
+    """Конвертация строки БД → DTO."""
+    # admin_msg_ids в JSONB хранятся с string-ключами → приводим к int
+    raw_ids = row.admin_msg_ids or {}
+    admin_ids = {int(k): int(v) for k, v in raw_ids.items()}
+    return PendingWriteoff(
+        doc_id=row.doc_id,
+        created_at=row.created_at,
+        author_chat_id=row.author_chat_id,
+        author_name=row.author_name,
+        store_id=row.store_id,
+        store_name=row.store_name,
+        account_id=row.account_id,
+        account_name=row.account_name,
+        reason=row.reason,
+        department_id=row.department_id,
+        items=list(row.items),
+        admin_msg_ids=admin_ids,
+    )
 
-# TTL: удаляем документы старше 24 часов (на случай если все забили)
-_TTL = 86400
+
+async def _cleanup_expired() -> None:
+    """Удалить протухшие документы (>24ч)."""
+    cutoff = datetime.now(_KGD_TZ).replace(tzinfo=None) - _TTL
+    async with async_session_factory() as session:
+        result = await session.execute(
+            delete(PendingWriteoffDoc).where(PendingWriteoffDoc.created_at < cutoff)
+        )
+        await session.commit()
+        if result.rowcount:
+            logger.info("[pending] Очищено %d протухших документов", result.rowcount)
 
 
-def create(
+async def create(
     author_chat_id: int,
     author_name: str,
     store_id: str,
@@ -58,11 +94,10 @@ def create(
     items: list[dict],
 ) -> PendingWriteoff:
     """Создать новый ожидающий документ."""
-    _cleanup_expired()
+    await _cleanup_expired()
     doc_id = secrets.token_hex(4)  # 8 символов, коллизии крайне маловероятны
-    doc = PendingWriteoff(
+    row = PendingWriteoffDoc(
         doc_id=doc_id,
-        created_at=time.monotonic(),
         author_chat_id=author_chat_id,
         author_name=author_name,
         store_id=store_id,
@@ -72,60 +107,142 @@ def create(
         reason=reason,
         department_id=department_id,
         items=list(items),
+        admin_msg_ids={},
+        is_locked=False,
     )
-    _pending[doc_id] = doc
+    async with async_session_factory() as session:
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
     logger.info("[pending] Создан документ %s от «%s» (%d позиций)",
                 doc_id, author_name, len(items))
-    return doc
+    return _row_to_dto(row)
 
 
-def get(doc_id: str) -> PendingWriteoff | None:
+async def get(doc_id: str) -> PendingWriteoff | None:
     """Получить документ по ID (или None)."""
-    return _pending.get(doc_id)
+    if not doc_id:
+        return None
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PendingWriteoffDoc).where(PendingWriteoffDoc.doc_id == doc_id)
+        )
+        row = result.scalar_one_or_none()
+        return _row_to_dto(row) if row else None
 
 
-def remove(doc_id: str) -> PendingWriteoff | None:
+async def remove(doc_id: str) -> PendingWriteoff | None:
     """Удалить документ из хранилища."""
-    _lock_set.discard(doc_id)
-    doc = _pending.pop(doc_id, None)
-    if doc:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PendingWriteoffDoc).where(PendingWriteoffDoc.doc_id == doc_id)
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            return None
+        dto = _row_to_dto(row)
+        await session.delete(row)
+        await session.commit()
         logger.info("[pending] Удалён документ %s", doc_id)
-    return doc
+        return dto
 
 
-def try_lock(doc_id: str) -> bool:
+async def try_lock(doc_id: str) -> bool:
     """Попытаться залочить документ (для редактирования/отправки).
-    Возвращает True если лок получен, False если уже залочен другим."""
-    if doc_id in _lock_set:
-        return False
-    _lock_set.add(doc_id)
-    return True
+    Возвращает True если лок получен, False если уже залочен другим.
+    Атомарная операция: UPDATE ... WHERE is_locked = false."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            update(PendingWriteoffDoc)
+            .where(
+                PendingWriteoffDoc.doc_id == doc_id,
+                PendingWriteoffDoc.is_locked == False,  # noqa: E712
+            )
+            .values(is_locked=True)
+        )
+        await session.commit()
+        locked = result.rowcount > 0
+        if not locked:
+            logger.debug("[pending] Лок не получен для %s (уже залочен)", doc_id)
+        return locked
 
 
-def unlock(doc_id: str) -> None:
+async def unlock(doc_id: str) -> None:
     """Снять лок."""
-    _lock_set.discard(doc_id)
+    async with async_session_factory() as session:
+        await session.execute(
+            update(PendingWriteoffDoc)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+            .values(is_locked=False)
+        )
+        await session.commit()
 
 
-def is_locked(doc_id: str) -> bool:
-    return doc_id in _lock_set
+async def is_locked(doc_id: str) -> bool:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PendingWriteoffDoc.is_locked)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+        )
+        val = result.scalar_one_or_none()
+        return bool(val)
 
 
-def all_pending() -> list[PendingWriteoff]:
+async def save_admin_msg_ids(doc_id: str, admin_msg_ids: dict[int, int]) -> None:
+    """Сохранить admin_msg_ids в БД после рассылки."""
+    # JSONB требует строковые ключи
+    serializable = {str(k): v for k, v in admin_msg_ids.items()}
+    async with async_session_factory() as session:
+        await session.execute(
+            update(PendingWriteoffDoc)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+            .values(admin_msg_ids=serializable)
+        )
+        await session.commit()
+
+
+async def update_items(doc_id: str, items: list[dict]) -> None:
+    """Сохранить обновлённые позиции в БД после редактирования."""
+    async with async_session_factory() as session:
+        await session.execute(
+            update(PendingWriteoffDoc)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+            .values(items=items)
+        )
+        await session.commit()
+
+
+async def update_store(doc_id: str, store_id: str, store_name: str) -> None:
+    """Обновить склад документа."""
+    async with async_session_factory() as session:
+        await session.execute(
+            update(PendingWriteoffDoc)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+            .values(store_id=store_id, store_name=store_name)
+        )
+        await session.commit()
+
+
+async def update_account(doc_id: str, account_id: str, account_name: str) -> None:
+    """Обновить счёт документа."""
+    async with async_session_factory() as session:
+        await session.execute(
+            update(PendingWriteoffDoc)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+            .values(account_id=account_id, account_name=account_name)
+        )
+        await session.commit()
+
+
+async def all_pending() -> list[PendingWriteoff]:
     """Все ожидающие документы."""
-    _cleanup_expired()
-    return list(_pending.values())
-
-
-def _cleanup_expired() -> None:
-    """Удалить протухшие документы."""
-    now = time.monotonic()
-    expired = [k for k, v in _pending.items() if now - v.created_at > _TTL]
-    for k in expired:
-        _pending.pop(k, None)
-        _lock_set.discard(k)
-    if expired:
-        logger.info("[pending] Очищено %d протухших документов", len(expired))
+    await _cleanup_expired()
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PendingWriteoffDoc).order_by(PendingWriteoffDoc.created_at)
+        )
+        rows = result.scalars().all()
+        return [_row_to_dto(r) for r in rows]
 
 
 def build_summary_text(doc: PendingWriteoff) -> str:

@@ -15,9 +15,17 @@ import json
 import os
 import sys
 from datetime import date, timedelta
+from pathlib import Path
+from dotenv import load_dotenv
 
 # Путь к корню проекта
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Загружаем .env и добавляем заглушки для переменных, не нужных для дебага
+load_dotenv(Path(__file__).resolve().parent / ".env")
+for _stub in ("REDIS_URL", "IIKO_CLOUD_WEBHOOK_SECRET"):
+    if not os.environ.get(_stub):
+        os.environ[_stub] = "stub"
 
 import config  # noqa – инициализирует переменные окружения
 

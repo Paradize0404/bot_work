@@ -22,6 +22,9 @@ def _require(name: str) -> str:
     return value
 
 
+# ── Redis (FSM storage — survives restarts) ──
+REDIS_URL: str = _require("REDIS_URL")
+
 # ── Database ──
 _raw_db_url: str = _require("DATABASE_URL")
 # Railway выдаёт URL вида postgresql://… — принудительно ставим asyncpg-драйвер
