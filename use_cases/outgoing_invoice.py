@@ -549,91 +549,100 @@ async def calculate_dish_cost_prices(
     Себестоимость DISH (блюд) по технологическим картам.
 
     Запрашивает getAll с includePreparedCharts=true.
-    Для каждого блюда: cost = sum(ingredient.amountOut × ingredient_cost).
-    ingredient_cost берётся из goods_costs.
+    Считает рекурсивно:
+      1. Сначала себестоимость всех PREPARED (полуфабрикатов)
+      2. Затем себестоимость DISH, используя рассчитанную cost для PREPARED
 
     Возвращает {product_id: cost_price}.
     """
     from adapters import iiko_api
     from use_cases._helpers import now_kgd
+    from db.engine import get_session
+    from sqlalchemy import select
+    from db.models import Product
 
     today = now_kgd().strftime("%Y-%m-%d")
     t0 = time.monotonic()
     logger.info("[invoice] Расчёт себестоимости DISH по техкартам (дата=%s)...", today)
 
     chart_data = await iiko_api.fetch_assembly_charts(today, today, include_prepared=True)
-    prepared = chart_data.get("preparedCharts") or []
+    all_charts = chart_data.get("assemblyCharts") or []
+    
+    # Создаём карту техкарт: {assembledProductId: chart}
+    chart_map = {c.get("assembledProductId"): c for c in all_charts if c.get("assembledProductId")}
+    
+    # Получаем типы продуктов из БД для определения PREPARED vs DISH
+    product_types: dict[str, str] = {}
+    async with get_session() as sess:
+        stmt = select(Product.id, Product.product_type)
+        result = await sess.execute(stmt)
+        for row in result.all():
+            product_types[str(row.id)] = row.product_type
 
-    dish_costs: dict[str, float] = {}
-    missing_ingredients: set[str] = set()
-    found_ingredients: set[str] = set()
-    total_items_scanned = 0
-    charts_with_items = 0
-
-    for chart in prepared:
-        dish_id = chart.get("assembledProductId")
-        if not dish_id:
-            continue
-        items = chart.get("items") or []
-        if items:
-            charts_with_items += 1
-        total_cost = 0.0
-        for item in items:
-            ingredient_id = item.get("productId")
-            # iiko API: поле называется "amount" (не "amountOut")
-            amount_raw = item.get("amount", 0)
-            if not ingredient_id:
+    # Объединяем goods_costs с рассчитанными cost для PREPARED
+    # Итеративно считаем PREPARED до тех пор, пока есть изменения
+    all_costs: dict[str, float] = dict(goods_costs)
+    
+    max_iterations = 10  # Защита от циклических зависимостей
+    for iteration in range(max_iterations):
+        changes = False
+        
+        for chart in all_charts:
+            dish_id = chart.get("assembledProductId")
+            if not dish_id:
                 continue
-            total_items_scanned += 1
-            try:
-                amount = float(amount_raw)
-            except (ValueError, TypeError):
-                amount = 0.0
-
-            ingr_cost = goods_costs.get(ingredient_id)
-            if ingr_cost is not None:
+            
+            # Пропускаем, если уже рассчитано
+            if dish_id in all_costs:
+                continue
+            
+            items = chart.get("items") or []
+            if not items:
+                continue
+            
+            total_cost = 0.0
+            all_ingredients_ready = True
+            
+            for item in items:
+                ingredient_id = item.get("productId")
+                amount = float(item.get("amountOut", 0))
+                
+                # Проверяем, есть ли цена ингредиента
+                ingr_cost = all_costs.get(ingredient_id)
+                
+                if ingr_cost is None:
+                    # Проверяем, есть ли у ингредиента своя техкарта
+                    if ingredient_id in chart_map:
+                        # У ингредиента есть техкарта, но она ещё не рассчитана
+                        all_ingredients_ready = False
+                        break
+                    else:
+                        # Нет техкарты и нет цены — пропускаем
+                        continue
+                
                 total_cost += amount * ingr_cost
-                found_ingredients.add(ingredient_id)
-            else:
-                missing_ingredients.add(ingredient_id)
-
-        if total_cost > 0:
-            dish_costs[dish_id] = round(total_cost, 2)
-
-    # Статистика расчёта себестоимости блюд
-    logger.debug(
-        "[invoice] DISH stats: %d техкарт, %d с items, %d позиций просмотрено, "
-        "%d уник. ингр. найдены, %d уник. ингр. отсутствуют",
-        len(prepared), charts_with_items, total_items_scanned,
-        len(found_ingredients), len(missing_ingredients),
-    )
-    if prepared and not dish_costs:
-        # Если 0 блюд — показать первую техкарту для диагностики
-        sample = prepared[0]
-        s_items = sample.get("items") or []
-        s_detail = []
-        for it in s_items[:5]:
-            pid = it.get("productId", "?")
-            ao = it.get("amountOut", "?")
-            in_gc = pid in goods_costs
-            s_detail.append(f"pid={pid[:12]}.. ao={ao} found={in_gc}")
-        logger.debug(
-            "[invoice] DISH=0 диагностика первой техкарты: dish=%s, items=%d, details=[%s]",
-            sample.get("assembledProductId", "?")[:12],
-            len(s_items),
-            "; ".join(s_detail),
-        )
-
-    if missing_ingredients:
-        logger.warning(
-            "[invoice] %d ингредиентов без себестоимости (нет в приходах)",
-            len(missing_ingredients),
-        )
-
+            
+            # Если все ингредиенты готовы и стоимость > 0 — записываем
+            if all_ingredients_ready and total_cost > 0:
+                all_costs[dish_id] = round(total_cost, 2)
+                changes = True
+        
+        # Если за итерацию ничего не изменилось — выходим
+        if not changes:
+            break
+    
+    # Извлекаем только DISH (не PREPARED)
+    dish_costs: dict[str, float] = {}
+    for pid, cost in all_costs.items():
+        if product_types.get(pid) == "DISH":
+            dish_costs[pid] = cost
+    
+    # Статистика
     logger.info(
-        "[invoice] Себестоимость DISH: %d блюд из %d техкарт за %.2f сек",
-        len(dish_costs), len(prepared), time.monotonic() - t0,
+        "[invoice] DISH: %d блюд с себестоимостью (из %d техкарт, итераций=%d)",
+        len(dish_costs), len(all_charts), iteration + 1,
     )
+    
     return dish_costs
 
 
@@ -798,7 +807,15 @@ async def _sync_prices_to_db(
         for item in gsheet_data:
             pid = item["product_id"]
             info = prod_info.get(pid, {})
-            cost = cost_prices.get(pid, item.get("cost_price"))
+            product_type = info.get("product_type", "")
+            
+            # Для DISH берём ТОЛЬКО расчётную себестоимость (无 fallback из GSheet)
+            # Для GOODS берём расчётную, а если нет — fallback из GSheet (ручное значение)
+            if product_type == "DISH":
+                cost = cost_prices.get(pid)  # None если не рассчитано
+            else:
+                cost = cost_prices.get(pid, item.get("cost_price"))
+            
             main_unit_str = info.get("main_unit")
             store_id_str = item.get("store_id", "")
             product_rows.append({
