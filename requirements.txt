@@ -34,7 +34,4 @@ numpy>=1.26.0
 # QR code detection
 pyzbar>=0.1.9
 
-# AWS S3 (document storage)
-boto3>=1.34.0
-
 # XML parsing (stdlib, no extra dep)

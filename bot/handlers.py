@@ -43,7 +43,7 @@ from use_cases import price_list as price_uc
 from bot.middleware import (
     admin_required, auth_required, permission_required,
     sync_with_progress, track_task, get_sync_lock,
-    parse_callback_uuid, reply_menu,
+    reply_menu,
     validate_callback_uuid, truncate_input, MAX_TEXT_NAME,
 )
 

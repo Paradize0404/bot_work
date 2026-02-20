@@ -82,7 +82,6 @@ def _get_lock_owner(pk: int) -> tuple[int, str] | None:
 # ══════════════════════════════════════════════════════
 
 class CreateRequestStates(StatesGroup):
-    supplier_choose = State()
     add_items = State()          # поиск товаров по названию
     enter_item_qty = State()     # ввод количества для выбранного товара
     confirm = State()
@@ -445,7 +444,6 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
 
     # Сохраняем выбранный товар для следующего шага
     await state.update_data(_selected_product=product)
-    await state.set_state(CreateRequestStates.enter_item_qty)
 
     # ── Блокировка: товар без склада ──
     if not product.get("store_id"):
@@ -453,6 +451,7 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
             "⚠️ У товара не указан склад. Выберите другой товар.",
             show_alert=True,
         )
+        await state.set_state(CreateRequestStates.add_items)
         await _send_prompt(callback.bot, callback.message.chat.id, state,
             f"⚠️ У товара <b>{product['name']}</b> не указан склад "
             "в прайс-листе.\n\n"
@@ -462,6 +461,8 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
             reply_markup=_req_add_more_kb(len(items)) if items else None,
         )
         return
+
+    await state.set_state(CreateRequestStates.enter_item_qty)
 
     # ── Определяем цену: сначала из столбца поставщика, потом себестоимость ──
     source_store_name = product.get("store_name", "")
@@ -1580,7 +1581,7 @@ async def edit_enter_new_quantity(message: Message, state: FSMContext) -> None:
     if norm in ("kg", "l"):
         converted = qty / 1000
         display_unit = "г" if norm == "kg" else "мл"
-        api_unit = "кг" if norm == "l" else "л"
+        api_unit = "кг" if norm == "kg" else "л"
         qty_display = f"{qty:.4g} {display_unit} ({converted:.3g} {api_unit})"
     else:
         converted = qty

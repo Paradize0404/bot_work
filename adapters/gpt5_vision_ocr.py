@@ -9,15 +9,36 @@ import io
 import json
 import re
 import base64
+import logging
 from typing import Dict, Any
-import httpx
 from openai import AsyncOpenAI
 from PIL import Image, ImageOps
 from config import OPENAI_API_KEY
 
+logger = logging.getLogger(__name__)
 
 # Модель GPT-5.2
 OCR_MODEL = "gpt-5.2-chat-latest"
+
+# Singleton клиент — переиспользуем HTTP-соединения
+_client: AsyncOpenAI | None = None
+
+
+def _get_client() -> AsyncOpenAI:
+    """Получить singleton AsyncOpenAI клиент."""
+    global _client
+    if _client is None:
+        _client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    return _client
+
+
+async def close_client() -> None:
+    """Закрыть HTTP-клиент при shutdown."""
+    global _client
+    if _client is not None:
+        await _client.close()
+        _client = None
+        logger.info("OpenAI client closed")
 
 
 # Системный промпт для распознавания документов
@@ -190,7 +211,7 @@ async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
     Returns:
         Словарь с распознанными данными
     """
-    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    client = _get_client()
 
     # Авто-поворот: коррекция EXIF + горизонтальные → портрет
     image_bytes = _auto_rotate(image_bytes)
@@ -263,7 +284,7 @@ async def classify_document(image_bytes: bytes) -> str:
     Returns:
         Тип документа: 'upd', 'receipt', 'act', 'cash_order', 'other'
     """
-    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    client = _get_client()
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     
     prompt = """

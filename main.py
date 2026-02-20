@@ -160,6 +160,7 @@ async def _cleanup() -> None:
     from adapters.iiko_api import close_client as close_iiko
     from adapters.iiko_cloud_api import close_client as close_iiko_cloud
     from adapters.fintablo_api import close_client as close_ft
+    from adapters.gpt5_vision_ocr import close_client as close_openai
     from db.engine import dispose_engine
     from bot.middleware import cancel_tracked_tasks
 
@@ -180,6 +181,7 @@ async def _cleanup() -> None:
     await close_iiko()
     await close_iiko_cloud()
     await close_ft()
+    await close_openai()
     await dispose_engine()
     logger.info("Shutdown complete")
 

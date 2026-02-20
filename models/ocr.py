@@ -7,6 +7,8 @@ from sqlalchemy import String, Text, REAL, Boolean, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship, declarative_base
 from uuid import uuid4
 
+from use_cases._helpers import now_kgd
+
 Base = declarative_base()
 
 
@@ -17,7 +19,7 @@ class OcrDocument(Base):
     __tablename__ = 'ocr_document'
     
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    telegram_id: Mapped[int] = mapped_column(String(50), nullable=False, index=True)  # Telegram user ID
+    telegram_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # Telegram user ID
     user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # iiko user ID если авторизован
     department_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # iiko department ID
     
@@ -67,7 +69,7 @@ class OcrDocument(Base):
     mapped_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # После маппинга
     
     # Временные метки
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=now_kgd)
     updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     sent_to_iiko_at: Mapped[datetime | None] = mapped_column(nullable=True)
     
@@ -159,7 +161,7 @@ class OcrMapping(Base):
     use_count: Mapped[int] = mapped_column(default=1)
     last_used_at: Mapped[datetime | None] = mapped_column(nullable=True)
     
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=now_kgd)
     
     def __repr__(self):
         return f"<OcrMapping {self.raw_name} → {self.iiko_name}>"
@@ -196,7 +198,7 @@ class OcrSupplierMapping(Base):
     use_count: Mapped[int] = mapped_column(default=1)
     last_used_at: Mapped[datetime | None] = mapped_column(nullable=True)
     
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=now_kgd)
     
     def __repr__(self):
         return f"<OcrSupplierMapping {self.raw_name} → {self.iiko_id}>"
@@ -225,7 +227,7 @@ class OcrCorrectionLog(Base):
     
     # Кто исправил
     corrected_by: Mapped[int | None] = mapped_column(nullable=True)  # Telegram user ID
-    corrected_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, index=True)
+    corrected_at: Mapped[datetime] = mapped_column(default=now_kgd, index=True)
     
     # Причина исправления
     reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -254,7 +256,7 @@ class OcrConfidenceStats(Base):
     manual_mapped_items: Mapped[int] = mapped_column(default=0)
     auto_mapping_pct: Mapped[float] = mapped_column(REAL, default=0.0)
     
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=now_kgd)
     
     def __repr__(self):
         return f"<OcrConfidenceStats {self.date} {self.doc_type}>"

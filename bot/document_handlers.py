@@ -43,7 +43,6 @@ from bot._utils import ocr_keyboard
 from bot.middleware import (
     auth_required,
     permission_required,
-    reply_menu,
     set_cancel_kb,
     track_task,
 )

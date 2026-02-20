@@ -71,7 +71,8 @@ async def get_pending_ocr_documents(
             ]
         else:
             # Фоллбек: recognized за последние 24 ч
-            since = _dt.datetime.utcnow() - _dt.timedelta(hours=24)
+            from use_cases._helpers import now_kgd
+            since = now_kgd() - _dt.timedelta(hours=24)
             conditions = [
                 OcrDocument.status == target_status,
                 OcrDocument.doc_type.in_(["upd", "act", "other"]),

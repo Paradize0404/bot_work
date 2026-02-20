@@ -121,15 +121,5 @@ TIMEZONE: str = "Europe/Kaliningrad"
 # ── Logging ──
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# ── Yandex Vision (OCR) ──
-YANDEX_IAM_TOKEN: str | None = os.getenv("YANDEX_IAM_TOKEN")
-YANDEX_FOLDER_ID: str | None = os.getenv("YANDEX_FOLDER_ID")
-
-# ── Yandex Object Storage (S3) ──
-S3_ENDPOINT: str = os.getenv("S3_ENDPOINT", "https://storage.yandexcloud.net")
-S3_ACCESS_KEY: str | None = os.getenv("S3_ACCESS_KEY")
-S3_SECRET_KEY: str | None = os.getenv("S3_SECRET_KEY")
-S3_BUCKET: str = os.getenv("S3_BUCKET", "ocr-gpt")
-
 # ── OpenAI GPT-5.2 (OCR) ──
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
