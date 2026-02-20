@@ -722,7 +722,19 @@ async def sync_invoice_prices_to_sheet(
             except json.JSONDecodeError:
                 logger.debug("[%s] update() вернул пустой body (ОК)", LABEL)
 
-        # ── 8. Dropdown складов в колонке C (строки 3+) ──
+        # ── 8. Очистка валидации с колонки D (Себестоимость) ──
+        # Удаляем старую валидацию, чтобы колонка D была обычным значением
+        try:
+            from gspread.worksheet import ValidationConditionType
+
+            # Очищаем валидацию со всей колонки D (строки 3 до конца)
+            cost_range = f"D3:D{2 + len(data_rows)}"
+            ws.clear_validation(cost_range)
+            logger.info("[%s] Очищена валидация колонки D (Себестоимость)", LABEL)
+        except Exception:
+            logger.debug("[%s] Очистка валидации D не удалась (ОК)", LABEL, exc_info=True)
+
+        # ── 9. Dropdown складов в колонке C (строки 3+) ──
         try:
             from gspread.worksheet import ValidationConditionType
 
@@ -742,7 +754,7 @@ async def sync_invoice_prices_to_sheet(
         except Exception:
             logger.warning("[%s] Ошибка dropdown заведений", LABEL, exc_info=True)
 
-        # ── 9. Dropdown поставщиков в заголовках (строка 2, столбцы E..N) ──
+        # ── 10. Dropdown поставщиков в заголовках (строка 2, столбцы E..N) ──
         try:
             from gspread.worksheet import ValidationConditionType
 
