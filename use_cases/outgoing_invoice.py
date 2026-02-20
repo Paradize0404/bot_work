@@ -635,7 +635,14 @@ async def calculate_dish_cost_prices(
             product_types[str(row.id).lower()] = row.product_type
 
     # Итеративный расчёт: начинаем с goods_costs, добавляем PREPARED, потом DISH
-    all_costs: dict[str, float] = dict(goods_costs)
+    # Исключаем DISH-продукты из начального словаря — их себестоимость должна
+    # считаться по техкарте, а не по остаткам склада (иначе блюда, которые
+    # одновременно хранятся на складе, получат СЦС вместо рецептурной цены).
+    all_costs: dict[str, float] = {
+        pid: cost
+        for pid, cost in goods_costs.items()
+        if product_types.get(pid) != "DISH"
+    }
 
     max_iterations = 10  # защита от циклических зависимостей
     for iteration in range(max_iterations):
