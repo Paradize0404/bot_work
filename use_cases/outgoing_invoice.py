@@ -486,12 +486,19 @@ async def preload_for_invoice(department_id: str) -> None:
 # Себестоимости: товары по последнему приходу + техкарты
 # ═══════════════════════════════════════════════════════
 
-async def calculate_goods_cost_prices(days_back: int = 90) -> dict[str, float]:
+async def calculate_goods_cost_prices(
+    days_back: int = 90,
+    store_ids: set[str] | None = None,
+) -> dict[str, float]:
     """
     Себестоимость GOODS по средневзвешенной цене остатка (СЦС).
 
     Основной источник: GET /resto/api/v2/reports/balance/stores
     Для каждого продукта: СЦС = sum(sum_по_складам) / sum(amount_по_складам).
+
+    store_ids — если передан, учитываются только остатки этих складов
+                (склады выбранного подразделения из Настроек).
+                None = все склады (поведение по умолчанию).
 
     Fallback (для товаров с нулевым/отсутствующим остатком):
     последняя цена из приходных накладных за `days_back` дней.
@@ -504,14 +511,29 @@ async def calculate_goods_cost_prices(days_back: int = 90) -> dict[str, float]:
 
     today = now_kgd()
     t0 = time.monotonic()
-    logger.info("[invoice] Расчёт себестоимости GOODS: СЦС из остатков склада")
+    if store_ids:
+        logger.info(
+            "[invoice] Расчёт себестоимости GOODS: СЦС по %d складам подразделения",
+            len(store_ids),
+        )
+    else:
+        logger.info("[invoice] Расчёт себестоимости GOODS: СЦС из остатков всех складов")
 
     # ── 1. Остатки склада → СЦС ─────────────────────────────────────────────
     balances = await iiko_api.fetch_stock_balances()
 
+    # Нормализуем store_ids к lowercase для сравнения
+    store_ids_lower: set[str] | None = (
+        {sid.lower() for sid in store_ids} if store_ids else None
+    )
+
     product_sum: dict[str, float] = {}
     product_amt: dict[str, float] = {}
     for entry in balances:
+        store_id = (entry.get("store") or "").lower().strip()
+        # Если задан фильтр по складам — пропускаем чужие
+        if store_ids_lower and store_id not in store_ids_lower:
+            continue
         pid = (entry.get("product") or "").lower().strip()
         amt = float(entry.get("amount") or 0)
         sm  = float(entry.get("sum")    or 0)
@@ -724,8 +746,45 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
         logger.warning("[invoice] Нет товаров для прайс-листа")
         return "0 товаров"
 
-    # 2. Себестоимость GOODS
-    goods_costs = await calculate_goods_cost_prices(days_back=days_back)
+    # 1b. Склады выбранного подразделения (из Настроек GSheet)
+    dept_store_ids: set[str] = set()
+    stores_for_dropdown: list[dict[str, str]] = []
+    try:
+        from use_cases.product_request import get_request_stores
+        from db.engine import async_session_factory
+        from db.models import Store
+        from sqlalchemy import select as sa_select
+
+        selected = await get_request_stores()  # [{id, name}] — 0 или 1
+        if selected:
+            dept_uuid = selected[0]["id"]
+            async with async_session_factory() as sess:
+                res = await sess.execute(
+                    sa_select(Store.id, Store.name)
+                    .where(Store.deleted.is_(False))
+                    .where(Store.parent_id == dept_uuid)
+                    .order_by(Store.name)
+                )
+                stores_for_dropdown = [
+                    {"id": str(r.id), "name": r.name} for r in res.all()
+                ]
+            dept_store_ids = {s["id"] for s in stores_for_dropdown}
+            logger.info(
+                "[invoice] Склады заведения '%s': %d — СЦС будет по ним",
+                selected[0]["name"], len(dept_store_ids),
+            )
+        else:
+            logger.warning(
+                "[invoice] Заведение для заявок не выбрано — СЦС по всем складам"
+            )
+    except Exception:
+        logger.warning("[invoice] Ошибка загрузки складов подразделения", exc_info=True)
+
+    # 2. Себестоимость GOODS (только по складам подразделения, если настроено)
+    goods_costs = await calculate_goods_cost_prices(
+        days_back=days_back,
+        store_ids=dept_store_ids or None,
+    )
 
     # 3. Себестоимость DISH (ингредиенты из goods_costs)
     dish_costs = await calculate_dish_cost_prices(goods_costs)
@@ -769,36 +828,7 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
 
     # 6. Загружаем поставщиков для dropdown в Google Sheet
     suppliers = await load_all_suppliers()
-
-    # 6b. Склады выбранного заведения для dropdown в колонке C прайс-листа
-    stores_for_dropdown: list[dict[str, str]] = []
-    try:
-        from use_cases.product_request import get_request_stores
-        from db.engine import async_session_factory
-        from db.models import Store
-        from sqlalchemy import select as sa_select
-
-        selected = await get_request_stores()  # [{id, name}] — 0 или 1
-        if selected:
-            dept_uuid = selected[0]["id"]
-            async with async_session_factory() as sess:
-                res = await sess.execute(
-                    sa_select(Store.id, Store.name)
-                    .where(Store.deleted.is_(False))
-                    .where(Store.parent_id == dept_uuid)
-                    .order_by(Store.name)
-                )
-                stores_for_dropdown = [
-                    {"id": str(r.id), "name": r.name} for r in res.all()
-                ]
-            logger.info(
-                "[invoice] Склады заведения %s: %d шт",
-                selected[0]["name"], len(stores_for_dropdown),
-            )
-        else:
-            logger.warning("[invoice] Заведение для заявок не выбрано в Настройках")
-    except Exception:
-        logger.warning("[invoice] Ошибка загрузки складов для dropdown", exc_info=True)
+    # stores_for_dropdown уже загружены в шаге 1b
 
     # 7. Записываем в Google Sheet
     count = await gs.sync_invoice_prices_to_sheet(
