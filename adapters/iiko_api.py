@@ -376,6 +376,152 @@ async def fetch_stock_balances(
     return data
 
 
+# ─────────────────────────────────────────────────────
+# 9b. OLAP остатки (v1 GET) — с иерархией групп Product.TopParent
+# ─────────────────────────────────────────────────────
+
+_OLAP_V1_DIMENSIONS = (
+    "Account.Name",        # склад / счёт
+    "Product.TopParent",   # группа 1 уровня (TopParent)
+    "Product.Name",        # позиция номенклатуры
+    "Product.MeasureUnit", # единица измерения
+)
+_OLAP_V1_METRICS = (
+    "FinalBalance.Amount",  # остаток кол-во
+    "FinalBalance.Money",   # остаток денежный
+)
+
+
+def _parse_olap_xml(xml_text: str) -> list[dict[str, Any]]:
+    """Парсинг XML-ответа OLAP v1 (<rows><r><Account.Name>...</Account.Name>...</r></rows>)."""
+    import xml.etree.ElementTree as ET
+
+    def _cast(v: str | None) -> Any:
+        if v is None:
+            return None
+        text = v.strip()
+        if not text:
+            return None
+        for caster in (int, float):
+            try:
+                return caster(text)
+            except (ValueError, TypeError):
+                pass
+        return text
+
+    root = ET.fromstring(xml_text)
+    rows = []
+    for elem in root.findall("./r"):
+        row: dict[str, Any] = {}
+        for child in elem:
+            row[child.tag] = _cast(child.text)
+        rows.append(row)
+    return rows
+
+
+async def fetch_olap_transactions_v1(
+    date_from_ddmmyyyy: str,
+    date_to_ddmmyyyy: str,
+) -> list[dict[str, Any]]:
+    """
+    Получить остатки по складам через OLAP v1 GET endpoint.
+
+    Endpoint: GET /resto/api/reports/olap
+    Формат дат: DD.MM.YYYY (например, "20.02.2026").
+    Возвращает строки с полями: Account.Name, Product.TopParent, Product.Name,
+                                Product.MeasureUnit, FinalBalance.Amount, FinalBalance.Money.
+    """
+    key = await _get_key()
+    url = f"{_base()}/resto/api/reports/olap"
+
+    # httpx требует список пар для multi-value params
+    params: list[tuple[str, str]] = [
+        ("key", key),
+        ("report", "TRANSACTIONS"),
+        ("from", date_from_ddmmyyyy),
+        ("to", date_to_ddmmyyyy),
+    ]
+    for dim in _OLAP_V1_DIMENSIONS:
+        params.append(("groupRow", dim))
+    for metric in _OLAP_V1_METRICS:
+        params.append(("agr", metric))
+
+    label = f"olap_v1 {date_from_ddmmyyyy}..{date_to_ddmmyyyy}"
+    logger.info("[API] GET %s — запрашиваю...", label)
+    t0 = time.monotonic()
+    client = await _get_client()
+    resp = await client.get(url, params=params)
+    elapsed = time.monotonic() - t0
+
+    if resp.status_code >= 400:
+        body = resp.text[:500] if resp.text else ""
+        logger.error("[API] GET %s FAIL — HTTP %d, %.1fs, body=%s", label, resp.status_code, elapsed, body)
+        resp.raise_for_status()
+
+    content_type = (resp.headers.get("content-type") or "").lower()
+    if "json" in content_type:
+        payload = resp.json()
+        rows = payload.get("data") or payload.get("rows") or payload.get("report") or []
+    elif "xml" in content_type or content_type.startswith("text/"):
+        rows = _parse_olap_xml(resp.text)
+    else:
+        # Попробуем JSON, затем XML
+        try:
+            payload = resp.json()
+            rows = payload.get("data") or payload.get("rows") or []
+        except Exception:
+            rows = _parse_olap_xml(resp.text)
+
+    logger.info(
+        "[API] GET %s — %d строк, HTTP %d, %.1f сек, %d байт",
+        label, len(rows), resp.status_code, elapsed, len(resp.content),
+    )
+    return rows
+
+
+# ─────────────────────────────────────────────────────
+# 9c. Внутреннее перемещение (POST)
+# ─────────────────────────────────────────────────────
+
+async def send_internal_transfer(document: dict[str, Any]) -> dict[str, Any]:
+    """
+    Отправить внутреннее перемещение в iiko.
+
+    POST /resto/api/v2/documents/internalTransfer?key={token}
+    Документ: {"dateIncoming", "status", "comment", "storeFromId", "storeToId", "items":[...]}
+    items: [{"productId": UUID, "amount": float, "measureUnitId": UUID}, ...]
+    Возвращает {"ok": True} при успехе, иначе выбрасывает исключение.
+    """
+    key = await _get_key()
+    url = f"{_base()}/resto/api/v2/documents/internalTransfer"
+    params = {"key": key}
+
+    logger.info(
+        "[API] POST internalTransfer — from=%s, to=%s, items=%d",
+        document.get("storeFromId"),
+        document.get("storeToId"),
+        len(document.get("items", [])),
+    )
+    t0 = time.monotonic()
+    client = await _get_client()
+    resp = await client.post(url, params=params, json=document)
+    elapsed = time.monotonic() - t0
+
+    if resp.status_code >= 400:
+        body = resp.text[:500] if resp.text else ""
+        logger.error(
+            "[API] POST internalTransfer FAIL — HTTP %d, %.1f сек, body=%s",
+            resp.status_code, elapsed, body,
+        )
+        resp.raise_for_status()
+
+    logger.info(
+        "[API] POST internalTransfer OK — HTTP %d, %.1f сек",
+        resp.status_code, elapsed,
+    )
+    return {"ok": True}
+
+
 # ═════════════════════════════════════════════════════
 # 10. Отправка документов (JSON POST)
 # ═════════════════════════════════════════════════════

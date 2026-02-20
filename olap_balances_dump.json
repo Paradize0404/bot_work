@@ -182,7 +182,7 @@
     },
     {
       "Account.Name": "Бар (Московский)",
-      "FinalBalance.Amount": -0.3,
+      "FinalBalance.Amount": -0.36,
       "FinalBalance.Money": 0,
       "Product.Name": "Грейпфрут"
     },
@@ -404,8 +404,8 @@
     },
     {
       "Account.Name": "Бар (Московский)",
-      "FinalBalance.Amount": 3.032,
-      "FinalBalance.Money": 1167.32,
+      "FinalBalance.Amount": 3.0304,
+      "FinalBalance.Money": 1166.7,
       "Product.Name": "Малина розмарин цех"
     },
     {
@@ -548,8 +548,8 @@
     },
     {
       "Account.Name": "Бар (Московский)",
-      "FinalBalance.Amount": -3.512,
-      "FinalBalance.Money": -403.88,
+      "FinalBalance.Amount": -3.5144,
+      "FinalBalance.Money": -404.16,
       "Product.Name": "Морс вишня цех"
     },
     {
@@ -560,8 +560,8 @@
     },
     {
       "Account.Name": "Бар (Московский)",
-      "FinalBalance.Amount": 1.313,
-      "FinalBalance.Money": 177.26,
+      "FinalBalance.Amount": 1.3106,
+      "FinalBalance.Money": 176.93,
       "Product.Name": "Морс смородина цех"
     },
     {
@@ -722,8 +722,8 @@
     },
     {
       "Account.Name": "Бар (Московский)",
-      "FinalBalance.Amount": 11.944,
-      "FinalBalance.Money": 2126.03,
+      "FinalBalance.Amount": 11.928,
+      "FinalBalance.Money": 2123.18,
       "Product.Name": "Сидр полусухой Яблочный сад"
     },
     {
@@ -860,8 +860,8 @@
     },
     {
       "Account.Name": "Бар (Московский)",
-      "FinalBalance.Amount": -0.75,
-      "FinalBalance.Money": -119.93,
+      "FinalBalance.Amount": -1.07,
+      "FinalBalance.Money": -171.1,
       "Product.Name": "Тоник розлив"
     },
     {
@@ -884,8 +884,8 @@
     },
     {
       "Account.Name": "Бар (Московский)",
-      "FinalBalance.Amount": -0.27,
-      "FinalBalance.Money": -197.1,
+      "FinalBalance.Amount": -0.67,
+      "FinalBalance.Money": -489.1,
       "Product.Name": "Фреш грейпфрукт цех"
     },
     {
@@ -1274,14 +1274,14 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.1929,
-      "FinalBalance.Money": 424.38,
+      "FinalBalance.Amount": 0.1909,
+      "FinalBalance.Money": 419.98,
       "Product.Name": "Базилик"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.209317364,
-      "FinalBalance.Money": 39.74,
+      "FinalBalance.Amount": 0.052071855,
+      "FinalBalance.Money": 9.89,
       "Product.Name": "Баклажан"
     },
     {
@@ -1370,14 +1370,14 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.026005587,
-      "FinalBalance.Money": -8.56,
+      "FinalBalance.Amount": -0.026302885,
+      "FinalBalance.Money": -8.65,
       "Product.Name": "Горчица зернистая/дижонская "
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.049,
-      "FinalBalance.Money": 39.94,
+      "FinalBalance.Amount": 0.039,
+      "FinalBalance.Money": 31.79,
       "Product.Name": "Гренки на цезарь цех"
     },
     {
@@ -1430,8 +1430,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 5.832,
-      "FinalBalance.Money": 2711.11,
+      "FinalBalance.Amount": 5.782,
+      "FinalBalance.Money": 2687.86,
       "Product.Name": "Грудка куриная сувид цех"
     },
     {
@@ -1472,8 +1472,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 1.634,
-      "FinalBalance.Money": 915.04,
+      "FinalBalance.Amount": 1.626,
+      "FinalBalance.Money": 910.56,
       "Product.Name": "Заправка на панцанеллу Цех"
     },
     {
@@ -1484,8 +1484,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.33425,
-      "FinalBalance.Money": 289.78,
+      "FinalBalance.Amount": 0.33275,
+      "FinalBalance.Money": 288.48,
       "Product.Name": "Зелень кинза"
     },
     {
@@ -1568,8 +1568,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.027608694,
-      "FinalBalance.Money": 76.38,
+      "FinalBalance.Amount": 0.147608694,
+      "FinalBalance.Money": 408.86,
       "Product.Name": "Колбаса Фуэт"
     },
     {
@@ -1658,8 +1658,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 1.674371399,
-      "FinalBalance.Money": 300.22,
+      "FinalBalance.Amount": 1.674027498,
+      "FinalBalance.Money": 300.16,
       "Product.Name": "Лимоны"
     },
     {
@@ -1688,20 +1688,20 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.07459,
-      "FinalBalance.Money": 94.42,
+      "FinalBalance.Amount": 0.07159,
+      "FinalBalance.Money": 90.62,
       "Product.Name": "Масло оливковое (ExtraVirgen)"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.106160001,
-      "FinalBalance.Money": -48.26,
+      "FinalBalance.Amount": 0.393839999,
+      "FinalBalance.Money": 586.31,
       "Product.Name": "Масло оливковое второй сорт (pomace olive)"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 4.315466859,
-      "FinalBalance.Money": 894.1,
+      "FinalBalance.Amount": 4.313466859,
+      "FinalBalance.Money": 893.68,
       "Product.Name": "Масло подсолнечное"
     },
     {
@@ -1712,8 +1712,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.2313125,
-      "FinalBalance.Money": -646.76,
+      "FinalBalance.Amount": 0.2686875,
+      "FinalBalance.Money": 671.72,
       "Product.Name": "Масло трюфельное"
     },
     {
@@ -1778,14 +1778,14 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 2.715,
-      "FinalBalance.Money": 920.63,
+      "FinalBalance.Amount": 2.615,
+      "FinalBalance.Money": 886.72,
       "Product.Name": "Огурцы "
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 1.089999996,
-      "FinalBalance.Money": 1840.4,
+      "FinalBalance.Amount": 1.079999996,
+      "FinalBalance.Money": 1823.52,
       "Product.Name": "Оливки/маслины консервированные"
     },
     {
@@ -1856,14 +1856,14 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 37.5,
-      "FinalBalance.Money": 1125,
+      "FinalBalance.Amount": 36.5,
+      "FinalBalance.Money": 1095,
       "Product.Name": "Парбейк большой цех"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -31,
-      "FinalBalance.Money": -775,
+      "FinalBalance.Amount": -32,
+      "FinalBalance.Money": -800,
       "Product.Name": "Парбейк стандарт цех"
     },
     {
@@ -1874,8 +1874,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.965226292,
-      "FinalBalance.Money": 302.37,
+      "FinalBalance.Amount": 0.767238341,
+      "FinalBalance.Money": 240.35,
       "Product.Name": "Перец болгарский красный сладкий"
     },
     {
@@ -2000,8 +2000,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.6375,
-      "FinalBalance.Money": 292.66,
+      "FinalBalance.Amount": 0.5375,
+      "FinalBalance.Money": 246.75,
       "Product.Name": "Помидоры Черри"
     },
     {
@@ -2012,8 +2012,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -10.742447478,
-      "FinalBalance.Money": -3461.95,
+      "FinalBalance.Amount": -10.880484745,
+      "FinalBalance.Money": -3506.43,
       "Product.Name": "Помито (томаты в с/с)/томатная паста"
     },
     {
@@ -2168,8 +2168,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.050066292,
-      "FinalBalance.Money": -90.64,
+      "FinalBalance.Amount": -0.051162566,
+      "FinalBalance.Money": -92.62,
       "Product.Name": "Прованские травы "
     },
     {
@@ -2198,8 +2198,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -2.773025853,
-      "FinalBalance.Money": -492.36,
+      "FinalBalance.Amount": 2.226974147,
+      "FinalBalance.Money": 436.22,
       "Product.Name": "Рис"
     },
     {
@@ -2228,8 +2228,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.512475,
-      "FinalBalance.Money": -884.75,
+      "FinalBalance.Amount": -0.517675,
+      "FinalBalance.Money": -893.73,
       "Product.Name": "Руккола"
     },
     {
@@ -2258,8 +2258,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 5.012412121,
-      "FinalBalance.Money": 1506.31,
+      "FinalBalance.Amount": 4.944533333,
+      "FinalBalance.Money": 1485.91,
       "Product.Name": "Салат Айсберг/Романо"
     },
     {
@@ -2294,8 +2294,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.26055223,
-      "FinalBalance.Money": -18.15,
+      "FinalBalance.Amount": -0.264278519,
+      "FinalBalance.Money": -18.41,
       "Product.Name": "Сахар"
     },
     {
@@ -2306,20 +2306,20 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.128834398,
-      "FinalBalance.Money": 50.66,
+      "FinalBalance.Amount": 0.128229607,
+      "FinalBalance.Money": 50.42,
       "Product.Name": "Семена льна"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.128254773,
-      "FinalBalance.Money": 29.95,
+      "FinalBalance.Amount": 0.125533216,
+      "FinalBalance.Money": 29.31,
       "Product.Name": "Семена подсолнечника"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.130254773,
-      "FinalBalance.Money": 144.41,
+      "FinalBalance.Amount": 0.127533216,
+      "FinalBalance.Money": 141.4,
       "Product.Name": "Семена тыквенные"
     },
     {
@@ -2372,14 +2372,14 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.887602677,
-      "FinalBalance.Money": 58.11,
+      "FinalBalance.Amount": 0.884496167,
+      "FinalBalance.Money": 57.9,
       "Product.Name": "Соль "
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.008881758,
-      "FinalBalance.Money": -14.97,
+      "FinalBalance.Amount": -0.009030406,
+      "FinalBalance.Money": -15.22,
       "Product.Name": "Соус Ворчестер"
     },
     {
@@ -2420,8 +2420,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.567162877,
-      "FinalBalance.Money": 61.94,
+      "FinalBalance.Amount": 0.555067068,
+      "FinalBalance.Money": 60.62,
       "Product.Name": "Соус Соевый"
     },
     {
@@ -2438,8 +2438,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.628852477,
-      "FinalBalance.Money": 321,
+      "FinalBalance.Amount": 0.628703829,
+      "FinalBalance.Money": 320.92,
       "Product.Name": "Соус Шрирача"
     },
     {
@@ -2462,8 +2462,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 3.203,
-      "FinalBalance.Money": 1345.26,
+      "FinalBalance.Amount": 3.173,
+      "FinalBalance.Money": 1332.66,
       "Product.Name": "Соус цезарь цех"
     },
     {
@@ -2486,14 +2486,14 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.626,
-      "FinalBalance.Money": -1247.78,
+      "FinalBalance.Amount": -0.648,
+      "FinalBalance.Money": -1291.64,
       "Product.Name": "Сыр Дор Блю"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.243,
-      "FinalBalance.Money": -561.35,
+      "FinalBalance.Amount": -0.265,
+      "FinalBalance.Money": -612.18,
       "Product.Name": "Сыр Камамбер"
     },
     {
@@ -2510,14 +2510,14 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -8.974,
+      "FinalBalance.Amount": -9.076,
       "FinalBalance.Money": 0,
       "Product.Name": "Сыр Моцарелла твердый"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.174816892,
-      "FinalBalance.Money": -313.18,
+      "FinalBalance.Amount": -0.194283559,
+      "FinalBalance.Money": -348.05,
       "Product.Name": "Сыр Пармезан/стародуб хард"
     },
     {
@@ -2528,8 +2528,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": 0.04,
-      "FinalBalance.Money": 38.03,
+      "FinalBalance.Amount": 0.67,
+      "FinalBalance.Money": 644.28,
       "Product.Name": "Сыр Фета/сиртаки"
     },
     {
@@ -2606,20 +2606,20 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.015862274,
-      "FinalBalance.Money": -22.59,
+      "FinalBalance.Amount": -0.033119759,
+      "FinalBalance.Money": -47.16,
       "Product.Name": "Томаты вяленые"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.609217394,
-      "FinalBalance.Money": -712.84,
+      "FinalBalance.Amount": 1.150782606,
+      "FinalBalance.Money": 1480.64,
       "Product.Name": "Тунец красный св/м"
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.008881758,
-      "FinalBalance.Money": -3.39,
+      "FinalBalance.Amount": -0.009030406,
+      "FinalBalance.Money": -3.45,
       "Product.Name": "Уксус Яблочный"
     },
     {
@@ -2630,8 +2630,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.387672386,
-      "FinalBalance.Money": -359.71,
+      "FinalBalance.Amount": 1.362327614,
+      "FinalBalance.Money": 734.98,
       "Product.Name": "Уксус рисовый"
     },
     {
@@ -2696,8 +2696,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -0.037154231,
-      "FinalBalance.Money": -12.26,
+      "FinalBalance.Amount": -0.037240718,
+      "FinalBalance.Money": -12.29,
       "Product.Name": "Чеснок"
     },
     {
@@ -3098,8 +3098,8 @@
     },
     {
       "Account.Name": "Кухня (Московский)",
-      "FinalBalance.Amount": -84.187315745,
-      "FinalBalance.Money": -841.87,
+      "FinalBalance.Amount": -25.187315745,
+      "FinalBalance.Money": -262.86,
       "Product.Name": "Яйцо"
     },
     {

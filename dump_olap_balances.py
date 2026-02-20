@@ -68,28 +68,11 @@ async def main():
         return
 
     data = resp.json()
-    print(f"Тип ответа: {type(data)}")
 
     out_path = Path(__file__).resolve().parent / "olap_balances_dump.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"Сохранено → {out_path}")
-
-    # Краткий превью
-    if isinstance(data, list):
-        print(f"Строк: {len(data)}")
-        print("Первые 3:", json.dumps(data[:3], ensure_ascii=False, indent=2))
-    elif isinstance(data, dict):
-        print("Ключи:", list(data.keys()))
-        # Попробуем найти строки
-        for key_name in ("data", "rows", "items", "result"):
-            if key_name in data:
-                rows = data[key_name]
-                print(f"data['{key_name}'] — {len(rows)} строк")
-                print("Первые 3:", json.dumps(rows[:3], ensure_ascii=False, indent=2))
-                break
-        else:
-            print(json.dumps(data, ensure_ascii=False, indent=2)[:3000])
+    print(f"Сохранено → {out_path}  ({len(resp.content)} байт)")
 
 
 if __name__ == "__main__":

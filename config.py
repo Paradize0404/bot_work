@@ -131,3 +131,19 @@ if not OPENAI_API_KEY:
     logging.getLogger(__name__).warning(
         "OPENAI_API_KEY не задан — OCR функции будут недоступны"
     )
+
+# ── Авто-перемещение отрицательных остатков расходных материалов ──
+# Запускается ежедневно в 23:00 по Калининграду.
+# Ресторан определяется автоматически по паттерну имени склада: "TYPE (РЕСТОРАН)"
+# Источник: склад с именем <SOURCE_PREFIX> (РЕСТОРАН)
+# Цели:     склады с именем <TARGET_PREFIXES> (РЕСТОРАН)
+# Фильтр товаров: только группа верхнего уровня == PRODUCT_GROUP
+NEGATIVE_TRANSFER_SOURCE_PREFIX: str = os.getenv(
+    "NEGATIVE_TRANSFER_SOURCE_PREFIX", "Хоз. товары"
+)
+NEGATIVE_TRANSFER_TARGET_PREFIXES: str = os.getenv(
+    "NEGATIVE_TRANSFER_TARGET_PREFIXES", "Бар,Кухня"
+)
+NEGATIVE_TRANSFER_PRODUCT_GROUP: str = os.getenv(
+    "NEGATIVE_TRANSFER_PRODUCT_GROUP", "Расходные материалы"
+)
