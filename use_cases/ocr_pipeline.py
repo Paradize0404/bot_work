@@ -14,9 +14,9 @@ Flow:
 
 import asyncio
 import logging
+import time
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
-from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from adapters.gpt5_vision_ocr import recognize_document
@@ -238,7 +238,7 @@ async def process_photo_batch(
 
         if not group_key:
             # Нет group_key → создаём уникальный
-            group_key = f"single_{item['photo_index']}_{datetime.now().timestamp()}"
+            group_key = f"single_{item['photo_index']}_{time.monotonic()}"
 
         if group_key not in groups:
             groups[group_key] = DocumentGroup(
@@ -275,7 +275,7 @@ async def process_photo_batch(
                     break
 
         if not matched_key:
-            matched_key = f"single_{item['photo_index']}_{datetime.now().timestamp()}"
+            matched_key = f"single_{item['photo_index']}_{time.monotonic()}"
             groups[matched_key] = DocumentGroup(
                 group_key=matched_key,
                 doc_type=result.get("doc_type", "unknown"),
@@ -603,29 +603,3 @@ def _to_float(value: Any) -> Optional[float]:
         return float(Decimal(text))
     except (InvalidOperation, ValueError, TypeError):
         return None
-
-
-async def process_single_photo(photo: bytes) -> OCRResult:
-    """
-    Обработать одно фото (упрощённый интерфейс).
-    
-    Args:
-        photo: Изображение в байтах
-    
-    Returns:
-        Результат OCR
-    """
-    results = await process_photo_batch([photo])
-    return results[0] if results else OCRResult(
-        status="error",
-        doc_type="unknown",
-        doc_number=None,
-        doc_date=None,
-        supplier=None,
-        buyer=None,
-        items=[],
-        total_amount=None,
-        page_count=0,
-        total_pages=0,
-        errors=["Нет результатов"]
-    )

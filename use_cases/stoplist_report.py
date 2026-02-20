@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, func, case, literal_column
+from sqlalchemy import select, func
 
 from db.engine import async_session_factory
 from db.models import StoplistHistory

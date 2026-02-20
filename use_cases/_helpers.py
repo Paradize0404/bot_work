@@ -24,12 +24,6 @@ def now_kgd() -> datetime:
     return datetime.now(KGD_TZ).replace(tzinfo=None)
 
 
-# Backward-compatible alias
-def utcnow() -> datetime:
-    """DEPRECATED: используй now_kgd(). Оставлен для совместимости."""
-    return now_kgd()
-
-
 def safe_uuid(v: Any) -> uuid.UUID | None:
     """Безопасное преобразование в UUID (None если невалидно)."""
     if v is None:

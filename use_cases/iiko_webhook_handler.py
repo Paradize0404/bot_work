@@ -19,8 +19,6 @@ import logging
 import time
 from typing import Any
 
-from config import STOCK_CHANGE_THRESHOLD_PCT
-
 logger = logging.getLogger(__name__)
 
 LABEL = "iikoWebhook"
@@ -112,7 +110,7 @@ def _schedule_stoplist_flush(org_ids: set[str], bot: Any) -> None:
     if _stoplist_timer is not None:
         _stoplist_timer.cancel()
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     _stoplist_timer = loop.call_later(
         _STOPLIST_DEBOUNCE_SEC,
         lambda: asyncio.ensure_future(_flush_stoplist()),
@@ -343,7 +341,7 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         {"processed": int, "triggered_check": bool, "updated_messages": bool,
          "stoplist_updated": bool}
     """
-    global _last_snapshot_hash, _last_total_sum
+    global _last_snapshot_hash, _last_snapshot_items, _last_update_time
 
     result = {
         "processed": 0,

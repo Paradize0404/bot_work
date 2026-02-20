@@ -12,6 +12,7 @@
   НЕ создаём/обновляем токен сами — «работает, не трогай».
 """
 
+import hmac
 import logging
 import time
 from typing import Any
@@ -193,7 +194,7 @@ def verify_webhook_auth(auth_header: str | None) -> bool:
     token = auth_header
     if token.startswith("Bearer "):
         token = token[7:]
-    return token == IIKO_CLOUD_WEBHOOK_SECRET
+    return hmac.compare_digest(token, IIKO_CLOUD_WEBHOOK_SECRET)
 
 
 # ═══════════════════════════════════════════════════════

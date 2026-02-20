@@ -3,7 +3,6 @@ import httpx
 import logging
 import asyncio
 import time
-from datetime import datetime, timedelta
 
 from config import IIKO_BASE_URL, IIKO_LOGIN, IIKO_SHA1_PASSWORD
 

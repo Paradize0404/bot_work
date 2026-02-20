@@ -98,10 +98,3 @@ def invalidate() -> None:
         del _store[k]
     if keys_to_drop:
         logger.debug("[inv_cache] Сброшено %d ключей", len(keys_to_drop))
-
-
-def invalidate_all() -> None:
-    """Полный сброс."""
-    count = len(_store)
-    _store.clear()
-    logger.debug("[inv_cache] Полный сброс: %d ключей", count)

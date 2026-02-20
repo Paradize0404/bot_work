@@ -1171,7 +1171,8 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
 
         # Генерация PDF
         try:
-            pdf_bytes = pdf_uc.generate_invoice_pdf(
+            pdf_bytes = await asyncio.to_thread(
+                pdf_uc.generate_invoice_pdf,
                 items=items,
                 store_name=req_data.get("store_name", ""),
                 counteragent_name=req_data.get("counteragent_name", ""),

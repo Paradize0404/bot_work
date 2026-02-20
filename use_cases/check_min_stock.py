@@ -25,7 +25,7 @@ from sqlalchemy import select, func
 
 from db.engine import async_session_factory
 from db.models import Store, StockBalance, Department, MinStockLevel
-from use_cases._helpers import utcnow
+from use_cases._helpers import now_kgd
 from bot._utils import escape_md as _escape_md
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ async def check_min_stock_levels(
             dept_stmt = select(Department.name).where(Department.id == _uuid.UUID(department_id)) if department_id else None
             dept_name = (await session.execute(dept_stmt)).scalar_one_or_none() if dept_stmt else None
             return {
-                "checked_at": utcnow(),
+                "checked_at": now_kgd(),
                 "total_products": 0,
                 "below_min_count": 0,
                 "department_name": dept_name,
@@ -165,7 +165,7 @@ async def check_min_stock_levels(
         )
 
         return {
-            "checked_at": utcnow(),
+            "checked_at": now_kgd(),
             "total_products": len(limits),
             "below_min_count": len(below_min),
             "department_name": dept_name,

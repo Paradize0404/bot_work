@@ -921,7 +921,8 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
             if ctx and ctx.department_name:
                 department_name = ctx.department_name
 
-            pdf_bytes = pdf_uc.generate_invoice_pdf(
+            pdf_bytes = await asyncio.to_thread(
+                pdf_uc.generate_invoice_pdf,
                 items=items_with_qty,
                 store_name=template.get("store_name", ""),
                 counteragent_name=template.get("counteragent_name", ""),

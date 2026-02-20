@@ -270,29 +270,6 @@ class SyncLog(Base):
 
 
 # ─────────────────────────────────────────────────────
-# 10. Администраторы бота
-# ─────────────────────────────────────────────────────
-
-class BotAdmin(Base):
-    """
-    Администратор Telegram-бота.
-    Ссылается на iiko_employee через employee_id.
-    telegram_id — дублируется для быстрого поиска (без JOIN).
-    """
-    __tablename__ = "bot_admin"
-
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    telegram_id = Column(BigInteger, nullable=False, unique=True, index=True,
-                         comment="Telegram user ID администратора")
-    employee_id = Column(UUID(as_uuid=True), nullable=False,
-                         comment="FK → iiko_employee.id")
-    employee_name = Column(String(500), nullable=True,
-                           comment="ФИО (для отображения без JOIN)")
-    added_at = Column(DateTime, default=_utcnow, nullable=False)
-    added_by = Column(BigInteger, nullable=True,
-                      comment="telegram_id того, кто добавил")
-
-# ─────────────────────────────────────────────────────
 # 11. Остатки по складам (OLAP-отчёт по проводкам)
 # ─────────────────────────────────────────────────────
 
@@ -656,29 +633,6 @@ class PriceSupplierPrice(Base):
         DateTime, default=_utcnow, onupdate=_utcnow, nullable=False,
         comment="Время последней синхронизации",
     )
-
-
-# ─────────────────────────────────────────────────────
-# 19. Получатели заявок (request_receiver)
-# ─────────────────────────────────────────────────────
-
-class RequestReceiver(Base):
-    """
-    Сотрудник, которому приходят заявки на товары.
-    Аналог BotAdmin — назначается из авторизованных сотрудников.
-    """
-    __tablename__ = "request_receiver"
-
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    telegram_id = Column(BigInteger, nullable=False, unique=True, index=True,
-                         comment="Telegram user ID получателя")
-    employee_id = Column(UUID(as_uuid=True), nullable=False,
-                         comment="FK → iiko_employee.id")
-    employee_name = Column(String(500), nullable=True,
-                           comment="ФИО (для отображения без JOIN)")
-    added_at = Column(DateTime, default=_utcnow, nullable=False)
-    added_by = Column(BigInteger, nullable=True,
-                      comment="telegram_id того, кто добавил")
 
 
 # ─────────────────────────────────────────────────────

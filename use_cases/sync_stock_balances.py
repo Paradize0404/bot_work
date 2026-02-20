@@ -27,7 +27,7 @@ from sqlalchemy import delete as sa_delete, select
 from adapters import iiko_api
 from db.engine import async_session_factory
 from db.models import Product, Store, StockBalance, SyncLog
-from use_cases._helpers import safe_float, safe_uuid, utcnow
+from use_cases._helpers import safe_float, safe_uuid, now_kgd
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ async def sync_stock_balances(
 
     Returns: количество записанных строк.
     """
-    started = utcnow()
+    started = now_kgd()
     t0 = time.monotonic()
     logger.info("[%s] Начинаю синхронизацию остатков (timestamp=%s)...", LABEL, timestamp or "now")
 
@@ -122,7 +122,7 @@ async def sync_stock_balances(
         t1 = time.monotonic()
         async with async_session_factory() as session:
 
-            now = utcnow()
+            now = now_kgd()
             rows: list[dict] = []
             skipped = 0
             no_name = 0
@@ -175,7 +175,7 @@ async def sync_stock_balances(
             session.add(SyncLog(
                 entity_type=LABEL,
                 started_at=started,
-                finished_at=utcnow(),
+                finished_at=now_kgd(),
                 status="success",
                 records_synced=count,
                 triggered_by=triggered_by,
@@ -196,7 +196,7 @@ async def sync_stock_balances(
                 session.add(SyncLog(
                     entity_type=LABEL,
                     started_at=started,
-                    finished_at=utcnow(),
+                    finished_at=now_kgd(),
                     status="error",
                     error_message=str(exc)[:2000],
                     triggered_by=triggered_by,
@@ -205,57 +205,3 @@ async def sync_stock_balances(
         except Exception:
             logger.exception("[%s] Не удалось записать ошибку в sync_log", LABEL)
         raise
-
-
-# ═══════════════════════════════════════════════════════
-# Query helpers (для бота / отчётов)
-# ═══════════════════════════════════════════════════════
-
-async def get_stock_by_store(store_name: str) -> list[dict[str, Any]]:
-    """
-    Остатки для конкретного склада (из БД).
-    Быстро — без запросов к iiko API.
-    """
-    async with async_session_factory() as session:
-        stmt = (
-            select(
-                StockBalance.product_name,
-                StockBalance.amount,
-                StockBalance.money,
-            )
-            .where(StockBalance.store_name == store_name)
-            .order_by(StockBalance.product_name)
-        )
-        result = await session.execute(stmt)
-        return [dict(row._mapping) for row in result.all()]
-
-
-async def get_stores_with_stock() -> list[dict[str, Any]]:
-    """Список складов, у которых есть остатки, с подсчётом позиций."""
-    from sqlalchemy import func
-    async with async_session_factory() as session:
-        stmt = (
-            select(
-                StockBalance.store_id,
-                StockBalance.store_name,
-                func.count().label("product_count"),
-                func.sum(StockBalance.money).label("total_money"),
-            )
-            .group_by(StockBalance.store_id, StockBalance.store_name)
-            .order_by(StockBalance.store_name)
-        )
-        result = await session.execute(stmt)
-        return [dict(row._mapping) for row in result.all()]
-
-
-async def get_stock_summary() -> dict[str, Any]:
-    """Сводка: сколько складов, позиций, общая сумма."""
-    from sqlalchemy import func, distinct
-    async with async_session_factory() as session:
-        stmt = select(
-            func.count(distinct(StockBalance.store_id)).label("stores"),
-            func.count().label("products"),
-            func.sum(StockBalance.money).label("total_money"),
-        )
-        row = (await session.execute(stmt)).one()
-        return dict(row._mapping)

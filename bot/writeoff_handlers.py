@@ -37,7 +37,6 @@ from use_cases import writeoff_history as wo_hist
 from bot.middleware import (
     set_cancel_kb, restore_menu_kb,
     validate_callback_uuid, validate_callback_int, extract_callback_value,
-    parse_uuid,
     MAX_TEXT_SEARCH, truncate_input,
 )
 from bot._utils import writeoffs_keyboard

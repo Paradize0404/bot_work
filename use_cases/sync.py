@@ -32,7 +32,7 @@ from db.models import (
     Supplier,
     SyncLog,
 )
-from use_cases._helpers import safe_uuid, safe_bool, safe_decimal, utcnow
+from use_cases._helpers import safe_uuid, safe_bool, safe_decimal, now_kgd
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +171,7 @@ async def _run_sync(
       3. _batch_upsert()       — batch INSERT ON CONFLICT
       4. SyncLog               — в той же сессии (0 лишних round-trip)
     """
-    started = utcnow()
+    started = now_kgd()
     t0 = time.monotonic()
     logger.info("[%s] Начинаю синхронизацию...", label)
 
@@ -180,7 +180,7 @@ async def _run_sync(
         t_api = time.monotonic() - t0
         logger.info("[%s] API: %d записей за %.1f сек", label, len(items), t_api)
 
-        now = utcnow()
+        now = now_kgd()
         rows = [r for item in items if (r := mapper(item, now)) is not None]
         skipped = len(items) - len(rows)
         if skipped:
@@ -198,7 +198,7 @@ async def _run_sync(
             session.add(SyncLog(
                 entity_type=label,
                 started_at=started,
-                finished_at=utcnow(),
+                finished_at=now_kgd(),
                 status="success",
                 records_synced=count,
                 triggered_by=triggered_by,
@@ -216,7 +216,7 @@ async def _run_sync(
                 session.add(SyncLog(
                     entity_type=label,
                     started_at=started,
-                    finished_at=utcnow(),
+                    finished_at=now_kgd(),
                     status="error",
                     error_message=str(exc)[:2000],
                     triggered_by=triggered_by,
@@ -364,7 +364,7 @@ async def sync_entity_list(root_type: str, triggered_by: str | None = None) -> i
 async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
     """Fetch all 16 rootTypes in parallel, upsert in one transaction."""
     t0 = time.monotonic()
-    started = utcnow()
+    started = now_kgd()
 
     # 1) Параллельно забираем все 16 типов из API
     logger.info("=== Справочники: загружаю %d типов параллельно ===", len(ENTITY_ROOT_TYPES))
@@ -377,7 +377,7 @@ async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
     logger.info("=== API: все %d типов за %.1f сек ===", len(ENTITY_ROOT_TYPES), t_api)
 
     # 2) Маппим все в строки для БД
-    now = utcnow()
+    now = now_kgd()
     results: dict[str, int] = {}
     all_rows: list[dict] = []
 
@@ -417,7 +417,7 @@ async def sync_all_entities(triggered_by: str | None = None) -> dict[str, int]:
             session.add(SyncLog(
                 entity_type=rt,
                 started_at=started,
-                finished_at=utcnow(),
+                finished_at=now_kgd(),
                 status="success" if cnt >= 0 else "error",
                 records_synced=cnt if cnt >= 0 else None,
                 error_message=str(fetched[rt])[:2000] if cnt < 0 else None,

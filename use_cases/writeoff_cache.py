@@ -89,13 +89,6 @@ def invalidate() -> None:
         logger.debug("[wo_cache] Сброшено %d ключей", len(keys_to_drop))
 
 
-def invalidate_all() -> None:
-    """Полный сброс всего кеша включая единицы."""
-    count = len(_store)
-    _store.clear()
-    logger.debug("[wo_cache] Полный сброс: %d ключей", count)
-
-
 def stats() -> dict:
     """Статистика кеша (для отладки)."""
     now = time.monotonic()

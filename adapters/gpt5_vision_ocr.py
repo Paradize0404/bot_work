@@ -259,8 +259,16 @@ async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
     json_match = re.search(r'\{.*\}', content, re.DOTALL)
     if json_match:
         content = json_match.group()
-    
-    result = json.loads(content)
+
+    try:
+        result = json.loads(content)
+    except json.JSONDecodeError as exc:
+        logger.error("[gpt5_ocr] GPT вернул невалидный JSON: %s … (%s)", content[:200], exc)
+        return {
+            "error": "Не удалось распознать документ (невалидный JSON от GPT)",
+            "_raw_response": content,
+            "_model": OCR_MODEL,
+        }
     
     # Добавляем метаинформацию
     result['_raw_response'] = content
@@ -272,60 +280,3 @@ async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
     }
     
     return result
-
-
-async def classify_document(image_bytes: bytes) -> str:
-    """
-    Классифицировать тип документа.
-    
-    Args:
-        image_bytes: Изображение в формате JPEG/PNG
-    
-    Returns:
-        Тип документа: 'upd', 'receipt', 'act', 'cash_order', 'other'
-    """
-    client = _get_client()
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    
-    prompt = """
-Классифицируй тип российского бухгалтерского документа.
-
-Варианты:
-- upd — Универсальный передаточный документ (таблица с товарами, подписи, печати)
-- receipt — Кассовый чек (длинная узкая лента, фискальные данные, QR-код)
-- act — Акт выполненных работ/услуг (таблица с услугами, подписи)
-- cash_order — Кассовый ордер (форма КО-2, рукописные данные)
-- other — Другой документ
-
-Верни ТОЛЬКО одно слово (upd/receipt/act/cash_order/other).
-"""
-    
-    response = await client.chat.completions.create(
-        model=OCR_MODEL,
-        messages=[
-            {"role": "system", "content": "Ты эксперт по российским документам."},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                            "detail": "low"
-                        }
-                    }
-                ]
-            }
-        ],
-        max_completion_tokens=10
-    )
-    
-    doc_type = response.choices[0].message.content.strip().lower()
-    
-    # Валидация
-    valid_types = ['upd', 'receipt', 'act', 'cash_order', 'other']
-    if doc_type not in valid_types:
-        doc_type = 'other'
-    
-    return doc_type

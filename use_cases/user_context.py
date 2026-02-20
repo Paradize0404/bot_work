@@ -146,10 +146,3 @@ def invalidate(telegram_id: int) -> None:
     removed = _cache.pop(telegram_id, None)
     if removed:
         logger.info("[user_ctx] Кеш инвалидирован: tg:%d", telegram_id)
-
-
-def clear_all() -> None:
-    """Очистить весь кеш (при необходимости)."""
-    count = len(_cache)
-    _cache.clear()
-    logger.info("[user_ctx] Весь кеш очищен (%d записей)", count)
