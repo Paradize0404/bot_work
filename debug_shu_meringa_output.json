@@ -1,976 +1,1612 @@
 {
-  "step1_raw_dish_assemblyCharts": [
-    {
-      "id": "cc12da68-8b97-437f-bfb0-29ad60f6905c",
-      "assembledProductId": "adac4235-f90a-4ee0-a1ce-119d11d767f7",
-      "dateFrom": "2026-01-01",
-      "dateTo": null,
-      "assembledAmount": 1,
-      "productWriteoffStrategy": "ASSEMBLE",
-      "effectiveDirectWriteoffStoreSpecification": {
-        "departments": [
-          "fb855535-5d3a-447c-b951-71c3059b705b",
-          "259d78e6-922d-4dc8-b2f8-aaad1f5524b1"
-        ],
-        "inverse": false
+  "raw_dish_assemblyChart": {
+    "id": "fd524c5b-d7cf-4b50-9b36-28e30dedbed2",
+    "assembledProductId": "53742a20-5f14-4f36-accf-33773fe8a1d7",
+    "dateFrom": "2024-04-01",
+    "dateTo": "2025-11-24",
+    "assembledAmount": 1,
+    "productWriteoffStrategy": "DIRECT",
+    "effectiveDirectWriteoffStoreSpecification": {
+      "departments": [],
+      "inverse": true
+    },
+    "productSizeAssemblyStrategy": "COMMON",
+    "items": [
+      {
+        "id": "2aba1088-78fa-9011-018f-805ab6240636",
+        "sortWeight": 0.0,
+        "productId": "cc4b73ec-3395-4767-97a0-3effadb08728",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amountIn": 1,
+        "amountMiddle": 1,
+        "amountOut": 1,
+        "amountIn1": 0,
+        "amountOut1": 0,
+        "amountIn2": 0,
+        "amountOut2": 0,
+        "amountIn3": 0,
+        "amountOut3": 0,
+        "packageCount": 0,
+        "packageTypeId": null
+      }
+    ],
+    "technologyDescription": "",
+    "description": "",
+    "appearance": "",
+    "organoleptic": "",
+    "outputComment": ""
+  },
+  "raw_pf_preparedChart": {
+    "id": "abc1d454-1db3-d717-019b-b0fbd6926d12",
+    "assembledProductId": "cc4b73ec-3395-4767-97a0-3effadb08728",
+    "dateFrom": "2025-11-14",
+    "dateTo": "2025-12-17",
+    "effectiveDirectWriteoffStoreSpecification": {
+      "departments": [],
+      "inverse": false
+    },
+    "productSizeAssemblyStrategy": "COMMON",
+    "items": [
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d13",
+        "sortWeight": 0.0,
+        "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.010227273
       },
-      "productSizeAssemblyStrategy": "COMMON",
-      "items": [
-        {
-          "id": "abc1d454-1db3-d717-019c-19bc3b2ca360",
-          "sortWeight": 0.0,
-          "productId": "60177252-8aad-4127-b9a4-7ec6eca39a4e",
-          "productSizeSpecification": null,
-          "storeSpecification": {
-            "departments": [],
-            "inverse": true
-          },
-          "amountIn": 1,
-          "amountMiddle": 1,
-          "amountOut": 1,
-          "amountIn1": 0,
-          "amountOut1": 0,
-          "amountIn2": 0,
-          "amountOut2": 0,
-          "amountIn3": 0,
-          "amountOut3": 0,
-          "packageCount": 0,
-          "packageTypeId": null
-        }
-      ],
-      "technologyDescription": "",
-      "description": "",
-      "appearance": "",
-      "organoleptic": "",
-      "outputComment": ""
-    }
-  ],
-  "step1_raw_pf_preparedCharts": [
-    {
-      "id": "abc1d454-1db3-d717-019b-b0fbd6926d0d",
-      "assembledProductId": "60177252-8aad-4127-b9a4-7ec6eca39a4e",
-      "dateFrom": "2025-11-14",
-      "dateTo": null,
-      "effectiveDirectWriteoffStoreSpecification": {
-        "departments": [],
-        "inverse": false
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d14",
+        "sortWeight": 0.0,
+        "productId": "920968b7-b2ac-4ea0-831e-1e29f99a2bb6",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.003428571
       },
-      "productSizeAssemblyStrategy": "COMMON",
-      "items": [
-        {
-          "id": "abc1d454-1db3-d717-019b-b0fbd6926d0e",
-          "sortWeight": 0.0,
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "productSizeSpecification": null,
-          "storeSpecification": null,
-          "amount": 0.340909091
-        },
-        {
-          "id": "abc1d454-1db3-d717-019b-b0fbd6926d0f",
-          "sortWeight": 0.0,
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "productSizeSpecification": null,
-          "storeSpecification": null,
-          "amount": 0.681818182
-        },
-        {
-          "id": "abc1d454-1db3-d717-019b-b0fbd6926d10",
-          "sortWeight": 0.0,
-          "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
-          "productSizeSpecification": null,
-          "storeSpecification": null,
-          "amount": 0.204545455
-        },
-        {
-          "id": "abc1d454-1db3-d717-019b-b0fbd6926d11",
-          "sortWeight": 0.0,
-          "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
-          "productSizeSpecification": null,
-          "storeSpecification": null,
-          "amount": 0.018181818
-        }
-      ]
-    }
-  ],
-  "step2_product_info": {
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d15",
+        "sortWeight": 0.0,
+        "productId": "79862119-2047-49ac-ae3a-6b4eb4e4e13c",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.003272727
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d16",
+        "sortWeight": 0.0,
+        "productId": "3753d7d1-e4f8-4027-9814-e98a46096881",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.226004464
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d17",
+        "sortWeight": 0.0,
+        "productId": "f02137f0-78be-48b0-abcd-c2590fe545ca",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.014792412
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d18",
+        "sortWeight": 0.0,
+        "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.000545455
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d19",
+        "sortWeight": 0.0,
+        "productId": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.011940299
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1a",
+        "sortWeight": 0.0,
+        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.035313139
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1b",
+        "sortWeight": 0.0,
+        "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.013728201
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1c",
+        "sortWeight": 0.0,
+        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.016371433
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1d",
+        "sortWeight": 0.0,
+        "productId": "554e702e-3769-4cf9-8433-e3381ff9c1b8",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.000146939
+      },
+      {
+        "id": "abc1d454-1db3-d717-019b-b0fbd6926d1e",
+        "sortWeight": 0.0,
+        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
+        "productSizeSpecification": null,
+        "storeSpecification": null,
+        "amount": 0.03814262
+      }
+    ]
+  },
+  "product_info": {
+    "259a72d7-2f41-49e9-84ec-b13b7a58fafe": {
+      "name": "???",
+      "type": "???"
+    },
+    "2dddfe23-0a95-45d5-8dbb-56067c23f99f": {
+      "name": "???",
+      "type": "???"
+    },
+    "3753d7d1-e4f8-4027-9814-e98a46096881": {
+      "name": "???",
+      "type": "???"
+    },
+    "53742a20-5f14-4f36-accf-33773fe8a1d7": {
+      "name": "???",
+      "type": "???"
+    },
+    "554e702e-3769-4cf9-8433-e3381ff9c1b8": {
+      "name": "???",
+      "type": "???"
+    },
+    "5a98a152-21be-4cd0-b76f-5c87c4672537": {
+      "name": "???",
+      "type": "???"
+    },
+    "79862119-2047-49ac-ae3a-6b4eb4e4e13c": {
+      "name": "???",
+      "type": "???"
+    },
+    "920968b7-b2ac-4ea0-831e-1e29f99a2bb6": {
+      "name": "???",
+      "type": "???"
+    },
+    "b1912863-0e7c-4ad0-80fb-6a98c716bc21": {
+      "name": "???",
+      "type": "???"
+    },
+    "cc4b73ec-3395-4767-97a0-3effadb08728": {
+      "name": "???",
+      "type": "???"
+    },
     "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7": {
-      "name": "Вода из под крана",
-      "type": "GOODS",
-      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+      "name": "???",
+      "type": "???"
     },
     "dcc37f95-0d63-44c6-8d3b-a59871e73806": {
-      "name": "Белок паст.",
-      "type": "GOODS",
-      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
-    },
-    "adac4235-f90a-4ee0-a1ce-119d11d767f7": {
-      "name": "Меренга цех",
-      "type": "DISH",
-      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
-    },
-    "259a72d7-2f41-49e9-84ec-b13b7a58fafe": {
-      "name": "Лимонная кислота",
-      "type": "GOODS",
-      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+      "name": "???",
+      "type": "???"
     },
     "dfc9d89b-18a2-49ea-85f0-0a2ed0083849": {
-      "name": "Сахар",
-      "type": "GOODS",
-      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+      "name": "???",
+      "type": "???"
     },
-    "60177252-8aad-4127-b9a4-7ec6eca39a4e": {
-      "name": "п/ф Меренга итальянская",
-      "type": "PREPARED",
-      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+    "f02137f0-78be-48b0-abcd-c2590fe545ca": {
+      "name": "???",
+      "type": "???"
     }
   },
-  "step3_relevant_invoices": [
-    {
-      "id": "18006f77-8110-32b3-019a-c1ed5ac98871",
-      "date": "2025-11-25T09:00:00",
-      "supplier": "fab31b9d-003c-4c66-bf8d-f296284a406b",
-      "items": [
-        {
-          "actualAmount": "1.800000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "305.000000000",
-          "priceWithoutNds": "305.000000000",
-          "sum": "610.000000000",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "1.800000000"
-        }
-      ]
-    },
-    {
-      "id": "db1a24c5-81d9-419e-a97a-f46750602f5b",
-      "date": "2025-12-01T09:00:00",
-      "supplier": "fab31b9d-003c-4c66-bf8d-f296284a406b",
-      "items": [
-        {
-          "actualAmount": "5.400000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "305.000000000",
-          "priceWithoutNds": "305.000000000",
-          "sum": "1830.000000000",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "5.400000000"
-        }
-      ]
-    },
-    {
-      "id": "85202b06-2857-4119-9c6f-800a0dfbcc99",
-      "date": "2025-12-02T09:00:00",
-      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
-      "items": [
-        {
-          "actualAmount": "50.000000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "95.000000000",
-          "priceWithoutNds": "95.000000000",
-          "sum": "4750.000000000",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "50.000000000"
-        },
-        {
-          "actualAmount": "1.000000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "192.500000000",
-          "priceWithoutNds": "192.500000000",
-          "sum": "192.500000000",
-          "ndsPercent": "0.000000000",
-          "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
-          "amount": "1.000000000"
-        }
-      ]
-    },
-    {
-      "id": "b307bdef-3a04-4a52-bdf7-6e99be22f45c",
-      "date": "2025-12-02T09:00:00",
-      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
-      "items": [
-        {
-          "actualAmount": "2.000000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "179.000000000",
-          "priceWithoutNds": "179.000000000",
-          "sum": "358.000000000",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "2.000000000"
-        }
-      ]
-    },
-    {
-      "id": "18006f77-8110-32b3-019b-0db2bec44f72",
-      "date": "2025-12-08T09:00:00",
-      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
-      "items": [
-        {
-          "actualAmount": "2.000000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "179.000000000",
-          "priceWithoutNds": "179.000000000",
-          "sum": "358.000000000",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "2.000000000"
-        }
-      ]
-    },
-    {
-      "id": "18006f77-8110-32b3-019b-0db2bec44f68",
-      "date": "2025-12-09T09:00:00",
-      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
-      "items": [
-        {
-          "actualAmount": "2.000000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "179.000000000",
-          "priceWithoutNds": "179.000000000",
-          "sum": "358.000000000",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "2.000000000"
-        }
-      ]
-    },
-    {
-      "id": "424c617c-42f2-476d-ace3-1fd3396b42c5",
-      "date": "2025-12-09T09:00:00",
-      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
-      "items": [
-        {
-          "actualAmount": "2.000000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "179.000000000",
-          "priceWithoutNds": "179.000000000",
-          "sum": "358.000000000",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "2.000000000"
-        }
-      ]
-    },
-    {
-      "id": "bbf6315f-6d81-4422-a1a0-7938381587ac",
-      "date": "2025-12-12T09:00:00",
-      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
-      "items": [
-        {
-          "actualAmount": "4.500000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "317.000000000",
-          "priceWithoutNds": "317.000000000",
-          "sum": "1585.000000000",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "4.500000000"
-        }
-      ]
-    },
-    {
-      "id": "18006f77-8110-32b3-019b-299b47e443b8",
-      "date": "2025-12-16T09:00:00",
-      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
-      "items": [
-        {
-          "actualAmount": "50.000000000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "95.000000000",
-          "priceWithoutNds": "86.360000000",
-          "sum": "4750.000000000",
-          "ndsPercent": "10.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "50.000000000"
-        }
-      ]
-    },
-    {
-      "id": "5602e123-6104-4f1f-aaa1-6b48b3e25f25",
-      "date": "2025-12-20T09:00:00",
-      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
-      "items": [
-        {
-          "actualAmount": "2.700",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "317.000000000",
-          "priceWithoutNds": "317.000000000",
-          "sum": "950.99",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "2.700"
-        }
-      ]
-    },
-    {
-      "id": "de2d39d3-a7ad-5fee-019b-4e82208235a2",
-      "date": "2025-12-23T09:00:00",
-      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
-      "items": [
-        {
-          "actualAmount": "1.000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "192.500000000",
-          "priceWithoutNds": "160.420000000",
-          "sum": "192.50",
-          "ndsPercent": "20.000000000",
-          "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
-          "amount": "1.000"
-        },
-        {
-          "actualAmount": "50.000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "95.000000000",
-          "priceWithoutNds": "86.360000000",
-          "sum": "4750.00",
-          "ndsPercent": "10.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "50.000"
-        }
-      ]
-    },
-    {
-      "id": "fde797e7-5f05-4c66-8cca-9adf83205450",
-      "date": "2025-12-27T09:00:00",
-      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
-      "items": [
-        {
-          "actualAmount": "2.500",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "360.000000000",
-          "priceWithoutNds": "360.000000000",
-          "sum": "899.99",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "2.500"
-        }
-      ]
-    },
-    {
-      "id": "a6476856-c26d-4712-a6eb-39fabf55e97c",
-      "date": "2025-12-30T09:00:00",
-      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
-      "items": [
-        {
-          "actualAmount": "2.000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "179.000000000",
-          "priceWithoutNds": "179.000000000",
-          "sum": "358.00",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "2.000"
-        }
-      ]
-    },
-    {
-      "id": "65157398-96b1-43de-bce1-b54a3929e890",
-      "date": "2025-12-30T09:00:00",
-      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
-      "items": [
-        {
-          "actualAmount": "50.000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "95.000000000",
-          "priceWithoutNds": "95.000000000",
-          "sum": "4750.00",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "50.000"
-        }
-      ]
-    },
-    {
-      "id": "ddf3f23d-caed-440b-b195-1e39b846dc6b",
-      "date": "2026-01-02T09:00:00",
-      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
-      "items": [
-        {
-          "actualAmount": "2.700",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "317.000000000",
-          "priceWithoutNds": "317.000000000",
-          "sum": "951.00",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "2.700"
-        }
-      ]
-    },
-    {
-      "id": "504ac036-5ba6-4018-bcd5-6a16d99081cd",
-      "date": "2026-01-03T09:00:00",
-      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
-      "items": [
-        {
-          "actualAmount": "5.400",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "317.000000000",
-          "priceWithoutNds": "317.000000000",
-          "sum": "1901.99",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "5.400"
-        }
-      ]
-    },
-    {
-      "id": "58c1f136-b932-4ef2-a097-9d508719eea0",
-      "date": "2026-01-07T09:00:00",
-      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
-      "items": [
-        {
-          "actualAmount": "5.400",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "285.820000000",
-          "priceWithoutNds": "285.820000000",
-          "sum": "1714.94",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "5.400"
-        }
-      ]
-    },
-    {
-      "id": "5b5da3dc-b755-497a-aa55-d2876da6fbc5",
-      "date": "2026-01-11T09:00:00",
-      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
-      "items": [
-        {
-          "actualAmount": "2.400",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "81.240000000",
-          "priceWithoutNds": "81.240000000",
-          "sum": "194.97",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "2.400"
-        }
-      ]
-    },
-    {
-      "id": "32303423-7947-4dd6-8b82-8971db3265ba",
-      "date": "2026-01-12T09:00:00",
-      "supplier": "5c9f6165-7cb8-4eeb-807e-16ba06223b9a",
-      "items": [
-        {
-          "actualAmount": "50.000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "85.000000000",
-          "priceWithoutNds": "85.000000000",
-          "sum": "4250.00",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "50.000"
-        }
-      ]
-    },
-    {
-      "id": "34301a03-4cf5-4456-8ac8-49047e2d11b6",
-      "date": "2026-01-12T09:00:00",
-      "supplier": "fab31b9d-003c-4c66-bf8d-f296284a406b",
-      "items": [
-        {
-          "actualAmount": "10.800",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "349.000000000",
-          "priceWithoutNds": "349.000000000",
-          "sum": "4188.00",
-          "ndsPercent": "0.000000000",
-          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-          "amount": "10.800"
-        }
-      ]
-    },
-    {
-      "id": "18b061be-c3db-4af6-a0fd-a8225ed08784",
-      "date": "2026-01-16T09:00:00",
-      "supplier": "5c9f6165-7cb8-4eeb-807e-16ba06223b9a",
-      "items": [
-        {
-          "actualAmount": "50.000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "85.000000000",
-          "priceWithoutNds": "85.000000000",
-          "sum": "4250.00",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "50.000"
-        }
-      ]
-    },
-    {
-      "id": "c618c015-d920-4bdb-92ea-77b5dbcbc7e7",
-      "date": "2026-01-24T09:00:00",
-      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
-      "items": [
-        {
-          "actualAmount": "1.000",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "75.900000000",
-          "priceWithoutNds": "75.900000000",
-          "sum": "75.90",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "1.000"
-        }
-      ]
-    },
-    {
-      "id": "abc1d454-1db3-d717-019c-156129c96695",
-      "date": "2026-01-24T09:13:59",
-      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
-      "items": [
-        {
-          "actualAmount": "0.039",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "86.92",
-          "priceWithoutNds": "86.92",
-          "sum": "3.39",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "0.039"
-        }
-      ]
-    },
-    {
-      "id": "abc1d454-1db3-d717-019c-156129c969c7",
-      "date": "2026-01-24T09:24:50",
-      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
-      "items": [
-        {
-          "actualAmount": "0.039",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "86.92",
-          "priceWithoutNds": "86.92",
-          "sum": "3.39",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "0.039"
-        }
-      ]
-    },
-    {
-      "id": "abc1d454-1db3-d717-019c-156129c96f8f",
-      "date": "2026-01-24T09:30:02",
-      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
-      "items": [
-        {
-          "actualAmount": "0.039",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "86.92",
-          "priceWithoutNds": "86.92",
-          "sum": "3.39",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "0.039"
-        }
-      ]
-    },
-    {
-      "id": "abc1d454-1db3-d717-019c-156129c97239",
-      "date": "2026-01-24T09:34:41",
-      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
-      "items": [
-        {
-          "actualAmount": "0.003",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "86.67",
-          "priceWithoutNds": "86.67",
-          "sum": "0.26",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "0.003"
-        }
-      ]
-    },
-    {
-      "id": "abc1d454-1db3-d717-019c-156129c9745d",
-      "date": "2026-01-24T09:36:46",
-      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
-      "items": [
-        {
-          "actualAmount": "0.005",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "86.000000000",
-          "priceWithoutNds": "86.000000000",
-          "sum": "0.43",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "0.005"
-        }
-      ]
-    },
-    {
-      "id": "abc1d454-1db3-d717-019c-156129c97761",
-      "date": "2026-01-24T09:38:33",
-      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
-      "items": [
-        {
-          "actualAmount": "0.003",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "86.67",
-          "priceWithoutNds": "86.67",
-          "sum": "0.26",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "0.003"
-        }
-      ]
-    },
-    {
-      "id": "bb2e6622-37fc-4e87-ad79-5b5cbc8cfe57",
-      "date": "2026-01-29T09:00:00",
-      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
-      "items": [
-        {
-          "actualAmount": "1.000",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "75.900000000",
-          "priceWithoutNds": "75.900000000",
-          "sum": "75.90",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "1.000"
-        }
-      ]
-    },
-    {
-      "id": "d5c6fe38-6b83-4248-b711-ea5381fd4a2c",
-      "date": "2026-02-04T09:00:00",
-      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
-      "items": [
-        {
-          "actualAmount": "6.000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "179.000000000",
-          "priceWithoutNds": "179.000000000",
-          "sum": "1074.00",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "6.000"
-        }
-      ]
-    },
-    {
-      "id": "0334add6-6d6d-41b2-95c9-ef6aaba2ec62",
-      "date": "2026-02-04T09:00:00",
-      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
-      "items": [
-        {
-          "actualAmount": "50.000",
-          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
-          "price": "95.000000000",
-          "priceWithoutNds": "95.000000000",
-          "sum": "4750.00",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "50.000"
-        }
-      ]
-    },
-    {
-      "id": "84b36716-64ca-4a8e-98fb-fd074adfb40a",
-      "date": "2026-02-05T09:00:00",
-      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
-      "items": [
-        {
-          "actualAmount": "1.000",
-          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
-          "price": "65.490000000",
-          "priceWithoutNds": "65.490000000",
-          "sum": "65.49",
-          "ndsPercent": "0.000000000",
-          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-          "amount": "1.000"
-        }
-      ]
-    }
-  ],
-  "step3_ingredient_price_history": {
+  "invoice_price_history": {
+    "259a72d7-2f41-49e9-84ec-b13b7a58fafe": [
+      {
+        "date": "",
+        "price": 192.5,
+        "invoice_id": "85202b06-2857-4119-9c6f-800a0dfbcc99"
+      },
+      {
+        "date": "",
+        "price": 192.5,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-4e82208235a2"
+      }
+    ],
+    "2dddfe23-0a95-45d5-8dbb-56067c23f99f": [
+      {
+        "date": "",
+        "price": 510.0,
+        "invoice_id": "18006f77-8110-32b3-019a-c1ed5ac98871"
+      },
+      {
+        "date": "",
+        "price": 487.0,
+        "invoice_id": "bbf6315f-6d81-4422-a1a0-7938381587ac"
+      },
+      {
+        "date": "",
+        "price": 487.0,
+        "invoice_id": "5602e123-6104-4f1f-aaa1-6b48b3e25f25"
+      },
+      {
+        "date": "",
+        "price": 528.29,
+        "invoice_id": "fde797e7-5f05-4c66-8cca-9adf83205450"
+      },
+      {
+        "date": "",
+        "price": 448.26,
+        "invoice_id": "ddccefa9-8bb3-42d4-8e47-170ac00d63d6"
+      },
+      {
+        "date": "",
+        "price": 489.0,
+        "invoice_id": "ddf3f23d-caed-440b-b195-1e39b846dc6b"
+      },
+      {
+        "date": "",
+        "price": 487.0,
+        "invoice_id": "504ac036-5ba6-4018-bcd5-6a16d99081cd"
+      },
+      {
+        "date": "",
+        "price": 510.0,
+        "invoice_id": "34301a03-4cf5-4456-8ac8-49047e2d11b6"
+      },
+      {
+        "date": "",
+        "price": 566.67,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c97239"
+      },
+      {
+        "date": "",
+        "price": 510.0,
+        "invoice_id": "e9ab3108-3ea4-4a29-8722-359e7f9750e5"
+      },
+      {
+        "date": "",
+        "price": 487.0,
+        "invoice_id": "b9598742-89f3-41fa-a686-951f8507428f"
+      },
+      {
+        "date": "",
+        "price": 541.13,
+        "invoice_id": "b9598742-89f3-41fa-a686-951f8507428f"
+      }
+    ],
+    "3753d7d1-e4f8-4027-9814-e98a46096881": [
+      {
+        "date": "",
+        "price": 8.0,
+        "invoice_id": "18006f77-8110-32b3-019a-bf5638771365"
+      },
+      {
+        "date": "",
+        "price": 8.0,
+        "invoice_id": "18006f77-8110-32b3-019a-cc32adfbb0e8"
+      },
+      {
+        "date": "",
+        "price": 11.15,
+        "invoice_id": "550a019f-1cec-4677-a591-7d5647771aef"
+      },
+      {
+        "date": "",
+        "price": 8.89,
+        "invoice_id": "bbf6315f-6d81-4422-a1a0-7938381587ac"
+      },
+      {
+        "date": "",
+        "price": 10.7,
+        "invoice_id": "cbfd5680-eaa3-4bf5-9b3e-6a10485f284c"
+      },
+      {
+        "date": "",
+        "price": 10.7,
+        "invoice_id": "f0fa8a1b-4396-4d41-8cb6-6d20f4d30c30"
+      },
+      {
+        "date": "",
+        "price": 8.3,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-5f0852182bac"
+      },
+      {
+        "date": "",
+        "price": 10.0,
+        "invoice_id": "0675931c-d950-43fa-aa0f-6664a6541a8b"
+      },
+      {
+        "date": "",
+        "price": 10.0,
+        "invoice_id": "0675931c-d950-43fa-aa0f-6664a6541a8b"
+      },
+      {
+        "date": "",
+        "price": 9.5,
+        "invoice_id": "c0e539a9-3984-49d5-9676-0f0052b39389"
+      },
+      {
+        "date": "",
+        "price": 10.7,
+        "invoice_id": "a28cdfff-a426-4083-ad30-3659f43b6c17"
+      },
+      {
+        "date": "",
+        "price": 10.0,
+        "invoice_id": "bce0aa80-5a79-4fd6-9afb-2b53a8f67c2d"
+      },
+      {
+        "date": "",
+        "price": 10.0,
+        "invoice_id": "bce0aa80-5a79-4fd6-9afb-2b53a8f67c2d"
+      },
+      {
+        "date": "",
+        "price": 10.7,
+        "invoice_id": "1d1fe1ba-d53e-4440-8d11-0202babbe348"
+      },
+      {
+        "date": "",
+        "price": 10.7,
+        "invoice_id": "57cbd7b5-606b-41b5-9a7b-5a1a960ff555"
+      },
+      {
+        "date": "",
+        "price": 8.5,
+        "invoice_id": "18b061be-c3db-4af6-a0fd-a8225ed08784"
+      },
+      {
+        "date": "",
+        "price": 8.5,
+        "invoice_id": "a4c19a6f-3628-4188-9113-9a0252606f22"
+      },
+      {
+        "date": "",
+        "price": 8.5,
+        "invoice_id": "b03cc18d-bf90-42da-bef1-fec3c8937a7e"
+      },
+      {
+        "date": "",
+        "price": 12.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-0ecfe77a55ac"
+      },
+      {
+        "date": "",
+        "price": 9.09,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c96695"
+      },
+      {
+        "date": "",
+        "price": 9.09,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c969c7"
+      },
+      {
+        "date": "",
+        "price": 9.09,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c96f8f"
+      },
+      {
+        "date": "",
+        "price": 9.1,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c9745d"
+      },
+      {
+        "date": "",
+        "price": 8.5,
+        "invoice_id": "d62cd6c8-c91d-4b21-9dbc-2456a6137f6a"
+      },
+      {
+        "date": "",
+        "price": 10.0,
+        "invoice_id": "da1cb80a-c5c0-44cf-ba6e-6300bccda931"
+      },
+      {
+        "date": "",
+        "price": 10.0,
+        "invoice_id": "0a771950-aa3c-4358-a06a-5be6066f76b2"
+      },
+      {
+        "date": "",
+        "price": 9.97,
+        "invoice_id": "abc1d454-1db3-d717-019c-57777f9b5c83"
+      },
+      {
+        "date": "",
+        "price": 9.0,
+        "invoice_id": "7854ebc9-97c6-44a3-9c47-52d3385f42e0"
+      },
+      {
+        "date": "",
+        "price": 9.99,
+        "invoice_id": "8da3dc08-c627-43b5-b24f-c57bb96b8d77"
+      },
+      {
+        "date": "",
+        "price": 317.0,
+        "invoice_id": "b9598742-89f3-41fa-a686-951f8507428f"
+      },
+      {
+        "date": "",
+        "price": 317.02,
+        "invoice_id": "b9598742-89f3-41fa-a686-951f8507428f"
+      },
+      {
+        "date": "",
+        "price": 10.5,
+        "invoice_id": "c0d5032a-6352-4c4e-88b9-0a56a0bdd6e9"
+      },
+      {
+        "date": "",
+        "price": 9.0,
+        "invoice_id": "c8287999-d9ca-4d35-b019-a4ad79646b31"
+      },
+      {
+        "date": "",
+        "price": 9.97,
+        "invoice_id": "4e1702bc-50b2-4e4b-9ca9-dd00bae99a19"
+      },
+      {
+        "date": "",
+        "price": 10.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-5f7b57d8927b"
+      },
+      {
+        "date": "",
+        "price": 11.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-757814fa74d6"
+      },
+      {
+        "date": "",
+        "price": 10.5,
+        "invoice_id": "9b77b279-1c9d-4bd1-aee1-e559f830ddc3"
+      }
+    ],
+    "53742a20-5f14-4f36-accf-33773fe8a1d7": [
+      {
+        "date": "",
+        "price": 40.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-0ecfe77a8890"
+      },
+      {
+        "date": "",
+        "price": 40.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-0ecfe77a970b"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-57777f9b5c83"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-57777f9b7ba8"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-5f7b57d86879"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-5f7b57d88658"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-5f7b57d8881e"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-5f7b57d88a08"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-5f7b57d88be4"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-5f7b57d88fcc"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-5f7b57d8927b"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-757814fa82a2"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-685e96018365"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-685e9601e9ad"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-757814fa88dc"
+      },
+      {
+        "date": "",
+        "price": 45.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-757814fa8c70"
+      }
+    ],
+    "554e702e-3769-4cf9-8433-e3381ff9c1b8": [
+      {
+        "date": "",
+        "price": 18.99,
+        "invoice_id": "18006f77-8110-32b3-019a-cc32adfb9e45"
+      },
+      {
+        "date": "",
+        "price": 37.98,
+        "invoice_id": "f5b06ee6-4258-42b9-8a9a-65d7cdae25f1"
+      },
+      {
+        "date": "",
+        "price": 29.4,
+        "invoice_id": "5f3c621a-38f5-48db-a983-7ce226515cff"
+      },
+      {
+        "date": "",
+        "price": 29.4,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389a7ee8"
+      },
+      {
+        "date": "",
+        "price": 29.4,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-563013e2a9bb"
+      },
+      {
+        "date": "",
+        "price": 35.0,
+        "invoice_id": "a579d61a-a21f-41ec-9dc5-ad4c908adb37"
+      },
+      {
+        "date": "",
+        "price": 18.29,
+        "invoice_id": "7d144205-3649-4015-bb5b-d5bc27194572"
+      },
+      {
+        "date": "",
+        "price": 25.99,
+        "invoice_id": "bcc6a997-4090-4b6a-b70f-7cde76e265e4"
+      },
+      {
+        "date": "",
+        "price": 30.0,
+        "invoice_id": "18b061be-c3db-4af6-a0fd-a8225ed08784"
+      },
+      {
+        "date": "",
+        "price": 30.0,
+        "invoice_id": "a4c19a6f-3628-4188-9113-9a0252606f22"
+      },
+      {
+        "date": "",
+        "price": 14.89,
+        "invoice_id": "c618c015-d920-4bdb-92ea-77b5dbcbc7e7"
+      },
+      {
+        "date": "",
+        "price": 30.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c96f8f"
+      },
+      {
+        "date": "",
+        "price": 28.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c97239"
+      },
+      {
+        "date": "",
+        "price": 27.5,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c9745d"
+      },
+      {
+        "date": "",
+        "price": 27.5,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c97761"
+      },
+      {
+        "date": "",
+        "price": 25.91,
+        "invoice_id": "bb2e6622-37fc-4e87-ad79-5b5cbc8cfe57"
+      },
+      {
+        "date": "",
+        "price": 244.0,
+        "invoice_id": "bb2e6622-37fc-4e87-ad79-5b5cbc8cfe57"
+      },
+      {
+        "date": "",
+        "price": 25.8,
+        "invoice_id": "04c71708-8bdc-414f-835c-11e448a2b464"
+      },
+      {
+        "date": "",
+        "price": 30.0,
+        "invoice_id": "dac42502-f7ff-4cce-8a6b-4311e07bdd70"
+      },
+      {
+        "date": "",
+        "price": 25.99,
+        "invoice_id": "6755a7ae-e7b8-47db-aceb-e0beeba154a3"
+      }
+    ],
+    "5a98a152-21be-4cd0-b76f-5c87c4672537": [
+      {
+        "date": "",
+        "price": 290.0,
+        "invoice_id": "18006f77-8110-32b3-019a-cc32adfb96d8"
+      },
+      {
+        "date": "",
+        "price": 279.0,
+        "invoice_id": "30c4e0d8-8042-46b3-9cde-a7b9f0d1cb6d"
+      },
+      {
+        "date": "",
+        "price": 245.0,
+        "invoice_id": "60c49fb8-fc27-4403-924c-25b625a32b55"
+      },
+      {
+        "date": "",
+        "price": 245.0,
+        "invoice_id": "31fa2c49-2fa9-42c4-b119-c6c17f481c83"
+      },
+      {
+        "date": "",
+        "price": 195.0,
+        "invoice_id": "9697370b-d1df-4ef1-ad07-d0d066c0bd83"
+      },
+      {
+        "date": "",
+        "price": 180.0,
+        "invoice_id": "fb6ebb11-8bb6-4f4a-bcb5-ece2f665c42c"
+      },
+      {
+        "date": "",
+        "price": 213.6,
+        "invoice_id": "abc1d454-1db3-d717-019c-0ecfe77a55ac"
+      },
+      {
+        "date": "",
+        "price": 250.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c96123"
+      },
+      {
+        "date": "",
+        "price": 210.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c97239"
+      },
+      {
+        "date": "",
+        "price": 220.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c9745d"
+      },
+      {
+        "date": "",
+        "price": 175.0,
+        "invoice_id": "8098d003-7c3a-45ab-a003-f12a0cb17a5c"
+      },
+      {
+        "date": "",
+        "price": 175.0,
+        "invoice_id": "791487b3-2d7b-4ced-9306-92bd5cdc5aad"
+      },
+      {
+        "date": "",
+        "price": 230.0,
+        "invoice_id": "68d65654-787f-4e0b-bb5d-520d4b05b138"
+      },
+      {
+        "date": "",
+        "price": 294.0,
+        "invoice_id": "d6503a3f-53fd-45e8-b096-2f17d559799e"
+      }
+    ],
+    "79862119-2047-49ac-ae3a-6b4eb4e4e13c": [
+      {
+        "date": "",
+        "price": 364.0,
+        "invoice_id": "f68acd4e-081c-4755-bdc0-3f9c21e02c39"
+      },
+      {
+        "date": "",
+        "price": 363.96,
+        "invoice_id": "f68acd4e-081c-4755-bdc0-3f9c21e02c39"
+      },
+      {
+        "date": "",
+        "price": 319.92,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c97d2e"
+      },
+      {
+        "date": "",
+        "price": 404.44,
+        "invoice_id": "b9598742-89f3-41fa-a686-951f8507428f"
+      },
+      {
+        "date": "",
+        "price": 404.43,
+        "invoice_id": "b9598742-89f3-41fa-a686-951f8507428f"
+      }
+    ],
+    "920968b7-b2ac-4ea0-831e-1e29f99a2bb6": [
+      {
+        "date": "",
+        "price": 101.0,
+        "invoice_id": "18006f77-8110-32b3-019a-ca0761ef5885"
+      },
+      {
+        "date": "",
+        "price": 115.79,
+        "invoice_id": "d92d4d4a-4848-4b1a-8d70-bea397f463c4"
+      },
+      {
+        "date": "",
+        "price": 110.0,
+        "invoice_id": "9e367765-3a46-42ee-9abc-ad1058682f1a"
+      },
+      {
+        "date": "",
+        "price": 110.0,
+        "invoice_id": "9ba4367a-70c0-47c9-acb8-9c4c0d5964ab"
+      },
+      {
+        "date": "",
+        "price": 110.0,
+        "invoice_id": "6541a749-831c-4c4b-97d7-b9fea177ef7b"
+      },
+      {
+        "date": "",
+        "price": 101.0,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-5f0852182b9c"
+      },
+      {
+        "date": "",
+        "price": 101.0,
+        "invoice_id": "f29b57a2-78ee-4c67-9467-96109f113b6c"
+      },
+      {
+        "date": "",
+        "price": 105.0,
+        "invoice_id": "1653129f-e146-41b7-9b0e-bf34a392fac2"
+      },
+      {
+        "date": "",
+        "price": 99.99,
+        "invoice_id": "41674944-b706-47df-81a3-4a321f324d05"
+      },
+      {
+        "date": "",
+        "price": 99.99,
+        "invoice_id": "41674944-b706-47df-81a3-4a321f324d05"
+      },
+      {
+        "date": "",
+        "price": 99.99,
+        "invoice_id": "41674944-b706-47df-81a3-4a321f324d05"
+      },
+      {
+        "date": "",
+        "price": 99.99,
+        "invoice_id": "41674944-b706-47df-81a3-4a321f324d05"
+      },
+      {
+        "date": "",
+        "price": 99.99,
+        "invoice_id": "41674944-b706-47df-81a3-4a321f324d05"
+      },
+      {
+        "date": "",
+        "price": 99.99,
+        "invoice_id": "41674944-b706-47df-81a3-4a321f324d05"
+      },
+      {
+        "date": "",
+        "price": 107.0,
+        "invoice_id": "d97a59d0-eb43-4819-b36a-6d3be93bccc1"
+      },
+      {
+        "date": "",
+        "price": 101.0,
+        "invoice_id": "32303423-7947-4dd6-8b82-8971db3265ba"
+      },
+      {
+        "date": "",
+        "price": 105.0,
+        "invoice_id": "58700480-5ed0-4b13-8e32-3dd3f29f807d"
+      },
+      {
+        "date": "",
+        "price": 107.0,
+        "invoice_id": "58700480-5ed0-4b13-8e32-3dd3f29f807d"
+      },
+      {
+        "date": "",
+        "price": 103.0,
+        "invoice_id": "a4c19a6f-3628-4188-9113-9a0252606f22"
+      },
+      {
+        "date": "",
+        "price": 100.0,
+        "invoice_id": "ba6388ef-32ff-43a5-826f-471b896d38ce"
+      },
+      {
+        "date": "",
+        "price": 109.0,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 109.0,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 109.0,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "8bfec3a5-4dea-4c43-877a-6f6ab8d4f452"
+      },
+      {
+        "date": "",
+        "price": 138.29,
+        "invoice_id": "e2c28401-79a8-4f1a-bc3c-bbea9768e7d7"
+      },
+      {
+        "date": "",
+        "price": 138.29,
+        "invoice_id": "e2c28401-79a8-4f1a-bc3c-bbea9768e7d7"
+      },
+      {
+        "date": "",
+        "price": 138.29,
+        "invoice_id": "e2c28401-79a8-4f1a-bc3c-bbea9768e7d7"
+      },
+      {
+        "date": "",
+        "price": 138.29,
+        "invoice_id": "e2c28401-79a8-4f1a-bc3c-bbea9768e7d7"
+      },
+      {
+        "date": "",
+        "price": 105.0,
+        "invoice_id": "35110ab9-478c-4edc-94d0-e7f57c365f86"
+      },
+      {
+        "date": "",
+        "price": 100.0,
+        "invoice_id": "a17716ad-8ea9-4f97-99b2-24de207878ea"
+      },
+      {
+        "date": "",
+        "price": 119.99,
+        "invoice_id": "31eecbc1-6e82-4431-a829-ee98fb409630"
+      },
+      {
+        "date": "",
+        "price": 119.99,
+        "invoice_id": "31eecbc1-6e82-4431-a829-ee98fb409630"
+      },
+      {
+        "date": "",
+        "price": 119.99,
+        "invoice_id": "31eecbc1-6e82-4431-a829-ee98fb409630"
+      },
+      {
+        "date": "",
+        "price": 119.99,
+        "invoice_id": "31eecbc1-6e82-4431-a829-ee98fb409630"
+      },
+      {
+        "date": "",
+        "price": 119.99,
+        "invoice_id": "31eecbc1-6e82-4431-a829-ee98fb409630"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "dcfd05f1-c745-4f35-9647-e471f9bb9f64"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "dcfd05f1-c745-4f35-9647-e471f9bb9f64"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "dcfd05f1-c745-4f35-9647-e471f9bb9f64"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "dcfd05f1-c745-4f35-9647-e471f9bb9f64"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "dcfd05f1-c745-4f35-9647-e471f9bb9f64"
+      },
+      {
+        "date": "",
+        "price": 124.0,
+        "invoice_id": "df5dca01-cf07-4abe-a9a5-22f88141763a"
+      },
+      {
+        "date": "",
+        "price": 124.0,
+        "invoice_id": "df5dca01-cf07-4abe-a9a5-22f88141763a"
+      },
+      {
+        "date": "",
+        "price": 138.0,
+        "invoice_id": "774ce14c-439b-42c0-9cce-23b384fa962f"
+      },
+      {
+        "date": "",
+        "price": 105.0,
+        "invoice_id": "774ce14c-439b-42c0-9cce-23b384fa962f"
+      },
+      {
+        "date": "",
+        "price": 99.0,
+        "invoice_id": "8b3b7629-e55d-45f2-b568-ce7228549150"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "d8ee92e4-74c5-4bc4-88f8-dfe40d9fb5f8"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "d8ee92e4-74c5-4bc4-88f8-dfe40d9fb5f8"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "d8ee92e4-74c5-4bc4-88f8-dfe40d9fb5f8"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "d8ee92e4-74c5-4bc4-88f8-dfe40d9fb5f8"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "d8ee92e4-74c5-4bc4-88f8-dfe40d9fb5f8"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "d8ee92e4-74c5-4bc4-88f8-dfe40d9fb5f8"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "59784acb-01ab-47fe-90aa-b69d339833b6"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "59784acb-01ab-47fe-90aa-b69d339833b6"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "59784acb-01ab-47fe-90aa-b69d339833b6"
+      },
+      {
+        "date": "",
+        "price": 129.99,
+        "invoice_id": "59784acb-01ab-47fe-90aa-b69d339833b6"
+      },
+      {
+        "date": "",
+        "price": 124.01,
+        "invoice_id": "18291ba6-d4b6-4b2a-b46e-40dd7a0dcefe"
+      },
+      {
+        "date": "",
+        "price": 99.0,
+        "invoice_id": "46e280b4-b412-4809-bca7-ca0476bda4d4"
+      },
+      {
+        "date": "",
+        "price": 109.0,
+        "invoice_id": "a8872f37-0e36-448f-9782-42763281794b"
+      }
+    ],
+    "b1912863-0e7c-4ad0-80fb-6a98c716bc21": [
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "85202b06-2857-4119-9c6f-800a0dfbcc99"
+      },
+      {
+        "date": "",
+        "price": 249.99,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389af008"
+      },
+      {
+        "date": "",
+        "price": 249.99,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389af008"
+      },
+      {
+        "date": "",
+        "price": 249.99,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389af008"
+      },
+      {
+        "date": "",
+        "price": 249.99,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389af008"
+      },
+      {
+        "date": "",
+        "price": 249.99,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389af008"
+      },
+      {
+        "date": "",
+        "price": 249.99,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389af008"
+      },
+      {
+        "date": "",
+        "price": 249.99,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389af008"
+      },
+      {
+        "date": "",
+        "price": 249.99,
+        "invoice_id": "18006f77-8110-32b3-019b-21e2389af008"
+      },
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "18006f77-8110-32b3-019b-299b47e443b8"
+      },
+      {
+        "date": "",
+        "price": 1666.61,
+        "invoice_id": "9d952362-9a4f-4419-9388-cdf82bc2e842"
+      },
+      {
+        "date": "",
+        "price": 1666.61,
+        "invoice_id": "9d952362-9a4f-4419-9388-cdf82bc2e842"
+      },
+      {
+        "date": "",
+        "price": 1666.61,
+        "invoice_id": "9d952362-9a4f-4419-9388-cdf82bc2e842"
+      },
+      {
+        "date": "",
+        "price": 1666.61,
+        "invoice_id": "9d952362-9a4f-4419-9388-cdf82bc2e842"
+      },
+      {
+        "date": "",
+        "price": 1666.61,
+        "invoice_id": "b491c7e9-5835-4c3a-8287-4265aa535de5"
+      },
+      {
+        "date": "",
+        "price": 1666.61,
+        "invoice_id": "b491c7e9-5835-4c3a-8287-4265aa535de5"
+      },
+      {
+        "date": "",
+        "price": 1666.61,
+        "invoice_id": "b491c7e9-5835-4c3a-8287-4265aa535de5"
+      },
+      {
+        "date": "",
+        "price": 1666.61,
+        "invoice_id": "b491c7e9-5835-4c3a-8287-4265aa535de5"
+      },
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-4e82208235a2"
+      },
+      {
+        "date": "",
+        "price": 1444.0,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-4e82208236db"
+      },
+      {
+        "date": "",
+        "price": 1444.39,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-4e82208236db"
+      },
+      {
+        "date": "",
+        "price": 1444.39,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-4e82208236db"
+      },
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "65157398-96b1-43de-bce1-b54a3929e890"
+      },
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "58700480-5ed0-4b13-8e32-3dd3f29f807d"
+      },
+      {
+        "date": "",
+        "price": 1042.2,
+        "invoice_id": "f68acd4e-081c-4755-bdc0-3f9c21e02c39"
+      },
+      {
+        "date": "",
+        "price": 1042.2,
+        "invoice_id": "f68acd4e-081c-4755-bdc0-3f9c21e02c39"
+      },
+      {
+        "date": "",
+        "price": 1042.2,
+        "invoice_id": "f68acd4e-081c-4755-bdc0-3f9c21e02c39"
+      },
+      {
+        "date": "",
+        "price": 1042.2,
+        "invoice_id": "f68acd4e-081c-4755-bdc0-3f9c21e02c39"
+      },
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "d9a146df-7386-4dee-9704-3b9070a419f5"
+      },
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "971861cf-afc2-4925-8f31-b680a41ffbe0"
+      },
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "ece770b8-dc88-4b7c-8deb-83edb60906f9"
+      },
+      {
+        "date": "",
+        "price": 855.0,
+        "invoice_id": "04c71708-8bdc-414f-835c-11e448a2b464"
+      },
+      {
+        "date": "",
+        "price": 1142.8,
+        "invoice_id": "ad1da011-c865-4cfe-a55c-97ed0b378a6f"
+      }
+    ],
+    "cc4b73ec-3395-4767-97a0-3effadb08728": [],
+    "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7": [],
     "dcc37f95-0d63-44c6-8d3b-a59871e73806": [
       {
-        "date": "2025-11-25T09:00:00",
-        "price": "305.000000000",
-        "amount": "1.800000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 305.0,
+        "invoice_id": "18006f77-8110-32b3-019a-c1ed5ac98871"
       },
       {
-        "date": "2025-12-01T09:00:00",
-        "price": "305.000000000",
-        "amount": "5.400000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 305.0,
+        "invoice_id": "db1a24c5-81d9-419e-a97a-f46750602f5b"
       },
       {
-        "date": "2025-12-12T09:00:00",
-        "price": "317.000000000",
-        "amount": "4.500000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 317.0,
+        "invoice_id": "bbf6315f-6d81-4422-a1a0-7938381587ac"
       },
       {
-        "date": "2025-12-20T09:00:00",
-        "price": "317.000000000",
-        "amount": "2.700",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 317.0,
+        "invoice_id": "5602e123-6104-4f1f-aaa1-6b48b3e25f25"
       },
       {
-        "date": "2025-12-27T09:00:00",
-        "price": "360.000000000",
-        "amount": "2.500",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 360.0,
+        "invoice_id": "fde797e7-5f05-4c66-8cca-9adf83205450"
       },
       {
-        "date": "2026-01-02T09:00:00",
-        "price": "317.000000000",
-        "amount": "2.700",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 317.0,
+        "invoice_id": "ddf3f23d-caed-440b-b195-1e39b846dc6b"
       },
       {
-        "date": "2026-01-03T09:00:00",
-        "price": "317.000000000",
-        "amount": "5.400",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 317.0,
+        "invoice_id": "504ac036-5ba6-4018-bcd5-6a16d99081cd"
       },
       {
-        "date": "2026-01-07T09:00:00",
-        "price": "285.820000000",
-        "amount": "5.400",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 285.82,
+        "invoice_id": "58c1f136-b932-4ef2-a097-9d508719eea0"
       },
       {
-        "date": "2026-01-12T09:00:00",
-        "price": "349.000000000",
-        "amount": "10.800",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 349.0,
+        "invoice_id": "34301a03-4cf5-4456-8ac8-49047e2d11b6"
       }
     ],
     "dfc9d89b-18a2-49ea-85f0-0a2ed0083849": [
       {
-        "date": "2025-12-02T09:00:00",
-        "price": "95.000000000",
-        "amount": "50.000000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 95.0,
+        "invoice_id": "85202b06-2857-4119-9c6f-800a0dfbcc99"
       },
       {
-        "date": "2025-12-02T09:00:00",
-        "price": "179.000000000",
-        "amount": "2.000000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 179.0,
+        "invoice_id": "b307bdef-3a04-4a52-bdf7-6e99be22f45c"
       },
       {
-        "date": "2025-12-08T09:00:00",
-        "price": "179.000000000",
-        "amount": "2.000000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 179.0,
+        "invoice_id": "18006f77-8110-32b3-019b-0db2bec44f72"
       },
       {
-        "date": "2025-12-09T09:00:00",
-        "price": "179.000000000",
-        "amount": "2.000000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 179.0,
+        "invoice_id": "18006f77-8110-32b3-019b-0db2bec44f68"
       },
       {
-        "date": "2025-12-09T09:00:00",
-        "price": "179.000000000",
-        "amount": "2.000000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 179.0,
+        "invoice_id": "424c617c-42f2-476d-ace3-1fd3396b42c5"
       },
       {
-        "date": "2025-12-16T09:00:00",
-        "price": "95.000000000",
-        "amount": "50.000000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 95.0,
+        "invoice_id": "18006f77-8110-32b3-019b-299b47e443b8"
       },
       {
-        "date": "2025-12-23T09:00:00",
-        "price": "95.000000000",
-        "amount": "50.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 95.0,
+        "invoice_id": "de2d39d3-a7ad-5fee-019b-4e82208235a2"
       },
       {
-        "date": "2025-12-30T09:00:00",
-        "price": "179.000000000",
-        "amount": "2.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 179.0,
+        "invoice_id": "a6476856-c26d-4712-a6eb-39fabf55e97c"
       },
       {
-        "date": "2025-12-30T09:00:00",
-        "price": "95.000000000",
-        "amount": "50.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 95.0,
+        "invoice_id": "65157398-96b1-43de-bce1-b54a3929e890"
       },
       {
-        "date": "2026-01-11T09:00:00",
-        "price": "81.240000000",
-        "amount": "2.400",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 81.24,
+        "invoice_id": "5b5da3dc-b755-497a-aa55-d2876da6fbc5"
       },
       {
-        "date": "2026-01-12T09:00:00",
-        "price": "85.000000000",
-        "amount": "50.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 85.0,
+        "invoice_id": "32303423-7947-4dd6-8b82-8971db3265ba"
       },
       {
-        "date": "2026-01-16T09:00:00",
-        "price": "85.000000000",
-        "amount": "50.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 85.0,
+        "invoice_id": "18b061be-c3db-4af6-a0fd-a8225ed08784"
       },
       {
-        "date": "2026-01-24T09:00:00",
-        "price": "75.900000000",
-        "amount": "1.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 75.9,
+        "invoice_id": "c618c015-d920-4bdb-92ea-77b5dbcbc7e7"
       },
       {
-        "date": "2026-01-24T09:13:59",
-        "price": "86.92",
-        "amount": "0.039",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 86.92,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c96695"
       },
       {
-        "date": "2026-01-24T09:24:50",
-        "price": "86.92",
-        "amount": "0.039",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 86.92,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c969c7"
       },
       {
-        "date": "2026-01-24T09:30:02",
-        "price": "86.92",
-        "amount": "0.039",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 86.92,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c96f8f"
       },
       {
-        "date": "2026-01-24T09:34:41",
-        "price": "86.67",
-        "amount": "0.003",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 86.67,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c97239"
       },
       {
-        "date": "2026-01-24T09:36:46",
-        "price": "86.000000000",
-        "amount": "0.005",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 86.0,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c9745d"
       },
       {
-        "date": "2026-01-24T09:38:33",
-        "price": "86.67",
-        "amount": "0.003",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 86.67,
+        "invoice_id": "abc1d454-1db3-d717-019c-156129c97761"
       },
       {
-        "date": "2026-01-29T09:00:00",
-        "price": "75.900000000",
-        "amount": "1.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 75.9,
+        "invoice_id": "bb2e6622-37fc-4e87-ad79-5b5cbc8cfe57"
       },
       {
-        "date": "2026-02-04T09:00:00",
-        "price": "179.000000000",
-        "amount": "6.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 179.0,
+        "invoice_id": "d5c6fe38-6b83-4248-b711-ea5381fd4a2c"
       },
       {
-        "date": "2026-02-04T09:00:00",
-        "price": "95.000000000",
-        "amount": "50.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 95.0,
+        "invoice_id": "0334add6-6d6d-41b2-95c9-ef6aaba2ec62"
       },
       {
-        "date": "2026-02-05T09:00:00",
-        "price": "65.490000000",
-        "amount": "1.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 65.49,
+        "invoice_id": "84b36716-64ca-4a8e-98fb-fd074adfb40a"
       }
     ],
-    "259a72d7-2f41-49e9-84ec-b13b7a58fafe": [
+    "f02137f0-78be-48b0-abcd-c2590fe545ca": [
       {
-        "date": "2025-12-02T09:00:00",
-        "price": "192.500000000",
-        "amount": "1.000000000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 53.0,
+        "invoice_id": "dd778f05-c064-4a3a-abdc-dc15c46cf6ac"
       },
       {
-        "date": "2025-12-23T09:00:00",
-        "price": "192.500000000",
-        "amount": "1.000",
-        "unit_info": "price = руб за единицу из накладной"
+        "date": "",
+        "price": 105.0,
+        "invoice_id": "1653129f-e146-41b7-9b0e-bf34a392fac2"
+      },
+      {
+        "date": "",
+        "price": 53.0,
+        "invoice_id": "1653129f-e146-41b7-9b0e-bf34a392fac2"
       }
     ]
   },
-  "step4_our_pf_calculation": {
-    "ingredients": [
+  "step_A_pf_calculation": {
+    "pf_id": "cc4b73ec-3395-4767-97a0-3effadb08728",
+    "pf_name": "cc4b73ec-3395-4767-97a0-3effadb08728",
+    "assembledAmount": 1.0,
+    "items": [
       {
         "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
-        "name": "Белок паст.",
-        "unit_in_db": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc",
-        "amount_in_chart": 0.340909091,
-        "price_from_invoice": 349.0,
-        "line_cost": 118.977273,
-        "comment": ""
+        "name": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "amount": 0.010227273,
+        "unit_cost": 349.0,
+        "line_cost": 3.5693,
+        "has_price": true
       },
       {
-        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
-        "name": "Сахар",
-        "unit_in_db": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc",
-        "amount_in_chart": 0.681818182,
-        "price_from_invoice": 65.49,
-        "line_cost": 44.652273,
-        "comment": ""
+        "productId": "920968b7-b2ac-4ea0-831e-1e29f99a2bb6",
+        "name": "920968b7-b2ac-4ea0-831e-1e29f99a2bb6",
+        "amount": 0.003428571,
+        "unit_cost": 109.0,
+        "line_cost": 0.3737,
+        "has_price": true
       },
       {
-        "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
-        "name": "Вода из под крана",
-        "unit_in_db": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc",
-        "amount_in_chart": 0.204545455,
-        "price_from_invoice": null,
-        "line_cost": null,
-        "comment": "MISSING — нет в приходах"
+        "productId": "79862119-2047-49ac-ae3a-6b4eb4e4e13c",
+        "name": "79862119-2047-49ac-ae3a-6b4eb4e4e13c",
+        "amount": 0.003272727,
+        "unit_cost": 404.43,
+        "line_cost": 1.3236,
+        "has_price": true
+      },
+      {
+        "productId": "3753d7d1-e4f8-4027-9814-e98a46096881",
+        "name": "3753d7d1-e4f8-4027-9814-e98a46096881",
+        "amount": 0.226004464,
+        "unit_cost": 10.5,
+        "line_cost": 2.373,
+        "has_price": true
+      },
+      {
+        "productId": "f02137f0-78be-48b0-abcd-c2590fe545ca",
+        "name": "f02137f0-78be-48b0-abcd-c2590fe545ca",
+        "amount": 0.014792412,
+        "unit_cost": 53.0,
+        "line_cost": 0.784,
+        "has_price": true
       },
       {
         "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
-        "name": "Лимонная кислота",
-        "unit_in_db": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc",
-        "amount_in_chart": 0.018181818,
-        "price_from_invoice": 192.5,
-        "line_cost": 3.5,
-        "comment": ""
-      }
-    ],
-    "total_cost_raw": 167.1295,
-    "assembledAmount": null,
-    "cost_per_unit": 167.1295,
-    "dateFrom": "2025-11-14"
-  },
-  "step4_our_dish_calculation": {
-    "ingredients": [
+        "name": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
+        "amount": 0.000545455,
+        "unit_cost": 192.5,
+        "line_cost": 0.105,
+        "has_price": true
+      },
       {
-        "productId": "60177252-8aad-4127-b9a4-7ec6eca39a4e",
-        "name": "п/ф Меренга итальянская",
-        "amountOut": 1.0,
-        "unit_cost": 167.1295,
-        "line_cost": 167.1295
+        "productId": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
+        "name": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
+        "amount": 0.011940299,
+        "unit_cost": 541.13,
+        "line_cost": 6.4613,
+        "has_price": true
+      },
+      {
+        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+        "name": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+        "amount": 0.035313139,
+        "unit_cost": 65.49,
+        "line_cost": 2.3127,
+        "has_price": true
+      },
+      {
+        "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
+        "name": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
+        "amount": 0.013728201,
+        "unit_cost": 0.0,
+        "line_cost": 0.0,
+        "has_price": false
+      },
+      {
+        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
+        "name": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
+        "amount": 0.016371433,
+        "unit_cost": 1142.8,
+        "line_cost": 18.7093,
+        "has_price": true
+      },
+      {
+        "productId": "554e702e-3769-4cf9-8433-e3381ff9c1b8",
+        "name": "554e702e-3769-4cf9-8433-e3381ff9c1b8",
+        "amount": 0.000146939,
+        "unit_cost": 25.99,
+        "line_cost": 0.0038,
+        "has_price": true
+      },
+      {
+        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
+        "name": "5a98a152-21be-4cd0-b76f-5c87c4672537",
+        "amount": 0.03814262,
+        "unit_cost": 294.0,
+        "line_cost": 11.2139,
+        "has_price": true
       }
     ],
-    "total_cost": 167.13,
-    "assembledAmount": 1,
-    "dateFrom": "2026-01-01"
+    "total_batch_cost": 47.2296,
+    "cost_per_unit": 47.2296
   },
-  "step5_reverse_analysis": {
-    "iiko_dish_cost": 43.0,
-    "our_dish_cost": 167.13,
-    "our_pf_ingredient_total": 167.1295,
-    "implied_assembledAmount_of_pf": 3.8867,
-    "hypothesis": "Если assembledAmount п/ф = 3.8867, то cost_per_unit = 43.0004 (должно быть 43).",
-    "missing_ingredient_dbad3bbf": {
-      "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
-      "name": "Вода из под крана",
-      "amount_in_chart": 0.204545455,
-      "note": "Нет в приходных накладных за 90 дней — если эта цена ~38 руб, суммарно будет ~175"
-    }
+  "step_B_dish_calculation": {
+    "dish_id": "53742a20-5f14-4f36-accf-33773fe8a1d7",
+    "dish_name": "53742a20-5f14-4f36-accf-33773fe8a1d7",
+    "items": [
+      {
+        "productId": "cc4b73ec-3395-4767-97a0-3effadb08728",
+        "name": "cc4b73ec-3395-4767-97a0-3effadb08728",
+        "amount": 1.0,
+        "unit_cost": 47.2296,
+        "line_cost": 47.2296,
+        "is_pf": true
+      }
+    ],
+    "total_cost": 47.2296
+  },
+  "comparison": {
+    "our_calculation": 47.2296,
+    "iiko_reference": 43.0,
+    "difference": 4.2296,
+    "top_expensive_pf_ingredients": [
+      {
+        "productId": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
+        "name": "b1912863-0e7c-4ad0-80fb-6a98c716bc21",
+        "amount": 0.016371433,
+        "unit_cost": 1142.8,
+        "line_cost": 18.7093,
+        "has_price": true
+      },
+      {
+        "productId": "5a98a152-21be-4cd0-b76f-5c87c4672537",
+        "name": "5a98a152-21be-4cd0-b76f-5c87c4672537",
+        "amount": 0.03814262,
+        "unit_cost": 294.0,
+        "line_cost": 11.2139,
+        "has_price": true
+      },
+      {
+        "productId": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
+        "name": "2dddfe23-0a95-45d5-8dbb-56067c23f99f",
+        "amount": 0.011940299,
+        "unit_cost": 541.13,
+        "line_cost": 6.4613,
+        "has_price": true
+      },
+      {
+        "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "name": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "amount": 0.010227273,
+        "unit_cost": 349.0,
+        "line_cost": 3.5693,
+        "has_price": true
+      },
+      {
+        "productId": "3753d7d1-e4f8-4027-9814-e98a46096881",
+        "name": "3753d7d1-e4f8-4027-9814-e98a46096881",
+        "amount": 0.226004464,
+        "unit_cost": 10.5,
+        "line_cost": 2.373,
+        "has_price": true
+      }
+    ]
   }
 }
