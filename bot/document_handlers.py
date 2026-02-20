@@ -648,7 +648,7 @@ async def cb_refresh_mapping_ref(callback: CallbackQuery) -> None:
         pass
 
 
-
+async def _handle_mapping_done(placeholder, tg_id) -> None:
     """Общая логика проверки и финализации маппинга."""
     from use_cases import ocr_mapping as mapping_uc
 
