@@ -1,0 +1,976 @@
+{
+  "step1_raw_dish_assemblyCharts": [
+    {
+      "id": "cc12da68-8b97-437f-bfb0-29ad60f6905c",
+      "assembledProductId": "adac4235-f90a-4ee0-a1ce-119d11d767f7",
+      "dateFrom": "2026-01-01",
+      "dateTo": null,
+      "assembledAmount": 1,
+      "productWriteoffStrategy": "ASSEMBLE",
+      "effectiveDirectWriteoffStoreSpecification": {
+        "departments": [
+          "fb855535-5d3a-447c-b951-71c3059b705b",
+          "259d78e6-922d-4dc8-b2f8-aaad1f5524b1"
+        ],
+        "inverse": false
+      },
+      "productSizeAssemblyStrategy": "COMMON",
+      "items": [
+        {
+          "id": "abc1d454-1db3-d717-019c-19bc3b2ca360",
+          "sortWeight": 0.0,
+          "productId": "60177252-8aad-4127-b9a4-7ec6eca39a4e",
+          "productSizeSpecification": null,
+          "storeSpecification": {
+            "departments": [],
+            "inverse": true
+          },
+          "amountIn": 1,
+          "amountMiddle": 1,
+          "amountOut": 1,
+          "amountIn1": 0,
+          "amountOut1": 0,
+          "amountIn2": 0,
+          "amountOut2": 0,
+          "amountIn3": 0,
+          "amountOut3": 0,
+          "packageCount": 0,
+          "packageTypeId": null
+        }
+      ],
+      "technologyDescription": "",
+      "description": "",
+      "appearance": "",
+      "organoleptic": "",
+      "outputComment": ""
+    }
+  ],
+  "step1_raw_pf_preparedCharts": [
+    {
+      "id": "abc1d454-1db3-d717-019b-b0fbd6926d0d",
+      "assembledProductId": "60177252-8aad-4127-b9a4-7ec6eca39a4e",
+      "dateFrom": "2025-11-14",
+      "dateTo": null,
+      "effectiveDirectWriteoffStoreSpecification": {
+        "departments": [],
+        "inverse": false
+      },
+      "productSizeAssemblyStrategy": "COMMON",
+      "items": [
+        {
+          "id": "abc1d454-1db3-d717-019b-b0fbd6926d0e",
+          "sortWeight": 0.0,
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "productSizeSpecification": null,
+          "storeSpecification": null,
+          "amount": 0.340909091
+        },
+        {
+          "id": "abc1d454-1db3-d717-019b-b0fbd6926d0f",
+          "sortWeight": 0.0,
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "productSizeSpecification": null,
+          "storeSpecification": null,
+          "amount": 0.681818182
+        },
+        {
+          "id": "abc1d454-1db3-d717-019b-b0fbd6926d10",
+          "sortWeight": 0.0,
+          "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
+          "productSizeSpecification": null,
+          "storeSpecification": null,
+          "amount": 0.204545455
+        },
+        {
+          "id": "abc1d454-1db3-d717-019b-b0fbd6926d11",
+          "sortWeight": 0.0,
+          "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
+          "productSizeSpecification": null,
+          "storeSpecification": null,
+          "amount": 0.018181818
+        }
+      ]
+    }
+  ],
+  "step2_product_info": {
+    "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7": {
+      "name": "Вода из под крана",
+      "type": "GOODS",
+      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+    },
+    "dcc37f95-0d63-44c6-8d3b-a59871e73806": {
+      "name": "Белок паст.",
+      "type": "GOODS",
+      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+    },
+    "adac4235-f90a-4ee0-a1ce-119d11d767f7": {
+      "name": "Меренга цех",
+      "type": "DISH",
+      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+    },
+    "259a72d7-2f41-49e9-84ec-b13b7a58fafe": {
+      "name": "Лимонная кислота",
+      "type": "GOODS",
+      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+    },
+    "dfc9d89b-18a2-49ea-85f0-0a2ed0083849": {
+      "name": "Сахар",
+      "type": "GOODS",
+      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+    },
+    "60177252-8aad-4127-b9a4-7ec6eca39a4e": {
+      "name": "п/ф Меренга итальянская",
+      "type": "PREPARED",
+      "unit": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc"
+    }
+  },
+  "step3_relevant_invoices": [
+    {
+      "id": "18006f77-8110-32b3-019a-c1ed5ac98871",
+      "date": "2025-11-25T09:00:00",
+      "supplier": "fab31b9d-003c-4c66-bf8d-f296284a406b",
+      "items": [
+        {
+          "actualAmount": "1.800000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "305.000000000",
+          "priceWithoutNds": "305.000000000",
+          "sum": "610.000000000",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "1.800000000"
+        }
+      ]
+    },
+    {
+      "id": "db1a24c5-81d9-419e-a97a-f46750602f5b",
+      "date": "2025-12-01T09:00:00",
+      "supplier": "fab31b9d-003c-4c66-bf8d-f296284a406b",
+      "items": [
+        {
+          "actualAmount": "5.400000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "305.000000000",
+          "priceWithoutNds": "305.000000000",
+          "sum": "1830.000000000",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "5.400000000"
+        }
+      ]
+    },
+    {
+      "id": "85202b06-2857-4119-9c6f-800a0dfbcc99",
+      "date": "2025-12-02T09:00:00",
+      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
+      "items": [
+        {
+          "actualAmount": "50.000000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "95.000000000",
+          "priceWithoutNds": "95.000000000",
+          "sum": "4750.000000000",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "50.000000000"
+        },
+        {
+          "actualAmount": "1.000000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "192.500000000",
+          "priceWithoutNds": "192.500000000",
+          "sum": "192.500000000",
+          "ndsPercent": "0.000000000",
+          "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
+          "amount": "1.000000000"
+        }
+      ]
+    },
+    {
+      "id": "b307bdef-3a04-4a52-bdf7-6e99be22f45c",
+      "date": "2025-12-02T09:00:00",
+      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
+      "items": [
+        {
+          "actualAmount": "2.000000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "179.000000000",
+          "priceWithoutNds": "179.000000000",
+          "sum": "358.000000000",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "2.000000000"
+        }
+      ]
+    },
+    {
+      "id": "18006f77-8110-32b3-019b-0db2bec44f72",
+      "date": "2025-12-08T09:00:00",
+      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
+      "items": [
+        {
+          "actualAmount": "2.000000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "179.000000000",
+          "priceWithoutNds": "179.000000000",
+          "sum": "358.000000000",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "2.000000000"
+        }
+      ]
+    },
+    {
+      "id": "18006f77-8110-32b3-019b-0db2bec44f68",
+      "date": "2025-12-09T09:00:00",
+      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
+      "items": [
+        {
+          "actualAmount": "2.000000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "179.000000000",
+          "priceWithoutNds": "179.000000000",
+          "sum": "358.000000000",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "2.000000000"
+        }
+      ]
+    },
+    {
+      "id": "424c617c-42f2-476d-ace3-1fd3396b42c5",
+      "date": "2025-12-09T09:00:00",
+      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
+      "items": [
+        {
+          "actualAmount": "2.000000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "179.000000000",
+          "priceWithoutNds": "179.000000000",
+          "sum": "358.000000000",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "2.000000000"
+        }
+      ]
+    },
+    {
+      "id": "bbf6315f-6d81-4422-a1a0-7938381587ac",
+      "date": "2025-12-12T09:00:00",
+      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
+      "items": [
+        {
+          "actualAmount": "4.500000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "317.000000000",
+          "priceWithoutNds": "317.000000000",
+          "sum": "1585.000000000",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "4.500000000"
+        }
+      ]
+    },
+    {
+      "id": "18006f77-8110-32b3-019b-299b47e443b8",
+      "date": "2025-12-16T09:00:00",
+      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
+      "items": [
+        {
+          "actualAmount": "50.000000000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "95.000000000",
+          "priceWithoutNds": "86.360000000",
+          "sum": "4750.000000000",
+          "ndsPercent": "10.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "50.000000000"
+        }
+      ]
+    },
+    {
+      "id": "5602e123-6104-4f1f-aaa1-6b48b3e25f25",
+      "date": "2025-12-20T09:00:00",
+      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
+      "items": [
+        {
+          "actualAmount": "2.700",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "317.000000000",
+          "priceWithoutNds": "317.000000000",
+          "sum": "950.99",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "2.700"
+        }
+      ]
+    },
+    {
+      "id": "de2d39d3-a7ad-5fee-019b-4e82208235a2",
+      "date": "2025-12-23T09:00:00",
+      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
+      "items": [
+        {
+          "actualAmount": "1.000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "192.500000000",
+          "priceWithoutNds": "160.420000000",
+          "sum": "192.50",
+          "ndsPercent": "20.000000000",
+          "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
+          "amount": "1.000"
+        },
+        {
+          "actualAmount": "50.000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "95.000000000",
+          "priceWithoutNds": "86.360000000",
+          "sum": "4750.00",
+          "ndsPercent": "10.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "50.000"
+        }
+      ]
+    },
+    {
+      "id": "fde797e7-5f05-4c66-8cca-9adf83205450",
+      "date": "2025-12-27T09:00:00",
+      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
+      "items": [
+        {
+          "actualAmount": "2.500",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "360.000000000",
+          "priceWithoutNds": "360.000000000",
+          "sum": "899.99",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "2.500"
+        }
+      ]
+    },
+    {
+      "id": "a6476856-c26d-4712-a6eb-39fabf55e97c",
+      "date": "2025-12-30T09:00:00",
+      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
+      "items": [
+        {
+          "actualAmount": "2.000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "179.000000000",
+          "priceWithoutNds": "179.000000000",
+          "sum": "358.00",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "2.000"
+        }
+      ]
+    },
+    {
+      "id": "65157398-96b1-43de-bce1-b54a3929e890",
+      "date": "2025-12-30T09:00:00",
+      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
+      "items": [
+        {
+          "actualAmount": "50.000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "95.000000000",
+          "priceWithoutNds": "95.000000000",
+          "sum": "4750.00",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "50.000"
+        }
+      ]
+    },
+    {
+      "id": "ddf3f23d-caed-440b-b195-1e39b846dc6b",
+      "date": "2026-01-02T09:00:00",
+      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
+      "items": [
+        {
+          "actualAmount": "2.700",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "317.000000000",
+          "priceWithoutNds": "317.000000000",
+          "sum": "951.00",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "2.700"
+        }
+      ]
+    },
+    {
+      "id": "504ac036-5ba6-4018-bcd5-6a16d99081cd",
+      "date": "2026-01-03T09:00:00",
+      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
+      "items": [
+        {
+          "actualAmount": "5.400",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "317.000000000",
+          "priceWithoutNds": "317.000000000",
+          "sum": "1901.99",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "5.400"
+        }
+      ]
+    },
+    {
+      "id": "58c1f136-b932-4ef2-a097-9d508719eea0",
+      "date": "2026-01-07T09:00:00",
+      "supplier": "6f4a7e04-f8bb-407b-a7cd-6395d304a8ac",
+      "items": [
+        {
+          "actualAmount": "5.400",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "285.820000000",
+          "priceWithoutNds": "285.820000000",
+          "sum": "1714.94",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "5.400"
+        }
+      ]
+    },
+    {
+      "id": "5b5da3dc-b755-497a-aa55-d2876da6fbc5",
+      "date": "2026-01-11T09:00:00",
+      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
+      "items": [
+        {
+          "actualAmount": "2.400",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "81.240000000",
+          "priceWithoutNds": "81.240000000",
+          "sum": "194.97",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "2.400"
+        }
+      ]
+    },
+    {
+      "id": "32303423-7947-4dd6-8b82-8971db3265ba",
+      "date": "2026-01-12T09:00:00",
+      "supplier": "5c9f6165-7cb8-4eeb-807e-16ba06223b9a",
+      "items": [
+        {
+          "actualAmount": "50.000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "85.000000000",
+          "priceWithoutNds": "85.000000000",
+          "sum": "4250.00",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "50.000"
+        }
+      ]
+    },
+    {
+      "id": "34301a03-4cf5-4456-8ac8-49047e2d11b6",
+      "date": "2026-01-12T09:00:00",
+      "supplier": "fab31b9d-003c-4c66-bf8d-f296284a406b",
+      "items": [
+        {
+          "actualAmount": "10.800",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "349.000000000",
+          "priceWithoutNds": "349.000000000",
+          "sum": "4188.00",
+          "ndsPercent": "0.000000000",
+          "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+          "amount": "10.800"
+        }
+      ]
+    },
+    {
+      "id": "18b061be-c3db-4af6-a0fd-a8225ed08784",
+      "date": "2026-01-16T09:00:00",
+      "supplier": "5c9f6165-7cb8-4eeb-807e-16ba06223b9a",
+      "items": [
+        {
+          "actualAmount": "50.000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "85.000000000",
+          "priceWithoutNds": "85.000000000",
+          "sum": "4250.00",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "50.000"
+        }
+      ]
+    },
+    {
+      "id": "c618c015-d920-4bdb-92ea-77b5dbcbc7e7",
+      "date": "2026-01-24T09:00:00",
+      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
+      "items": [
+        {
+          "actualAmount": "1.000",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "75.900000000",
+          "priceWithoutNds": "75.900000000",
+          "sum": "75.90",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "1.000"
+        }
+      ]
+    },
+    {
+      "id": "abc1d454-1db3-d717-019c-156129c96695",
+      "date": "2026-01-24T09:13:59",
+      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
+      "items": [
+        {
+          "actualAmount": "0.039",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "86.92",
+          "priceWithoutNds": "86.92",
+          "sum": "3.39",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "0.039"
+        }
+      ]
+    },
+    {
+      "id": "abc1d454-1db3-d717-019c-156129c969c7",
+      "date": "2026-01-24T09:24:50",
+      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
+      "items": [
+        {
+          "actualAmount": "0.039",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "86.92",
+          "priceWithoutNds": "86.92",
+          "sum": "3.39",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "0.039"
+        }
+      ]
+    },
+    {
+      "id": "abc1d454-1db3-d717-019c-156129c96f8f",
+      "date": "2026-01-24T09:30:02",
+      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
+      "items": [
+        {
+          "actualAmount": "0.039",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "86.92",
+          "priceWithoutNds": "86.92",
+          "sum": "3.39",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "0.039"
+        }
+      ]
+    },
+    {
+      "id": "abc1d454-1db3-d717-019c-156129c97239",
+      "date": "2026-01-24T09:34:41",
+      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
+      "items": [
+        {
+          "actualAmount": "0.003",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "86.67",
+          "priceWithoutNds": "86.67",
+          "sum": "0.26",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "0.003"
+        }
+      ]
+    },
+    {
+      "id": "abc1d454-1db3-d717-019c-156129c9745d",
+      "date": "2026-01-24T09:36:46",
+      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
+      "items": [
+        {
+          "actualAmount": "0.005",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "86.000000000",
+          "priceWithoutNds": "86.000000000",
+          "sum": "0.43",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "0.005"
+        }
+      ]
+    },
+    {
+      "id": "abc1d454-1db3-d717-019c-156129c97761",
+      "date": "2026-01-24T09:38:33",
+      "supplier": "87543b23-5be6-0b15-018f-e7d672291717",
+      "items": [
+        {
+          "actualAmount": "0.003",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "86.67",
+          "priceWithoutNds": "86.67",
+          "sum": "0.26",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "0.003"
+        }
+      ]
+    },
+    {
+      "id": "bb2e6622-37fc-4e87-ad79-5b5cbc8cfe57",
+      "date": "2026-01-29T09:00:00",
+      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
+      "items": [
+        {
+          "actualAmount": "1.000",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "75.900000000",
+          "priceWithoutNds": "75.900000000",
+          "sum": "75.90",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "1.000"
+        }
+      ]
+    },
+    {
+      "id": "d5c6fe38-6b83-4248-b711-ea5381fd4a2c",
+      "date": "2026-02-04T09:00:00",
+      "supplier": "399abb0f-d484-4a8b-95f7-22c86695fdec",
+      "items": [
+        {
+          "actualAmount": "6.000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "179.000000000",
+          "priceWithoutNds": "179.000000000",
+          "sum": "1074.00",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "6.000"
+        }
+      ]
+    },
+    {
+      "id": "0334add6-6d6d-41b2-95c9-ef6aaba2ec62",
+      "date": "2026-02-04T09:00:00",
+      "supplier": "a45f2e5d-5e21-4b8b-abf6-5f504709cfca",
+      "items": [
+        {
+          "actualAmount": "50.000",
+          "storeId": "722b4cd4-2be7-4b10-9c3f-d0507ff11d2d",
+          "price": "95.000000000",
+          "priceWithoutNds": "95.000000000",
+          "sum": "4750.00",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "50.000"
+        }
+      ]
+    },
+    {
+      "id": "84b36716-64ca-4a8e-98fb-fd074adfb40a",
+      "date": "2026-02-05T09:00:00",
+      "supplier": "e1212b53-f383-42a3-9732-93b01f0f2ed9",
+      "items": [
+        {
+          "actualAmount": "1.000",
+          "storeId": "6894955e-9a40-4286-ac77-57892f3ae3f2",
+          "price": "65.490000000",
+          "priceWithoutNds": "65.490000000",
+          "sum": "65.49",
+          "ndsPercent": "0.000000000",
+          "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+          "amount": "1.000"
+        }
+      ]
+    }
+  ],
+  "step3_ingredient_price_history": {
+    "dcc37f95-0d63-44c6-8d3b-a59871e73806": [
+      {
+        "date": "2025-11-25T09:00:00",
+        "price": "305.000000000",
+        "amount": "1.800000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-01T09:00:00",
+        "price": "305.000000000",
+        "amount": "5.400000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-12T09:00:00",
+        "price": "317.000000000",
+        "amount": "4.500000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-20T09:00:00",
+        "price": "317.000000000",
+        "amount": "2.700",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-27T09:00:00",
+        "price": "360.000000000",
+        "amount": "2.500",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-02T09:00:00",
+        "price": "317.000000000",
+        "amount": "2.700",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-03T09:00:00",
+        "price": "317.000000000",
+        "amount": "5.400",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-07T09:00:00",
+        "price": "285.820000000",
+        "amount": "5.400",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-12T09:00:00",
+        "price": "349.000000000",
+        "amount": "10.800",
+        "unit_info": "price = руб за единицу из накладной"
+      }
+    ],
+    "dfc9d89b-18a2-49ea-85f0-0a2ed0083849": [
+      {
+        "date": "2025-12-02T09:00:00",
+        "price": "95.000000000",
+        "amount": "50.000000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-02T09:00:00",
+        "price": "179.000000000",
+        "amount": "2.000000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-08T09:00:00",
+        "price": "179.000000000",
+        "amount": "2.000000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-09T09:00:00",
+        "price": "179.000000000",
+        "amount": "2.000000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-09T09:00:00",
+        "price": "179.000000000",
+        "amount": "2.000000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-16T09:00:00",
+        "price": "95.000000000",
+        "amount": "50.000000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-23T09:00:00",
+        "price": "95.000000000",
+        "amount": "50.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-30T09:00:00",
+        "price": "179.000000000",
+        "amount": "2.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-30T09:00:00",
+        "price": "95.000000000",
+        "amount": "50.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-11T09:00:00",
+        "price": "81.240000000",
+        "amount": "2.400",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-12T09:00:00",
+        "price": "85.000000000",
+        "amount": "50.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-16T09:00:00",
+        "price": "85.000000000",
+        "amount": "50.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-24T09:00:00",
+        "price": "75.900000000",
+        "amount": "1.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-24T09:13:59",
+        "price": "86.92",
+        "amount": "0.039",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-24T09:24:50",
+        "price": "86.92",
+        "amount": "0.039",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-24T09:30:02",
+        "price": "86.92",
+        "amount": "0.039",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-24T09:34:41",
+        "price": "86.67",
+        "amount": "0.003",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-24T09:36:46",
+        "price": "86.000000000",
+        "amount": "0.005",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-24T09:38:33",
+        "price": "86.67",
+        "amount": "0.003",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-01-29T09:00:00",
+        "price": "75.900000000",
+        "amount": "1.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-02-04T09:00:00",
+        "price": "179.000000000",
+        "amount": "6.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-02-04T09:00:00",
+        "price": "95.000000000",
+        "amount": "50.000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2026-02-05T09:00:00",
+        "price": "65.490000000",
+        "amount": "1.000",
+        "unit_info": "price = руб за единицу из накладной"
+      }
+    ],
+    "259a72d7-2f41-49e9-84ec-b13b7a58fafe": [
+      {
+        "date": "2025-12-02T09:00:00",
+        "price": "192.500000000",
+        "amount": "1.000000000",
+        "unit_info": "price = руб за единицу из накладной"
+      },
+      {
+        "date": "2025-12-23T09:00:00",
+        "price": "192.500000000",
+        "amount": "1.000",
+        "unit_info": "price = руб за единицу из накладной"
+      }
+    ]
+  },
+  "step4_our_pf_calculation": {
+    "ingredients": [
+      {
+        "productId": "dcc37f95-0d63-44c6-8d3b-a59871e73806",
+        "name": "Белок паст.",
+        "unit_in_db": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc",
+        "amount_in_chart": 0.340909091,
+        "price_from_invoice": 349.0,
+        "line_cost": 118.977273,
+        "comment": ""
+      },
+      {
+        "productId": "dfc9d89b-18a2-49ea-85f0-0a2ed0083849",
+        "name": "Сахар",
+        "unit_in_db": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc",
+        "amount_in_chart": 0.681818182,
+        "price_from_invoice": 65.49,
+        "line_cost": 44.652273,
+        "comment": ""
+      },
+      {
+        "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
+        "name": "Вода из под крана",
+        "unit_in_db": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc",
+        "amount_in_chart": 0.204545455,
+        "price_from_invoice": null,
+        "line_cost": null,
+        "comment": "MISSING — нет в приходах"
+      },
+      {
+        "productId": "259a72d7-2f41-49e9-84ec-b13b7a58fafe",
+        "name": "Лимонная кислота",
+        "unit_in_db": "7ba81c3a-8de5-8f9d-fb9f-e39efcbc57cc",
+        "amount_in_chart": 0.018181818,
+        "price_from_invoice": 192.5,
+        "line_cost": 3.5,
+        "comment": ""
+      }
+    ],
+    "total_cost_raw": 167.1295,
+    "assembledAmount": null,
+    "cost_per_unit": 167.1295,
+    "dateFrom": "2025-11-14"
+  },
+  "step4_our_dish_calculation": {
+    "ingredients": [
+      {
+        "productId": "60177252-8aad-4127-b9a4-7ec6eca39a4e",
+        "name": "п/ф Меренга итальянская",
+        "amountOut": 1.0,
+        "unit_cost": 167.1295,
+        "line_cost": 167.1295
+      }
+    ],
+    "total_cost": 167.13,
+    "assembledAmount": 1,
+    "dateFrom": "2026-01-01"
+  },
+  "step5_reverse_analysis": {
+    "iiko_dish_cost": 43.0,
+    "our_dish_cost": 167.13,
+    "our_pf_ingredient_total": 167.1295,
+    "implied_assembledAmount_of_pf": 3.8867,
+    "hypothesis": "Если assembledAmount п/ф = 3.8867, то cost_per_unit = 43.0004 (должно быть 43).",
+    "missing_ingredient_dbad3bbf": {
+      "productId": "dbad3bbf-b3a1-4cfb-a147-83e32cb993e7",
+      "name": "Вода из под крана",
+      "amount_in_chart": 0.204545455,
+      "note": "Нет в приходных накладных за 90 дней — если эта цена ~38 руб, суммарно будет ~175"
+    }
+  }
+}
