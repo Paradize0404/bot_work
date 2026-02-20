@@ -4,7 +4,7 @@ Use-case: создание и отправка акта списания (writeo
 Бизнес-логика:
   1. Получение складов по подразделению пользователя (бар / кухня)
   2. Получение счетов списания (Account)
-  3. Поиск номенклатуры (GOODS / PREPARED)
+  3. Поиск номенклатуры (GOODS / DISH / PREPARED)
   4. Получение единицы измерения по UUID
   5. Формирование и отправка документа через адаптер
   6. Подготовка writeoff, одобрение/отклонение (use-case для admin)
@@ -250,11 +250,11 @@ async def preload_products(department_id: str | None = None) -> None:
     Загрузить товары для списания в in-memory кеш.
 
     Логика фильтрации (если department_id задан):
-      - Точка-получатель заявок → GOODS из writeoff_request_store_group (BFS) + все PREPARED
-      - Все остальные точки     → GOODS из gsheet_export_group (BFS) + все PREPARED
+      - Точка-получатель заявок → GOODS+DISH из writeoff_request_store_group (BFS) + все PREPARED
+      - Все остальные точки     → GOODS+DISH из gsheet_export_group (BFS) + все PREPARED
     Если таблица папок пуста → показываем только PREPARED.
 
-    Если department_id не задан → загружает все GOODS+PREPARED (без фильтрации, fallback).
+    Если department_id не задан → загружает все GOODS+DISH+PREPARED (без фильтрации, fallback).
     ~1942 товара × ~200 байт ≈ 400 КБ RAM. TTL = 10 мин.
     После загрузки search_products ищет за 0 мс вместо ~2 сек (DB round-trip).
     """
@@ -279,19 +279,19 @@ async def preload_products(department_id: str | None = None) -> None:
         stmt = (
             select(Product.id, Product.name, Product.parent_id,
                    Product.main_unit, Product.product_type)
-            .where(Product.product_type.in_(["GOODS", "PREPARED"]))
+            .where(Product.product_type.in_(["GOODS", "DISH", "PREPARED"]))
             .where(Product.deleted.is_(False))
             .order_by(Product.name)
         )
         result = await session.execute(stmt)
         rows = result.all()
 
-        # Фильтр папок: GOODS — только из разрешённых групп, PREPARED — всегда
+        # Фильтр папок: GOODS+DISH — только из разрешённых групп, PREPARED — всегда
         if allowed_groups is not None:
             rows = [
                 r for r in rows
                 if r.product_type == "PREPARED"
-                or (r.product_type == "GOODS" and r.parent_id
+                or (r.product_type in ("GOODS", "DISH") and r.parent_id
                     and str(r.parent_id) in allowed_groups)
             ]
 
@@ -352,9 +352,9 @@ async def search_products(
     Поиск товаров по подстроке названия.
 
     Фильтрация зависит от подразделения (department_id):
-      - Точка-получатель заявок → GOODS из writeoff_request_store_group + все PREPARED
-      - Все остальные точки     → GOODS из gsheet_export_group + все PREPARED
-      - department_id=None      → все GOODS+PREPARED (без фильтрации, fallback)
+      - Точка-получатель заявок → GOODS+DISH из writeoff_request_store_group + все PREPARED
+      - Все остальные точки     → GOODS+DISH из gsheet_export_group + все PREPARED
+      - department_id=None      → все GOODS+DISH+PREPARED (без фильтрации, fallback)
 
     Стратегия поиска:
       1. Если в кеше есть products для данного dept → поиск in-memory (0 мс)
@@ -406,7 +406,7 @@ async def search_products(
         stmt = (
             select(Product)
             .where(func.lower(Product.name).contains(pattern))
-            .where(Product.product_type.in_(["GOODS", "PREPARED"]))
+            .where(Product.product_type.in_(["GOODS", "DISH", "PREPARED"]))
             .where(Product.deleted.is_(False))
             .order_by(Product.name)
             .limit(limit)
