@@ -45,8 +45,9 @@ async def _daily_full_sync() -> None:
       1. iiko: справочники + подразделения + склады + номенклатура и т.д.
       2. FinTablo: все 13 справочников
       3. Остатки по складам (sync_stock_balances)
-      4. Min/max из Google Таблицы (sync_min_stock)
-      5. Обновить «Маппинг Справочник» в Google Таблице (GOODS-товары)
+      4. Min/max из Google Таблицы → БД (sync_min_stock)
+      5. Номенклатура БД → Google Таблица «Мин.остатки» (sync_nomenclature_to_gsheet)
+      6. Обновить «Маппинг Справочник» в Google Таблице (GOODS-товары)
     """
     t0 = time.monotonic()
     started = now_kgd()
@@ -76,16 +77,25 @@ async def _daily_full_sync() -> None:
         logger.exception("[scheduler] Ошибка sync остатков")
         report_lines.append("\n📦 Остатки: ❌ ошибка")
 
-    # ── 3. Min/max из Google Таблицы ──
+    # ── 3. Min/max из Google Таблицы (GSheet → БД) ──
     try:
         from use_cases.sync_min_stock import sync_min_stock_from_gsheet
         gs_count = await sync_min_stock_from_gsheet(triggered_by=TRIGGERED_BY)
-        report_lines.append(f"📋 Min/max GSheet: ✅ {gs_count} записей")
+        report_lines.append(f"📋 Min/max GSheet→БД: ✅ {gs_count} записей")
     except Exception:
         logger.exception("[scheduler] Ошибка sync min/max GSheet")
-        report_lines.append("📋 Min/max GSheet: ❌ ошибка")
+        report_lines.append("📋 Min/max GSheet→БД: ❌ ошибка")
 
-    # ── 4. Обновить справочник товаров для маппинга ──
+    # ── 4. Номенклатура БД → GSheet (обновляет лист мин.остатков) ──
+    try:
+        from use_cases.sync_min_stock import sync_nomenclature_to_gsheet
+        nomen_count = await sync_nomenclature_to_gsheet(triggered_by=TRIGGERED_BY)
+        report_lines.append(f"📦 Номенкл.→GSheet: ✅ {nomen_count} товаров")
+    except Exception:
+        logger.exception("[scheduler] Ошибка sync номенклатуры в GSheet")
+        report_lines.append("📦 Номенкл.→GSheet: ❌ ошибка")
+
+    # ── 5. Обновить справочник товаров для маппинга ──
     try:
         from use_cases.ocr_mapping import refresh_ref_sheet
         ref_count = await refresh_ref_sheet()
@@ -98,7 +108,7 @@ async def _daily_full_sync() -> None:
     report_lines.append(f"\n⏱ Время: {elapsed:.1f} сек")
     logger.info("=== [scheduler] Ежедневная синхронизация ЗАВЕРШЕНА за %.1f сек ===", elapsed)
 
-    # ── 4. Уведомление админов ──
+    # ── 6. Уведомление админов ──
     try:
         await _notify_admins_about_sync(report_lines)
     except Exception:
@@ -165,7 +175,7 @@ _bot_ref = None  # Ссылка на Bot-инстанс для отправки 
 def start_scheduler(bot) -> None:
     """
     Запустить APScheduler:
-      - 07:00 — ежедневная синхронизация iiko + FinTablo + остатки + min/max
+      - 07:00 — ежедневная синхронизация iiko + FinTablo + остатки + min/max + номенклатура GSheet + маппинг справочник
       - 22:00 — ежедневный отчёт по стоп-листу
     Вызывается из main.py при старте бота.
     """
