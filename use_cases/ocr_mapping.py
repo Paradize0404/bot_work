@@ -321,9 +321,10 @@ async def notify_accountants(
     # ── Уведомление о маппинге ──
     if unmapped_count > 0:
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        mapping_kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="✅ Маппинг готов", callback_data="mapping_done"),
-        ]])
+        mapping_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Маппинг готов", callback_data="mapping_done")],
+            [InlineKeyboardButton(text="🔄 Обновить список товаров", callback_data="refresh_mapping_ref")],
+        ])
         mapping_text = (
             f"🗂 <b>Требуется маппинг!</b>\n\n"
             f"Обнаружено <b>{unmapped_count}</b> незамапленных позиций.\n\n"
@@ -338,6 +339,37 @@ async def notify_accountants(
                                        reply_markup=mapping_kb)
             except Exception:
                 logger.warning("[ocr_mapping] Не удалось уведомить admin %d о маппинге", admin_id)
+
+
+# ═══════════════════════════════════════════════════════
+#  Принудительное обновление справочного листа
+# ═══════════════════════════════════════════════════════
+
+async def refresh_ref_sheet() -> int:
+    """
+    Перезаписать столбец товаров в «Маппинг Справочник» актуальными GOODS-позициями.
+    Возвращает кол-во записанных строк.
+    """
+    from adapters.google_sheets import _get_client, _write_ref_column
+    from config import MIN_STOCK_SHEET_ID
+    iiko_products = await _load_iiko_goods_products()
+    if not iiko_products:
+        logger.warning("[ocr_mapping] refresh_ref_sheet: список товаров пуст")
+        return 0
+    names = [p["name"] for p in iiko_products]
+
+    def _do_write():
+        spreadsheet = _get_client().open_by_key(MIN_STOCK_SHEET_ID)
+        _write_ref_column(spreadsheet, 0, names)
+        return len(names)
+
+    try:
+        count = await _run_sync(_do_write)
+        logger.info("[ocr_mapping] Справочный лист обновлён: %d товаров", count)
+        return count
+    except Exception:
+        logger.exception("[ocr_mapping] Ошибка обновления справочного листа")
+        return 0
 
 
 # ═══════════════════════════════════════════════════════

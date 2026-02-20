@@ -626,7 +626,29 @@ async def cb_mapping_done(callback: CallbackQuery) -> None:
     await _handle_mapping_done(placeholder, tg_id)
 
 
-async def _handle_mapping_done(placeholder, tg_id: int) -> None:
+@router.callback_query(F.data == "refresh_mapping_ref")
+async def cb_refresh_mapping_ref(callback: CallbackQuery) -> None:
+    """Обновить справочный лист «Маппинг Справочник» актуальными товарами GOODS."""
+    try:
+        await callback.answer("⏳ Обновляю список товаров...")
+    except Exception:
+        pass
+
+    from use_cases import ocr_mapping as mapping_uc
+    count = await mapping_uc.refresh_ref_sheet()
+
+    if count:
+        text = f"✅ Список товаров обновлён: {count} позиций.\nОбновите страницу Google Таблицы и попробуйте выпадающий список снова."
+    else:
+        text = "❌ Не удалось обновить список товаров. Обратитесь к администратору."
+
+    try:
+        await callback.message.answer(text)
+    except Exception:
+        pass
+
+
+
     """Общая логика проверки и финализации маппинга."""
     from use_cases import ocr_mapping as mapping_uc
 
