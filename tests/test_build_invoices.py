@@ -136,7 +136,7 @@ async def test_single_invoice_single_store(
     assert inv["store_type"] == "кухня"
     assert inv["storeId"] == STORE_TYPE_MAP["кухня"]["id"]
     assert inv["store_name"] == STORE_TYPE_MAP["кухня"]["name"]
-    assert inv["dateIncoming"] == "15.02.2026"
+    assert inv["dateIncoming"] == "2026-02-15T00:00:00"
     assert len(inv["items"]) == 1
     assert inv["items"][0]["amount"] == 5.0
 
@@ -363,7 +363,7 @@ async def test_no_date_warns_and_uses_today(
     # dateIncoming должна быть в формате dd.mm.YYYY
     import re
 
-    assert re.match(r"\d{2}\.\d{2}\.\d{4}", invoices[0]["dateIncoming"])
+    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", invoices[0]["dateIncoming"])
 
 
 @pytest.mark.asyncio
@@ -385,6 +385,5 @@ async def test_unknown_store_type_warns(
         docs, DEPT_ID, base_mapping=BASE_MAPPING
     )
 
-    assert len(invoices) == 1
-    assert invoices[0]["storeId"] == ""  # не найден
+    assert len(invoices) == 0  # пропущен — storeId пустой, iiko отклонит
     assert any("кухня" in w for w in warnings)
