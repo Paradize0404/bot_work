@@ -43,7 +43,7 @@ from use_cases import price_list as price_uc
 from bot.middleware import (
     admin_required, auth_required,
     sync_with_progress, track_task, get_sync_lock,
-    reply_menu,
+    reply_menu, with_cooldown,
     validate_callback_uuid, truncate_input, MAX_TEXT_NAME,
 )
 
@@ -684,6 +684,7 @@ async def btn_sync_permissions_gsheet(message: Message) -> None:
 
 @router.message(F.text == "📋 Синхр. справочники")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_sync_entities(message: Message) -> None:
     """Синхронизировать все rootType (entities/list)."""
     triggered = f"tg:{message.from_user.id}"
@@ -708,6 +709,7 @@ async def btn_sync_entities(message: Message) -> None:
 
 
 @router.message(F.text == "🏢 Синхр. подразделения")
+@with_cooldown("sync", 10.0)
 @admin_required
 async def btn_sync_departments(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
@@ -717,6 +719,7 @@ async def btn_sync_departments(message: Message) -> None:
 
 @router.message(F.text == "🏪 Синхр. склады")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_sync_stores(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Склады tg:%d", message.from_user.id)
@@ -725,6 +728,7 @@ async def btn_sync_stores(message: Message) -> None:
 
 @router.message(F.text == "👥 Синхр. группы")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_sync_groups(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Группы tg:%d", message.from_user.id)
@@ -733,6 +737,7 @@ async def btn_sync_groups(message: Message) -> None:
 
 @router.message(F.text == "📦 Синхр. номенклатуру")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_sync_products(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Номенклатура tg:%d", message.from_user.id)
@@ -741,6 +746,7 @@ async def btn_sync_products(message: Message) -> None:
 
 @router.message(F.text == "🚚 Синхр. поставщиков")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_sync_suppliers(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Поставщики tg:%d", message.from_user.id)
@@ -749,6 +755,7 @@ async def btn_sync_suppliers(message: Message) -> None:
 
 @router.message(F.text == "👷 Синхр. сотрудников")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_sync_employees(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Сотрудники tg:%d", message.from_user.id)
@@ -757,6 +764,7 @@ async def btn_sync_employees(message: Message) -> None:
 
 @router.message(F.text == "🎭 Синхр. должности")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_sync_roles(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] Должности tg:%d", message.from_user.id)
@@ -765,6 +773,7 @@ async def btn_sync_roles(message: Message) -> None:
 
 @router.message(F.text == "🔄 Синхр. ВСЁ iiko")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_sync_all_iiko(message: Message) -> None:
     """Полная синхронизация iiko — справочники + остальные параллельно."""
     triggered = f"tg:{message.from_user.id}"
@@ -792,54 +801,63 @@ async def _ft_sync_one(message: Message, label: str, sync_func) -> None:
 
 @router.message(F.text == "📊 FT: Статьи")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_categories(message: Message) -> None:
     await _ft_sync_one(message, "статьи ДДС", ft_uc.sync_ft_categories)
 
 
 @router.message(F.text == "💰 FT: Счета")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_moneybags(message: Message) -> None:
     await _ft_sync_one(message, "счета", ft_uc.sync_ft_moneybags)
 
 
 @router.message(F.text == "🤝 FT: Контрагенты")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_partners(message: Message) -> None:
     await _ft_sync_one(message, "контрагенты", ft_uc.sync_ft_partners)
 
 
 @router.message(F.text == "🎯 FT: Направления")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_directions(message: Message) -> None:
     await _ft_sync_one(message, "направления", ft_uc.sync_ft_directions)
 
 
 @router.message(F.text == "📦 FT: Товары")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_goods(message: Message) -> None:
     await _ft_sync_one(message, "товары", ft_uc.sync_ft_goods)
 
 
 @router.message(F.text == "📝 FT: Сделки")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_deals(message: Message) -> None:
     await _ft_sync_one(message, "сделки", ft_uc.sync_ft_deals)
 
 
 @router.message(F.text == "📋 FT: Обязательства")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_obligations(message: Message) -> None:
     await _ft_sync_one(message, "обязательства", ft_uc.sync_ft_obligations)
 
 
 @router.message(F.text == "👤 FT: Сотрудники")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_employees(message: Message) -> None:
     await _ft_sync_one(message, "сотрудники", ft_uc.sync_ft_employees)
 
 
 @router.message(F.text == "💹 FT: Синхр. ВСЁ")
 @admin_required
+@with_cooldown("sync", 10.0)
 async def btn_ft_sync_all(message: Message) -> None:
     """Полная синхронизация всех 13 справочников FinTablo параллельно."""
     triggered = f"tg:{message.from_user.id}"
@@ -853,6 +871,7 @@ async def btn_ft_sync_all(message: Message) -> None:
     try:
         async with lock:
             results = await ft_uc.sync_all_fintablo(triggered_by=triggered)
+@with_cooldown("sync", 10.0)
         lines = ft_uc.format_ft_report(results)
         await placeholder.edit_text("💹 FinTablo — результат:\n\n" + "\n".join(lines))
     except Exception as exc:
@@ -959,7 +978,7 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
         count = await sync_cloud_org_mapping_to_sheet(dept_list, cloud_orgs)
 
         # 4. Сбросить кеш
-        invalidate_cache()
+        await invalidate_cache()
 
         await placeholder.edit_text(
             f"✅ Выгружено!\n\n"

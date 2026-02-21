@@ -534,34 +534,55 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
     POST /resto/api/v2/documents/writeoff?key={token}
     Возвращает {"ok": True} при успехе, иначе выбрасывает исключение.
     """
+    from use_cases.errors import is_transient
     key = await _get_key()
     url = f"{_base()}/resto/api/v2/documents/writeoff"
     params = {"key": key}
 
+    doc_id = document.get("id", "unknown")
     logger.info(
-        "[API] POST writeoff — store=%s, account=%s, items=%d",
+        "[API] POST writeoff — id=%s, store=%s, account=%s, items=%d",
+        doc_id,
         document.get("storeId"),
         document.get("accountId"),
         len(document.get("items", [])),
     )
-    t0 = time.monotonic()
+    
     client = await _get_client()
-    resp = await client.post(url, params=params, json=document)
-    elapsed = time.monotonic() - t0
+    max_retries = 2
+    backoff = (2, 5)
+    
+    for attempt in range(max_retries + 1):
+        t0 = time.monotonic()
+        try:
+            resp = await client.post(url, params=params, json=document)
+            elapsed = time.monotonic() - t0
 
-    if resp.status_code >= 400:
-        body = resp.text[:500] if resp.text else ""
-        logger.error(
-            "[API] POST writeoff FAIL — HTTP %d, %.1f сек, body=%s",
-            resp.status_code, elapsed, body,
-        )
-        resp.raise_for_status()
+            if resp.status_code >= 400:
+                body = resp.text[:500] if resp.text else ""
+                logger.error(
+                    "[API] POST writeoff FAIL — HTTP %d, %.1f сек, body=%s",
+                    resp.status_code, elapsed, body,
+                )
+                resp.raise_for_status()
 
-    logger.info(
-        "[API] POST writeoff OK — HTTP %d, %.1f сек",
-        resp.status_code, elapsed,
-    )
-    return {"ok": True}
+            logger.info(
+                "[API] POST writeoff OK — HTTP %d, %.1f сек",
+                resp.status_code, elapsed,
+            )
+            return {"ok": True}
+            
+        except Exception as e:
+            if attempt == max_retries or not is_transient(e):
+                logger.error("[API] POST writeoff failed permanently after %d attempts: %s", attempt + 1, e)
+                raise
+            
+            delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
+            logger.warning("[API] POST writeoff retry %d/%d for doc %s: %s. Waiting %ds...", 
+                          attempt + 1, max_retries, doc_id, e, delay)
+            await asyncio.sleep(delay)
+            
+    return {"ok": False}
 
 
 def _build_outgoing_invoice_xml(document: dict[str, Any]) -> str:

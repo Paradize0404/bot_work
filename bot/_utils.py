@@ -88,15 +88,36 @@ def items_inline_kb(
     id_key: str = "id",
     prefix: str,
     cancel_data: str,
+    page: int = 0,
+    page_size: int = 10,
 ) -> InlineKeyboardMarkup:
-    """Inline-клавиатура из списка элементов с кнопкой отмены."""
+    """Inline-клавиатура из списка элементов с кнопкой отмены и пагинацией."""
+    total = len(items)
+    start = page * page_size
+    end = start + page_size
+    page_items = items[start:end]
+
     buttons = [
         [InlineKeyboardButton(
             text=item[text_key],
             callback_data=f"{prefix}:{item[id_key]}",
         )]
-        for item in items
+        for item in page_items
     ]
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"{prefix}_page:{page - 1}"))
+    if end < total:
+        nav.append(InlineKeyboardButton(text="▶️ Далее", callback_data=f"{prefix}_page:{page + 1}"))
+    
+    if nav:
+        total_pages = (total + page_size - 1) // page_size
+        nav.insert(len(nav) // 2, InlineKeyboardButton(
+            text=f"{page + 1}/{total_pages}", callback_data="noop",
+        ))
+        buttons.append(nav)
+
     buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=cancel_data)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

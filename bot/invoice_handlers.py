@@ -82,16 +82,16 @@ class InvoiceFromTemplateStates(StatesGroup):
 #  Клавиатуры
 # ══════════════════════════════════════════════════════
 
-def _stores_kb(stores: list[dict]) -> InlineKeyboardMarkup:
-    return items_inline_kb(stores, prefix="inv_store", cancel_data="inv_cancel")
+def _stores_kb(stores: list[dict], page: int = 0) -> InlineKeyboardMarkup:
+    return items_inline_kb(stores, prefix="inv_store", cancel_data="inv_cancel", page=page)
 
 
-def _suppliers_kb(suppliers: list[dict]) -> InlineKeyboardMarkup:
-    return items_inline_kb(suppliers, prefix="inv_sup", cancel_data="inv_cancel")
+def _suppliers_kb(suppliers: list[dict], page: int = 0) -> InlineKeyboardMarkup:
+    return items_inline_kb(suppliers, prefix="inv_sup", cancel_data="inv_cancel", page=page)
 
 
-def _products_kb(products: list[dict]) -> InlineKeyboardMarkup:
-    return items_inline_kb(products, prefix="inv_prod", cancel_data="inv_cancel")
+def _products_kb(products: list[dict], page: int = 0) -> InlineKeyboardMarkup:
+    return items_inline_kb(products, prefix="inv_prod", cancel_data="inv_cancel", page=page)
 
 
 def _add_more_kb() -> InlineKeyboardMarkup:
@@ -101,14 +101,34 @@ def _add_more_kb() -> InlineKeyboardMarkup:
     ])
 
 
-def _templates_kb(templates: list[dict]) -> InlineKeyboardMarkup:
+def _templates_kb(templates: list[dict], page: int = 0) -> InlineKeyboardMarkup:
+    total = len(templates)
+    page_size = 10
+    start = page * page_size
+    end = start + page_size
+    page_items = templates[start:end]
+
     buttons = [
         [InlineKeyboardButton(
             text=f"{t['name']} ({t['counteragent_name']}, {t['items_count']} поз.)",
             callback_data=f"inv_tmpl:{t['pk']}",
         )]
-        for t in templates
+        for t in page_items
     ]
+    
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"inv_tmpl_page:{page - 1}"))
+    if end < total:
+        nav.append(InlineKeyboardButton(text="▶️ Далее", callback_data=f"inv_tmpl_page:{page + 1}"))
+    
+    if nav:
+        total_pages = (total + page_size - 1) // page_size
+        nav.insert(len(nav) // 2, InlineKeyboardButton(
+            text=f"{page + 1}/{total_pages}", callback_data="noop",
+        ))
+        buttons.append(nav)
+
     buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -413,8 +433,56 @@ async def search_product(message: Message, state: FSMContext) -> None:
     await _send_prompt(
         message.bot, message.chat.id, state,
         f"🔍 Найдено {len(products)}. Выберите товар:",
-        reply_markup=_products_kb(products),
+        reply_markup=_products_kb(products, page=0),
     )
+
+
+@router.callback_query(F.data.startswith("inv_store_page:"))
+async def invoice_store_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    stores = data.get("_stores_cache", [])
+    if not stores:
+        await callback.answer("Склады не найдены", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_stores_kb(stores, page=page))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("inv_sup_page:"))
+async def invoice_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    suppliers = data.get("_suppliers_cache", [])
+    if not suppliers:
+        await callback.answer("Контрагенты не найдены", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_suppliers_kb(suppliers, page=page))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("inv_prod_page:"))
+async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    products = data.get("_products_cache", [])
+    if not products:
+        await callback.answer("Товары не найдены", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_products_kb(products, page=page))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("inv_tmpl_page:"))
+async def invoice_tmpl_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    templates = data.get("_templates_cache", [])
+    if not templates:
+        await callback.answer("Шаблоны не найдены", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_templates_kb(templates, page=page))
+    await callback.answer()
 
 
 # ── 5. Выбор товара → добавление ──

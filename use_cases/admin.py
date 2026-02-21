@@ -32,6 +32,24 @@ async def get_admin_ids() -> list[int]:
     return await perm_uc.get_admin_ids()
 
 
+async def alert_admins(bot, message: str) -> None:
+    """Отправить алерт всем админам (или сисадминам). Fire-and-forget."""
+    from use_cases import permissions as perm_uc
+    
+    # Пытаемся найти сисадминов
+    sys_admins = await perm_uc.get_users_with_role("🔧 Сис.Админ")
+    
+    # Если сисадминов нет, шлем всем обычным админам
+    if not sys_admins:
+        sys_admins = await perm_uc.get_admin_ids()
+        
+    for admin_id in sys_admins:
+        try:
+            await bot.send_message(admin_id, f"🚨 ALERT\n\n{message[:4000]}")
+        except Exception as e:
+            logger.warning("[alert_admins] Failed to send alert to %s: %s", admin_id, e)
+
+
 async def is_admin(telegram_id: int) -> bool:
     """Проверить, является ли пользователь админом (из GSheet кеша)."""
     from use_cases import permissions as perm_uc

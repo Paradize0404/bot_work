@@ -104,7 +104,7 @@ async def bind_telegram_id(employee_id: str, telegram_id: int) -> str:
             logger.info("[auth] Отвязываю telegram_id=%d от старого сотрудника %s (%s)",
                         telegram_id, old_emp.id, old_emp.name)
             old_emp.telegram_id = None
-            uctx.invalidate(telegram_id)  # инвалидируем кеш старого
+            await uctx.invalidate(telegram_id)  # инвалидируем кеш старого
 
         # Привязываем к новому
         stmt = select(Employee).where(Employee.id == UUID(employee_id))
@@ -124,7 +124,7 @@ async def bind_telegram_id(employee_id: str, telegram_id: int) -> str:
         first_name = emp.first_name or emp.name or "сотрудник"
 
         # Записываем в кеш (без ресторана — выберут на след. шаге)
-        uctx.set_context(
+        await uctx.set_context(
             telegram_id=telegram_id,
             employee_id=str(emp.id),
             employee_name=emp.name or "",
@@ -275,12 +275,12 @@ async def complete_department_selection(
     dept_name = await save_department(telegram_id, department_id)
 
     # Обновляем кеш
-    ctx = uctx.get_cached(telegram_id)
+    ctx = await uctx.get_user_context(telegram_id)
     if ctx:
-        uctx.update_department(telegram_id, department_id, dept_name)
+        await uctx.update_department(telegram_id, department_id, dept_name)
     elif employee_id:
         # Первая авторизация — загрузим полный контекст из БД
         await uctx.get_user_context(telegram_id)
-        uctx.update_department(telegram_id, department_id, dept_name)
+        await uctx.update_department(telegram_id, department_id, dept_name)
 
     return dept_name

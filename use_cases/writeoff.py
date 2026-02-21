@@ -524,12 +524,14 @@ def build_writeoff_document(
     Отфильтровывает позиции с quantity == 0.
     comment = "причина (Автор: ФИО)" — для трекинга в iiko.
     """
+    import uuid
     non_zero = [i for i in items if i.get("quantity", 0) > 0]
     comment_parts = [reason] if reason else []
     if author_name:
         comment_parts.append(f"(Автор: {author_name})")
     comment = " ".join(comment_parts)
     return {
+        "id": str(uuid.uuid4()),
         "dateIncoming": now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
         "status": "PROCESSED",
         "comment": comment,

@@ -175,7 +175,7 @@ def permission_required(perm_key: str):
 
 
 # ═══════════════════════════════════════════════════════
-# 3. Sync-lock
+# 3. Sync-lock и Cooldown
 # ═══════════════════════════════════════════════════════
 
 _sync_locks: dict[str, asyncio.Lock] = {}
@@ -188,6 +188,41 @@ def get_sync_lock(entity: str) -> asyncio.Lock:
     return _sync_locks[entity]
 
 
+async def run_sync_with_lock(entity: str, sync_coro):
+    """Запуск синхронизации с гарантией единственного выполнения."""
+    lock = get_sync_lock(entity)
+    if lock.locked():
+        return None  # уже запущено
+    async with lock:
+        return await sync_coro
+
+
+def with_cooldown(action: str, seconds: float = 1.0):
+    """Декоратор: rate limiting для handler'ов."""
+    def decorator(handler):
+        @wraps(handler)
+        async def wrapper(event, *args, **kwargs):
+            from use_cases.cooldown import check_cooldown
+            tg_id = event.from_user.id
+            if not check_cooldown(tg_id, action, seconds):
+                if isinstance(event, CallbackQuery):
+                    await event.answer(f"⏳ Подождите {seconds} сек...")
+                elif isinstance(event, Message):
+                    msg = await event.answer(f"⏳ Подождите {seconds} сек...")
+                    asyncio.create_task(delete_message_delayed(msg, 3.0))
+                return
+            return await handler(event, *args, **kwargs)
+        return wrapper
+    return decorator
+
+async def delete_message_delayed(message: Message, delay: float):
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
 # ═══════════════════════════════════════════════════════
 # 4. Хелпер sync с прогрессом (placeholder → edit)
 # ═══════════════════════════════════════════════════════
@@ -198,7 +233,7 @@ async def sync_with_progress(message: Message, label: str, sync_fn, *, lock_key:
       1. Проверить sync-lock (если lock_key задан)
       2. Отправить «⏳ ...» placeholder
       3. Выполнить sync
-      4. Edit placeholder → «✅ результат»
+      4. Отредактировать placeholder на результат
 
     Исключает дублирование кода в десятках sync-handler'ов.
     """

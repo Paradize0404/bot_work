@@ -60,17 +60,38 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
 
     # Error handler: ловим оставшиеся сетевые ошибки (после retry)
     from aiogram.exceptions import TelegramNetworkError, TelegramServerError
+    from use_cases._helpers import mask_secrets
+    from use_cases.admin import alert_admins
 
     @dp.errors()
-    async def _on_network_error(event, exception):
+    async def _global_error_handler(event, exception):
         if isinstance(exception, (TelegramNetworkError, TelegramServerError)):
             logger.warning(
                 "[error-handler] %s suppressed after retries: %s",
                 type(exception).__name__, exception,
             )
             return True  # mark handled, don't crash
-        # all other exceptions — re-raise (default aiogram behaviour)
-        return False
+        
+        # Логируем с маскировкой секретов
+        error_msg = mask_secrets(str(exception))
+        logger.exception("[error-handler] Unhandled exception: %s", error_msg)
+        
+        # Отправляем алерт админам
+        try:
+            await alert_admins(bot, f"Unhandled exception:\n{type(exception).__name__}: {error_msg}")
+        except Exception:
+            pass
+            
+        # Пытаемся ответить пользователю
+        try:
+            if event.update.message:
+                await event.update.message.answer("⚠️ Произошла техническая ошибка. Администраторы уже уведомлены.")
+            elif event.update.callback_query:
+                await event.update.callback_query.answer("⚠️ Техническая ошибка", show_alert=True)
+        except Exception:
+            pass
+            
+        return True # mark handled
 
     return bot, dp
 
@@ -292,7 +313,15 @@ def run_webhook() -> None:
 
     # Health endpoint — Railway / load-balancer проверяет доступность
     async def health(_request: web.Request) -> web.Response:
-        return web.Response(text="ok")
+        try:
+            from db.engine import async_session_factory
+            from sqlalchemy import text
+            async with async_session_factory() as session:
+                await session.execute(text("SELECT 1"))
+            return web.json_response({"status": "ok", "db": "connected"})
+        except Exception as e:
+            logger.error("[health] DB check failed: %s", e)
+            return web.json_response({"status": "error", "db": str(e)}, status=503)
     app.router.add_get("/health", health)
 
     # iikoCloud webhook endpoint — принимает события от iikoCloud

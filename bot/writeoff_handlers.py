@@ -100,8 +100,8 @@ class HistoryStates(StatesGroup):
 #  Клавиатуры — создание
 # ══════════════════════════════════════════════════════
 
-def _stores_kb(stores: list[dict]) -> InlineKeyboardMarkup:
-    return items_inline_kb(stores, prefix="wo_store", cancel_data="wo_cancel")
+def _stores_kb(stores: list[dict], page: int = 0) -> InlineKeyboardMarkup:
+    return items_inline_kb(stores, prefix="wo_store", cancel_data="wo_cancel", page=page)
 
 
 ACC_PAGE_SIZE = 10
@@ -144,8 +144,8 @@ def _accounts_kb(accounts: list[dict], page: int = 0) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _products_kb(products: list[dict]) -> InlineKeyboardMarkup:
-    return items_inline_kb(products, prefix="wo_prod", cancel_data="wo_cancel")
+def _products_kb(products: list[dict], page: int = 0) -> InlineKeyboardMarkup:
+    return items_inline_kb(products, prefix="wo_prod", cancel_data="wo_cancel", page=page)
 
 
 def _add_more_kb() -> InlineKeyboardMarkup:
@@ -297,8 +297,20 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
     # Ручной выбор склада
     summary_msg = await message.answer(_build_summary(await state.get_data()), parse_mode="HTML")
     await state.update_data(header_msg_id=summary_msg.message_id)
-    msg = await message.answer("🏬 Выберите склад:", reply_markup=_stores_kb(wo_start.stores))
+    msg = await message.answer("🏬 Выберите склад:", reply_markup=_stores_kb(wo_start.stores, page=0))
     await state.update_data(prompt_msg_id=msg.message_id)
+
+
+@router.callback_query(F.data.startswith("wo_store_page:"))
+async def writeoff_store_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    stores = data.get("_stores_cache", [])
+    if not stores:
+        await callback.answer("Склады не найдены", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_stores_kb(stores, page=page))
+    await callback.answer()
     await state.set_state(WriteoffStates.store)
 
 
@@ -441,9 +453,9 @@ async def search_product(message: Message, state: FSMContext) -> None:
         return
 
     cache = {p["id"]: p for p in products}
-    await state.update_data(product_cache=cache)
+    await state.update_data(product_cache=cache, _products_list=products)
     sel_id = data.get("selection_msg_id")
-    kb = _products_kb(products)
+    kb = _products_kb(products, page=0)
     if sel_id:
         try:
             await message.bot.edit_message_text(
@@ -454,6 +466,18 @@ async def search_product(message: Message, state: FSMContext) -> None:
             pass
     msg = await message.answer(f"Найдено {len(products)}. Выберите товар:", reply_markup=kb)
     await state.update_data(selection_msg_id=msg.message_id)
+
+
+@router.callback_query(F.data.startswith("wo_prod_page:"))
+async def writeoff_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    products = data.get("_products_list", [])
+    if not products:
+        await callback.answer("Товары не найдены", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_products_kb(products, page=page))
+    await callback.answer()
 
 
 @router.callback_query(WriteoffStates.add_items, F.data.startswith("wo_prod:"))

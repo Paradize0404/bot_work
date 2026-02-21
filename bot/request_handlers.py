@@ -103,13 +103,13 @@ class DuplicateRequestStates(StatesGroup):
 #  Клавиатуры
 # ══════════════════════════════════════════════════════
 
-def _suppliers_kb(suppliers: list[dict]) -> InlineKeyboardMarkup:
-    return items_inline_kb(suppliers, prefix="req_sup", cancel_data="req_cancel")
+def _suppliers_kb(suppliers: list[dict], page: int = 0) -> InlineKeyboardMarkup:
+    return items_inline_kb(suppliers, prefix="req_sup", cancel_data="req_cancel", page=page)
 
 
-def _req_products_kb(products: list[dict]) -> InlineKeyboardMarkup:
+def _req_products_kb(products: list[dict], page: int = 0) -> InlineKeyboardMarkup:
     """Клавиатура найденных товаров для заявки."""
-    return items_inline_kb(products, prefix="reqp", cancel_data="req_cancel")
+    return items_inline_kb(products, prefix="reqp", cancel_data="req_cancel", page=page)
 
 
 def _req_add_more_kb(items_count: int = 0) -> InlineKeyboardMarkup:
@@ -135,10 +135,16 @@ def _confirm_kb() -> InlineKeyboardMarkup:
     ])
 
 
-def _history_kb(requests: list[dict]) -> InlineKeyboardMarkup:
+def _history_kb(requests: list[dict], page: int = 0) -> InlineKeyboardMarkup:
     """Клавиатура истории заявок с кнопкой 'Повторить'."""
+    total = len(requests)
+    page_size = 10
+    start = page * page_size
+    end = start + page_size
+    page_items = requests[start:end]
+
     buttons = []
-    for r in requests:
+    for r in page_items:
         created = r.get("created_at")
         date_str = created.strftime("%d.%m") if created else "?"
         status_icon = {"approved": "✅", "pending": "⏳", "cancelled": "❌"}.get(r.get("status", ""), "?")
@@ -148,6 +154,19 @@ def _history_kb(requests: list[dict]) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=label, callback_data=f"req_hist_view:{r['pk']}"),
             InlineKeyboardButton(text="🔄", callback_data=f"req_dup:{r['pk']}"),
         ])
+    
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"req_hist_page:{page - 1}"))
+    if end < total:
+        nav.append(InlineKeyboardButton(text="▶️ Далее", callback_data=f"req_hist_page:{page + 1}"))
+    
+    if nav:
+        total_pages = (total + page_size - 1) // page_size
+        nav.insert(len(nav) // 2, InlineKeyboardButton(
+            text=f"{page + 1}/{total_pages}", callback_data="noop",
+        ))
+        buttons.append(nav)
     buttons.append([InlineKeyboardButton(text="❌ Закрыть", callback_data="req_hist_close")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -382,8 +401,44 @@ async def search_request_product(message: Message, state: FSMContext) -> None:
     await state.update_data(_products_cache=products)
     await _send_prompt(message.bot, message.chat.id, state,
         f"🔍 Найдено {len(products)}. Выберите товар:",
-        reply_markup=_req_products_kb(products),
+        reply_markup=_req_products_kb(products, page=0),
     )
+
+
+@router.callback_query(F.data.startswith("req_sup_page:"))
+async def request_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    suppliers = data.get("_suppliers_cache", [])
+    if not suppliers:
+        await callback.answer("Контрагенты не найдены", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_suppliers_kb(suppliers, page=page))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("reqp_page:"))
+async def request_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    products = data.get("_products_cache", [])
+    if not products:
+        await callback.answer("Товары не найдены", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_req_products_kb(products, page=page))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("req_hist_page:"))
+async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    requests = data.get("_history_cache", [])
+    if not requests:
+        await callback.answer("История не найдена", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_history_kb(requests, page=page))
+    await callback.answer()
 
 
 # ── 4. Выбор товара → запрос количества ──
@@ -1685,11 +1740,12 @@ async def view_request_history(message: Message, state: FSMContext) -> None:
         await message.answer("📋 У вас пока нет заявок.")
         return
 
+    await state.update_data(_history_cache=requests)
     await message.answer(
         "📋 <b>Ваши последние заявки</b>\n"
         "<i>Нажмите 🔄 чтобы повторить заявку с новым количеством:</i>",
         parse_mode="HTML",
-        reply_markup=_history_kb(requests),
+        reply_markup=_history_kb(requests, page=0),
     )
 
 
@@ -1719,7 +1775,7 @@ async def view_history_item(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data == "req_hist_back")
-async def back_to_history_list(callback: CallbackQuery) -> None:
+async def back_to_history_list(callback: CallbackQuery, state: FSMContext) -> None:
     """Возврат из карточки заявки к списку истории."""
     await callback.answer()
     requests = await req_uc.get_user_requests(callback.from_user.id, limit=10)
@@ -1729,12 +1785,13 @@ async def back_to_history_list(callback: CallbackQuery) -> None:
         except Exception:
             pass
         return
+    await state.update_data(_history_cache=requests)
     try:
         await callback.message.edit_text(
             "📋 <b>Ваши последние заявки</b>\n"
             "<i>Нажмите 🔄 чтобы повторить заявку с новым количеством:</i>",
             parse_mode="HTML",
-            reply_markup=_history_kb(requests),
+            reply_markup=_history_kb(requests, page=0),
         )
     except Exception:
         pass

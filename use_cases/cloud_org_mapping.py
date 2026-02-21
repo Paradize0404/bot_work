@@ -12,48 +12,47 @@ Use-case: маппинг department_id (iiko Server) → cloud_org_id (iikoCloud
 """
 
 import logging
-import time
+import json
 from typing import Any
+
+from use_cases.redis_cache import get_cached_or_fetch, invalidate_key
 
 logger = logging.getLogger(__name__)
 
 LABEL = "CloudOrgMap"
 
 # ─────────────────────────────────────────────────────
-# In-memory cache with TTL
+# Redis cache with TTL
 # ─────────────────────────────────────────────────────
 
-_CACHE_TTL: float = 5 * 60  # 5 минут
-
-_cache: dict[str, str] = {}  # {department_uuid: cloud_org_uuid}
-_cache_ts: float = 0.0
+_CACHE_TTL: int = 5 * 60  # 5 минут
+_CACHE_KEY = "cloud_org_mapping"
 
 
 async def _ensure_cache() -> dict[str, str]:
     """Обновить кеш из GSheet если просрочен."""
-    global _cache, _cache_ts
+    async def _fetch() -> dict[str, str] | None:
+        try:
+            from adapters.google_sheets import read_cloud_org_mapping
+            fresh = await read_cloud_org_mapping()
+            if fresh:
+                logger.info("[%s] Кеш обновлён: %d привязок", LABEL, len(fresh))
+                return fresh
+            else:
+                logger.warning("[%s] GSheet вернул пустой маппинг", LABEL)
+                return None
+        except Exception:
+            logger.exception("[%s] Ошибка чтения GSheet", LABEL)
+            return None
 
-    if _cache and (time.monotonic() - _cache_ts) < _CACHE_TTL:
-        return _cache
-
-    try:
-        from adapters.google_sheets import read_cloud_org_mapping
-        fresh = await read_cloud_org_mapping()
-        if fresh:
-            _cache = fresh
-            _cache_ts = time.monotonic()
-            logger.info("[%s] Кеш обновлён: %d привязок", LABEL, len(_cache))
-        elif not _cache:
-            logger.warning("[%s] GSheet вернул пустой маппинг, кеш пуст", LABEL)
-        else:
-            logger.warning("[%s] GSheet вернул пустой маппинг, используем предыдущий кеш (%d)", LABEL, len(_cache))
-    except Exception:
-        if _cache:
-            logger.warning("[%s] Ошибка чтения GSheet, используем предыдущий кеш (%d)", LABEL, len(_cache), exc_info=True)
-        else:
-            logger.exception("[%s] Ошибка чтения GSheet, кеш пуст", LABEL)
-
-    return _cache
+    data = await get_cached_or_fetch(
+        _CACHE_KEY,
+        _fetch,
+        ttl_seconds=_CACHE_TTL,
+        serializer=json.dumps,
+        deserializer=json.loads
+    )
+    return data or {}
 
 
 async def resolve_cloud_org_id(department_id: str | None) -> str | None:
@@ -97,9 +96,7 @@ async def get_all_cloud_org_ids() -> list[str]:
     return list(set(mapping.values()))
 
 
-def invalidate_cache() -> None:
+async def invalidate_cache() -> None:
     """Сбросить кеш (вызывается после обновления маппинга в GSheet)."""
-    global _cache, _cache_ts
-    _cache.clear()
-    _cache_ts = 0.0
+    await invalidate_key(_CACHE_KEY)
     logger.info("[%s] Кеш инвалидирован", LABEL)

@@ -18,10 +18,11 @@ Use-case: права доступа сотрудников (из Google Табл
 
 import asyncio
 import logging
-import time
+import json
 from typing import Any
 
 from adapters import google_sheets as gsheet
+from use_cases.redis_cache import get_cached_or_fetch, invalidate_key
 
 # Единственный источник истины: роли и perm_key
 from bot.permission_map import (
@@ -36,59 +37,45 @@ logger = logging.getLogger(__name__)
 LABEL = "Permissions"
 
 # ═══════════════════════════════════════════════════════
-# In-memory кеш прав (TTL 5 мин)
+# Redis кеш прав (TTL 5 мин)
 # ═══════════════════════════════════════════════════════
 
-_CACHE_TTL: float = 5 * 60  # 5 минут
-
-# {telegram_id: {perm_key: bool}}
-_perms_cache: dict[int, dict[str, bool]] | None = None
-_perms_cache_ts: float = 0.0
+_CACHE_TTL: int = 5 * 60  # 5 минут
+_CACHE_KEY = "permissions_cache"
 
 
-def _is_cache_valid() -> bool:
-    return _perms_cache is not None and (time.monotonic() - _perms_cache_ts) < _CACHE_TTL
-
-
-def invalidate_cache() -> None:
+async def invalidate_cache() -> None:
     """Принудительно сбросить кеш прав (вызывается после sync)."""
-    global _perms_cache, _perms_cache_ts
-    _perms_cache = None
-    _perms_cache_ts = 0.0
+    await invalidate_key(_CACHE_KEY)
     logger.info("[%s] Кеш прав инвалидирован", LABEL)
 
 
-async def _ensure_cache() -> dict[int, dict[str, bool]]:
+async def _ensure_cache() -> dict[str, dict[str, bool]]:
     """Загрузить матрицу прав из GSheet если кеш устарел."""
-    global _perms_cache, _perms_cache_ts
-    if _is_cache_valid():
-        return _perms_cache  # type: ignore
+    async def _fetch() -> dict[str, dict[str, bool]] | None:
+        try:
+            raw = await gsheet.read_permissions_sheet()
+            # raw = [{telegram_id: int, perms: {key: bool, ...}}, ...]
+            new_cache: dict[str, dict[str, bool]] = {}
+            for entry in raw:
+                tg_id = entry.get("telegram_id")
+                if tg_id:
+                    new_cache[str(tg_id)] = entry.get("perms", {})
 
-    t0 = time.monotonic()
-    try:
-        raw = await gsheet.read_permissions_sheet()
-        # raw = [{telegram_id: int, perms: {key: bool, ...}}, ...]
-        new_cache: dict[int, dict[str, bool]] = {}
-        for entry in raw:
-            tg_id = entry.get("telegram_id")
-            if tg_id:
-                new_cache[tg_id] = entry.get("perms", {})
+            logger.info("[%s] Кеш обновлён: %d пользователей", LABEL, len(new_cache))
+            return new_cache
+        except Exception:
+            logger.exception("[%s] Ошибка чтения прав из GSheet", LABEL)
+            return None
 
-        _perms_cache = new_cache
-        _perms_cache_ts = time.monotonic()
-        logger.info(
-            "[%s] Кеш обновлён: %d пользователей за %.2f сек",
-            LABEL, len(new_cache), time.monotonic() - t0,
-        )
-        return new_cache
-    except Exception:
-        logger.exception("[%s] Ошибка чтения прав из GSheet", LABEL)
-        # Если кеш был — используем старый (graceful degradation)
-        if _perms_cache is not None:
-            logger.warning("[%s] Используем устаревший кеш (%d записей)", LABEL, len(_perms_cache))
-            return _perms_cache
-        # Если кеша вообще не было — пустой dict (ничего не разрешено)
-        return {}
+    data = await get_cached_or_fetch(
+        _CACHE_KEY,
+        _fetch,
+        ttl_seconds=_CACHE_TTL,
+        serializer=json.dumps,
+        deserializer=json.loads
+    )
+    return data or {}
 
 
 # ═══════════════════════════════════════════════════════
@@ -98,7 +85,7 @@ async def _ensure_cache() -> dict[int, dict[str, bool]]:
 async def is_admin(telegram_id: int) -> bool:
     """Проверить, является ли пользователь админом (по GSheet столбцу «👑 Админ»)."""
     cache = await _ensure_cache()
-    user_perms = cache.get(telegram_id)
+    user_perms = cache.get(str(telegram_id))
     if user_perms is None:
         return False
     return user_perms.get(ROLE_ADMIN, False)
@@ -107,7 +94,7 @@ async def is_admin(telegram_id: int) -> bool:
 async def get_admin_ids() -> list[int]:
     """Список telegram_id всех админов из GSheet."""
     cache = await _ensure_cache()
-    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_ADMIN, False)]
+    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_ADMIN, False)]
 
 
 async def has_any_admin() -> bool:
@@ -119,7 +106,7 @@ async def has_any_admin() -> bool:
 async def is_receiver(telegram_id: int) -> bool:
     """Проверить, является ли пользователь получателем заявок (по GSheet столбцу «📬 Получатель»)."""
     cache = await _ensure_cache()
-    user_perms = cache.get(telegram_id)
+    user_perms = cache.get(str(telegram_id))
     if user_perms is None:
         return False
     return user_perms.get(ROLE_RECEIVER, False)
@@ -128,7 +115,7 @@ async def is_receiver(telegram_id: int) -> bool:
 async def get_receiver_ids() -> list[int]:
     """Список telegram_id всех получателей заявок из GSheet."""
     cache = await _ensure_cache()
-    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_RECEIVER, False)]
+    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_RECEIVER, False)]
 
 
 # ═══════════════════════════════════════════════════════
@@ -138,19 +125,19 @@ async def get_receiver_ids() -> list[int]:
 async def get_stock_subscriber_ids() -> list[int]:
     """Список telegram_id пользователей с флагом «📦 Остатки»."""
     cache = await _ensure_cache()
-    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_STOCK, False)]
+    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_STOCK, False)]
 
 
 async def get_stoplist_subscriber_ids() -> list[int]:
     """Список telegram_id пользователей с флагом «🚫 Стоп-лист»."""
     cache = await _ensure_cache()
-    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_STOPLIST, False)]
+    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_STOPLIST, False)]
 
 
 async def get_accountant_ids() -> list[int]:
     """Список telegram_id пользователей с ролью «📑 Бухгалтер»."""
     cache = await _ensure_cache()
-    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_ACCOUNTANT, False)]
+    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_ACCOUNTANT, False)]
 
 
 async def get_sysadmin_ids() -> list[int]:
@@ -160,11 +147,11 @@ async def get_sysadmin_ids() -> list[int]:
     (fallback: не терять алерты при первоначальной настройке).
     """
     cache = await _ensure_cache()
-    ids = [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_SYSADMIN, False)]
+    ids = [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_SYSADMIN, False)]
     if ids:
         return ids
     # Fallback: сисадмин не назначен → шлём обычным админам
-    return [tg_id for tg_id, perms in cache.items() if perms.get(ROLE_ADMIN, False)]
+    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_ADMIN, False)]
 
 
 # ═══════════════════════════════════════════════════════
@@ -181,7 +168,7 @@ async def has_permission(telegram_id: int, perm_key: str) -> bool:
     Если пользователя нет в таблице → нет прав.
     """
     cache = await _ensure_cache()
-    user_perms = cache.get(telegram_id)
+    user_perms = cache.get(str(telegram_id))
     if user_perms is None:
         return False
 
@@ -208,7 +195,7 @@ async def get_allowed_keys(telegram_id: int) -> set[str]:
     Bootstrap (нет админов) → все кнопки для любого авторизованного.
     """
     cache = await _ensure_cache()
-    user_perms = cache.get(telegram_id)
+    user_perms = cache.get(str(telegram_id))
     if user_perms is None:
         return set()
 
@@ -268,7 +255,7 @@ async def sync_permissions_to_gsheet(triggered_by: str | None = None) -> int:
     )
 
     # 3. Инвалидировать кеш чтобы при следующем запросе подтянулись свежие данные
-    invalidate_cache()
+    await invalidate_cache()
 
     elapsed = time.monotonic() - t0
     logger.info("[%s] → GSheet: %d сотрудников за %.1f сек", LABEL, count, elapsed)

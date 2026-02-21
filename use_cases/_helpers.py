@@ -66,4 +66,15 @@ def safe_float(v: Any) -> float | None:
     return safe_decimal(v)
 
 
+import re
+
+_SECRET_RE = re.compile(r'(key|token|password|secret|bearer)=([^\s&"\']+)', re.IGNORECASE)
+
+def mask_secrets(text: str) -> str:
+    """Маскирует секреты в строке для безопасного логирования."""
+    if not text:
+        return text
+    return _SECRET_RE.sub(r'\1=***', str(text))
+
+
 
