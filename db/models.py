@@ -6,6 +6,7 @@
 raw_json — полный оригинальный ответ API (страховка).
 """
 
+import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 

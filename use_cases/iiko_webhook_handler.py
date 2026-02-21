@@ -238,8 +238,6 @@ def _should_update(new_hash: str, new_items_dict: dict[tuple[str, str], float]) 
       - Хеш не изменился (ничего не изменилось)
       - Все изменения < 3% И прошло < 30 мин (мелкие продажи, антиспам)
     """
-    global _last_snapshot_hash, _last_snapshot_items, _last_update_time
-
     from config import STOCK_CHANGE_THRESHOLD_PCT, STOCK_UPDATE_INTERVAL_MIN
 
     if _last_snapshot_hash is None:
