@@ -1,13 +1,13 @@
 ﻿"""
-Telegram-���: ������ ��������.
-��� ������-������ � � use_cases/.
-�������� ������:
-  1) ��������� �������
-  2) �������� use-case
-  3) ���������� ��������� ������������
+Telegram-бот: обработка команд.
+Вся бизнес-логика — в use_cases/.
+Структура подхода:
+  1) принимаем событие
+  2) вызываем use-case
+  3) возвращаем результат пользователю
 
-�����������:
-  /start > ���� ������� > ����� ���������� > ����� ��������� > ������� ����
+Навигация:
+  /start > ввод фамилии > выбор сотрудника > выбор ресторана > главное меню
 """
 
 import asyncio
@@ -83,50 +83,50 @@ def _main_keyboard(
     allowed: set[str] | None = None, dept_name: str | None = None
 ) -> ReplyKeyboardMarkup:
     """
-    ������� ����: ��������� �� ����� + ������ + ���������.
-    ������������ ������ ������, �� ������� � ������������ ���� �����.
-    allowed � ��������� ������� ������ �������� ���� (�� get_allowed_keys).
-    allowed = None > �������� ��� (��� �������� �������������).
+    Главная клавиатура: опционально по ролям + кнопка + настройки.
+    Отображаем только кнопки, на которые у пользователя есть роли.
+    allowed — допустимые кнопки (ключи из get_allowed_keys).
+    allowed = None — отображать всё (для первой авторизации).
     """
     from bot.permission_map import MENU_BUTTON_GROUPS
 
-    # ������ �������� ���� � ������ ������� (����� = ���� MENU_BUTTON_GROUPS)
+    # Список кнопок меню в нужном порядке (ключи = ключи MENU_BUTTON_GROUPS)
     menu_buttons: list[str] = [
-        "?? ��������",
-        "?? ���������",
-        "?? ������",
-        "?? ������",
-        "?? ���������",
+        "📝 Списания",
+        "📦 Накладные",
+        "📋 Заявки",
+        "📊 Отчёты",
+        "📑 Документы",
     ]
 
-    # ��������� �� ������
+    # Фильтрация по роли
     visible = []
     for text in menu_buttons:
         if allowed is None or text in allowed:
             visible.append(KeyboardButton(text=text))
 
-    # �������� ������ �� 2 ������
+    # Разбить кнопки по 2 в ряд
     rows: list[list[KeyboardButton]] = []
     for i in range(0, len(visible), 2):
         rows.append(visible[i : i + 2])
 
-    # ������-���� � ������ ����� ���� �������������
-    rows.append([KeyboardButton(text="?? �����-����")])
+    # Прайс-лист в конце всегда виден пользователям
+    rows.append([KeyboardButton(text="💰 Прайс-лист")])
 
-    # �������� �������� � ������ �����, ���������� ������� ��������
+    # Добавляем кнопку смены зала, отображающая текущий ресторан
     dept_label = (
-        f"?? ������� �������� ({dept_name})" if dept_name else "?? ������� ��������"
+        f"🏠 Сменить ресторан ({dept_name})" if dept_name else "🏠 Сменить ресторан"
     )
     rows.append([KeyboardButton(text=dept_label)])
 
-    # ���������� � ������ ���� ���� �����
-    if allowed is None or "?? ���������" in allowed:
-        rows.append([KeyboardButton(text="?? ���������")])
+    # Настройки в главном меню если есть право
+    if allowed is None or "⚙️ Настройки" in allowed:
+        rows.append([KeyboardButton(text="⚙️ Настройки")])
 
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
-# ������� � ������ �� _utils (������������ � � ������ handler-������)
+# Утилиты из модуля _utils (дублированы и в модуль handler-групп)
 from bot._utils import (
     writeoffs_keyboard as _writeoffs_keyboard,
     invoices_keyboard as _invoices_keyboard,
@@ -137,20 +137,20 @@ from bot._utils import (
 
 
 def _settings_keyboard() -> ReplyKeyboardMarkup:
-    """������� '���������' (������ ��� �������)."""
+    """Клавиатура 'Настройки' (кнопки для раздела)."""
     buttons = [
-        [KeyboardButton(text="?? �������������")],
-        [KeyboardButton(text="?? Google �������")],
-        [KeyboardButton(text="?? ����� ������� > GSheet")],
+        [KeyboardButton(text="🔄 Синхронизация")],
+        [KeyboardButton(text="📤 Google Таблицы")],
+        [KeyboardButton(text="🔑 Права доступа → GSheet")],
         [KeyboardButton(text="🍰 Группы кондитеров")],
-        [KeyboardButton(text="?? iikoCloud ������")],
-        [KeyboardButton(text="?? �����")],
+        [KeyboardButton(text="☁️ iikoCloud вебхук")],
+        [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
 async def _get_main_kb(tg_id: int) -> ReplyKeyboardMarkup:
-    """�������� ������� ���������� � ������ ���� ������������."""
+    """Получить текущие разрешения в рамках роли пользователя."""
     allowed = await perm_uc.get_allowed_keys(tg_id)
     ctx = await uctx.get_user_context(tg_id)
     dept_name = ctx.department_name if ctx else None
@@ -158,41 +158,41 @@ async def _get_main_kb(tg_id: int) -> ReplyKeyboardMarkup:
 
 
 def _sync_keyboard() -> ReplyKeyboardMarkup:
-    """������� '�������������'."""
+    """Клавиатура 'Синхронизация'."""
     buttons = [
-        [KeyboardButton(text="? �����. �Ѩ (iiko + FT)")],
+        [KeyboardButton(text="⚡ Синхр. ВСЁ (iiko + FT)")],
         [
-            KeyboardButton(text="?? �����. �Ѩ iiko"),
-            KeyboardButton(text="?? FT: �����. �Ѩ"),
+            KeyboardButton(text="🔄 Синхр. ВСЁ iiko"),
+            KeyboardButton(text="💹 FT: Синхр. ВСЁ"),
         ],
         [
-            KeyboardButton(text="?? �����. �����������"),
-            KeyboardButton(text="?? �����. ������������"),
+            KeyboardButton(text="📋 Синхр. справочники"),
+            KeyboardButton(text="🏢 Синхр. подразделения"),
         ],
-        [KeyboardButton(text="?? �����. �������������")],
-        [KeyboardButton(text="?? � ����������")],
+        [KeyboardButton(text="🚚 Синхр. поставщиков")],
+        [KeyboardButton(text="🔙 К настройкам")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
 def _gsheet_keyboard() -> ReplyKeyboardMarkup:
-    """������� 'Google �������'."""
+    """Клавиатура 'Google Таблицы'."""
     buttons = [
-        [KeyboardButton(text="?? ������������ > GSheet")],
-        [KeyboardButton(text="?? ���. ������� GSheet > ��")],
-        [KeyboardButton(text="?? �����-���� > GSheet")],
-        [KeyboardButton(text="?? � ����������")],
+        [KeyboardButton(text="📤 Номенклатура → GSheet")],
+        [KeyboardButton(text="📥 Мин. остатки GSheet → БД")],
+        [KeyboardButton(text="💰 Прайс-лист → GSheet")],
+        [KeyboardButton(text="🔙 К настройкам")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
 # -----------------------------------------------------
-# Helpers: inline-���������� ��� �����������
+# Helpers: inline-клавиатуры для авторизации
 # -----------------------------------------------------
 
 
 def _employees_inline_kb(employees: list[dict]) -> InlineKeyboardMarkup:
-    """Inline-������ ������ ����������."""
+    """Inline-кнопки выбора сотрудника."""
     buttons = [
         [
             InlineKeyboardButton(
@@ -202,67 +202,68 @@ def _employees_inline_kb(employees: list[dict]) -> InlineKeyboardMarkup:
         ]
         for emp in employees
     ]
-    buttons.append([InlineKeyboardButton(text="? ������", callback_data="auth_cancel")])
+    buttons.append(
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def _departments_inline_kb(
     departments: list[dict], prefix: str = "auth_dept"
 ) -> InlineKeyboardMarkup:
-    """Inline-������ ������ ���������."""
+    """Inline-кнопки выбора ресторана."""
     buttons = [
         [InlineKeyboardButton(text=d["name"], callback_data=f"{prefix}:{d['id']}")]
         for d in departments
     ]
     cancel_cb = "auth_cancel" if prefix == "auth_dept" else "change_dept_cancel"
-    buttons.append([InlineKeyboardButton(text="? ������", callback_data=cancel_cb)])
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=cancel_cb)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 # -----------------------------------------------------
-# /start  � �����������
+# /start — авторизация
 # -----------------------------------------------------
 
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
-    """������ �����������: ���������� �������."""
+    """Старт авторизации: запрашиваем фамилию."""
     logger.info("[auth] /start tg:%d", message.from_user.id)
     result = await auth_uc.check_auth_status(message.from_user.id)
 
     if result.status == AuthStatus.AUTHORIZED:
         kb = await _get_main_kb(message.from_user.id)
         await message.answer(
-            f"?? � ������������, {result.first_name}!\n" "�������� ��������:",
+            f"👋 С возвращением, {result.first_name}!\nВыберите раздел:",
             reply_markup=kb,
         )
         return
 
     await state.set_state(AuthStates.waiting_last_name)
     await message.answer(
-        "?? ����� ����������!\n\n" "��� ����������� ������� ���� **�������**:",
+        "🆕 Добро пожаловать!\n\nДля авторизации введите свою **Фамилию**:",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardRemove(),
     )
 
 
 # -----------------------------------------------------
-# ��� 2: �������� ������� > ���� ����������
+# Шаг 2: фамилия введена > ищем сотрудника
 # -----------------------------------------------------
 
 
 @router.message(AuthStates.waiting_last_name)
 async def process_last_name(message: Message, state: FSMContext) -> None:
-    """����� ���������� �� �������."""
+    """Ввод фамилии для поиска."""
     last_name = truncate_input(message.text.strip(), MAX_TEXT_NAME)
-    logger.info("[auth] ���� ������� tg:%d, text='%s'", message.from_user.id, last_name)
     try:
         await message.delete()
     except Exception:
         pass
 
     if not last_name:
-        await message.answer("����������, ������� �������:")
+        await message.answer("Пожалуйста, введите фамилию:")
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -270,55 +271,55 @@ async def process_last_name(message: Message, state: FSMContext) -> None:
 
     if not result.employees:
         await message.answer(
-            f"? ��������� � �������� �{last_name}� �� ������.\n" "���������� ��� ���:"
+            f"❌ Сотрудник с фамилией «{last_name}» не найден.\n" "Попробуйте ещё раз:"
         )
         return
 
     if result.auto_bound_first_name:
-        # ���� ��������� � ��� ��������
+        # Если совпадение с уже известным
         await state.update_data(employee_id=result.employees[0]["id"])
         if not result.restaurants:
             await state.clear()
             kb = await _get_main_kb(message.from_user.id)
             await message.answer(
-                f"?? ������, {result.auto_bound_first_name}!\n"
-                "?? ��������� ���� �� ���������. ������� ��������������� �������������.",
+                f"✅ Добро пожаловать, {result.auto_bound_first_name}!\n"
+                "🏢 Ресторан назначен по умолчанию. Права устанавливаются автоматически.",
                 reply_markup=kb,
             )
             return
 
         await state.set_state(AuthStates.choosing_department)
         await message.answer(
-            f"?? ������, {result.auto_bound_first_name}!\n\n"
-            "?? �������� ��� ��������:",
+            f"✅ Добро пожаловать, {result.auto_bound_first_name}!\n\n"
+            "🏢 Выберите ваш ресторан:",
             reply_markup=_departments_inline_kb(result.restaurants, prefix="auth_dept"),
         )
         return
 
-    # ��������� ���������� � ���������� �����
+    # Отвечаем сотруднику из нескольких вариантов
     await state.set_state(AuthStates.choosing_employee)
     await message.answer(
-        f"������� {len(result.employees)} �����������. �������� ����:",
+        f"Найдено {len(result.employees)} сотрудников. Выберите себя:",
         reply_markup=_employees_inline_kb(result.employees),
     )
 
 
 # -----------------------------------------------------
-# ��� 2�: ����� �� ���������� ����������� (inline)
+# Шаг 2б: выбор из кандидатов сотрудников (inline)
 # -----------------------------------------------------
 
 
 @router.callback_query(AuthStates.choosing_employee, F.data.startswith("auth_emp:"))
 async def process_choose_employee(callback: CallbackQuery, state: FSMContext) -> None:
-    """������������ ������ ���������� �� ������."""
+    """Обрабатывает выбор сотрудника из списка."""
     await callback.answer()
     employee_id = await validate_callback_uuid(callback, callback.data)
     if not employee_id:
         return
     logger.info(
-        "[auth] ������ ��������� tg:%d, emp_id=%s", callback.from_user.id, employee_id
+        "[auth] выбор сотрудника tg:%d, emp_id=%s", callback.from_user.id, employee_id
     )
-    await callback.message.edit_text("? ��������...")
+    await callback.message.edit_text("⏳ Загрузка...")
 
     result = await auth_uc.complete_employee_selection(
         callback.from_user.id, employee_id
@@ -328,32 +329,32 @@ async def process_choose_employee(callback: CallbackQuery, state: FSMContext) ->
     if not result.restaurants:
         await state.clear()
         await callback.message.edit_text(
-            f"?? ������, {result.first_name}!\n"
-            "?? ��������� ���� �� ���������. ������� ��������������� �������������.",
+            f"✅ Добро пожаловать, {result.first_name}!\n"
+            "🏢 Ресторан назначен по умолчанию. Права устанавливаются автоматически.",
         )
         return
 
     await state.set_state(AuthStates.choosing_department)
     await callback.message.edit_text(
-        f"?? ������, {result.first_name}!\n\n" "?? �������� ��� ��������:",
+        f"✅ Добро пожаловать, {result.first_name}!\n\n🏢 Выберите ваш ресторан:",
         reply_markup=_departments_inline_kb(result.restaurants, prefix="auth_dept"),
     )
 
 
 # -----------------------------------------------------
-# ��� 3: ����� ��������� (inline) � �����������
+# Шаг 3: выбор ресторана (inline) с авторизацией
 # -----------------------------------------------------
 
 
 @router.callback_query(AuthStates.choosing_department, F.data.startswith("auth_dept:"))
 async def process_choose_department(callback: CallbackQuery, state: FSMContext) -> None:
-    """������������ ������ �������� ��� �����������."""
+    """Обрабатывает выбор ресторана при авторизации."""
     await callback.answer()
     department_id = await validate_callback_uuid(callback, callback.data)
     if not department_id:
         return
     logger.info(
-        "[auth] ������ �������� tg:%d, dept_id=%s", callback.from_user.id, department_id
+        "[auth] выбор ресторана tg:%d, dept_id=%s", callback.from_user.id, department_id
     )
 
     data = await state.get_data()
@@ -365,16 +366,16 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
 
     await state.clear()
     await callback.message.edit_text(
-        f"? ��������: **{dept_name}**\n\n" "����������� ���������!",
+        f"✅ Ресторан: **{dept_name}**\n\nАвторизация завершена!",
         parse_mode="Markdown",
     )
     kb = await _get_main_kb(callback.from_user.id)
     await callback.message.answer(
-        "�������� ��������:",
+        "Выберите раздел:",
         reply_markup=kb,
     )
 
-    # ������� ������������� ������� ������ �������
+    # Задача: синхронизация прав доступа в фоне
     async def _sync_perms():
         try:
             await perm_uc.sync_permissions_to_gsheet(
@@ -382,7 +383,7 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
             )
         except Exception:
             logger.warning(
-                "[auth] �� ������� ���������������� ����� �������", exc_info=True
+                "[auth] не удалось синхронизировать права доступа", exc_info=True
             )
 
     asyncio.create_task(
@@ -390,12 +391,12 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
         name=f"perms_sync_auth_{callback.from_user.id}",
     )
 
-    # ������� �������� �������� �������������
+    # Задача: отправить сообщение о мин. остатках
     asyncio.create_task(
         send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
         name=f"stock_alert_auth_{callback.from_user.id}",
     )
-    # ������� �������� ����-�����
+    # Задача: отправить стоп-лист
     asyncio.create_task(
         send_stoplist_for_user(callback.bot, callback.from_user.id),
         name=f"stoplist_auth_{callback.from_user.id}",
@@ -403,18 +404,17 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
 
 
 # -----------------------------------------------------
-# ������ ����������� / ����� ���������
+# Отмена авторизации / смена ресторана
 # -----------------------------------------------------
 
 
 @router.callback_query(F.data == "auth_cancel")
 async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
-    """������ �� ����� ���� �����������."""
-    await callback.answer("��������")
+    await callback.answer("Отмена")
     await state.clear()
     try:
         await callback.message.edit_text(
-            "? ����������� ��������.\n������� /start ����� ������ ������."
+            "❌ Авторизация отменена.\nНажмите /start чтобы начать снова."
         )
     except Exception:
         pass
@@ -422,40 +422,39 @@ async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "change_dept_cancel")
 async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None:
-    """������ ����� ���������."""
-    await callback.answer("��������")
+    await callback.answer("Отмена")
     await state.clear()
     try:
-        await callback.message.edit_text("? ����� ��������� ��������.")
+        await callback.message.edit_text("❌ Смена ресторана отменена.")
     except Exception:
         pass
 
 
 # -----------------------------------------------------
-# ����� ��������� (�� �������� ����)
+# Смена ресторана (по кнопке меню)
 # -----------------------------------------------------
 
 
-@router.message(F.text.startswith("?? ������� ��������"))
+@router.message(F.text.startswith("🏠 Сменить ресторан"))
 async def btn_change_department(message: Message, state: FSMContext) -> None:
-    """������� ����������� ��������."""
-    logger.info("[nav] ������� �������� tg:%d", message.from_user.id)
+    """Сменить аккаунтный ресторан."""
+    logger.info("[nav] смена ресторана tg:%d", message.from_user.id)
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx:
-        await message.answer("?? �� �� ������������. ������� /start")
+        await message.answer("⚠️ Вы не авторизованы. Нажмите /start")
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     restaurants = await auth_uc.get_restaurants()
     if not restaurants:
         await message.answer(
-            "?? ��������� �� ���������. ������� ��������������� �������������."
+            "🏢 Ресторан не определён. Нажмите /start для авторизации повторно."
         )
         return
 
     await state.set_state(ChangeDeptStates.choosing_department)
     await message.answer(
-        "?? �������� ����� ��������:",
+        "🏠 Выберите новый ресторан:",
         reply_markup=_departments_inline_kb(restaurants, prefix="change_dept"),
     )
 
@@ -464,13 +463,15 @@ async def btn_change_department(message: Message, state: FSMContext) -> None:
     ChangeDeptStates.choosing_department, F.data.startswith("change_dept:")
 )
 async def process_change_department(callback: CallbackQuery, state: FSMContext) -> None:
-    """��������� ����� ��������."""
+    """Применяет новый ресторан."""
     await callback.answer()
     department_id = await validate_callback_uuid(callback, callback.data)
     if not department_id:
         return
     logger.info(
-        "[nav] �������� ������ tg:%d, dept_id=%s", callback.from_user.id, department_id
+        "[nav] применён ресторан tg:%d, dept_id=%s",
+        callback.from_user.id,
+        department_id,
     )
     dept_name = await auth_uc.complete_department_selection(
         callback.from_user.id, department_id
@@ -478,19 +479,19 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
 
     await state.clear()
     await callback.message.edit_text(
-        f"? �������� ������ ��: **{dept_name}**", parse_mode="Markdown"
+        f"✅ Ресторан сменён на: **{dept_name}**", parse_mode="Markdown"
     )
 
-    # ��������� reply-���������� (�������� ��������� � ������)
+    # Сбрасываем reply-клавиатуру (отправляем сообщение с клавиатурой)
     kb = await _get_main_kb(callback.from_user.id)
-    await callback.message.answer("�������� ��������:", reply_markup=kb)
+    await callback.message.answer("Выберите раздел:", reply_markup=kb)
 
-    # ������� �������� �������� ������ �������������
+    # Задача: отправить сообщение о мин. остатках
     asyncio.create_task(
         send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
         name=f"stock_alert_switch_{callback.from_user.id}",
     )
-    # ������� �������� ����-�����
+    # Задача: отправить стоп-лист
     asyncio.create_task(
         send_stoplist_for_user(callback.bot, callback.from_user.id),
         name=f"stoplist_switch_{callback.from_user.id}",
@@ -498,7 +499,7 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
 
 
 # -----------------------------------------------------
-# ������: ����� � inline-���������� �����������
+# Защита: блок inline-клавиатуры авторизации
 # -----------------------------------------------------
 
 
@@ -527,16 +528,16 @@ async def _guard_change_dept(message: Message) -> None:
 
 
 # -----------------------------------------------------
-# ���������: �������
+# Навигация: разделы
 # -----------------------------------------------------
 
 
-@router.message(F.text == "?? ��������")
+@router.message(F.text == "📝 Списания")
 @auth_required
 async def btn_writeoffs_menu(message: Message, state: FSMContext) -> None:
-    """������� '��������' + ������� ������� ����."""
-    logger.info("[nav] ���� �������� tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? ��������:", _writeoffs_keyboard())
+    """Кнопка 'Списания' + открыть главное меню."""
+    logger.info("[nav] меню списаний tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📝 Списания:", _writeoffs_keyboard())
 
     tg_id = message.from_user.id
     track_task(sync_uc.bg_sync_for_documents(f"bg:writeoffs:{tg_id}"))
@@ -545,12 +546,12 @@ async def btn_writeoffs_menu(message: Message, state: FSMContext) -> None:
         track_task(wo_uc.preload_for_user(ctx.department_id))
 
 
-@router.message(F.text == "?? ���������")
+@router.message(F.text == "📦 Накладные")
 @auth_required
 async def btn_invoices_menu(message: Message, state: FSMContext) -> None:
-    """������� '���������' + ������� ������� ����."""
-    logger.info("[nav] ���� ��������� tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? ���������:", _invoices_keyboard())
+    """Кнопка 'Накладные' + открыть главное меню."""
+    logger.info("[nav] меню накладных tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📦 Накладные:", _invoices_keyboard())
 
     tg_id = message.from_user.id
     track_task(sync_uc.bg_sync_for_documents(f"bg:invoices:{tg_id}"))
@@ -561,38 +562,38 @@ async def btn_invoices_menu(message: Message, state: FSMContext) -> None:
         track_task(inv_uc.preload_for_invoice(ctx.department_id))
 
 
-@router.message(F.text == "?? ������")
+@router.message(F.text == "📋 Заявки")
 @auth_required
 async def btn_requests_menu(message: Message, state: FSMContext) -> None:
-    """������� '������'."""
-    logger.info("[nav] ���� ������ tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? ������:", _requests_keyboard())
+    """Кнопка 'Заявки'."""
+    logger.info("[nav] меню заявок tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📋 Заявки:", _requests_keyboard())
 
     tg_id = message.from_user.id
     track_task(sync_uc.bg_sync_for_documents(f"bg:requests:{tg_id}"))
 
 
-@router.message(F.text == "?? ������")
+@router.message(F.text == "📊 Отчёты")
 @auth_required
 async def btn_reports_menu(message: Message, state: FSMContext) -> None:
-    """������� '������'."""
-    logger.info("[nav] ���� ������ tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? ������:", _reports_keyboard())
+    """Кнопка 'Отчёты'."""
+    logger.info("[nav] меню отчётов tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📊 Отчёты:", _reports_keyboard())
 
 
-@router.message(F.text == "?? ���������")
+@router.message(F.text == "📑 Документы")
 @auth_required
 async def btn_documents_menu(message: Message, state: FSMContext) -> None:
-    """������� '���������' (OCR ������������� ���������)."""
-    logger.info("[nav] ���� ��������� tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? ���������:", _ocr_keyboard())
+    """Кнопка 'Документы' (OCR распознавание документов)."""
+    logger.info("[nav] меню документов tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📑 Документы:", _ocr_keyboard())
 
 
-@router.message(F.text == "?? �����-����")
+@router.message(F.text == "💰 Прайс-лист")
 @auth_required
 async def btn_price_list(message: Message, state: FSMContext) -> None:
-    """�������� �����-���� ���� ������������."""
-    logger.info("[price_list] ������ �����-����� tg:%d", message.from_user.id)
+    """Прайс-лист всех наименований."""
+    logger.info("[price_list] запрос прайс-листа tg:%d", message.from_user.id)
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
@@ -607,155 +608,155 @@ async def btn_price_list(message: Message, state: FSMContext) -> None:
         )
     except Exception as exc:
         logger.exception(
-            "[price_list] ������ ��������� �����-����� tg:%d", message.from_user.id
+            "[price_list] ошибка получения прайс-листа tg:%d", message.from_user.id
         )
         await message.answer(
-            "? ������ ��� �������� �����-�����. ���������� �����.",
+            "❌ Ошибка при загрузке прайс-листа. Попробуйте позже.",
             reply_markup=await _get_main_kb(message.from_user.id),
         )
 
 
-@router.message(F.text == "?? ���������")
+@router.message(F.text == "⚙️ Настройки")
 @auth_required
 async def btn_settings_menu(message: Message, state: FSMContext) -> None:
-    """������� '���������' (������ ��� �������)."""
-    logger.info("[nav] ���� ��������� tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? ���������:", _settings_keyboard())
+    """Кнопка 'Настройки' (кнопки для раздела)."""
+    logger.info("[nav] меню настроек tg:%d", message.from_user.id)
+    await reply_menu(message, state, "⚙️ Настройки:", _settings_keyboard())
 
 
-@router.message(F.text == "?? �������������")
+@router.message(F.text == "🔄 Синхронизация")
 @permission_required(PERM_SETTINGS)
 async def btn_sync_menu(message: Message, state: FSMContext) -> None:
-    """������� '�������������'."""
-    logger.info("[nav] ���� ������������� tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? �������������:", _sync_keyboard())
+    """Кнопка 'Синхронизация'."""
+    logger.info("[nav] меню синхронизации tg:%d", message.from_user.id)
+    await reply_menu(message, state, "🔄 Синхронизация:", _sync_keyboard())
 
 
-@router.message(F.text == "?? Google �������")
+@router.message(F.text == "📤 Google Таблицы")
 @permission_required(PERM_SETTINGS)
 async def btn_gsheet_menu(message: Message, state: FSMContext) -> None:
-    """������� 'Google �������'."""
-    logger.info("[nav] ���� Google ������� tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? Google �������:", _gsheet_keyboard())
+    """Кнопка 'Google Таблицы'."""
+    logger.info("[nav] меню Google Таблицы tg:%d", message.from_user.id)
+    await reply_menu(message, state, "📤 Google Таблицы:", _gsheet_keyboard())
 
 
-@router.message(F.text == "?? � ����������")
+@router.message(F.text == "🔙 К настройкам")
 async def btn_back_to_settings(message: Message, state: FSMContext) -> None:
-    """������� � ���� ��������."""
-    logger.info("[nav] ����� � ���������� tg:%d", message.from_user.id)
-    await reply_menu(message, state, "?? ���������:", _settings_keyboard())
+    """Вернуть к меню настроек."""
+    logger.info("[nav] назад к настройкам tg:%d", message.from_user.id)
+    await reply_menu(message, state, "⚙️ Настройки:", _settings_keyboard())
 
 
-@router.message(F.text == "?? �����")
+@router.message(F.text == "◀️ Назад")
 async def btn_back_to_main(message: Message, state: FSMContext) -> None:
-    """������� � ������� ����."""
-    logger.info("[nav] ����� (������� ����) tg:%d", message.from_user.id)
+    """Вернуть к главному меню."""
+    logger.info("[nav] назад (главное меню) tg:%d", message.from_user.id)
     kb = await _get_main_kb(message.from_user.id)
-    await reply_menu(message, state, "?? ������� ����:", kb)
+    await reply_menu(message, state, "🏠 Главное меню:", kb)
 
 
-@router.message(F.text == "?? ���. ������� �� �������")
+@router.message(F.text == "📊 Мин. остатки по складам")
 @auth_required
 async def btn_check_min_stock(message: Message) -> None:
-    """���������������� �������, ��������� min/max �� GSheet, �������� ������ ���� ��������."""
+    """Подготавливает отчёт, загружает min/max из GSheet, отправляет текст пользователю."""
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[report] ���. ������� tg:%d", message.from_user.id)
+    logger.info("[report] мин. остатки tg:%d", message.from_user.id)
 
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
-        await message.answer("? ������� ������������� � �������� �������� (/start).")
+        await message.answer("⚠️ Сначала авторизуйтесь в контексте заведения (/start).")
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     placeholder = await message.answer(
-        "? ������������� �������, �������� ����������� ������ � ��������..."
+        "⏳ Подготавливаем отчёт, загружаем актуальные данные из iiko..."
     )
     try:
         text = await reports_uc.run_min_stock_report(ctx.department_id, triggered)
         await placeholder.edit_text(text, parse_mode="Markdown")
     except Exception as exc:
         logger.exception("btn_check_min_stock failed")
-        await placeholder.edit_text(f"? ������: {exc}")
+        await placeholder.edit_text(f"❌ Ошибка: {exc}")
 
 
-@router.message(F.text == "?? ������������ > GSheet")
+@router.message(F.text == "📤 Номенклатура → GSheet")
 @permission_required(PERM_SETTINGS)
 async def btn_sync_nomenclature_gsheet(message: Message) -> None:
-    """��������� ������ (GOODS) + ������������� � Google �������."""
+    """Синхронизация GOODS + отправка номенклатуры в Google Таблицы."""
     from use_cases.sync_min_stock import sync_nomenclature_to_gsheet
 
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ������������ > GSheet tg:%d", message.from_user.id)
+    logger.info("[sync] номенклатура > GSheet tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "������������ > GSheet",
+        "Номенклатура → GSheet",
         sync_nomenclature_to_gsheet,
         lock_key="gsheet_nomenclature",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? ���. ������� GSheet > ��")
+@router.message(F.text == "📥 Мин. остатки GSheet → БД")
 @permission_required(PERM_SETTINGS)
 async def btn_sync_min_stock_gsheet(message: Message) -> None:
-    """���������������� ���. �������: Google ������� > ��."""
+    """Синхронизация мин. остатков: Google Таблицы > БД."""
     from use_cases.sync_min_stock import sync_min_stock_from_gsheet
 
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ���. ������� GSheet > �� tg:%d", message.from_user.id)
+    logger.info("[sync] мин. остатки GSheet > БД tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "̳�. ������� GSheet > ��",
+        "Мин. остатки GSheet → БД",
         sync_min_stock_from_gsheet,
         lock_key="gsheet_min_stock",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? �����-���� > GSheet")
+@router.message(F.text == "💰 Прайс-лист → GSheet")
 @permission_required(PERM_SETTINGS)
 async def btn_sync_price_sheet(message: Message) -> None:
-    """������ ������������� + �������� �����-����� ��������� � Google �������."""
+    """Загрузить номенклатуру + отправить прайс-лист поставщиков в Google Таблицы."""
     from use_cases.outgoing_invoice import sync_price_sheet
 
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] �����-���� > GSheet tg:%d", message.from_user.id)
+    logger.info("[sync] прайс-лист > GSheet tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "�����-���� > GSheet",
+        "Прайс-лист → GSheet",
         sync_price_sheet,
         lock_key="gsheet_price",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? ����� ������� > GSheet")
+@router.message(F.text == "🔑 Права доступа → GSheet")
 async def btn_sync_permissions_gsheet(message: Message) -> None:
-    """��������� �������������� ����������� + ������� ���� � Google �������.
+    """Синхронизировать пользовательские разрешения + записать роли в Google Таблицы.
 
-    Bootstrap: ���� � GSheet ��� ��� �� ������ ������ � ������ ��������
-    ������ ��������������� ���������� (����� ���������� ��������� ������� ������).
-    ��� ������ ���� �� ���� ����� �������� � ��������� admin-������.
+    Bootstrap: если в GSheet ещё нет ни одной строки с ролью роли
+    можно использоваться первоначально (чтобы заполнить таблицу статичными ролями).
+    Обязательный шаг при онбординге admin-пользователя.
     """
     tg_id = message.from_user.id
     any_admin = await perm_uc.has_any_admin()
     if any_admin and not await perm_uc.has_permission(tg_id, PERM_SETTINGS):
-        await message.answer("? � ��� ��� ���� ��������������")
+        await message.answer("❌ У вас нет прав администратора")
         logger.warning(
-            "[auth] ������� admin-������� ��� ���� tg:%d > btn_sync_permissions_gsheet",
+            "[auth] попытка admin-действия без роли tg:%d > btn_sync_permissions_gsheet",
             tg_id,
         )
         return
     if not any_admin:
         logger.warning(
-            "[auth] BOOTSTRAP: ��� �� ������ ������ > ��������� sync ���� ��� tg:%d",
+            "[auth] BOOTSTRAP: нет ни одного админа > разрешаем sync всем для tg:%d",
             tg_id,
         )
     triggered = f"tg:{tg_id}"
-    logger.info("[sync] ����� ������� > GSheet tg:%d", tg_id)
+    logger.info("[sync] права доступа > GSheet tg:%d", tg_id)
     await sync_with_progress(
         message,
-        "����� ������� > GSheet",
+        "Права доступа → GSheet",
         perm_uc.sync_permissions_to_gsheet,
         lock_key="gsheet_permissions",
         triggered_by=triggered,
@@ -763,158 +764,160 @@ async def btn_sync_permissions_gsheet(message: Message) -> None:
 
 
 # -----------------------------------------------------
-# ����������� ������ ������������� (������� ���������)
+# Индивидуальные кнопки синхронизации (iiko справочники)
 # -----------------------------------------------------
 
 
-@router.message(F.text == "?? �����. �����������")
+@router.message(F.text == "📋 Синхр. справочники")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_sync_entities(message: Message) -> None:
-    """���������������� ��� rootType (entities/list)."""
+    """Синхронизировать все rootType (entities/list)."""
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ����������� tg:%d", message.from_user.id)
+    logger.info("[sync] справочники tg:%d", message.from_user.id)
     lock = get_sync_lock("sync_entities")
     if lock.locked():
-        await message.answer("? ������������� ������������ ��� �����������. ���������.")
+        await message.answer(
+            "⏳ Синхронизация справочников уже выполняется. Подождите."
+        )
         return
-    placeholder = await message.answer("? ������������� ����������� (16 �����)...")
+    placeholder = await message.answer("⏳ Синхронизация справочников (16 типов)...")
 
     try:
         async with lock:
             results = await sync_uc.sync_all_entities(triggered_by=triggered)
         lines = []
         for rt, cnt in results.items():
-            status = f"? {cnt}" if cnt >= 0 else "? ������"
+            status = f"✅ {cnt}" if cnt >= 0 else "❌ Ошибка"
             lines.append(f"  {rt}: {status}")
-        await placeholder.edit_text("?? �����������:\n" + "\n".join(lines))
+        await placeholder.edit_text("📋 Справочники:\n" + "\n".join(lines))
     except Exception as exc:
         logger.exception("btn_sync_entities failed")
-        await placeholder.edit_text(f"? �����������: {exc}")
+        await placeholder.edit_text(f"❌ Справочники: {exc}")
 
 
-@router.message(F.text == "?? �����. �������������")
+@router.message(F.text == "🏢 Синхр. подразделения")
 @with_cooldown("sync", 10.0)
 @permission_required(PERM_SETTINGS)
 async def btn_sync_departments(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ������������� tg:%d", message.from_user.id)
+    logger.info("[sync] подразделения tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "�������������",
+        "Подразделения",
         sync_uc.sync_departments,
         lock_key="sync_departments",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? �����. ������")
+@router.message(F.text == "🏪 Синхр. склады")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_sync_stores(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ������ tg:%d", message.from_user.id)
+    logger.info("[sync] склады tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "������",
+        "Склады",
         sync_uc.sync_stores,
         lock_key="sync_stores",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? �����. ������")
+@router.message(F.text == "👥 Синхр. группы")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_sync_groups(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ������ tg:%d", message.from_user.id)
+    logger.info("[sync] группы tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "������",
+        "Группы",
         sync_uc.sync_groups,
         lock_key="sync_groups",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? �����. ������������")
+@router.message(F.text == "📦 Синхр. номенклатуру")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_sync_products(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ������������ tg:%d", message.from_user.id)
+    logger.info("[sync] номенклатура tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "������������",
+        "Номенклатура",
         sync_uc.sync_products,
         lock_key="sync_products",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? �����. �����������")
+@router.message(F.text == "🚚 Синхр. поставщиков")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_sync_suppliers(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ���������� tg:%d", message.from_user.id)
+    logger.info("[sync] поставщики tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "����������",
+        "Поставщики",
         sync_uc.sync_suppliers,
         lock_key="sync_suppliers",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? �����. �����������")
+@router.message(F.text == "👷 Синхр. сотрудников")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_sync_employees(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ���������� tg:%d", message.from_user.id)
+    logger.info("[sync] сотрудники tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "����������",
+        "Сотрудники",
         sync_uc.sync_employees,
         lock_key="sync_employees",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? �����. ���������")
+@router.message(F.text == "🎭 Синхр. должности")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_sync_roles(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] ��������� tg:%d", message.from_user.id)
+    logger.info("[sync] должности tg:%d", message.from_user.id)
     await sync_with_progress(
         message,
-        "���������",
+        "Должности",
         sync_uc.sync_employee_roles,
         lock_key="sync_roles",
         triggered_by=triggered,
     )
 
 
-@router.message(F.text == "?? �����. �Ѩ iiko")
+@router.message(F.text == "🔄 Синхр. ВСЁ iiko")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_sync_all_iiko(message: Message) -> None:
-    """������ ������������� iiko � ����������� + ��������� �����������."""
+    """Запуск синхронизации iiko параллельно + запись строк справочников."""
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] �Ѩ iiko tg:%d", message.from_user.id)
+    logger.info("[sync] всё iiko tg:%d", message.from_user.id)
     lock = get_sync_lock("sync_all_iiko")
     if lock.locked():
-        await message.answer("? ������ ������������� iiko ��� �����������. ���������.")
+        await message.answer("⏳ Синхр. iiko уже выполняется. Подождите.")
         return
     placeholder = await message.answer(
-        "? �������� ������ ������������� iiko (�����������)..."
+        "⏳ Запускаем полную синхронизацию iiko (параллельно)..."
     )
     async with lock:
         report = await sync_uc.sync_all_iiko_with_report(triggered)
-    await placeholder.edit_text("?? iiko � ���������:\n\n" + "\n".join(report))
+    await placeholder.edit_text("✅ iiko — результаты:\n\n" + "\n".join(report))
 
 
 # -----------------------------------------------------
@@ -923,107 +926,105 @@ async def btn_sync_all_iiko(message: Message) -> None:
 
 
 async def _ft_sync_one(message: Message, label: str, sync_func) -> None:
-    """������ ��� ���������� FT-������."""
+    """Общий хэлпер для запуска FT-задачи."""
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync-ft] %s tg:%d", label, message.from_user.id)
     await sync_with_progress(message, f"FT {label}", sync_func, triggered_by=triggered)
 
 
-@router.message(F.text == "?? FT: ������")
+@router.message(F.text == "📊 FT: Статьи")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_categories(message: Message) -> None:
-    await _ft_sync_one(message, "������ ���", ft_uc.sync_ft_categories)
+    await _ft_sync_one(message, "Статьи", ft_uc.sync_ft_categories)
 
 
-@router.message(F.text == "?? FT: �����")
+@router.message(F.text == "💰 FT: Счета")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_moneybags(message: Message) -> None:
-    await _ft_sync_one(message, "�����", ft_uc.sync_ft_moneybags)
+    await _ft_sync_one(message, "Счета", ft_uc.sync_ft_moneybags)
 
 
-@router.message(F.text == "?? FT: �����������")
+@router.message(F.text == "🤝 FT: Контрагенты")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_partners(message: Message) -> None:
-    await _ft_sync_one(message, "�����������", ft_uc.sync_ft_partners)
+    await _ft_sync_one(message, "Контрагенты", ft_uc.sync_ft_partners)
 
 
-@router.message(F.text == "?? FT: �����������")
+@router.message(F.text == "🎯 FT: Направления")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_directions(message: Message) -> None:
-    await _ft_sync_one(message, "�����������", ft_uc.sync_ft_directions)
+    await _ft_sync_one(message, "Направления", ft_uc.sync_ft_directions)
 
 
-@router.message(F.text == "?? FT: ������")
+@router.message(F.text == "📦 FT: Товары")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_goods(message: Message) -> None:
-    await _ft_sync_one(message, "������", ft_uc.sync_ft_goods)
+    await _ft_sync_one(message, "Товары", ft_uc.sync_ft_goods)
 
 
-@router.message(F.text == "?? FT: ������")
+@router.message(F.text == "📝 FT: Сделки")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_deals(message: Message) -> None:
-    await _ft_sync_one(message, "������", ft_uc.sync_ft_deals)
+    await _ft_sync_one(message, "Сделки", ft_uc.sync_ft_deals)
 
 
-@router.message(F.text == "?? FT: �������������")
+@router.message(F.text == "📋 FT: Обязательства")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_obligations(message: Message) -> None:
-    await _ft_sync_one(message, "�������������", ft_uc.sync_ft_obligations)
+    await _ft_sync_one(message, "Обязательства", ft_uc.sync_ft_obligations)
 
 
-@router.message(F.text == "?? FT: ����������")
+@router.message(F.text == "👤 FT: Сотрудники")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_employees(message: Message) -> None:
-    await _ft_sync_one(message, "����������", ft_uc.sync_ft_employees)
+    await _ft_sync_one(message, "Сотрудники", ft_uc.sync_ft_employees)
 
 
-@router.message(F.text == "?? FT: �����. �Ѩ")
+@router.message(F.text == "💹 FT: Синхр. ВСЁ")
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_sync_all(message: Message) -> None:
-    """������ ������������� ���� 13 ������������ FinTablo �����������."""
+    """Запуск синхронизации всех 13 справочников FinTablo параллельно."""
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync-ft] �Ѩ FT tg:%d", message.from_user.id)
+    logger.info("[sync-ft] всё FT tg:%d", message.from_user.id)
     lock = get_sync_lock("sync_all_ft")
     if lock.locked():
-        await message.answer(
-            "? ������ ������������� FinTablo ��� �����������. ���������."
-        )
+        await message.answer("⏳ Синхр. FinTablo уже выполняется. Подождите.")
         return
     placeholder = await message.answer(
-        "? FinTablo: ������������� ��� 13 ������������ �����������..."
+        "⏳ FinTablo: синхронизация всех 13 справочников запущена..."
     )
 
     try:
         async with lock:
             results = await ft_uc.sync_all_fintablo(triggered_by=triggered)
         lines = ft_uc.format_ft_report(results)
-        await placeholder.edit_text("?? FinTablo � ���������:\n\n" + "\n".join(lines))
+        await placeholder.edit_text("✅ FinTablo — результаты:\n\n" + "\n".join(lines))
     except Exception as exc:
         logger.exception("FT sync all failed")
-        await placeholder.edit_text(f"? FinTablo ������: {exc}")
+        await placeholder.edit_text(f"❌ FinTablo ошибка: {exc}")
 
 
-@router.message(F.text == "? �����. �Ѩ (iiko + FT)")
+@router.message(F.text == "⚡ Синхр. ВСЁ (iiko + FT)")
 @permission_required(PERM_SETTINGS)
 async def btn_sync_everything(message: Message) -> None:
-    """������ ������������� iiko + FinTablo �����������."""
+    """Запуск синхронизации iiko + FinTablo параллельно."""
     triggered = f"tg:{message.from_user.id}"
-    logger.info("[sync] �Ѩ iiko+FT tg:%d", message.from_user.id)
+    logger.info("[sync] всё iiko+FT tg:%d", message.from_user.id)
     lock = get_sync_lock("sync_everything")
     if lock.locked():
-        await message.answer("? ������ ������������� ��� �����������. ���������.")
+        await message.answer("⏳ Полная синхронизация уже выполняется. Подождите.")
         return
     placeholder = await message.answer(
-        "? �������� ������ ������������� iiko + FinTablo..."
+        "⏳ Запускаем полную синхронизацию iiko + FinTablo..."
     )
 
     async with lock:
@@ -1031,37 +1032,37 @@ async def btn_sync_everything(message: Message) -> None:
 
     lines = ["-- iiko --"] + iiko_lines + ["\n-- FinTablo --"] + ft_lines
     await placeholder.edit_text(
-        "? ��������� ������ �������������:\n\n" + "\n".join(lines)
+        "✅ Итоговые результаты синхронизации:\n\n" + "\n".join(lines)
     )
 
 
 # -----------------------------------------------------
-# iikoCloud ������: ��������� + �������������� �������� ��������
+# iikoCloud вебхук: настройка + автоматическая проверка остатков
 # -----------------------------------------------------
 
 
-@router.message(F.text == "?? iikoCloud ������")
+@router.message(F.text == "☁️ iikoCloud вебхук")
 @permission_required(PERM_SETTINGS)
 async def btn_iiko_cloud_menu(message: Message, state: FSMContext) -> None:
-    """������� ��������� iikoCloud �������."""
-    logger.info("[nav] iikoCloud ������ tg:%d", message.from_user.id)
+    """Открыть подменю iikoCloud вебхука."""
+    logger.info("[nav] iikoCloud меню tg:%d", message.from_user.id)
     buttons = [
-        [KeyboardButton(text="?? �������� �����������")],
-        [KeyboardButton(text="?? ��������� �����������")],
-        [KeyboardButton(text="?? ���������������� ������")],
-        [KeyboardButton(text="?? ������ �������")],
-        [KeyboardButton(text="?? �������� ������� ������")],
-        [KeyboardButton(text="?? � ����������")],
+        [KeyboardButton(text="📋 Получить организации")],
+        [KeyboardButton(text="🔗 Привязать организации")],
+        [KeyboardButton(text="🔗 Зарегистрировать вебхук")],
+        [KeyboardButton(text="ℹ️ Статус вебхука")],
+        [KeyboardButton(text="🔄 Обновить остатки сейчас")],
+        [KeyboardButton(text="🔙 К настройкам")],
     ]
     kb = ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-    await reply_menu(message, state, "?? iikoCloud ������:", kb)
+    await reply_menu(message, state, "☁️ iikoCloud вебхук:", kb)
 
 
-@router.message(F.text == "?? �������� �����������")
+@router.message(F.text == "📋 Получить организации")
 @permission_required(PERM_SETTINGS)
 async def btn_cloud_get_orgs(message: Message) -> None:
-    """�������� ������ ����������� �� iikoCloud."""
-    logger.info("[cloud] �������� ����������� tg:%d", message.from_user.id)
+    """Получить список организаций из iikoCloud."""
+    logger.info("[cloud] получение организаций tg:%d", message.from_user.id)
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
     try:
@@ -1069,29 +1070,28 @@ async def btn_cloud_get_orgs(message: Message) -> None:
 
         orgs = await get_organizations()
         if not orgs:
-            await message.answer("? ����������� �� �������. ������� apiLogin.")
+            await message.answer("⚠️ Организации не найдены. Проверьте apiLogin.")
             return
-        lines = ["?? *����������� iikoCloud:*\n"]
+        lines = ["🏢 *Организации iikoCloud:*\n"]
         for org in orgs:
-            name = org.get("name", "�")
-            org_id = org.get("id", "�")
+            name = org.get("name", "—")
+            org_id = org.get("id", "—")
             lines.append(f"?? *{name}*\n`{org_id}`\n")
         lines.append(
-            "����� ��������� ����������� � ��������������, ����� \xab?? ��������� �����������\xbb"
+            "Чтобы привязать организацию к подразделению, нажмите «🔗 Привязать организации»"
         )
         await message.answer("\n".join(lines), parse_mode="Markdown")
     except Exception as exc:
-        logger.exception("[cloud] ������ ��������� �����������")
-        await message.answer(f"? ������: {exc}")
+        await message.answer(f"❌ Ошибка: {exc}")
 
 
-@router.message(F.text == "?? ��������� �����������")
+@router.message(F.text == "🔗 Привязать организации")
 @permission_required(PERM_SETTINGS)
 async def btn_cloud_sync_org_mapping(message: Message) -> None:
-    """��������� ������������� + Cloud-����������� � GSheet ��� ��������."""
-    logger.info("[cloud] �������� ����������� tg:%d", message.from_user.id)
+    """Загрузить подразделения + Cloud-организации в GSheet для маппинга."""
+    logger.info("[cloud] привязка организаций tg:%d", message.from_user.id)
     placeholder = await message.answer(
-        "? �������� ������������� � ����������� � Google �������..."
+        "⏳ Загружаем подразделения и организации в Google Таблицы..."
     )
 
     try:
@@ -1102,7 +1102,7 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
         from adapters.google_sheets import sync_cloud_org_mapping_to_sheet
         from use_cases.cloud_org_mapping import invalidate_cache
 
-        # 1. ������������� �� �� (��� DEPARTMENT / STORE)
+        # 1. Подразделения из БД (тип DEPARTMENT / STORE)
         async with async_session_factory() as session:
             result = await session.execute(
                 select(Department).where(
@@ -1112,47 +1112,46 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
             )
             depts = result.scalars().all()
 
-        dept_list = [{"id": str(d.id), "name": d.name or "�"} for d in depts]
+        dept_list = [{"id": str(d.id), "name": d.name or "—"} for d in depts]
 
-        # 2. ����������� �� iikoCloud
+        # 2. Организации из iikoCloud
         cloud_orgs = await get_organizations()
 
-        # 3. �������� � GSheet
+        # 3. Загрузка в GSheet
         count = await sync_cloud_org_mapping_to_sheet(dept_list, cloud_orgs)
 
-        # 4. �������� ���
+        # 4. Инвалидация кэша
         await invalidate_cache()
 
         await placeholder.edit_text(
-            f"? ���������!\n\n"
-            f"?? �������������: {count}\n"
-            f"?? Cloud-�����������: {len(cloud_orgs)}\n\n"
-            f"������ ���� \xab���������\xbb � Google ������� � "
-            f"�������� ������� ������������� ������ ����������� "
-            f"�� ����������� ������ � ������� \xab����������� Cloud\xbb."
+            f"✅ Готово!\n\n"
+            f"🏢 Подразделения: {count}\n"
+            f"☁️ Cloud-организации: {len(cloud_orgs)}\n\n"
+            f"Теперь заполните «Маппинг» в Google Таблице и "
+            f"выберите нужные пары подразделений "
+            f"по нажатию «Привязать Cloud»."
         )
     except Exception as exc:
-        logger.exception("[cloud] ������ �������� �����������")
-        await placeholder.edit_text(f"? ������: {exc}")
+        await placeholder.edit_text(f"❌ Ошибка: {exc}")
 
 
-@router.message(F.text == "?? ���������������� ������")
+@router.message(F.text == "🔗 Зарегистрировать вебхук")
 @permission_required(PERM_SETTINGS)
 async def btn_cloud_register_webhook(message: Message) -> None:
-    """����������������/�������� ������ � iikoCloud ��� ���� ����������� �����������."""
+    """Зарегистрировать/обновить вебхук в iikoCloud для всех привязанных организаций."""
     from config import WEBHOOK_URL
 
-    logger.info("[cloud] ����������� ������� tg:%d", message.from_user.id)
+    logger.info("[cloud] регистрация вебхука tg:%d", message.from_user.id)
 
     if not WEBHOOK_URL:
         await message.answer(
-            "? ��� �������� � polling-������. ������ �������� ������ �� Railway (webhook-�����)."
+            "⚠️ Бот работает в polling-режиме. Вебхуки доступны только на Railway (webhook-режим)."
         )
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
-    # �������� org_id: �� GSheet-�������� + fallback �� env
+    # Получаем org_id: из GSheet-маппинга + fallback из env
     from use_cases.cloud_org_mapping import get_all_cloud_org_ids
     from config import IIKO_CLOUD_ORG_ID
 
@@ -1162,9 +1161,9 @@ async def btn_cloud_register_webhook(message: Message) -> None:
 
     if not org_ids:
         await message.answer(
-            "? ��� ����������� �����������.\n"
-            "������� ����� �?? ��������� ����������� � GSheet ����������\n"
-            "��� ����� `IIKO_CLOUD_ORG_ID` � env."
+            "⚠️ Нет привязанных организаций.\n"
+            "Нажмите «🔗 Привязать организации» в GSheet Маппинг\n"
+            "или задайте `IIKO_CLOUD_ORG_ID` в env."
         )
         return
 
@@ -1176,7 +1175,7 @@ async def btn_cloud_register_webhook(message: Message) -> None:
 
         ok_ids: list[str] = []
         fail_ids: list[str] = []
-        last_corr = "�"
+        last_corr = "—"
 
         for oid in org_ids:
             try:
@@ -1186,30 +1185,29 @@ async def btn_cloud_register_webhook(message: Message) -> None:
                     auth_token=IIKO_CLOUD_WEBHOOK_SECRET,
                 )
                 ok_ids.append(oid)
-                last_corr = result.get("correlationId", "�")
-                logger.info("[cloud] ������ ��������������� ��� org %s", oid)
+                last_corr = result.get("correlationId", "—")
+                logger.info("[cloud] успех регистрации вебхука для org %s", oid)
             except Exception as exc:
-                logger.warning("[cloud] ������ ����������� ��� org %s: %s", oid, exc)
+                logger.warning("[cloud] ошибка регистрации для org %s: %s", oid, exc)
                 fail_ids.append(oid)
 
         lines = [
-            f"? ������ ��������������� ��� {len(ok_ids)}/{len(org_ids)} �����������\n"
+            f"✅ Вебхук зарегистрирован для {len(ok_ids)}/{len(org_ids)} организаций\n"
         ]
         lines.append(f"URL: `{webhook_url}`")
-        lines.append("������: Closed ������ + StopListUpdate")
+        lines.append("События: Closed Orders + StopListUpdate")
         if fail_ids:
-            lines.append(f"\n?? ������ ���: {len(fail_ids)} ���.")
+            lines.append(f"\n⚠️ Ошибок для: {len(fail_ids)} орг.")
         await message.answer("\n".join(lines), parse_mode="Markdown")
     except Exception as exc:
-        logger.exception("[cloud] ������ ����������� �������")
-        await message.answer(f"? ������ �����������: {exc}")
+        await message.answer(f"❌ Ошибка регистрации: {exc}")
 
 
-@router.message(F.text == "?? ������ �������")
+@router.message(F.text == "ℹ️ Статус вебхука")
 @permission_required(PERM_SETTINGS)
 async def btn_cloud_webhook_status(message: Message) -> None:
-    """�������� ������� ��������� ������� � iikoCloud."""
-    logger.info("[cloud] ������ ������� tg:%d", message.from_user.id)
+    """Получить текущие настройки вебхука в iikoCloud."""
+    logger.info("[cloud] статус вебхука tg:%d", message.from_user.id)
 
     from use_cases.cloud_org_mapping import get_all_cloud_org_ids
 
@@ -1222,7 +1220,7 @@ async def btn_cloud_webhook_status(message: Message) -> None:
         org_id = IIKO_CLOUD_ORG_ID
 
     if not org_id:
-        await message.answer("? ��� ����������� �����������.")
+        await message.answer("⚠️ Нет привязанных организаций.")
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -1231,28 +1229,27 @@ async def btn_cloud_webhook_status(message: Message) -> None:
         from adapters.iiko_cloud_api import get_webhook_settings
 
         settings = await get_webhook_settings(org_id)
-        uri = settings.get("webHooksUri") or "�� �����"
-        login = settings.get("apiLoginName") or "�"
+        uri = settings.get("webHooksUri") or "не задан"
+        login = settings.get("apiLoginName") or "—"
         has_filter = "?" if settings.get("webHooksFilter") else "?"
         await message.answer(
-            f"?? *��������� �������:*\n\n"
+            f"ℹ️ *Настройки вебхука:*\n\n"
             f"API Login: `{login}`\n"
             f"URL: `{uri}`\n"
-            f"������: {has_filter}",
+            f"Фильтр: {has_filter}",
             parse_mode="Markdown",
         )
     except Exception as exc:
-        logger.exception("[cloud] ������ ��������� ������� �������")
-        await message.answer(f"? ������: {exc}")
+        await message.answer(f"❌ Ошибка: {exc}")
 
 
-@router.message(F.text == "?? �������� ������� ������")
+@router.message(F.text == "🔄 Обновить остатки сейчас")
 @permission_required(PERM_SETTINGS)
 async def btn_force_stock_check(message: Message) -> None:
-    """�������������� �������� �������� + ���������� ��������� � ���� �������������."""
-    logger.info("[cloud] �������������� �������� �������� tg:%d", message.from_user.id)
+    """Принудительная проверка остатков + отправка уведомлений в цепочку пользователей."""
+    logger.info("[cloud] принудительная проверка остатков tg:%d", message.from_user.id)
     placeholder = await message.answer(
-        "? ������������� ������� � �������� ���������..."
+        "⏳ Принудительная проверка складских остатков..."
     )
 
     try:
@@ -1260,11 +1257,10 @@ async def btn_force_stock_check(message: Message) -> None:
 
         result = await force_stock_check(message.bot)
         await placeholder.edit_text(
-            f"? ������� ���������!\n\n"
-            f"���� ��������: {result['below_min_count']} ���.\n"
-            f"���������: {result['total_products']} �������\n"
-            f"�����: {result['elapsed']} ���"
+            f"✅ Проверка завершена!\n\n"
+            f"Ниже минимума: {result['below_min_count']} поз.\n"
+            f"Всего позиций: {result['total_products']} товаров\n"
+            f"Время: {result['elapsed']} сек"
         )
     except Exception as exc:
-        logger.exception("[cloud] ������ �������������� �������� ��������")
-        await placeholder.edit_text(f"? ������: {exc}")
+        await placeholder.edit_text(f"❌ Ошибка: {exc}")
