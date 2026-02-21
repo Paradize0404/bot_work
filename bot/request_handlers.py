@@ -812,10 +812,14 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_REQUEST_APPROVE
     admin_ids = await perm_uc.get_users_with_permission(PERM_REQUEST_APPROVE)
-    receiver_ids = await req_uc.get_receiver_ids()
-
-    # Убираем пересечение (админ не дублируется в получателях)
-    receiver_only = [tg for tg in receiver_ids if tg not in set(admin_ids)]
+    
+    # Получаем получателей по ролям
+    kitchen_receivers = await req_uc.get_receiver_ids('kitchen')
+    bar_receivers = await req_uc.get_receiver_ids('bar')
+    pastry_receivers = await req_uc.get_receiver_ids('pastry')
+    
+    all_receivers = set(kitchen_receivers + bar_receivers + pastry_receivers)
+    receiver_only = [tg for tg in all_receivers if tg not in set(admin_ids)]
 
     if not admin_ids and not receiver_only:
         await callback.message.edit_text(
@@ -845,9 +849,46 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
     # Сохраняем для блокировки
     _request_admin_msgs[pk] = admin_msg_ids
 
-    # Получателям — информативное (без кнопок)
-    info_text = text + "\n\n<i>ℹ️ Информационное уведомление</i>"
+    # ── Разделение позиций для получателей ──
+    kitchen_items = []
+    bar_items = []
+    pastry_items = []
+    
+    for it in items:
+        target_name = (it.get("target_store_name") or "").lower()
+        if "бар" in target_name:
+            bar_items.append(it)
+        else:
+            # Если не бар, то это кухня. Проверяем, относится ли к кондитерке
+            if await req_uc.is_pastry_product(it["product_id"]):
+                pastry_items.append(it)
+            else:
+                kitchen_items.append(it)
+
+    # Отправляем получателям (только их часть)
     for tg_id in receiver_only:
+        user_items = []
+        seen_product_ids = set()
+        
+        def add_items(items_list):
+            for it in items_list:
+                if it["product_id"] not in seen_product_ids:
+                    user_items.append(it)
+                    seen_product_ids.add(it["product_id"])
+                    
+        if tg_id in kitchen_receivers:
+            add_items(kitchen_items)
+        if tg_id in bar_receivers:
+            add_items(bar_items)
+        if tg_id in pastry_receivers:
+            add_items(pastry_items)
+            
+        if not user_items:
+            continue
+            
+        partial_text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept, items_filter=user_items)
+        info_text = partial_text + "\n\n<i>ℹ️ Информационное уведомление (только ваши позиции)</i>"
+        
         try:
             await callback.bot.send_message(tg_id, info_text, parse_mode="HTML")
             total_sent += 1

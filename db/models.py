@@ -969,4 +969,18 @@ class PendingWriteoffDoc(Base):
 #   stoplist_message   — стоп-лист: закреплённые сообщения
 #   stoplist_history   — стоп-лист: история (вход/выход)
 #   pending_writeoff   — акты списания, ожидающие проверки
+#   pastry_nomenclature_group — группы кондитеров
 # ─────────────────────────────────────────────────────
+
+class PastryNomenclatureGroup(Base):
+    """
+    Номенклатурные группы, товары из которых отправляются кондитерам.
+    """
+    __tablename__ = "pastry_nomenclature_group"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    group_id = Column(UUID(as_uuid=True), nullable=False, unique=True, index=True,
+                      comment="UUID группы номенклатуры (→ iiko_product_group.id)")
+    group_name = Column(String(500), nullable=False,
+                        comment="Название группы")
+    created_at = Column(DateTime, default=_utcnow, nullable=False)

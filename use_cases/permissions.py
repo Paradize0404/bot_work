@@ -26,7 +26,7 @@ from use_cases.redis_cache import get_cached_or_fetch, invalidate_key
 
 # Единственный источник истины: роли и perm_key
 from bot.permission_map import (
-    ROLE_SYSADMIN, ROLE_RECEIVER, ROLE_STOCK,
+    ROLE_SYSADMIN, ROLE_RECEIVER_KITCHEN, ROLE_RECEIVER_BAR, ROLE_RECEIVER_PASTRY, ROLE_STOCK,
     ROLE_STOPLIST, ROLE_ACCOUNTANT, ROLE_KEYS,
     PERMISSION_KEYS, ALL_COLUMN_KEYS,
     MENU_BUTTON_GROUPS,
@@ -83,18 +83,36 @@ async def _ensure_cache() -> dict[str, dict[str, bool]]:
 # ═══════════════════════════════════════════════════════
 
 async def is_receiver(telegram_id: int) -> bool:
-    """Проверить, является ли пользователь получателем заявок (по GSheet столбцу «📬 Получатель»)."""
+    """Проверить, является ли пользователь получателем заявок (любого типа)."""
     cache = await _ensure_cache()
     user_perms = cache.get(str(telegram_id))
     if user_perms is None:
         return False
-    return user_perms.get(ROLE_RECEIVER, False)
+    return (user_perms.get(ROLE_RECEIVER_KITCHEN, False) or 
+            user_perms.get(ROLE_RECEIVER_BAR, False) or 
+            user_perms.get(ROLE_RECEIVER_PASTRY, False))
 
 
-async def get_receiver_ids() -> list[int]:
-    """Список telegram_id всех получателей заявок из GSheet."""
+async def get_receiver_ids(role_type: str = None) -> list[int]:
+    """
+    Список telegram_id получателей заявок из GSheet.
+    Если role_type указан ('kitchen', 'bar', 'pastry'), возвращает только их.
+    Иначе возвращает всех получателей.
+    """
     cache = await _ensure_cache()
-    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_RECEIVER, False)]
+    result = []
+    for tg_id, perms in cache.items():
+        if role_type == 'kitchen' and perms.get(ROLE_RECEIVER_KITCHEN, False):
+            result.append(int(tg_id))
+        elif role_type == 'bar' and perms.get(ROLE_RECEIVER_BAR, False):
+            result.append(int(tg_id))
+        elif role_type == 'pastry' and perms.get(ROLE_RECEIVER_PASTRY, False):
+            result.append(int(tg_id))
+        elif role_type is None and (perms.get(ROLE_RECEIVER_KITCHEN, False) or 
+                                    perms.get(ROLE_RECEIVER_BAR, False) or 
+                                    perms.get(ROLE_RECEIVER_PASTRY, False)):
+            result.append(int(tg_id))
+    return result
 
 
 # ═══════════════════════════════════════════════════════

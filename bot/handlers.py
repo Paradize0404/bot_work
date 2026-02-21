@@ -130,6 +130,7 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="?? �������������")],
         [KeyboardButton(text="?? Google �������")],
         [KeyboardButton(text="?? ����� ������� > GSheet")],
+        [KeyboardButton(text="🍰 Группы кондитеров")],
         [KeyboardButton(text="?? iikoCloud ������")],
         [KeyboardButton(text="?? �����")],
     ]

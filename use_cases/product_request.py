@@ -230,10 +230,10 @@ async def find_counteragent_for_store(store_name: str) -> dict[str, str] | None:
 # Получатели заявок — делегируем в permissions (GSheet)
 # ═══════════════════════════════════════════════════════
 
-async def get_receiver_ids() -> list[int]:
-    """Список telegram_id всех получателей заявок (из GSheet кеша)."""
+async def get_receiver_ids(role_type: str = None) -> list[int]:
+    """Список telegram_id получателей заявок (из GSheet кеша)."""
     from use_cases import permissions as perm_uc
-    return await perm_uc.get_receiver_ids()
+    return await perm_uc.get_receiver_ids(role_type)
 
 
 async def is_receiver(telegram_id: int) -> bool:
@@ -471,9 +471,9 @@ async def update_request_items(pk: int, items: list[dict], total_sum: float) -> 
     return True
 
 
-def format_request_text(req: dict, settings_dept_name: str = "") -> str:
+def format_request_text(req: dict, settings_dept_name: str = "", items_filter: list[dict] = None) -> str:
     """HTML-текст заявки для отображения (плоский список, без деления по складам)."""
-    items = req.get("items", [])
+    items = items_filter if items_filter is not None else req.get("items", [])
     created = req.get("created_at")
     date_str = created.strftime("%d.%m.%Y %H:%M") if created else "?"
 
@@ -489,18 +489,23 @@ def format_request_text(req: dict, settings_dept_name: str = "") -> str:
         f"{header}\n\n"
         f"<b>Позиции ({len(items)}):</b>\n"
     )
+    
+    total = 0.0
     for i, item in enumerate(items, 1):
         name = item.get("name", "?")
         amount = item.get("amount", 0)
         price = item.get("price", 0)
         unit = item.get("unit_name", "шт")
         line_sum = round(amount * price, 2)
+        total += line_sum
         text += f"  {i}. {name} × {amount:.4g} {unit}"
         if price:
             text += f" × {price:.2f}₽ = {line_sum:.2f}₽"
         text += "\n"
 
-    total = req.get("total_sum", 0)
+    if items_filter is None:
+        total = req.get("total_sum", 0)
+        
     text += f"\n<b>Итого: {total:.2f}₽</b>"
 
     if req.get("comment"):
@@ -509,3 +514,72 @@ def format_request_text(req: dict, settings_dept_name: str = "") -> str:
     status_map = {"pending": "⏳ Ожидает", "approved": "✅ Отправлена", "cancelled": "❌ Отменена"}
     text += f"\n\n<b>Статус:</b> {status_map.get(req.get('status', ''), req.get('status', ''))}"
     return text
+
+
+# ═══════════════════════════════════════════════════════
+# Группы кондитеров (Pastry Groups)
+# ═══════════════════════════════════════════════════════
+
+async def get_pastry_groups() -> list[dict]:
+    """Получить список номенклатурных групп кондитеров."""
+    from db.models import PastryNomenclatureGroup
+    async with async_session_factory() as session:
+        stmt = select(PastryNomenclatureGroup).order_by(PastryNomenclatureGroup.group_name)
+        rows = (await session.execute(stmt)).scalars().all()
+    return [{"id": str(r.id), "group_id": str(r.group_id), "group_name": r.group_name} for r in rows]
+
+
+async def add_pastry_group(group_id: str, group_name: str) -> bool:
+    """Добавить группу кондитеров."""
+    from db.models import PastryNomenclatureGroup
+    async with async_session_factory() as session:
+        stmt = select(PastryNomenclatureGroup).where(PastryNomenclatureGroup.group_id == UUID(group_id))
+        existing = (await session.execute(stmt)).scalar_one_or_none()
+        if existing:
+            return False
+        new_group = PastryNomenclatureGroup(group_id=UUID(group_id), group_name=group_name)
+        session.add(new_group)
+        await session.commit()
+    return True
+
+
+async def remove_pastry_group(pk: str) -> bool:
+    """Удалить группу кондитеров по ID записи."""
+    from db.models import PastryNomenclatureGroup
+    async with async_session_factory() as session:
+        stmt = select(PastryNomenclatureGroup).where(PastryNomenclatureGroup.id == UUID(pk))
+        group = (await session.execute(stmt)).scalar_one_or_none()
+        if not group:
+            return False
+        await session.delete(group)
+        await session.commit()
+    return True
+
+
+async def is_pastry_product(product_id: str) -> bool:
+    """Проверить, относится ли товар к кондитерской группе (включая подгруппы)."""
+    from db.models import Product, ProductGroup, PastryNomenclatureGroup
+    async with async_session_factory() as session:
+        # Получаем parent_id товара
+        stmt = select(Product.parent_id).where(Product.id == UUID(product_id))
+        current_group_id = (await session.execute(stmt)).scalar_one_or_none()
+        
+        if not current_group_id:
+            return False
+            
+        # Получаем все группы кондитеров
+        stmt_pastry = select(PastryNomenclatureGroup.group_id)
+        pastry_group_ids = set((await session.execute(stmt_pastry)).scalars().all())
+        
+        if not pastry_group_ids:
+            return False
+            
+        # Поднимаемся по иерархии групп
+        while current_group_id:
+            if current_group_id in pastry_group_ids:
+                return True
+                
+            stmt_parent = select(ProductGroup.parent_id).where(ProductGroup.id == current_group_id)
+            current_group_id = (await session.execute(stmt_parent)).scalar_one_or_none()
+            
+        return False

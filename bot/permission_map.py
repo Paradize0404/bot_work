@@ -23,13 +23,16 @@ PermissionMiddleware (global_commands.py) использует эти слова
 # ═══════════════════════════════════════════════════════
 
 ROLE_SYSADMIN = "🔧 Сис.Админ"
-ROLE_RECEIVER = "📬 Получатель"
+ROLE_RECEIVER_KITCHEN = "📬 Получатель (Кухня)"
+ROLE_RECEIVER_BAR = "📬 Получатель (Бар)"
+ROLE_RECEIVER_PASTRY = "📬 Получатель (Кондитерка)"
 ROLE_STOCK = "📦 Остатки"
 ROLE_STOPLIST = "🚫 Стоп-лист"
 ROLE_ACCOUNTANT = "📑 Бухгалтер"
 
 ROLE_KEYS: list[str] = [
-    ROLE_SYSADMIN, ROLE_RECEIVER,
+    ROLE_SYSADMIN,
+    ROLE_RECEIVER_KITCHEN, ROLE_RECEIVER_BAR, ROLE_RECEIVER_PASTRY,
     ROLE_STOCK, ROLE_STOPLIST, ROLE_ACCOUNTANT,
 ]
 
@@ -139,6 +142,7 @@ TEXT_PERMISSIONS: dict[str, str] = {
     "🔄 Синхронизация":              PERM_SETTINGS,
     "📤 Google Таблицы":             PERM_SETTINGS,
     "☁️ iikoCloud вебхук":           PERM_SETTINGS,
+    "🍰 Группы кондитеров":          PERM_SETTINGS,
 
     # ── GSheet / Sync (admin-only через PERM_SETTINGS + admin_required) ──
     "📤 Номенклатура → GSheet":      PERM_SETTINGS,
@@ -180,4 +184,7 @@ CALLBACK_PERMISSIONS: dict[str, str] = {
     "req_approve:":         PERM_REQUEST_APPROVE,
     "req_edit:":            PERM_REQUEST_APPROVE,
     "req_reject:":          PERM_REQUEST_APPROVE,
+
+    # Настройки: группы кондитеров
+    "pastry_":              PERM_SETTINGS,
 }
