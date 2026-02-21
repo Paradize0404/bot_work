@@ -440,7 +440,7 @@ async def get_templates_for_department(department_id: str) -> list[dict]:
                 "store_name": t.store_name,
                 "account_name": t.account_name,
                 "items_count": len(t.items) if t.items else 0,
-                "created_at": t.created_at,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
             }
         )
 

@@ -63,6 +63,7 @@ PERM_REQUEST_APPROVE = "📋 Одобрение заявок"
 # ── Раздел «Отчёты» ──
 PERM_REPORT_VIEW = "📊 Просмотр отчётов"
 PERM_REPORT_EDIT_MIN = "📊 Изменение мин.остатков"
+PERM_DAY_REPORT = "📋 Отчёт дня"
 
 # ── Раздел «Документы (OCR)» ──
 PERM_OCR_UPLOAD = "📑 Загрузка OCR"
@@ -87,6 +88,7 @@ PERMISSION_KEYS: list[str] = [
     # Отчёты
     PERM_REPORT_VIEW,
     PERM_REPORT_EDIT_MIN,
+    PERM_DAY_REPORT,
     # Документы (OCR)
     PERM_OCR_UPLOAD,
     PERM_OCR_SEND,
@@ -109,7 +111,7 @@ MENU_BUTTON_GROUPS: dict[str, list[str]] = {
     "📝 Списания": [PERM_WRITEOFF_CREATE, PERM_WRITEOFF_HISTORY, PERM_WRITEOFF_APPROVE],
     "📦 Накладные": [PERM_INVOICE_TEMPLATE, PERM_INVOICE_CREATE],
     "📋 Заявки": [PERM_REQUEST_CREATE, PERM_REQUEST_HISTORY, PERM_REQUEST_APPROVE],
-    "📊 Отчёты": [PERM_REPORT_VIEW, PERM_REPORT_EDIT_MIN],
+    "📊 Отчёты": [PERM_REPORT_VIEW, PERM_REPORT_EDIT_MIN, PERM_DAY_REPORT],
     "📑 Документы": [PERM_OCR_UPLOAD, PERM_OCR_SEND],
     "⚙️ Настройки": [PERM_SETTINGS],
 }
@@ -133,6 +135,7 @@ TEXT_PERMISSIONS: dict[str, str] = {
     # ── Подменю «Отчёты» ──
     "📊 Мин. остатки по складам": PERM_REPORT_VIEW,
     "✏️ Изменить мин. остаток": PERM_REPORT_EDIT_MIN,
+    "📋 Отчёт дня": PERM_DAY_REPORT,
     # ── Подменю «Документы (OCR)» ──
     "📤 Загрузить накладные": PERM_OCR_UPLOAD,
     "✅ Маппинг готов": PERM_OCR_UPLOAD,

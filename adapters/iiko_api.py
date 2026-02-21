@@ -558,6 +558,54 @@ async def fetch_olap_transactions_v1(
 
 
 # ─────────────────────────────────────────────────────
+# 9b2. OLAP v2 по preset ID (продажи / себестоимость)
+# ─────────────────────────────────────────────────────
+
+
+async def fetch_olap_by_preset(
+    preset_id: str,
+    date_from: str,
+    date_to: str,
+) -> list[dict[str, Any]]:
+    """
+    Получить данные OLAP-отчёта по preset ID через iiko REST API v2.
+
+    Endpoint: GET /resto/api/v2/reports/olap/byPresetId/{preset_id}
+    Параметры:
+        date_from / date_to — формат ISO: YYYY-MM-DDTHH:MM:SS
+        summary=true — включить суммарные строки
+    Возвращает список строк (dict) из поля «data» ответа.
+    """
+    key = await _get_key()
+    url = f"{_base()}/resto/api/v2/reports/olap/byPresetId/{preset_id}"
+    params = {
+        "key": key,
+        "dateFrom": date_from,
+        "dateTo": date_to,
+        "summary": "true",
+    }
+
+    label = f"olap_preset {preset_id[:8]}… {date_from[:10]}"
+    logger.info("[API] GET %s — запрашиваю...", label)
+    t0 = time.monotonic()
+    resp = await _get_with_retry(url, params, label=label)
+    elapsed = time.monotonic() - t0
+
+    data = resp.json()
+    rows = data.get("data", [])
+
+    logger.info(
+        "[API] GET %s — %d строк, HTTP %d, %.1f сек, %d байт",
+        label,
+        len(rows),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
+    )
+    return rows
+
+
+# ─────────────────────────────────────────────────────
 # 9c. Внутреннее перемещение (POST)
 # ─────────────────────────────────────────────────────
 
