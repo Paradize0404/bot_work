@@ -27,9 +27,16 @@ from use_cases.redis_cache import get_cached_or_fetch, invalidate_key
 
 # Единственный источник истины: роли и perm_key
 from bot.permission_map import (
-    ROLE_SYSADMIN, ROLE_RECEIVER_KITCHEN, ROLE_RECEIVER_BAR, ROLE_RECEIVER_PASTRY, ROLE_STOCK,
-    ROLE_STOPLIST, ROLE_ACCOUNTANT, ROLE_KEYS,
-    PERMISSION_KEYS, ALL_COLUMN_KEYS,
+    ROLE_SYSADMIN,
+    ROLE_RECEIVER_KITCHEN,
+    ROLE_RECEIVER_BAR,
+    ROLE_RECEIVER_PASTRY,
+    ROLE_STOCK,
+    ROLE_STOPLIST,
+    ROLE_ACCOUNTANT,
+    ROLE_KEYS,
+    PERMISSION_KEYS,
+    ALL_COLUMN_KEYS,
     MENU_BUTTON_GROUPS,
 )
 
@@ -53,6 +60,7 @@ async def invalidate_cache() -> None:
 
 async def _ensure_cache() -> dict[str, dict[str, bool]]:
     """Загрузить матрицу прав из GSheet если кеш устарел."""
+
     async def _fetch() -> dict[str, dict[str, bool]] | None:
         try:
             raw = await gsheet.read_permissions_sheet()
@@ -74,7 +82,7 @@ async def _ensure_cache() -> dict[str, dict[str, bool]]:
         _fetch,
         ttl_seconds=_CACHE_TTL,
         serializer=json.dumps,
-        deserializer=json.loads
+        deserializer=json.loads,
     )
     return data or {}
 
@@ -83,15 +91,18 @@ async def _ensure_cache() -> dict[str, dict[str, bool]]:
 # Роли: получатель (из GSheet)
 # ═══════════════════════════════════════════════════════
 
+
 async def is_receiver(telegram_id: int) -> bool:
     """Проверить, является ли пользователь получателем заявок (любого типа)."""
     cache = await _ensure_cache()
     user_perms = cache.get(str(telegram_id))
     if user_perms is None:
         return False
-    return (user_perms.get(ROLE_RECEIVER_KITCHEN, False) or 
-            user_perms.get(ROLE_RECEIVER_BAR, False) or 
-            user_perms.get(ROLE_RECEIVER_PASTRY, False))
+    return (
+        user_perms.get(ROLE_RECEIVER_KITCHEN, False)
+        or user_perms.get(ROLE_RECEIVER_BAR, False)
+        or user_perms.get(ROLE_RECEIVER_PASTRY, False)
+    )
 
 
 async def get_receiver_ids(role_type: str = None) -> list[int]:
@@ -103,15 +114,17 @@ async def get_receiver_ids(role_type: str = None) -> list[int]:
     cache = await _ensure_cache()
     result = []
     for tg_id, perms in cache.items():
-        if role_type == 'kitchen' and perms.get(ROLE_RECEIVER_KITCHEN, False):
+        if role_type == "kitchen" and perms.get(ROLE_RECEIVER_KITCHEN, False):
             result.append(int(tg_id))
-        elif role_type == 'bar' and perms.get(ROLE_RECEIVER_BAR, False):
+        elif role_type == "bar" and perms.get(ROLE_RECEIVER_BAR, False):
             result.append(int(tg_id))
-        elif role_type == 'pastry' and perms.get(ROLE_RECEIVER_PASTRY, False):
+        elif role_type == "pastry" and perms.get(ROLE_RECEIVER_PASTRY, False):
             result.append(int(tg_id))
-        elif role_type is None and (perms.get(ROLE_RECEIVER_KITCHEN, False) or 
-                                    perms.get(ROLE_RECEIVER_BAR, False) or 
-                                    perms.get(ROLE_RECEIVER_PASTRY, False)):
+        elif role_type is None and (
+            perms.get(ROLE_RECEIVER_KITCHEN, False)
+            or perms.get(ROLE_RECEIVER_BAR, False)
+            or perms.get(ROLE_RECEIVER_PASTRY, False)
+        ):
             result.append(int(tg_id))
     return result
 
@@ -120,22 +133,31 @@ async def get_receiver_ids(role_type: str = None) -> list[int]:
 # Подписки на уведомления: остатки / стоп-лист
 # ═══════════════════════════════════════════════════════
 
+
 async def get_stock_subscriber_ids() -> list[int]:
     """Список telegram_id пользователей с флагом «📦 Остатки»."""
     cache = await _ensure_cache()
-    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_STOCK, False)]
+    return [
+        int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_STOCK, False)
+    ]
 
 
 async def get_stoplist_subscriber_ids() -> list[int]:
     """Список telegram_id пользователей с флагом «🚫 Стоп-лист»."""
     cache = await _ensure_cache()
-    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_STOPLIST, False)]
+    return [
+        int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_STOPLIST, False)
+    ]
 
 
 async def get_accountant_ids() -> list[int]:
     """Список telegram_id пользователей с ролью «📑 Бухгалтер»."""
     cache = await _ensure_cache()
-    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_ACCOUNTANT, False)]
+    return [
+        int(tg_id)
+        for tg_id, perms in cache.items()
+        if perms.get(ROLE_ACCOUNTANT, False)
+    ]
 
 
 async def get_sysadmin_ids() -> list[int]:
@@ -143,7 +165,9 @@ async def get_sysadmin_ids() -> list[int]:
     Список telegram_id сисадминов — получателей технических алертов (ERROR/CRITICAL из логов).
     """
     cache = await _ensure_cache()
-    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_SYSADMIN, False)]
+    return [
+        int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_SYSADMIN, False)
+    ]
 
 
 async def get_users_with_permission(perm_key: str) -> list[int]:
@@ -151,15 +175,13 @@ async def get_users_with_permission(perm_key: str) -> list[int]:
     Получить список telegram_id пользователей, у которых есть конкретное право.
     """
     cache = await _ensure_cache()
-    return [
-        int(tg_id) for tg_id, perms in cache.items()
-        if perms.get(perm_key, False)
-    ]
+    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(perm_key, False)]
 
 
 # ═══════════════════════════════════════════════════════
 # Проверка прав на кнопки
 # ═══════════════════════════════════════════════════════
+
 
 async def has_permission(telegram_id: int, perm_key: str) -> bool:
     """
@@ -200,6 +222,7 @@ async def get_allowed_keys(telegram_id: int) -> set[str]:
 # Синхронизация: сотрудники + кнопки → GSheet
 # (защита от «дурака» — не стирает права, не удаляет строки)
 # ═══════════════════════════════════════════════════════
+
 
 async def sync_permissions_to_gsheet(triggered_by: str | None = None) -> int:
     """

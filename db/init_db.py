@@ -12,12 +12,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from logging_config import setup_logging
+
 setup_logging()
 
 from db.engine import engine
 from db.models import Base
+
 # Импортируем ft_models чтобы SQLAlchemy увидел таблицы ft_*
 import db.ft_models  # noqa: F401
+
 # Импортируем OCR модели (теперь используют общий Base из db.models)
 import models.ocr  # noqa: F401
 

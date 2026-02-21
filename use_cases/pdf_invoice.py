@@ -23,7 +23,11 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer,
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
@@ -91,7 +95,9 @@ def _download_fonts() -> None:
                     out_path = os.path.join(_FONTS_DIR, basename)
                     with open(out_path, "wb") as f:
                         f.write(data)
-                    logger.info("[pdf] Извлечён шрифт: %s (%d байт)", basename, len(data))
+                    logger.info(
+                        "[pdf] Извлечён шрифт: %s (%d байт)", basename, len(data)
+                    )
         os.remove(tmp_path)
     except Exception:
         logger.exception("[pdf] Не удалось скачать шрифты DejaVu")
@@ -100,6 +106,7 @@ def _download_fonts() -> None:
 # ═══════════════════════════════════════════════════════
 # Генерация PDF
 # ═══════════════════════════════════════════════════════
+
 
 def generate_invoice_pdf(
     *,
@@ -247,12 +254,12 @@ def generate_invoice_pdf(
         # Ширины колонок: №, Наименование, Ед., Кол-во, Цена, Сумма
         page_w = A4[0] - 20 * mm  # доступная ширина
         col_widths = [
-            page_w * 0.05,   # №
-            page_w * 0.43,   # Наименование
-            page_w * 0.08,   # Ед.
-            page_w * 0.12,   # Кол-во
-            page_w * 0.15,   # Цена
-            page_w * 0.17,   # Сумма
+            page_w * 0.05,  # №
+            page_w * 0.43,  # Наименование
+            page_w * 0.08,  # Ед.
+            page_w * 0.12,  # Кол-во
+            page_w * 0.15,  # Цена
+            page_w * 0.17,  # Сумма
         ]
 
         # Заголовок таблицы
@@ -301,42 +308,45 @@ def generate_invoice_pdf(
         table_data.append(total_row)
 
         table = Table(table_data, colWidths=col_widths, repeatRows=1)
-        table.setStyle(TableStyle([
-            # Шрифты (fallback, основные через Paragraph)
-            ("FONTNAME", (0, 0), (-1, 0), "DejaVu-Bold"),
-            ("FONTNAME", (0, 1), (-1, -1), "DejaVu"),
-            ("FONTSIZE", (0, 0), (-1, -1), font_size),
-
-            # Границы
-            ("GRID", (0, 0), (-1, -2), 0.5, colors.black),
-            ("LINEABOVE", (0, -1), (-1, -1), 1, colors.black),
-
-            # Заливка заголовка
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E8E8E8")),
-
-            # Выравнивание
-            ("ALIGN", (0, 0), (0, -1), "CENTER"),   # №
-            ("ALIGN", (2, 0), (2, -1), "CENTER"),    # Ед.
-            ("ALIGN", (3, 0), (3, -1), "RIGHT"),     # Кол-во
-            ("ALIGN", (4, 0), (4, -1), "RIGHT"),     # Цена
-            ("ALIGN", (5, 0), (5, -1), "RIGHT"),     # Сумма
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-
-            # Высота строк
-            ("ROWHEIGHT", (0, 0), (-1, -1), row_height),
-
-            # Отступы внутри ячеек
-            ("TOPPADDING", (0, 0), (-1, -1), 1),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-            ("LEFTPADDING", (0, 0), (-1, -1), 2),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-
-            # Чередование цвета строк
-            *[
-                ("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#F8F8F8"))
-                for row_idx in range(2, len(table_data) - 1, 2)
-            ],
-        ]))
+        table.setStyle(
+            TableStyle(
+                [
+                    # Шрифты (fallback, основные через Paragraph)
+                    ("FONTNAME", (0, 0), (-1, 0), "DejaVu-Bold"),
+                    ("FONTNAME", (0, 1), (-1, -1), "DejaVu"),
+                    ("FONTSIZE", (0, 0), (-1, -1), font_size),
+                    # Границы
+                    ("GRID", (0, 0), (-1, -2), 0.5, colors.black),
+                    ("LINEABOVE", (0, -1), (-1, -1), 1, colors.black),
+                    # Заливка заголовка
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E8E8E8")),
+                    # Выравнивание
+                    ("ALIGN", (0, 0), (0, -1), "CENTER"),  # №
+                    ("ALIGN", (2, 0), (2, -1), "CENTER"),  # Ед.
+                    ("ALIGN", (3, 0), (3, -1), "RIGHT"),  # Кол-во
+                    ("ALIGN", (4, 0), (4, -1), "RIGHT"),  # Цена
+                    ("ALIGN", (5, 0), (5, -1), "RIGHT"),  # Сумма
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    # Высота строк
+                    ("ROWHEIGHT", (0, 0), (-1, -1), row_height),
+                    # Отступы внутри ячеек
+                    ("TOPPADDING", (0, 0), (-1, -1), 1),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                    # Чередование цвета строк
+                    *[
+                        (
+                            "BACKGROUND",
+                            (0, row_idx),
+                            (-1, row_idx),
+                            colors.HexColor("#F8F8F8"),
+                        )
+                        for row_idx in range(2, len(table_data) - 1, 2)
+                    ],
+                ]
+            )
+        )
         elements.append(table)
 
         # Подписи
@@ -348,10 +358,14 @@ def generate_invoice_pdf(
             ]
         ]
         sign_table = Table(sign_data, colWidths=[page_w * 0.5, page_w * 0.5])
-        sign_table.setStyle(TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ]))
+        sign_table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ]
+            )
+        )
         elements.append(sign_table)
 
         return elements
@@ -383,7 +397,9 @@ def generate_invoice_pdf(
     elapsed = time.monotonic() - t0
     logger.info(
         "[pdf] Сформирован PDF: %d позиций, %.1f КБ, за %.3f сек",
-        len(items), len(pdf_bytes) / 1024, elapsed,
+        len(items),
+        len(pdf_bytes) / 1024,
+        elapsed,
     )
     return pdf_bytes
 
@@ -410,12 +426,39 @@ def generate_invoice_filename(
 def _transliterate(text: str) -> str:
     """Простая транслитерация кириллицы → латиницы для имён файлов."""
     _MAP = {
-        "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e",
-        "ё": "yo", "ж": "zh", "з": "z", "и": "i", "й": "j", "к": "k",
-        "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
-        "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
-        "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "",
-        "э": "e", "ю": "yu", "я": "ya",
+        "а": "a",
+        "б": "b",
+        "в": "v",
+        "г": "g",
+        "д": "d",
+        "е": "e",
+        "ё": "yo",
+        "ж": "zh",
+        "з": "z",
+        "и": "i",
+        "й": "j",
+        "к": "k",
+        "л": "l",
+        "м": "m",
+        "н": "n",
+        "о": "o",
+        "п": "p",
+        "р": "r",
+        "с": "s",
+        "т": "t",
+        "у": "u",
+        "ф": "f",
+        "х": "h",
+        "ц": "ts",
+        "ч": "ch",
+        "ш": "sh",
+        "щ": "sch",
+        "ъ": "",
+        "ы": "y",
+        "ь": "",
+        "э": "e",
+        "ю": "yu",
+        "я": "ya",
     }
     result = []
     for ch in text.lower():

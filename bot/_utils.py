@@ -31,55 +31,72 @@ def escape_md(s: str) -> str:
 # Reply-клавиатуры подменю (используются из разных файлов)
 # ═══════════════════════════════════════════════════════
 
+
 def writeoffs_keyboard() -> ReplyKeyboardMarkup:
     """Подменю 'Списания'."""
-    return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="📝 Создать списание")],
-        [KeyboardButton(text="🗂 История списаний")],
-        [KeyboardButton(text="◀️ Назад")],
-    ], resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📝 Создать списание")],
+            [KeyboardButton(text="🗂 История списаний")],
+            [KeyboardButton(text="◀️ Назад")],
+        ],
+        resize_keyboard=True,
+    )
 
 
 def invoices_keyboard() -> ReplyKeyboardMarkup:
     """Подменю 'Накладные'."""
-    return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="📑 Создать шаблон накладной")],
-        [KeyboardButton(text="📦 Создать по шаблону")],
-        [KeyboardButton(text="◀️ Назад")],
-    ], resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📑 Создать шаблон накладной")],
+            [KeyboardButton(text="📦 Создать по шаблону")],
+            [KeyboardButton(text="◀️ Назад")],
+        ],
+        resize_keyboard=True,
+    )
 
 
 def requests_keyboard() -> ReplyKeyboardMarkup:
     """Подменю 'Заявки'."""
-    return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="✏️ Создать заявку")],
-        [KeyboardButton(text="📒 История заявок")],
-        [KeyboardButton(text="📬 Входящие заявки")],
-        [KeyboardButton(text="◀️ Назад")],
-    ], resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="✏️ Создать заявку")],
+            [KeyboardButton(text="📒 История заявок")],
+            [KeyboardButton(text="📬 Входящие заявки")],
+            [KeyboardButton(text="◀️ Назад")],
+        ],
+        resize_keyboard=True,
+    )
 
 
 def reports_keyboard() -> ReplyKeyboardMarkup:
     """Подменю 'Отчёты'."""
-    return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="📊 Мин. остатки по складам")],
-        [KeyboardButton(text="✏️ Изменить мин. остаток")],
-        [KeyboardButton(text="◀️ Назад")],
-    ], resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📊 Мин. остатки по складам")],
+            [KeyboardButton(text="✏️ Изменить мин. остаток")],
+            [KeyboardButton(text="◀️ Назад")],
+        ],
+        resize_keyboard=True,
+    )
 
 
 def ocr_keyboard() -> ReplyKeyboardMarkup:
     """Подменю 'Документы' (OCR распознавание накладных)."""
-    return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="📤 Загрузить накладные")],
-        [KeyboardButton(text="✅ Маппинг готов")],
-        [KeyboardButton(text="◀️ Назад")],
-    ], resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📤 Загрузить накладные")],
+            [KeyboardButton(text="✅ Маппинг готов")],
+            [KeyboardButton(text="◀️ Назад")],
+        ],
+        resize_keyboard=True,
+    )
 
 
 # ═══════════════════════════════════════════════════════
 # Inline-keyboard фабрики (параметризованы префиксом)
 # ═══════════════════════════════════════════════════════
+
 
 def items_inline_kb(
     items: list[dict],
@@ -98,24 +115,38 @@ def items_inline_kb(
     page_items = items[start:end]
 
     buttons = [
-        [InlineKeyboardButton(
-            text=item[text_key],
-            callback_data=f"{prefix}:{item[id_key]}",
-        )]
+        [
+            InlineKeyboardButton(
+                text=item[text_key],
+                callback_data=f"{prefix}:{item[id_key]}",
+            )
+        ]
         for item in page_items
     ]
 
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"{prefix}_page:{page - 1}"))
+        nav.append(
+            InlineKeyboardButton(
+                text="◀️ Назад", callback_data=f"{prefix}_page:{page - 1}"
+            )
+        )
     if end < total:
-        nav.append(InlineKeyboardButton(text="▶️ Далее", callback_data=f"{prefix}_page:{page + 1}"))
-    
+        nav.append(
+            InlineKeyboardButton(
+                text="▶️ Далее", callback_data=f"{prefix}_page:{page + 1}"
+            )
+        )
+
     if nav:
         total_pages = (total + page_size - 1) // page_size
-        nav.insert(len(nav) // 2, InlineKeyboardButton(
-            text=f"{page + 1}/{total_pages}", callback_data="noop",
-        ))
+        nav.insert(
+            len(nav) // 2,
+            InlineKeyboardButton(
+                text=f"{page + 1}/{total_pages}",
+                callback_data="noop",
+            ),
+        )
         buttons.append(nav)
 
     buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=cancel_data)])
@@ -125,6 +156,7 @@ def items_inline_kb(
 # ═══════════════════════════════════════════════════════
 # FSM prompt / summary — одна логика, разные state_key
 # ═══════════════════════════════════════════════════════
+
 
 async def send_prompt_msg(
     bot: Bot,
@@ -154,7 +186,10 @@ async def send_prompt_msg(
                 return
             logger.warning("[%s] prompt edit fail: %s", log_tag, exc)
     msg = await bot.send_message(
-        chat_id, text, reply_markup=reply_markup, parse_mode="HTML",
+        chat_id,
+        text,
+        reply_markup=reply_markup,
+        parse_mode="HTML",
     )
     await state.update_data(**{state_key: msg.message_id})
 

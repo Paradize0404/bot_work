@@ -23,7 +23,9 @@ from iiko_auth import get_auth_token, get_base_url
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = httpx.Timeout(connect=15.0, read=60.0, write=15.0, pool=15.0)
-_LIMITS = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=120)
+_LIMITS = httpx.Limits(
+    max_connections=20, max_keepalive_connections=10, keepalive_expiry=120
+)
 
 # Persistent client — один на весь процесс.
 # Переиспользует TCP/TLS соединения (connection pooling).
@@ -35,11 +37,12 @@ async def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None or _client.is_closed:
         from config import IIKO_VERIFY_SSL
+
         _client = httpx.AsyncClient(
             verify=IIKO_VERIFY_SSL,
             timeout=_TIMEOUT,
             limits=_LIMITS,
-            http2=False,      # iiko не поддерживает h2
+            http2=False,  # iiko не поддерживает h2
         )
     return _client
 
@@ -99,13 +102,19 @@ async def _get_with_retry(
                 delay = _RETRY_DELAYS[attempt - 1]
                 logger.warning(
                     "[API] %s — попытка %d/%d: %s. Повтор через %d сек...",
-                    label, attempt, _MAX_RETRIES, exc, delay,
+                    label,
+                    attempt,
+                    _MAX_RETRIES,
+                    exc,
+                    delay,
                 )
                 await asyncio.sleep(delay)
             else:
                 logger.error(
                     "[API] %s — все %d попыток не удались: %s",
-                    label, _MAX_RETRIES, exc,
+                    label,
+                    _MAX_RETRIES,
+                    exc,
                 )
     raise last_exc  # type: ignore[misc]
 
@@ -114,10 +123,17 @@ async def _get_with_retry(
 # 1. entities/list  (справочники — JSON)
 # ─────────────────────────────────────────────────────
 
-async def fetch_entities(root_type: str, include_deleted: bool = True) -> list[dict[str, Any]]:
+
+async def fetch_entities(
+    root_type: str, include_deleted: bool = True
+) -> list[dict[str, Any]]:
     key = await _get_key()
     url = f"{_base()}/resto/api/v2/entities/list"
-    params = {"key": key, "rootType": root_type, "includeDeleted": str(include_deleted).lower()}
+    params = {
+        "key": key,
+        "rootType": root_type,
+        "includeDeleted": str(include_deleted).lower(),
+    }
 
     label = f"entities rootType={root_type}"
     logger.info("[API] GET %s — отправляю запрос...", label)
@@ -126,14 +142,21 @@ async def fetch_entities(root_type: str, include_deleted: bool = True) -> list[d
     elapsed = time.monotonic() - t0
 
     data = resp.json()
-    logger.info("[API] GET entities rootType=%s — %d записей, HTTP %d, %.1f сек, %d байт",
-                root_type, len(data), resp.status_code, elapsed, len(resp.content))
+    logger.info(
+        "[API] GET entities rootType=%s — %d записей, HTTP %d, %.1f сек, %d байт",
+        root_type,
+        len(data),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
+    )
     return data
 
 
 # ─────────────────────────────────────────────────────
 # 2. suppliers (XML)
 # ─────────────────────────────────────────────────────
+
 
 async def fetch_suppliers() -> list[dict[str, Any]]:
     key = await _get_key()
@@ -144,14 +167,19 @@ async def fetch_suppliers() -> list[dict[str, Any]]:
     t0 = time.monotonic()
     resp = await _get_with_retry(url, params, label="suppliers")
 
-    logger.info("[API] GET suppliers — HTTP %d, %.1f сек, %d байт",
-                resp.status_code, time.monotonic() - t0, len(resp.content))
+    logger.info(
+        "[API] GET suppliers — HTTP %d, %.1f сек, %d байт",
+        resp.status_code,
+        time.monotonic() - t0,
+        len(resp.content),
+    )
     return _parse_employees_xml(resp.text, entity_name="supplier")
 
 
 # ─────────────────────────────────────────────────────
 # 3. departments (XML)
 # ─────────────────────────────────────────────────────
+
 
 async def fetch_departments() -> list[dict[str, Any]]:
     key = await _get_key()
@@ -162,14 +190,19 @@ async def fetch_departments() -> list[dict[str, Any]]:
     t0 = time.monotonic()
     resp = await _get_with_retry(url, params, label="departments")
 
-    logger.info("[API] GET departments — HTTP %d, %.1f сек, %d байт",
-                resp.status_code, time.monotonic() - t0, len(resp.content))
+    logger.info(
+        "[API] GET departments — HTTP %d, %.1f сек, %d байт",
+        resp.status_code,
+        time.monotonic() - t0,
+        len(resp.content),
+    )
     return _parse_corporate_items_xml(resp.text)
 
 
 # ─────────────────────────────────────────────────────
 # 4. stores (XML)
 # ─────────────────────────────────────────────────────
+
 
 async def fetch_stores() -> list[dict[str, Any]]:
     key = await _get_key()
@@ -180,14 +213,19 @@ async def fetch_stores() -> list[dict[str, Any]]:
     t0 = time.monotonic()
     resp = await _get_with_retry(url, params, label="stores")
 
-    logger.info("[API] GET stores — HTTP %d, %.1f сек, %d байт",
-                resp.status_code, time.monotonic() - t0, len(resp.content))
+    logger.info(
+        "[API] GET stores — HTTP %d, %.1f сек, %d байт",
+        resp.status_code,
+        time.monotonic() - t0,
+        len(resp.content),
+    )
     return _parse_corporate_items_xml(resp.text)
 
 
 # ─────────────────────────────────────────────────────
 # 5. groups (XML)
 # ─────────────────────────────────────────────────────
+
 
 async def fetch_groups() -> list[dict[str, Any]]:
     key = await _get_key()
@@ -198,14 +236,19 @@ async def fetch_groups() -> list[dict[str, Any]]:
     t0 = time.monotonic()
     resp = await _get_with_retry(url, params, label="groups")
 
-    logger.info("[API] GET groups — HTTP %d, %.1f сек, %d байт",
-                resp.status_code, time.monotonic() - t0, len(resp.content))
+    logger.info(
+        "[API] GET groups — HTTP %d, %.1f сек, %d байт",
+        resp.status_code,
+        time.monotonic() - t0,
+        len(resp.content),
+    )
     return _parse_corporate_items_xml(resp.text)
 
 
 # ─────────────────────────────────────────────────────
 # 6. products (JSON)
 # ─────────────────────────────────────────────────────
+
 
 async def fetch_products(include_deleted: bool = False) -> list[dict[str, Any]]:
     key = await _get_key()
@@ -218,14 +261,20 @@ async def fetch_products(include_deleted: bool = False) -> list[dict[str, Any]]:
     elapsed = time.monotonic() - t0
 
     data = resp.json()
-    logger.info("[API] GET products — %d записей, HTTP %d, %.1f сек, %d байт",
-                len(data), resp.status_code, elapsed, len(resp.content))
+    logger.info(
+        "[API] GET products — %d записей, HTTP %d, %.1f сек, %d байт",
+        len(data),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
+    )
     return data
 
 
 # ─────────────────────────────────────────────────────
 # 7. employees (XML)
 # ─────────────────────────────────────────────────────
+
 
 async def fetch_employees(include_deleted: bool = True) -> list[dict[str, Any]]:
     key = await _get_key()
@@ -238,14 +287,19 @@ async def fetch_employees(include_deleted: bool = True) -> list[dict[str, Any]]:
     t0 = time.monotonic()
     resp = await _get_with_retry(url, params, label="employees")
 
-    logger.info("[API] GET employees — HTTP %d, %.1f сек, %d байт",
-                resp.status_code, time.monotonic() - t0, len(resp.content))
+    logger.info(
+        "[API] GET employees — HTTP %d, %.1f сек, %d байт",
+        resp.status_code,
+        time.monotonic() - t0,
+        len(resp.content),
+    )
     return _parse_employees_xml(resp.text, entity_name="employee")
 
 
 # ─────────────────────────────────────────────────────
 # 8. employee roles (XML)
 # ─────────────────────────────────────────────────────
+
 
 async def fetch_employee_roles() -> list[dict[str, Any]]:
     key = await _get_key()
@@ -256,14 +310,19 @@ async def fetch_employee_roles() -> list[dict[str, Any]]:
     t0 = time.monotonic()
     resp = await _get_with_retry(url, params, label="employee_roles")
 
-    logger.info("[API] GET employee_roles — HTTP %d, %.1f сек, %d байт",
-                resp.status_code, time.monotonic() - t0, len(resp.content))
+    logger.info(
+        "[API] GET employee_roles — HTTP %d, %.1f сек, %d байт",
+        resp.status_code,
+        time.monotonic() - t0,
+        len(resp.content),
+    )
     return _parse_roles_xml(resp.text)
 
 
 # ─────────────────────────────────────────────────────
 # 9. product groups (JSON)
 # ─────────────────────────────────────────────────────
+
 
 async def fetch_product_groups() -> list[dict[str, Any]]:
     """
@@ -282,7 +341,10 @@ async def fetch_product_groups() -> list[dict[str, Any]]:
     data = resp.json()
     logger.info(
         "[API] GET product_groups — %d записей, HTTP %d, %.1f сек, %d байт",
-        len(data), resp.status_code, elapsed, len(resp.content),
+        len(data),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
     )
     return data
 
@@ -290,6 +352,7 @@ async def fetch_product_groups() -> list[dict[str, Any]]:
 # ═════════════════════════════════════════════════════
 # XML parsers
 # ═════════════════════════════════════════════════════
+
 
 def _parse_employees_xml(xml_str: str, entity_name: str) -> list[dict[str, Any]]:
     root = ET.fromstring(xml_str)
@@ -357,7 +420,9 @@ async def fetch_stock_balances(
     Ответ — JSON: [{"store": UUID, "product": UUID, "amount": float, "sum": float}, ...]
     """
     if not timestamp:
-        timestamp = _now_kgd().strftime("%Y-%m-%dT%H:%M:%S")  # yyyy-MM-ddTHH:mm:ss (Калининград)
+        timestamp = _now_kgd().strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )  # yyyy-MM-ddTHH:mm:ss (Калининград)
 
     key = await _get_key()
     url = f"{_base()}/resto/api/v2/reports/balance/stores"
@@ -371,7 +436,10 @@ async def fetch_stock_balances(
     data = resp.json()
     logger.info(
         "[API] GET stock_balances — %d записей, HTTP %d, %.1f сек, %d байт",
-        len(data), resp.status_code, elapsed, len(resp.content),
+        len(data),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
     )
     return data
 
@@ -381,14 +449,14 @@ async def fetch_stock_balances(
 # ─────────────────────────────────────────────────────
 
 _OLAP_V1_DIMENSIONS = (
-    "Account.Name",        # склад / счёт
-    "Product.TopParent",   # группа 1 уровня (TopParent)
-    "Product.Name",        # позиция номенклатуры
-    "Product.MeasureUnit", # единица измерения
+    "Account.Name",  # склад / счёт
+    "Product.TopParent",  # группа 1 уровня (TopParent)
+    "Product.Name",  # позиция номенклатуры
+    "Product.MeasureUnit",  # единица измерения
 )
 _OLAP_V1_METRICS = (
     "FinalBalance.Amount",  # остаток кол-во
-    "FinalBalance.Money",   # остаток денежный
+    "FinalBalance.Money",  # остаток денежный
 )
 
 
@@ -455,7 +523,13 @@ async def fetch_olap_transactions_v1(
 
     if resp.status_code >= 400:
         body = resp.text[:500] if resp.text else ""
-        logger.error("[API] GET %s FAIL — HTTP %d, %.1fs, body=%s", label, resp.status_code, elapsed, body)
+        logger.error(
+            "[API] GET %s FAIL — HTTP %d, %.1fs, body=%s",
+            label,
+            resp.status_code,
+            elapsed,
+            body,
+        )
         resp.raise_for_status()
 
     content_type = (resp.headers.get("content-type") or "").lower()
@@ -474,7 +548,11 @@ async def fetch_olap_transactions_v1(
 
     logger.info(
         "[API] GET %s — %d строк, HTTP %d, %.1f сек, %d байт",
-        label, len(rows), resp.status_code, elapsed, len(resp.content),
+        label,
+        len(rows),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
     )
     return rows
 
@@ -482,6 +560,7 @@ async def fetch_olap_transactions_v1(
 # ─────────────────────────────────────────────────────
 # 9c. Внутреннее перемещение (POST)
 # ─────────────────────────────────────────────────────
+
 
 async def send_internal_transfer(document: dict[str, Any]) -> dict[str, Any]:
     """
@@ -511,13 +590,16 @@ async def send_internal_transfer(document: dict[str, Any]) -> dict[str, Any]:
         body = resp.text[:500] if resp.text else ""
         logger.error(
             "[API] POST internalTransfer FAIL — HTTP %d, %.1f сек, body=%s",
-            resp.status_code, elapsed, body,
+            resp.status_code,
+            elapsed,
+            body,
         )
         resp.raise_for_status()
 
     logger.info(
         "[API] POST internalTransfer OK — HTTP %d, %.1f сек",
-        resp.status_code, elapsed,
+        resp.status_code,
+        elapsed,
     )
     return {"ok": True}
 
@@ -535,6 +617,7 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
     Возвращает {"ok": True} при успехе, иначе выбрасывает исключение.
     """
     from use_cases.errors import is_transient
+
     key = await _get_key()
     url = f"{_base()}/resto/api/v2/documents/writeoff"
     params = {"key": key}
@@ -547,11 +630,11 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
         document.get("accountId"),
         len(document.get("items", [])),
     )
-    
+
     client = await _get_client()
     max_retries = 2
     backoff = (2, 5)
-    
+
     for attempt in range(max_retries + 1):
         t0 = time.monotonic()
         try:
@@ -562,26 +645,39 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
                 body = resp.text[:500] if resp.text else ""
                 logger.error(
                     "[API] POST writeoff FAIL — HTTP %d, %.1f сек, body=%s",
-                    resp.status_code, elapsed, body,
+                    resp.status_code,
+                    elapsed,
+                    body,
                 )
                 resp.raise_for_status()
 
             logger.info(
                 "[API] POST writeoff OK — HTTP %d, %.1f сек",
-                resp.status_code, elapsed,
+                resp.status_code,
+                elapsed,
             )
             return {"ok": True}
-            
+
         except Exception as e:
             if attempt == max_retries or not is_transient(e):
-                logger.error("[API] POST writeoff failed permanently after %d attempts: %s", attempt + 1, e)
+                logger.error(
+                    "[API] POST writeoff failed permanently after %d attempts: %s",
+                    attempt + 1,
+                    e,
+                )
                 raise
-            
+
             delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
-            logger.warning("[API] POST writeoff retry %d/%d for doc %s: %s. Waiting %ds...", 
-                          attempt + 1, max_retries, doc_id, e, delay)
+            logger.warning(
+                "[API] POST writeoff retry %d/%d for doc %s: %s. Waiting %ds...",
+                attempt + 1,
+                max_retries,
+                doc_id,
+                e,
+                delay,
+            )
             await asyncio.sleep(delay)
-            
+
     return {"ok": False}
 
 
@@ -651,11 +747,14 @@ async def send_outgoing_invoice(document: dict[str, Any]) -> dict[str, Any]:
         document.get("counteragentId"),
         len(document.get("items", [])),
     )
-    logger.debug("[API] outgoingInvoice XML body (first 2000 chars):\n%s", xml_body[:2000])
+    logger.debug(
+        "[API] outgoingInvoice XML body (first 2000 chars):\n%s", xml_body[:2000]
+    )
     t0 = time.monotonic()
     client = await _get_client()
     resp = await client.post(
-        url, params=params,
+        url,
+        params=params,
         content=xml_body.encode("utf-8"),
         headers={"Content-Type": "application/xml; charset=utf-8"},
     )
@@ -665,14 +764,19 @@ async def send_outgoing_invoice(document: dict[str, Any]) -> dict[str, Any]:
         body = resp.text[:500] if resp.text else ""
         logger.error(
             "[API] POST outgoingInvoice FAIL — HTTP %d, %.1f сек, body=%s\nXML sent:\n%s",
-            resp.status_code, elapsed, body, xml_body[:1000],
+            resp.status_code,
+            elapsed,
+            body,
+            xml_body[:1000],
         )
         resp.raise_for_status()
 
     resp_body = resp.text[:500] if resp.text else ""
     logger.info(
         "[API] POST outgoingInvoice HTTP %d, %.1f сек, body=%s",
-        resp.status_code, elapsed, resp_body,
+        resp.status_code,
+        elapsed,
+        resp_body,
     )
 
     # iiko возвращает 200 даже при ошибке валидации — проверяем <valid>true/false</valid>
@@ -686,7 +790,8 @@ async def send_outgoing_invoice(document: dict[str, Any]) -> dict[str, Any]:
             doc_num = doc_num_el.text if doc_num_el is not None else "?"
             logger.error(
                 "[API] outgoingInvoice VALIDATION FAILED — doc=%s, error: %s",
-                doc_num, err_msg,
+                doc_num,
+                err_msg,
             )
             return {"ok": False, "error": err_msg, "documentNumber": doc_num}
     except ET.ParseError:
@@ -696,6 +801,7 @@ async def send_outgoing_invoice(document: dict[str, Any]) -> dict[str, Any]:
 
 
 # ── 10b. Приходная накладная — XML import ────────────
+
 
 def _build_incoming_invoice_xml(document: dict[str, Any]) -> str:
     """Собрать XML приходной накладной для iiko import API.
@@ -768,11 +874,14 @@ async def send_incoming_invoice(document: dict[str, Any]) -> dict[str, Any]:
         document.get("supplierId"),
         len(document.get("items", [])),
     )
-    logger.debug("[API] incomingInvoice XML body (first 2000 chars):\n%s", xml_body[:2000])
+    logger.debug(
+        "[API] incomingInvoice XML body (first 2000 chars):\n%s", xml_body[:2000]
+    )
     t0 = time.monotonic()
     client = await _get_client()
     resp = await client.post(
-        url, params=params,
+        url,
+        params=params,
         content=xml_body.encode("utf-8"),
         headers={"Content-Type": "application/xml; charset=utf-8"},
     )
@@ -782,18 +891,27 @@ async def send_incoming_invoice(document: dict[str, Any]) -> dict[str, Any]:
         body = resp.text[:500] if resp.text else ""
         logger.error(
             "[API] POST incomingInvoice FAIL — HTTP %d, %.1f сек, body=%s\nXML sent:\n%s",
-            resp.status_code, elapsed, body, xml_body,
+            resp.status_code,
+            elapsed,
+            body,
+            xml_body,
         )
         # Не бросаем исключение — возвращаем структурированную ошибку
         return {
             "ok": False,
-            "error": f"iiko HTTP {resp.status_code}: {body}" if body else f"iiko HTTP {resp.status_code}",
+            "error": (
+                f"iiko HTTP {resp.status_code}: {body}"
+                if body
+                else f"iiko HTTP {resp.status_code}"
+            ),
         }
 
     resp_body = resp.text[:500] if resp.text else ""
     logger.info(
         "[API] POST incomingInvoice HTTP %d, %.1f сек, body=%s",
-        resp.status_code, elapsed, resp_body,
+        resp.status_code,
+        elapsed,
+        resp_body,
     )
 
     # iiko возвращает 200 даже при ошибке валидации — проверяем <valid>true/false</valid>
@@ -807,7 +925,8 @@ async def send_incoming_invoice(document: dict[str, Any]) -> dict[str, Any]:
             doc_num = doc_num_el.text if doc_num_el is not None else "?"
             logger.error(
                 "[API] incomingInvoice VALIDATION FAILED — doc=%s, error: %s",
-                doc_num, err_msg,
+                doc_num,
+                err_msg,
             )
             return {"ok": False, "error": err_msg, "documentNumber": doc_num}
     except ET.ParseError:
@@ -845,7 +964,10 @@ async def fetch_incoming_invoices(
     xml_str = resp.text
     logger.info(
         "[API] GET %s — HTTP %d, %.1f сек, %d байт",
-        label, resp.status_code, elapsed, len(resp.content),
+        label,
+        resp.status_code,
+        elapsed,
+        len(resp.content),
     )
     return _parse_incoming_invoices_xml(xml_str)
 
@@ -966,6 +1088,11 @@ async def fetch_assembly_charts(
     pc = data.get("preparedCharts") or []
     logger.info(
         "[API] GET %s — %d assembly + %d prepared charts, HTTP %d, %.1f сек, %d байт",
-        label, len(ac), len(pc), resp.status_code, elapsed, len(resp.content),
+        label,
+        len(ac),
+        len(pc),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
     )
     return data

@@ -65,9 +65,10 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
     if not found_qr:
         try:
             from pyzbar import pyzbar
+
             barcodes = pyzbar.decode(img)
             for barcode in barcodes:
-                if barcode.type == 'QRCODE':
+                if barcode.type == "QRCODE":
                     found_qr = True
                     break
         except ImportError:
@@ -79,7 +80,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
     if not found_qr:
         try:
             h, w = img_cv.shape[:2]
-            bottom_half = img_cv[int(h * 0.4):, :]
+            bottom_half = img_cv[int(h * 0.4) :, :]
 
             data, _, _ = detector.detectAndDecode(bottom_half)
             if data and len(data) > 10:
@@ -91,11 +92,12 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
     if not found_qr:
         try:
             from pyzbar import pyzbar
+
             h, w = img_cv.shape[:2]
-            bottom_half = Image.fromarray(img_cv[int(h * 0.4):, :])
+            bottom_half = Image.fromarray(img_cv[int(h * 0.4) :, :])
             barcodes = pyzbar.decode(bottom_half)
             for barcode in barcodes:
-                if barcode.type == 'QRCODE':
+                if barcode.type == "QRCODE":
                     found_qr = True
                     break
         except ImportError:
@@ -108,10 +110,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
         try:
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
             binary = cv2.adaptiveThreshold(
-                gray, 255,
-                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY,
-                11, 2
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
             )
             binary_cv = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
 
@@ -126,16 +125,14 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
     if not found_qr:
         try:
             from pyzbar import pyzbar
+
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
             binary = cv2.adaptiveThreshold(
-                gray, 255,
-                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY,
-                11, 2
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
             )
             barcodes = pyzbar.decode(binary)
             for barcode in barcodes:
-                if barcode.type == 'QRCODE':
+                if barcode.type == "QRCODE":
                     found_qr = True
                     break
         except ImportError:
@@ -158,7 +155,7 @@ async def detect_qr(image_bytes: bytes, doc_type: str = None) -> bool:
         True если QR-код найден, False иначе
     """
     # Если это чек — предполагаем что QR есть (требование 54-ФЗ)
-    if doc_type == 'receipt':
+    if doc_type == "receipt":
         return True
 
     return await asyncio.to_thread(_detect_qr_sync, image_bytes)

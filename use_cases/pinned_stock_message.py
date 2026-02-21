@@ -35,6 +35,7 @@ LABEL = "StockAlert"
 # Форматирование сообщения (per-department)
 # ═══════════════════════════════════════════════════════
 
+
 def format_stock_alert(data: dict[str, Any], department_name: str | None = None) -> str:
     """
     Форматирует данные check_min_stock_levels() в сообщение для закрепления.
@@ -95,6 +96,7 @@ def _compute_hash(text: str) -> str:
 # Получение всех telegram_id для рассылки
 # ═══════════════════════════════════════════════════════
 
+
 async def _get_target_user_ids() -> list[int]:
     """
     Список telegram_id пользователей, подписанных на остатки.
@@ -102,6 +104,7 @@ async def _get_target_user_ids() -> list[int]:
     Если ни у кого нет флага — отправляем всем (боотстрап).
     """
     from use_cases.permissions import get_stock_subscriber_ids
+
     subscribers = await get_stock_subscriber_ids()
     if subscribers:
         return subscribers
@@ -114,6 +117,7 @@ async def _get_target_user_ids() -> list[int]:
 # CRUD для StockAlertMessage
 # ═══════════════════════════════════════════════════════
 
+
 async def _get_alert_message(chat_id: int) -> StockAlertMessage | None:
     """Получить существующий alert-message для пользователя."""
     async with async_session_factory() as session:
@@ -123,7 +127,9 @@ async def _get_alert_message(chat_id: int) -> StockAlertMessage | None:
         return result.scalar_one_or_none()
 
 
-async def _upsert_alert_message(chat_id: int, message_id: int, snapshot_hash: str) -> None:
+async def _upsert_alert_message(
+    chat_id: int, message_id: int, snapshot_hash: str
+) -> None:
     """Сохранить/обновить alert-message в БД."""
     async with async_session_factory() as session:
         existing = await session.execute(
@@ -134,11 +140,13 @@ async def _upsert_alert_message(chat_id: int, message_id: int, snapshot_hash: st
             row.message_id = message_id
             row.snapshot_hash = snapshot_hash
         else:
-            session.add(StockAlertMessage(
-                chat_id=chat_id,
-                message_id=message_id,
-                snapshot_hash=snapshot_hash,
-            ))
+            session.add(
+                StockAlertMessage(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    snapshot_hash=snapshot_hash,
+                )
+            )
         await session.commit()
 
 
@@ -154,6 +162,7 @@ async def _delete_alert_message(chat_id: int) -> None:
 # ═══════════════════════════════════════════════════════
 # Обновление сообщения для одного пользователя
 # ═══════════════════════════════════════════════════════
+
 
 async def _update_single_alert(
     bot: Any,
@@ -186,7 +195,9 @@ async def _update_single_alert(
             # Сообщение уже удалено пользователем или недоступно
             logger.debug(
                 "[%s] delete не удался для chat_id=%d (msg=%d) — продолжаю",
-                LABEL, chat_id, existing.message_id,
+                LABEL,
+                chat_id,
+                existing.message_id,
             )
         await _delete_alert_message(chat_id)
 
@@ -201,13 +212,17 @@ async def _update_single_alert(
             )
         except Exception:
             # Pin может не сработать если бот не имеет прав
-            logger.debug("[%s] Не удалось закрепить сообщение в chat_id=%d", LABEL, chat_id)
+            logger.debug(
+                "[%s] Не удалось закрепить сообщение в chat_id=%d", LABEL, chat_id
+            )
 
         await _upsert_alert_message(chat_id, msg.message_id, text_hash)
         return True
     except Exception:
         # Пользователь заблокировал бота / chat_id недоступен
-        logger.warning("[%s] Не удалось отправить сообщение в chat_id=%d", LABEL, chat_id)
+        logger.warning(
+            "[%s] Не удалось отправить сообщение в chat_id=%d", LABEL, chat_id
+        )
         return False
 
 
@@ -215,6 +230,7 @@ async def _update_single_alert(
 # Отправка остатков ОДНОМУ пользователю (по его department)
 # Вызывается при авторизации / смене ресторана
 # ═══════════════════════════════════════════════════════
+
 
 async def send_stock_alert_for_user(
     bot: Any,
@@ -232,26 +248,38 @@ async def send_stock_alert_for_user(
     Всегда force=True — при смене ресторана данные точно другие.
     """
     t0 = time.monotonic()
-    logger.info("[%s] Отправка остатков tg:%d, dept=%s", LABEL, telegram_id, department_id)
+    logger.info(
+        "[%s] Отправка остатков tg:%d, dept=%s", LABEL, telegram_id, department_id
+    )
 
     try:
         # Удаляем старое сообщение ИЗ ЧАТА + из БД, чтобы не засорять чат.
         existing = await _get_alert_message(telegram_id)
         if existing:
             try:
-                await bot.delete_message(chat_id=telegram_id, message_id=existing.message_id)
+                await bot.delete_message(
+                    chat_id=telegram_id, message_id=existing.message_id
+                )
             except Exception:
-                logger.debug("[%s] Не удалось удалить старое сообщение msg=%d", LABEL, existing.message_id)
+                logger.debug(
+                    "[%s] Не удалось удалить старое сообщение msg=%d",
+                    LABEL,
+                    existing.message_id,
+                )
             await _delete_alert_message(telegram_id)
 
         from use_cases.check_min_stock import check_min_stock_levels
+
         result = await check_min_stock_levels(department_id=department_id)
 
         dept_name = result.get("department_name") or ""
         logger.info(
             "[%s] check_min_stock_levels вернул: dept_name=%s, total=%d, below=%d, запрошен dept_id=%s",
-            LABEL, dept_name, result.get("total_products", 0),
-            result.get("below_min_count", 0), department_id,
+            LABEL,
+            dept_name,
+            result.get("total_products", 0),
+            result.get("below_min_count", 0),
+            department_id,
         )
         text = format_stock_alert(result, department_name=dept_name)
         text_hash = _compute_hash(text)
@@ -259,8 +287,11 @@ async def send_stock_alert_for_user(
         ok = await _update_single_alert(bot, telegram_id, text, text_hash, force=True)
         logger.info(
             "[%s] tg:%d → %s (dept=%s, items=%d, %.1f сек)",
-            LABEL, telegram_id, "sent" if ok else "failed",
-            dept_name, result.get("below_min_count", 0),
+            LABEL,
+            telegram_id,
+            "sent" if ok else "failed",
+            dept_name,
+            result.get("below_min_count", 0),
             time.monotonic() - t0,
         )
         return ok
@@ -273,7 +304,10 @@ async def send_stock_alert_for_user(
 # Массовое обновление (по вебхуку / кнопке)
 # ═══════════════════════════════════════════════════════
 
-async def update_all_stock_alerts(bot: Any, stock_data: dict[str, Any] | None = None) -> int:
+
+async def update_all_stock_alerts(
+    bot: Any, stock_data: dict[str, Any] | None = None
+) -> int:
     """
     Обновить закреплённые сообщения с остатками у всех авторизованных пользователей.
     Каждый пользователь получает остатки **своего подразделения**.
@@ -293,7 +327,9 @@ async def update_all_stock_alerts(bot: Any, stock_data: dict[str, Any] | None = 
         logger.info("[%s] Нет авторизованных пользователей для рассылки", LABEL)
         return 0
 
-    logger.info("[%s] Обновляю stock-alert для %d пользователей...", LABEL, len(user_ids))
+    logger.info(
+        "[%s] Обновляю stock-alert для %d пользователей...", LABEL, len(user_ids)
+    )
 
     # Кешируем результаты по department_id чтобы не запрашивать N раз
     dept_cache: dict[str, dict[str, Any]] = {}
@@ -309,9 +345,14 @@ async def update_all_stock_alerts(bot: Any, stock_data: dict[str, Any] | None = 
         if dept_id not in dept_cache:
             try:
                 from use_cases.check_min_stock import check_min_stock_levels
-                dept_cache[dept_id] = await check_min_stock_levels(department_id=dept_id)
+
+                dept_cache[dept_id] = await check_min_stock_levels(
+                    department_id=dept_id
+                )
             except Exception:
-                logger.exception("[%s] Ошибка проверки остатков dept=%s", LABEL, dept_id)
+                logger.exception(
+                    "[%s] Ошибка проверки остатков dept=%s", LABEL, dept_id
+                )
                 continue
 
         result = dept_cache[dept_id]
@@ -325,6 +366,10 @@ async def update_all_stock_alerts(bot: Any, stock_data: dict[str, Any] | None = 
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Обновлено %d/%d сообщений (%d подразд.) за %.1f сек",
-        LABEL, updated, len(user_ids), len(dept_cache), elapsed,
+        LABEL,
+        updated,
+        len(user_ids),
+        len(dept_cache),
+        elapsed,
     )
     return updated

@@ -36,16 +36,19 @@ LABEL = "EditMinStock"
 # Dataclasses для результатов
 # ═══════════════════════════════════════════════════════
 
+
 @dataclass(slots=True)
 class EditMinResult:
     """Результат apply_min_level."""
+
     success: bool
-    text: str   # Markdown-форматированный текст результата
+    text: str  # Markdown-форматированный текст результата
 
 
 # ═══════════════════════════════════════════════════════
 # 1. Поиск товаров для редактирования
 # ═══════════════════════════════════════════════════════
+
 
 async def search_products_for_edit(query: str, limit: int = 15) -> list[dict]:
     """
@@ -72,12 +75,14 @@ async def search_products_for_edit(query: str, limit: int = 15) -> list[dict]:
         rows = (await session.execute(stmt)).all()
 
     items = [
-        {"id": str(r.id), "name": r.name, "product_type": r.product_type}
-        for r in rows
+        {"id": str(r.id), "name": r.name, "product_type": r.product_type} for r in rows
     ]
     logger.info(
         "[%s] Поиск «%s» → %d результатов за %.2f сек",
-        LABEL, pattern, len(items), time.monotonic() - t0,
+        LABEL,
+        pattern,
+        len(items),
+        time.monotonic() - t0,
     )
     return items
 
@@ -85,6 +90,7 @@ async def search_products_for_edit(query: str, limit: int = 15) -> list[dict]:
 # ═══════════════════════════════════════════════════════
 # 2. Обновление мин. остатка → Google Таблица + БД
 # ═══════════════════════════════════════════════════════
+
 
 async def update_min_level(
     product_id: str,
@@ -106,20 +112,26 @@ async def update_min_level(
     t0 = time.monotonic()
     logger.info(
         "[%s] Обновляю min=%s, max=%s для product=%s, dept=%s",
-        LABEL, new_min, new_max, product_id, department_id,
+        LABEL,
+        new_min,
+        new_max,
+        product_id,
+        department_id,
     )
 
     # 1. Получить имена
     async with async_session_factory() as session:
-        prod = (await session.execute(
-            select(Product.name)
-            .where(Product.id == UUID(product_id))
-        )).scalar_one_or_none()
+        prod = (
+            await session.execute(
+                select(Product.name).where(Product.id == UUID(product_id))
+            )
+        ).scalar_one_or_none()
 
-        dept = (await session.execute(
-            select(Department.name)
-            .where(Department.id == UUID(department_id))
-        )).scalar_one_or_none()
+        dept = (
+            await session.execute(
+                select(Department.name).where(Department.id == UUID(department_id))
+            )
+        ).scalar_one_or_none()
 
         if not prod:
             return "❌ Товар не найден в БД"
@@ -130,11 +142,13 @@ async def update_min_level(
         department_name = dept
 
         # 2. Текущий min из БД
-        old_row = (await session.execute(
-            select(MinStockLevel.min_level)
-            .where(MinStockLevel.product_id == UUID(product_id))
-            .where(MinStockLevel.department_id == UUID(department_id))
-        )).scalar_one_or_none()
+        old_row = (
+            await session.execute(
+                select(MinStockLevel.min_level)
+                .where(MinStockLevel.product_id == UUID(product_id))
+                .where(MinStockLevel.department_id == UUID(department_id))
+            )
+        ).scalar_one_or_none()
         old_min = float(old_row) if old_row is not None else None
 
     # 3. Записать в Google Таблицу
@@ -153,7 +167,10 @@ async def update_min_level(
     except Exception as exc:
         elapsed = time.monotonic() - t0
         logger.exception(
-            "[%s] ❌ Ошибка Google Sheets за %.2f сек: %s", LABEL, elapsed, exc,
+            "[%s] ❌ Ошибка Google Sheets за %.2f сек: %s",
+            LABEL,
+            elapsed,
+            exc,
         )
         return f"❌ Ошибка записи в Google Таблицу: {exc}"
 
@@ -187,7 +204,12 @@ async def update_min_level(
 
     logger.info(
         "[%s] ✅ %s (%s): min %s → %s за %.2f сек",
-        LABEL, product_name, department_name, old_str, new_min, elapsed,
+        LABEL,
+        product_name,
+        department_name,
+        old_str,
+        new_min,
+        elapsed,
     )
     return (
         f"✅ *Минимальный остаток обновлён!*\n\n"
@@ -201,6 +223,7 @@ async def update_min_level(
 # ═══════════════════════════════════════════════════════
 # 3. Высокоуровневый use-case: валидация + обновление
 # ═══════════════════════════════════════════════════════
+
 
 def apply_min_level(value_str: str) -> EditMinResult | float:
     """

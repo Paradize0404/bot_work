@@ -42,8 +42,11 @@ IIKO_SHA1_PASSWORD: str = _require("IIKO_SHA1_PASSWORD")
 # Установите IIKO_VERIFY_SSL=true если сервер имеет валидный SSL-сертификат,
 # или укажите путь к CA-bundle: IIKO_VERIFY_SSL=/path/to/ca-bundle.crt
 IIKO_VERIFY_SSL: bool | str = (
-    lambda v: True if v.lower() == "true"
-    else (False if v.lower() in ("false", "0", "") else v)
+    lambda v: (
+        True
+        if v.lower() == "true"
+        else (False if v.lower() in ("false", "0", "") else v)
+    )
 )(os.getenv("IIKO_VERIFY_SSL", "false"))
 
 # ── FinTablo API ──
@@ -66,7 +69,7 @@ if _wh:
     # Убираем любые ошибочные префиксы протокола
     for _bad in ("https://", "http://", "ttps://", "tps://"):
         if _wh.startswith(_bad):
-            _wh = _wh[len(_bad):]
+            _wh = _wh[len(_bad) :]
             break
     # Убираем trailing slash и WEBHOOK_PATH если пользователь вписал его в URL
     _wh = _wh.rstrip("/")
@@ -75,10 +78,12 @@ if _wh:
         _wh = _wh[: -len(_default_path)]
     # Всегда ставим https://
     _wh = f"https://{_wh}"
-WEBHOOK_URL: str | None = _wh or None                       # None → polling
-WEBHOOK_PATH: str = os.getenv("WEBHOOK_PATH", "/webhook")   # путь, куда Telegram шлёт апдейты
+WEBHOOK_URL: str | None = _wh or None  # None → polling
+WEBHOOK_PATH: str = os.getenv(
+    "WEBHOOK_PATH", "/webhook"
+)  # путь, куда Telegram шлёт апдейты
 WEBAPP_HOST: str = os.getenv("WEBAPP_HOST", "0.0.0.0")
-WEBAPP_PORT: int = int(os.getenv("PORT", "8080"))            # Railway пробрасывает PORT
+WEBAPP_PORT: int = int(os.getenv("PORT", "8080"))  # Railway пробрасывает PORT
 
 # ── Google Sheets (мин. остатки) ──
 GOOGLE_SHEETS_CREDENTIALS: str = os.getenv(
@@ -97,11 +102,17 @@ INVOICE_PRICE_SHEET_ID: str = os.getenv(
 # ── iikoCloud Webhooks ──
 # Organization ID в iikoCloud — если не задан, нужно получить через API
 # Поддерживаем оба имени: IIKO_CLOUD_ORG_ID (основное) и ORG_ID (совместимость со старым скриптом)
-IIKO_CLOUD_ORG_ID: str | None = os.getenv("IIKO_CLOUD_ORG_ID") or os.getenv("ORG_ID") or None
+IIKO_CLOUD_ORG_ID: str | None = (
+    os.getenv("IIKO_CLOUD_ORG_ID") or os.getenv("ORG_ID") or None
+)
 # Базовый URL iikoCloud API
-IIKO_CLOUD_BASE_URL: str = os.getenv("IIKO_CLOUD_BASE_URL", "https://api-ru.iiko.services")
+IIKO_CLOUD_BASE_URL: str = os.getenv(
+    "IIKO_CLOUD_BASE_URL", "https://api-ru.iiko.services"
+)
 # Порог изменения суммарных остатков (%) при котором отправляется обновление
-STOCK_CHANGE_THRESHOLD_PCT: float = float(os.getenv("STOCK_CHANGE_THRESHOLD_PCT", "3.0"))
+STOCK_CHANGE_THRESHOLD_PCT: float = float(
+    os.getenv("STOCK_CHANGE_THRESHOLD_PCT", "3.0")
+)
 # Минимальный интервал между отправками остатков (минуты)
 STOCK_UPDATE_INTERVAL_MIN: int = int(os.getenv("STOCK_UPDATE_INTERVAL_MIN", "30"))
 # authToken для верификации входящих вебхуков от iikoCloud
@@ -110,6 +121,7 @@ STOCK_UPDATE_INTERVAL_MIN: int = int(os.getenv("STOCK_UPDATE_INTERVAL_MIN", "30"
 _IIKO_CLOUD_WEBHOOK_SECRET_RAW = os.getenv("IIKO_CLOUD_WEBHOOK_SECRET")
 if not _IIKO_CLOUD_WEBHOOK_SECRET_RAW:
     import warnings
+
     warnings.warn(
         "IIKO_CLOUD_WEBHOOK_SECRET не задан — сгенерирован случайный. "
         "При рестарте зарегистрированный вебхук перестанет работать! "

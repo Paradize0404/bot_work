@@ -28,12 +28,13 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════
 
 MAPPING_TYPE_SUPPLIER = "поставщик"
-MAPPING_TYPE_PRODUCT  = "товар"
+MAPPING_TYPE_PRODUCT = "товар"
 
 
 # ═══════════════════════════════════════════════════════
 #  Базовый маппинг (чтение из GSheet «Маппинг»)
 # ═══════════════════════════════════════════════════════
+
 
 async def get_base_mapping() -> dict[str, dict[str, str]]:
     """
@@ -41,6 +42,7 @@ async def get_base_mapping() -> dict[str, dict[str, str]]:
     Возвращает: {ocr_name_lower: {iiko_name, iiko_id, type}}
     """
     from adapters.google_sheets import read_base_mapping_sheet
+
     try:
         rows = await _run_sync(read_base_mapping_sheet)
         result: dict[str, dict[str, str]] = {}
@@ -48,9 +50,9 @@ async def get_base_mapping() -> dict[str, dict[str, str]]:
             ocr_name = (row.get("ocr_name") or "").strip()
             if ocr_name:
                 result[ocr_name.lower()] = {
-                    "iiko_name":  row.get("iiko_name") or "",
-                    "iiko_id":    row.get("iiko_id") or "",
-                    "type":       row.get("type") or "",
+                    "iiko_name": row.get("iiko_name") or "",
+                    "iiko_id": row.get("iiko_id") or "",
+                    "type": row.get("type") or "",
                     "store_type": row.get("store_type") or "",
                 }
         logger.info("[ocr_mapping] Загружен базовый маппинг: %d записей", len(result))
@@ -63,6 +65,7 @@ async def get_base_mapping() -> dict[str, dict[str, str]]:
 # ═══════════════════════════════════════════════════════
 #  Применение маппинга к результатам OCR
 # ═══════════════════════════════════════════════════════
+
 
 def apply_mapping(
     ocr_results: list[dict[str, Any]],
@@ -92,7 +95,7 @@ def apply_mapping(
             match = base_mapping.get(sup_name.lower())
             if match:
                 supplier["iiko_name"] = match["iiko_name"]
-                supplier["iiko_id"]   = match["iiko_id"]
+                supplier["iiko_id"] = match["iiko_id"]
             else:
                 unmapped_sup.add(sup_name)
 
@@ -103,8 +106,8 @@ def apply_mapping(
                 continue
             match = base_mapping.get(item_name.lower())
             if match:
-                item["iiko_name"]  = match["iiko_name"]
-                item["iiko_id"]    = match["iiko_id"]
+                item["iiko_name"] = match["iiko_name"]
+                item["iiko_id"] = match["iiko_id"]
                 item["store_type"] = match.get("store_type") or ""
             else:
                 unmapped_prd.add(item_name)
@@ -116,9 +119,10 @@ def apply_mapping(
 #  Запись в трансферную таблицу
 # ═══════════════════════════════════════════════════════
 
+
 async def write_transfer(
     unmapped_suppliers: list[str],
-    unmapped_products:  list[str],
+    unmapped_products: list[str],
 ) -> bool:
     """
     Записать незамапленные имена в «Маппинг Импорт».
@@ -130,20 +134,24 @@ async def write_transfer(
 
     # Загружаем iiko-справочники из БД для dropdown (только GOODS)
     iiko_suppliers = await _load_iiko_suppliers()
-    iiko_products  = await _load_iiko_goods_products()
+    iiko_products = await _load_iiko_goods_products()
 
     from adapters.google_sheets import write_mapping_import_sheet
+
     try:
         await _run_sync(
             write_mapping_import_sheet,
             unmapped_suppliers,
             unmapped_products,
             [s["name"] for s in iiko_suppliers],
-            [p["display_name"] for p in iiko_products],  # без «т_»/«п/ф» для видимости в поиске
+            [
+                p["display_name"] for p in iiko_products
+            ],  # без «т_»/«п/ф» для видимости в поиске
         )
         logger.info(
             "[ocr_mapping] Записано в трансфер: %d поставщиков, %d товаров",
-            len(unmapped_suppliers), len(unmapped_products),
+            len(unmapped_suppliers),
+            len(unmapped_products),
         )
         return True
     except Exception:
@@ -155,6 +163,7 @@ async def write_transfer(
 #  Проверка готовности трансфера
 # ═══════════════════════════════════════════════════════
 
+
 async def check_transfer_ready() -> tuple[bool, int, list[str]]:
     """
     Проверить, все ли строки в «Маппинг Импорт» заполнены.
@@ -163,6 +172,7 @@ async def check_transfer_ready() -> tuple[bool, int, list[str]]:
         (is_ready, total_count, missing_names)
     """
     from adapters.google_sheets import read_mapping_import_sheet
+
     try:
         rows = await _run_sync(read_mapping_import_sheet)
     except Exception:
@@ -186,6 +196,7 @@ async def check_transfer_ready() -> tuple[bool, int, list[str]]:
 #  Финализация: трансфер → база, очистка трансфера
 # ═══════════════════════════════════════════════════════
 
+
 async def finalize_transfer() -> tuple[int, list[str]]:
     """
     Перенести данные из «Маппинг Импорт» в «Маппинг», очистить трансфер.
@@ -193,7 +204,11 @@ async def finalize_transfer() -> tuple[int, list[str]]:
     Для каждой строки: ищет iiko_id по iiko_name в БД (поставщики / товары).
     Возвращает (saved_count, errors).
     """
-    from adapters.google_sheets import read_mapping_import_sheet, upsert_base_mapping, clear_mapping_import_sheet
+    from adapters.google_sheets import (
+        read_mapping_import_sheet,
+        upsert_base_mapping,
+        clear_mapping_import_sheet,
+    )
 
     try:
         rows = await _run_sync(read_mapping_import_sheet)
@@ -208,7 +223,7 @@ async def finalize_transfer() -> tuple[int, list[str]]:
     # Для товаров используем _load_all_iiko_products() — БЕЗ фильтра по типу/группе,
     # чтобы PREPARED/DISH и продукты вне gsheet_export_group тоже получали свой iiko_id.
     iiko_suppliers = await _load_iiko_suppliers()
-    iiko_products  = await _load_all_iiko_products()
+    iiko_products = await _load_all_iiko_products()
 
     # Нормализуем ключи: strip() + lower() — не даём пробелам в БД ломать поиск
     sup_by_name = {s["name"].strip().lower(): s for s in iiko_suppliers}
@@ -221,7 +236,7 @@ async def finalize_transfer() -> tuple[int, list[str]]:
     for real_key, product in prd_by_name.items():
         for prefix in ("т_", "п/ф ", "п/ф_", "п/ф"):
             if real_key.startswith(prefix):
-                alias = real_key[len(prefix):]
+                alias = real_key[len(prefix) :]
                 if alias not in prd_by_name:
                     _aliases[alias] = product
                 break
@@ -232,8 +247,8 @@ async def finalize_transfer() -> tuple[int, list[str]]:
 
     for row in rows:
         entry_type = row.get("type") or ""
-        ocr_name   = (row.get("ocr_name") or "").strip()
-        iiko_name  = (row.get("iiko_name") or "").strip()
+        ocr_name = (row.get("ocr_name") or "").strip()
+        iiko_name = (row.get("iiko_name") or "").strip()
 
         if not iiko_name:
             errors.append(f"Не заполнено: «{ocr_name}»")
@@ -250,13 +265,15 @@ async def finalize_transfer() -> tuple[int, list[str]]:
             if found:
                 iiko_id = found.get("id") or ""
 
-        enriched.append({
-            "type":       entry_type,
-            "ocr_name":   ocr_name,
-            "iiko_name":  iiko_name,
-            "iiko_id":    iiko_id,
-            "store_type": (row.get("store_type") or "").strip(),
-        })
+        enriched.append(
+            {
+                "type": entry_type,
+                "ocr_name": ocr_name,
+                "iiko_name": iiko_name,
+                "iiko_id": iiko_id,
+                "store_type": (row.get("store_type") or "").strip(),
+            }
+        )
 
     if not enriched:
         return 0, errors
@@ -274,6 +291,7 @@ async def finalize_transfer() -> tuple[int, list[str]]:
 # ═══════════════════════════════════════════════════════
 #  Уведомление бухгалтеров
 # ═══════════════════════════════════════════════════════
+
 
 async def notify_user_about_mapping(
     bot,
@@ -295,13 +313,13 @@ async def notify_user_about_mapping(
             supplier = svc.get("supplier") or {}
             sup_name = supplier.get("name") or "Поставщик не определён"
             date_str = svc.get("doc_date") or svc.get("date") or "—"
-            amount   = svc.get("total_amount")
+            amount = svc.get("total_amount")
             recipient = svc.get("recipient")
-            purpose  = svc.get("purpose")
+            purpose = svc.get("purpose")
 
             type_labels = {
                 "cash_order": "💸 Расходный ордер",
-                "act":        "📄 Акт",
+                "act": "📄 Акт",
             }
             label = type_labels.get(doc_type, f"📄 {doc_type}")
             lines = [f"{label} от {date_str}"]
@@ -319,15 +337,29 @@ async def notify_user_about_mapping(
         try:
             await bot.send_message(user_id, service_text, parse_mode="HTML")
         except Exception:
-            logger.warning("[ocr_mapping] Не удалось уведомить пользователя %d об услугах", user_id)
+            logger.warning(
+                "[ocr_mapping] Не удалось уведомить пользователя %d об услугах", user_id
+            )
 
     # ── Уведомление о маппинге ──
     if unmapped_count > 0:
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        mapping_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Маппинг готов", callback_data="mapping_done")],
-            [InlineKeyboardButton(text="🔄 Обновить список товаров", callback_data="refresh_mapping_ref")],
-        ])
+
+        mapping_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Маппинг готов", callback_data="mapping_done"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Обновить список товаров",
+                        callback_data="refresh_mapping_ref",
+                    )
+                ],
+            ]
+        )
         mapping_text = (
             f"🗂 <b>Требуется маппинг!</b>\n\n"
             f"Обнаружено <b>{unmapped_count}</b> незамапленных позиций.\n\n"
@@ -337,15 +369,19 @@ async def notify_user_about_mapping(
             f"После заполнения нажмите кнопку ниже. 👇"
         )
         try:
-            await bot.send_message(user_id, mapping_text, parse_mode="HTML",
-                                   reply_markup=mapping_kb)
+            await bot.send_message(
+                user_id, mapping_text, parse_mode="HTML", reply_markup=mapping_kb
+            )
         except Exception:
-            logger.warning("[ocr_mapping] Не удалось уведомить пользователя %d о маппинге", user_id)
+            logger.warning(
+                "[ocr_mapping] Не удалось уведомить пользователя %d о маппинге", user_id
+            )
 
 
 # ═══════════════════════════════════════════════════════
 #  Принудительное обновление справочного листа
 # ═══════════════════════════════════════════════════════
+
 
 async def refresh_ref_sheet() -> int:
     """
@@ -362,6 +398,7 @@ async def refresh_ref_sheet() -> int:
 
     def _do_write():
         from adapters.google_sheets import refresh_import_sheet_dropdown
+
         return refresh_import_sheet_dropdown(names)
 
     try:
@@ -386,7 +423,7 @@ def _strip_tech_prefix(name: str) -> str:
     lo = name.lower()
     for p in _TECH_PREFIXES:
         if lo.startswith(p):
-            return name[len(p):]
+            return name[len(p) :]
     return name
 
 
@@ -431,11 +468,12 @@ async def _load_iiko_goods_products() -> list[dict[str, str]]:
             )
             rows = [
                 {
-                    "id":           str(r.id),
-                    "name":         r.name or "",
+                    "id": str(r.id),
+                    "name": r.name or "",
                     "display_name": _strip_tech_prefix(r.name or ""),
                 }
-                for r in result if r.name
+                for r in result
+                if r.name
             ]
         # Сортируем по отображаемому имени без учёта регистра
         rows.sort(key=lambda x: x["display_name"].lower())
@@ -471,8 +509,10 @@ async def _load_all_iiko_products() -> list[dict[str, str]]:
 #  Утилита: запуск sync-функций gspread в executor
 # ═══════════════════════════════════════════════════════
 
+
 async def _run_sync(fn, *args, **kwargs):
     """Запустить синхронную функцию gspread в thread pool (не блокируем event loop)."""
     import asyncio
+
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: fn(*args, **kwargs))

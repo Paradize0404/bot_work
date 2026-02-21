@@ -27,16 +27,19 @@ logger = logging.getLogger(__name__)
 # Dataclasses для результатов
 # ═══════════════════════════════════════════════════════
 
+
 class AuthStatus(Enum):
     """Статус авторизации пользователя."""
-    AUTHORIZED = "authorized"            # полностью авторизован (есть department)
+
+    AUTHORIZED = "authorized"  # полностью авторизован (есть department)
     NEEDS_DEPARTMENT = "needs_department"  # привязан, но нет ресторана
-    NOT_AUTHORIZED = "not_authorized"      # не привязан
+    NOT_AUTHORIZED = "not_authorized"  # не привязан
 
 
 @dataclass(slots=True)
 class AuthResult:
     """Результат проверки авторизации при /start."""
+
     status: AuthStatus
     first_name: str | None = None
 
@@ -44,14 +47,16 @@ class AuthResult:
 @dataclass(slots=True)
 class AuthSearchResult:
     """Результат поиска сотрудника по фамилии."""
+
     employees: list[dict]
     auto_bound_first_name: str | None = None  # если один сотрудник — уже привязан
-    restaurants: list[dict] | None = None      # рестораны (если авто-привязка прошла)
+    restaurants: list[dict] | None = None  # рестораны (если авто-привязка прошла)
 
 
 @dataclass(slots=True)
 class SelectionResult:
     """Результат выбора сотрудника из списка."""
+
     first_name: str
     restaurants: list[dict]
 
@@ -82,8 +87,12 @@ async def find_employees_by_last_name(last_name: str) -> list[dict]:
         }
         for emp in employees
     ]
-    logger.info("[auth] Фамилия «%s» → найдено %d сотрудников за %.2f сек",
-                last_name, len(found), time.monotonic() - t0)
+    logger.info(
+        "[auth] Фамилия «%s» → найдено %d сотрудников за %.2f сек",
+        last_name,
+        len(found),
+        time.monotonic() - t0,
+    )
     return found
 
 
@@ -93,7 +102,9 @@ async def bind_telegram_id(employee_id: str, telegram_id: int) -> str:
     Если telegram_id уже привязан к другому сотруднику — отвязывает старого.
     """
     t0 = time.monotonic()
-    logger.info("[auth] Привязка telegram_id=%d к сотруднику %s...", telegram_id, employee_id)
+    logger.info(
+        "[auth] Привязка telegram_id=%d к сотруднику %s...", telegram_id, employee_id
+    )
 
     async with async_session_factory() as session:
         # Отвязываем telegram_id от старого сотрудника (если был)
@@ -101,8 +112,12 @@ async def bind_telegram_id(employee_id: str, telegram_id: int) -> str:
         result_old = await session.execute(stmt_old)
         old_emp = result_old.scalar_one_or_none()
         if old_emp:
-            logger.info("[auth] Отвязываю telegram_id=%d от старого сотрудника %s (%s)",
-                        telegram_id, old_emp.id, old_emp.name)
+            logger.info(
+                "[auth] Отвязываю telegram_id=%d от старого сотрудника %s (%s)",
+                telegram_id,
+                old_emp.id,
+                old_emp.name,
+            )
             old_emp.telegram_id = None
             await uctx.invalidate(telegram_id)  # инвалидируем кеш старого
 
@@ -132,8 +147,13 @@ async def bind_telegram_id(employee_id: str, telegram_id: int) -> str:
             role_name=role_name,
         )
 
-        logger.info("[auth] ✅ telegram_id=%d привязан к «%s» (%s) за %.2f сек",
-                    telegram_id, emp.name, employee_id, time.monotonic() - t0)
+        logger.info(
+            "[auth] ✅ telegram_id=%d привязан к «%s» (%s) за %.2f сек",
+            telegram_id,
+            emp.name,
+            employee_id,
+            time.monotonic() - t0,
+        )
         return first_name
 
 
@@ -155,10 +175,7 @@ async def get_restaurants() -> list[dict]:
         result = await session.execute(stmt)
         departments = result.scalars().all()
 
-    items = [
-        {"id": str(dep.id), "name": dep.name}
-        for dep in departments
-    ]
+    items = [{"id": str(dep.id), "name": dep.name} for dep in departments]
     logger.info("[auth] Ресторанов: %d за %.2f сек", len(items), time.monotonic() - t0)
     return items
 
@@ -169,14 +186,20 @@ async def save_department(telegram_id: int, department_id: str) -> str:
     Возвращает название ресторана.
     """
     t0 = time.monotonic()
-    logger.info("[auth] Сохранение ресторана %s для telegram_id=%d...", department_id, telegram_id)
+    logger.info(
+        "[auth] Сохранение ресторана %s для telegram_id=%d...",
+        department_id,
+        telegram_id,
+    )
 
     async with async_session_factory() as session:
         stmt = select(Employee).where(Employee.telegram_id == telegram_id)
         result = await session.execute(stmt)
         emp = result.scalar_one_or_none()
         if not emp:
-            logger.warning("[auth] ❌ Сотрудник с telegram_id=%d не найден!", telegram_id)
+            logger.warning(
+                "[auth] ❌ Сотрудник с telegram_id=%d не найден!", telegram_id
+            )
             raise ValueError("Сотрудник не найден. Пройдите авторизацию /start")
 
         emp.department_id = UUID(department_id)
@@ -188,8 +211,13 @@ async def save_department(telegram_id: int, department_id: str) -> str:
 
         await session.commit()
 
-        logger.info("[auth] ✅ Сотрудник «%s» (tg:%d) → ресторан «%s» за %.2f сек",
-                    emp.name, telegram_id, dept_name, time.monotonic() - t0)
+        logger.info(
+            "[auth] ✅ Сотрудник «%s» (tg:%d) → ресторан «%s» за %.2f сек",
+            emp.name,
+            telegram_id,
+            dept_name,
+            time.monotonic() - t0,
+        )
         return dept_name
 
 
@@ -218,6 +246,7 @@ async def get_employee_by_telegram_id(telegram_id: int) -> dict | None:
 # Высокоуровневые use-case функции (тонкие handlers)
 # ═══════════════════════════════════════════════════════
 
+
 async def check_auth_status(telegram_id: int) -> AuthResult:
     """
     Проверить статус авторизации при /start.
@@ -231,9 +260,7 @@ async def check_auth_status(telegram_id: int) -> AuthResult:
     return AuthResult(status=AuthStatus.NOT_AUTHORIZED)
 
 
-async def process_auth_by_lastname(
-    telegram_id: int, lastname: str
-) -> AuthSearchResult:
+async def process_auth_by_lastname(telegram_id: int, lastname: str) -> AuthSearchResult:
     """
     Поиск сотрудника по фамилии + авто-привязка если найден ровно один.
     Возвращает AuthSearchResult.

@@ -49,7 +49,9 @@ class RetryAiohttpSession(AiohttpSession):
                 # Telegram сам просит подождать — уважаем retry_after
                 logger.warning(
                     "[retry] TelegramRetryAfter: wait %.1fs (attempt %d/%d)",
-                    e.retry_after, attempt, self.max_retries,
+                    e.retry_after,
+                    attempt,
+                    self.max_retries,
                 )
                 await asyncio.sleep(e.retry_after)
                 last_error = e
@@ -60,13 +62,20 @@ class RetryAiohttpSession(AiohttpSession):
                     delay = self.base_delay * (2 ** (attempt - 1))  # 1s, 2s, 4s
                     logger.warning(
                         "[retry] %s (attempt %d/%d) — retry in %.1fs: %s",
-                        type(e).__name__, attempt, self.max_retries, delay, e,
+                        type(e).__name__,
+                        attempt,
+                        self.max_retries,
+                        delay,
+                        e,
                     )
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
                         "[retry] %s (attempt %d/%d) — giving up: %s",
-                        type(e).__name__, attempt, self.max_retries, e,
+                        type(e).__name__,
+                        attempt,
+                        self.max_retries,
+                        e,
                     )
 
         raise last_error  # type: ignore[misc]

@@ -21,13 +21,14 @@ from use_cases._ttl_cache import TtlCache
 logger = logging.getLogger(__name__)
 
 # TTL в секундах
-CACHE_TTL = 600        # 10 минут
-PRODUCTS_TTL = 600     # 10 минут (номенклатура по дереву)
+CACHE_TTL = 600  # 10 минут
+PRODUCTS_TTL = 600  # 10 минут (номенклатура по дереву)
 
 _cache = TtlCache(default_ttl=CACHE_TTL)
 
 
 # ── Контрагенты (suppliers) ──
+
 
 def get_suppliers() -> list[dict] | None:
     """Все поставщики из кеша (или None если протухли)."""
@@ -40,6 +41,7 @@ def set_suppliers(suppliers: list[dict]) -> None:
 
 # ── Счёт реализации ──
 
+
 def get_revenue_account() -> dict | None:
     """Счёт реализации из кеша (или None)."""
     return _cache.get("inv:revenue_account")
@@ -50,6 +52,7 @@ def set_revenue_account(account: dict) -> None:
 
 
 # ── Склады (бар/кухня по подразделению) ──
+
 
 def get_stores(department_id: str) -> list[dict] | None:
     """Склады из кеша."""
@@ -62,6 +65,7 @@ def set_stores(department_id: str, stores: list[dict]) -> None:
 
 # ── Номенклатура по дереву (GOODS + DISH из gsheet_export_group) ──
 
+
 def get_products() -> list[dict] | None:
     """Все товары по дереву из кеша (или None если протухли)."""
     return _cache.get("inv:products_tree", ttl=PRODUCTS_TTL)
@@ -72,6 +76,7 @@ def set_products(products: list[dict]) -> None:
 
 
 # ── Сброс ──
+
 
 def invalidate() -> None:
     """Сброс кеша (при завершении/отмене)."""

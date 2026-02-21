@@ -101,6 +101,7 @@ def _get_worksheet() -> gspread.Worksheet:
 # Синхронизация номенклатуры → таблицу
 # ═══════════════════════════════════════════════════════
 
+
 async def sync_products_to_sheet(
     products: list[dict[str, str]],
     departments: list[dict[str, str]],
@@ -117,7 +118,9 @@ async def sync_products_to_sheet(
     t0 = time.monotonic()
     logger.info(
         "[%s] Синхронизация номенклатуры → GSheet: %d товаров, %d подразделений",
-        LABEL, len(products), len(departments),
+        LABEL,
+        len(products),
+        len(departments),
     )
 
     def _sync_write() -> int:
@@ -155,7 +158,9 @@ async def sync_products_to_sheet(
 
         logger.info(
             "[%s] Из таблицы: %d старых значений min/max, %d dept-колонок",
-            LABEL, len(old_values), len(old_dept_ids),
+            LABEL,
+            len(old_values),
+            len(old_dept_ids),
         )
 
         # ── 3. Строим новую таблицу ──
@@ -220,22 +225,31 @@ async def sync_products_to_sheet(
         # Форматирование
         try:
             # Мета-строка — мелкий серый шрифт
-            ws.format("A1:ZZ1", {
-                "textFormat": {
-                    "fontSize": 8,
-                    "foregroundColor": {"red": 0.6, "green": 0.6, "blue": 0.6},
+            ws.format(
+                "A1:ZZ1",
+                {
+                    "textFormat": {
+                        "fontSize": 8,
+                        "foregroundColor": {"red": 0.6, "green": 0.6, "blue": 0.6},
+                    },
                 },
-            })
+            )
             # Dept names — жирные, по центру
-            ws.format("A2:ZZ2", {
-                "textFormat": {"bold": True},
-                "horizontalAlignment": "CENTER",
-            })
+            ws.format(
+                "A2:ZZ2",
+                {
+                    "textFormat": {"bold": True},
+                    "horizontalAlignment": "CENTER",
+                },
+            )
             # Sub-headers МИН/МАКС — жирные, по центру
-            ws.format("A3:ZZ3", {
-                "textFormat": {"bold": True},
-                "horizontalAlignment": "CENTER",
-            })
+            ws.format(
+                "A3:ZZ3",
+                {
+                    "textFormat": {"bold": True},
+                    "horizontalAlignment": "CENTER",
+                },
+            )
             ws.freeze(rows=3)
 
             # Объединяем ячейки dept name попарно (C2:D2, E2:F2, ...)
@@ -285,57 +299,69 @@ async def sync_products_to_sheet(
             ]
 
             # Жирные вертикальные границы между парами МИН/МАКС
-            _THICK = {"style": "SOLID_MEDIUM", "colorStyle": {"rgbColor": {"red": 0, "green": 0, "blue": 0}}}
+            _THICK = {
+                "style": "SOLID_MEDIUM",
+                "colorStyle": {"rgbColor": {"red": 0, "green": 0, "blue": 0}},
+            }
             for di in range(len(departments)):
                 col_start = 2 + di * 2  # 0-based column index (C=2, E=4, ...)
-                requests.append({
-                    "updateBorders": {
-                        "range": {
-                            "sheetId": ws.id,
-                            "startRowIndex": 1,            # row 2 (skip meta)
-                            "endRowIndex": total_rows,
-                            "startColumnIndex": col_start,
-                            "endColumnIndex": col_start + 2,
-                        },
-                        "left": _THICK,
-                        "right": _THICK,
+                requests.append(
+                    {
+                        "updateBorders": {
+                            "range": {
+                                "sheetId": ws.id,
+                                "startRowIndex": 1,  # row 2 (skip meta)
+                                "endRowIndex": total_rows,
+                                "startColumnIndex": col_start,
+                                "endColumnIndex": col_start + 2,
+                            },
+                            "left": _THICK,
+                            "right": _THICK,
+                        }
                     }
-                })
+                )
 
             # Авто-ширина только для колонки A (товар)
-            requests.append({
-                "autoResizeDimensions": {
-                    "dimensions": {
-                        "sheetId": ws.id,
-                        "dimension": "COLUMNS",
-                        "startIndex": 0,
-                        "endIndex": 1,
+            requests.append(
+                {
+                    "autoResizeDimensions": {
+                        "dimensions": {
+                            "sheetId": ws.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 0,
+                            "endIndex": 1,
+                        }
                     }
                 }
-            })
+            )
 
             # Фиксированная равная ширина для всех МИН/МАКС колонок (C, D, E, F, ...)
             _COL_WIDTH = 60  # пикселей — компактно для чисел
-            requests.append({
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "dimension": "COLUMNS",
-                        "startIndex": 2,
-                        "endIndex": num_cols,
-                    },
-                    "properties": {"pixelSize": _COL_WIDTH},
-                    "fields": "pixelSize",
+            requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 2,
+                            "endIndex": num_cols,
+                        },
+                        "properties": {"pixelSize": _COL_WIDTH},
+                        "fields": "pixelSize",
+                    }
                 }
-            })
+            )
 
             spreadsheet.batch_update({"requests": requests})
             logger.info(
                 "[%s] batch_update: скрыты строка 1 + колонка B, границы для %d подр.",
-                LABEL, len(departments),
+                LABEL,
+                len(departments),
             )
         except Exception:
-            logger.warning("[%s] Ошибка batch_update (скрытие/границы)", LABEL, exc_info=True)
+            logger.warning(
+                "[%s] Ошибка batch_update (скрытие/границы)", LABEL, exc_info=True
+            )
 
         return len(data_rows)
 
@@ -343,7 +369,9 @@ async def sync_products_to_sheet(
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Синхронизация → GSheet: %d товаров за %.1f сек",
-        LABEL, count, elapsed,
+        LABEL,
+        count,
+        elapsed,
     )
     return count
 
@@ -351,6 +379,7 @@ async def sync_products_to_sheet(
 # ═══════════════════════════════════════════════════════
 # Чтение min/max из таблицы → list[dict]
 # ═══════════════════════════════════════════════════════
+
 
 async def read_all_levels() -> list[dict[str, Any]]:
     """
@@ -371,7 +400,7 @@ async def read_all_levels() -> list[dict[str, Any]]:
         if len(all_values) < 4:
             return []
 
-        meta_row = all_values[0]      # dept UUIDs
+        meta_row = all_values[0]  # dept UUIDs
         dept_name_row = all_values[1]  # dept names
         # all_values[2] = sub-headers (МИН/МАКС)
 
@@ -386,12 +415,14 @@ async def read_all_levels() -> list[dict[str, Any]]:
             dept_name = ""
             if col < len(dept_name_row):
                 dept_name = dept_name_row[col].strip()
-            depts.append({
-                "id": dept_id,
-                "name": dept_name,
-                "min_col": col,
-                "max_col": col + 1,
-            })
+            depts.append(
+                {
+                    "id": dept_id,
+                    "name": dept_name,
+                    "min_col": col,
+                    "max_col": col + 1,
+                }
+            )
             col += 2
 
         result: list[dict[str, Any]] = []
@@ -421,26 +452,31 @@ async def read_all_levels() -> list[dict[str, Any]]:
                 if min_level <= 0 and max_level <= 0:
                     continue
 
-                result.append({
-                    "product_id": product_id,
-                    "product_name": product_name,
-                    "department_id": dept["id"],
-                    "department_name": dept["name"],
-                    "min_level": min_level,
-                    "max_level": max_level,
-                })
+                result.append(
+                    {
+                        "product_id": product_id,
+                        "product_name": product_name,
+                        "department_id": dept["id"],
+                        "department_name": dept["name"],
+                        "min_level": min_level,
+                        "max_level": max_level,
+                    }
+                )
 
         return result
 
     result = await asyncio.to_thread(_sync_read)
     elapsed = time.monotonic() - t0
-    logger.info("[%s] Прочитано %d записей из таблицы за %.1f сек", LABEL, len(result), elapsed)
+    logger.info(
+        "[%s] Прочитано %d записей из таблицы за %.1f сек", LABEL, len(result), elapsed
+    )
     return result
 
 
 # ═══════════════════════════════════════════════════════
 # Обновление min/max для одного товара × ресторана
 # ═══════════════════════════════════════════════════════
+
 
 async def update_min_max(
     product_id: str,
@@ -476,7 +512,9 @@ async def update_min_max(
             col += 2
 
         if dept_min_col is None:
-            logger.warning("[%s] Department %s не найден в таблице", LABEL, department_id)
+            logger.warning(
+                "[%s] Department %s не найден в таблице", LABEL, department_id
+            )
             return False
 
         # Найти строку для product (1-based row number, данные с row 4)
@@ -501,7 +539,13 @@ async def update_min_max(
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] update_min_max: product=%s, dept=%s, min=%s, max=%s — %.1f сек (ok=%s)",
-        LABEL, product_id, department_id, min_level, max_level, elapsed, result,
+        LABEL,
+        product_id,
+        department_id,
+        min_level,
+        max_level,
+        elapsed,
+        result,
     )
     return result
 
@@ -523,7 +567,9 @@ def _get_price_worksheet() -> gspread.Worksheet:
     except gspread.exceptions.WorksheetNotFound:
         # 3 фикс-столбца (A,B,C) + 10 столбцов поставщиков
         ws = spreadsheet.add_worksheet(
-            title=PRICE_TAB, rows=1000, cols=3 + PRICE_SUPPLIER_COLS,
+            title=PRICE_TAB,
+            rows=1000,
+            cols=3 + PRICE_SUPPLIER_COLS,
         )
         logger.info("[%s] Лист «%s» создан", LABEL, PRICE_TAB)
     return ws
@@ -570,7 +616,11 @@ async def sync_invoice_prices_to_sheet(
 
     logger.info(
         "[%s] Синхронизация прайс-листа → GSheet: %d товаров, %d цен, %d поставщиков, %d заведений",
-        LABEL, len(products), len(cost_prices), len(suppliers), len(store_list),
+        LABEL,
+        len(products),
+        len(cost_prices),
+        len(suppliers),
+        len(store_list),
     )
 
     def _sync_write() -> int:
@@ -628,7 +678,11 @@ async def sync_invoice_prices_to_sheet(
                 if len(row) > cost_col_idx and row[cost_col_idx].strip():
                     old_costs[pid] = row[cost_col_idx].strip()
                 # Склад (только если столбец существовал)
-                if store_col_idx >= 0 and len(row) > store_col_idx and row[store_col_idx].strip():
+                if (
+                    store_col_idx >= 0
+                    and len(row) > store_col_idx
+                    and row[store_col_idx].strip()
+                ):
                     old_stores[pid] = row[store_col_idx].strip()
                 # Цены поставщиков
                 for ci in range(old_num_fixed, len(row)):
@@ -641,7 +695,9 @@ async def sync_invoice_prices_to_sheet(
 
         logger.info(
             "[%s] Прайс-лист: %d ручных цен, %d складов, %d старых поставщиков",
-            LABEL, len(old_prices), len(old_stores),
+            LABEL,
+            len(old_prices),
+            len(old_stores),
             len([s for s in resolved_supplier_ids if s]),
         )
 
@@ -664,11 +720,13 @@ async def sync_invoice_prices_to_sheet(
         # ── 6. Строим строки данных с разделением на блюда и товары ──
         data_rows = []
         prev_type = None  # Отслеживаем переходы между типами
-        
+
         for prod in products:
-            pid = prod["id"].lower()  # нормализуем — cost_prices и old_costs ключи lowercase
+            pid = prod[
+                "id"
+            ].lower()  # нормализуем — cost_prices и old_costs ключи lowercase
             current_type = prod.get("product_type", "")
-            
+
             # Добавляем заголовок блока при смене типа
             if current_type != prev_type and current_type in ["DISH", "GOODS"]:
                 if current_type == "DISH":
@@ -680,7 +738,7 @@ async def sync_invoice_prices_to_sheet(
                     separator = ["📦 ТОВАРЫ", "", "", ""] + [""] * num_supplier_cols
                     data_rows.append(separator)
                 prev_type = current_type
-            
+
             cost = cost_prices.get(pid)
             cost_str = f"{cost:.2f}" if cost is not None else old_costs.get(pid, "")
             store_name = old_stores.get(pid, "")
@@ -737,7 +795,9 @@ async def sync_invoice_prices_to_sheet(
                 )
                 logger.info(
                     "[%s] Dropdown заведений: %d вариантов в %d строках",
-                    LABEL, len(store_name_list), len(data_rows),
+                    LABEL,
+                    len(store_name_list),
+                    len(data_rows),
                 )
         except Exception:
             logger.warning("[%s] Ошибка dropdown заведений", LABEL, exc_info=True)
@@ -762,7 +822,9 @@ async def sync_invoice_prices_to_sheet(
                     )
                 logger.info(
                     "[%s] Dropdown поставщиков: %d вариантов в %d столбцах",
-                    LABEL, len(supplier_name_list), num_supplier_cols,
+                    LABEL,
+                    len(supplier_name_list),
+                    num_supplier_cols,
                 )
         except Exception:
             logger.warning("[%s] Ошибка dropdown поставщиков", LABEL, exc_info=True)
@@ -770,31 +832,46 @@ async def sync_invoice_prices_to_sheet(
         # ── 10. Форматирование ──
         try:
             last_col_letter = chr(ord("A") + num_cols - 1)
-            ws.format(f"A1:{last_col_letter}1", {
-                "textFormat": {
-                    "fontSize": 8,
-                    "foregroundColor": {"red": 0.6, "green": 0.6, "blue": 0.6},
+            ws.format(
+                f"A1:{last_col_letter}1",
+                {
+                    "textFormat": {
+                        "fontSize": 8,
+                        "foregroundColor": {"red": 0.6, "green": 0.6, "blue": 0.6},
+                    },
                 },
-            })
-            ws.format(f"A2:{last_col_letter}2", {
-                "textFormat": {"bold": True},
-                "horizontalAlignment": "CENTER",
-            })
+            )
+            ws.format(
+                f"A2:{last_col_letter}2",
+                {
+                    "textFormat": {"bold": True},
+                    "horizontalAlignment": "CENTER",
+                },
+            )
             ws.freeze(rows=2, cols=1)
-            
+
             # Форматирование разделительных строк (заголовки блоков)
             for i, row in enumerate(data_rows, start=3):
                 if row[0] in ["🍽 БЛЮДА", "📦 ТОВАРЫ"]:
-                    ws.format(f"A{i}:{last_col_letter}{i}", {
-                        "textFormat": {
-                            "bold": True,
-                            "fontSize": 11,
+                    ws.format(
+                        f"A{i}:{last_col_letter}{i}",
+                        {
+                            "textFormat": {
+                                "bold": True,
+                                "fontSize": 11,
+                            },
+                            "backgroundColor": {
+                                "red": 0.95,
+                                "green": 0.95,
+                                "blue": 0.95,
+                            },
+                            "horizontalAlignment": "LEFT",
                         },
-                        "backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
-                        "horizontalAlignment": "LEFT",
-                    })
+                    )
         except Exception:
-            logger.warning("[%s] Ошибка форматирования прайс-листа", LABEL, exc_info=True)
+            logger.warning(
+                "[%s] Ошибка форматирования прайс-листа", LABEL, exc_info=True
+            )
 
         # ── 11. batch_update: скрыть строку 1 + колонку B, ширина столбцов ──
         try:
@@ -893,7 +970,9 @@ async def sync_invoice_prices_to_sheet(
             ]
 
             spreadsheet.batch_update({"requests": requests})
-            logger.info("[%s] batch_update прайс-листа: скрыты строка 1 + колонка B", LABEL)
+            logger.info(
+                "[%s] batch_update прайс-листа: скрыты строка 1 + колонка B", LABEL
+            )
         except Exception:
             logger.warning("[%s] Ошибка batch_update прайс-листа", LABEL, exc_info=True)
 
@@ -903,7 +982,9 @@ async def sync_invoice_prices_to_sheet(
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Синхронизация прайс-листа → GSheet: %d товаров за %.1f сек",
-        LABEL, count, elapsed,
+        LABEL,
+        count,
+        elapsed,
     )
     return count
 
@@ -989,20 +1070,27 @@ async def read_invoice_prices(
                 except ValueError:
                     pass
 
-            result.append({
-                "product_id": pid,
-                "product_name": name,
-                "store_id": store_id,
-                "store_name": store_name,
-                "cost_price": cost,
-                "supplier_prices": supplier_prices,
-            })
+            result.append(
+                {
+                    "product_id": pid,
+                    "product_name": name,
+                    "store_id": store_id,
+                    "store_name": store_name,
+                    "cost_price": cost,
+                    "supplier_prices": supplier_prices,
+                }
+            )
 
         return result
 
     result = await asyncio.to_thread(_sync_read)
     elapsed = time.monotonic() - t0
-    logger.info("[%s] Прочитано %d записей из прайс-листа за %.1f сек", LABEL, len(result), elapsed)
+    logger.info(
+        "[%s] Прочитано %d записей из прайс-листа за %.1f сек",
+        LABEL,
+        len(result),
+        elapsed,
+    )
     return result
 
 
@@ -1074,14 +1162,18 @@ async def read_permissions_sheet() -> list[dict[str, Any]]:
                 if not key:
                     continue
                 cell_val = row[2 + ci].strip().lower() if (2 + ci) < len(row) else ""
-                perms[key] = cell_val in _TRUTHY or cell_val in {v.lower() for v in _TRUTHY}
+                perms[key] = cell_val in _TRUTHY or cell_val in {
+                    v.lower() for v in _TRUTHY
+                }
             result.append({"telegram_id": tg_id, "perms": perms})
 
         return result
 
     result = await asyncio.to_thread(_sync_read)
     elapsed = time.monotonic() - t0
-    logger.info("[%s] Прочитано %d записей прав за %.1f сек", LABEL, len(result), elapsed)
+    logger.info(
+        "[%s] Прочитано %d записей прав за %.1f сек", LABEL, len(result), elapsed
+    )
     return result
 
 
@@ -1113,7 +1205,9 @@ async def sync_permissions_to_sheet(
     t0 = time.monotonic()
     logger.info(
         "[%s] Синхронизация прав → GSheet: %d сотрудников, %d ключей прав",
-        LABEL, len(employees), len(permission_keys),
+        LABEL,
+        len(employees),
+        len(permission_keys),
     )
 
     def _sync_write() -> int:
@@ -1151,7 +1245,9 @@ async def sync_permissions_to_sheet(
 
         logger.info(
             "[%s] Из таблицы: %d существующих сотрудников, %d столбцов прав",
-            LABEL, len(old_perms), len(old_perm_keys),
+            LABEL,
+            len(old_perms),
+            len(old_perm_keys),
         )
 
         # ── 3. Столбцы прав = ТОЛЬКО permission_keys (единственный источник истины) ──
@@ -1170,8 +1266,7 @@ async def sync_permissions_to_sheet(
         # Сохраняем порядок старых, добавляем новых в конец (отсортированных по имени)
         existing_tg_ids = set(old_tg_ids_order)
         new_employees = [
-            e for e in employees
-            if str(e["telegram_id"]) not in existing_tg_ids
+            e for e in employees if str(e["telegram_id"]) not in existing_tg_ids
         ]
         # Сортируем новых по имени
         new_employees.sort(key=lambda e: e.get("name", ""))
@@ -1243,50 +1338,63 @@ async def sync_permissions_to_sheet(
 
         # ── 7. Форматирование ──
         try:
-            last_col = gspread.utils.rowcol_to_a1(1, num_cols)[-1] if num_cols <= 26 else "Z"
+            last_col = (
+                gspread.utils.rowcol_to_a1(1, num_cols)[-1] if num_cols <= 26 else "Z"
+            )
             # Мета-строка — мелкий серый шрифт
-            ws.format(f"A1:{last_col}1", {
-                "textFormat": {
-                    "fontSize": 8,
-                    "foregroundColor": {"red": 0.6, "green": 0.6, "blue": 0.6},
+            ws.format(
+                f"A1:{last_col}1",
+                {
+                    "textFormat": {
+                        "fontSize": 8,
+                        "foregroundColor": {"red": 0.6, "green": 0.6, "blue": 0.6},
+                    },
                 },
-            })
+            )
             # Заголовки — жирные, по центру
-            ws.format(f"A2:{last_col}2", {
-                "textFormat": {"bold": True},
-                "horizontalAlignment": "CENTER",
-            })
+            ws.format(
+                f"A2:{last_col}2",
+                {
+                    "textFormat": {"bold": True},
+                    "horizontalAlignment": "CENTER",
+                },
+            )
             # Столбцы прав — по центру
             if len(merged_keys) > 0:
                 perm_start = gspread.utils.rowcol_to_a1(3, 3)[:1]  # "C"
                 perm_end_col = gspread.utils.rowcol_to_a1(1, num_cols)
                 # Удалим цифры — оставим букву
-                perm_end_letter = re.sub(r'\d+', '', perm_end_col)
-                ws.format(f"{perm_start}3:{perm_end_letter}{len(all_rows)}", {
-                    "horizontalAlignment": "CENTER",
-                })
+                perm_end_letter = re.sub(r"\d+", "", perm_end_col)
+                ws.format(
+                    f"{perm_start}3:{perm_end_letter}{len(all_rows)}",
+                    {
+                        "horizontalAlignment": "CENTER",
+                    },
+                )
             ws.freeze(rows=2, cols=1)
 
             # Чекбоксы (Boolean data validation) для столбцов прав
             if merged_keys:
                 checkbox_requests = []
                 for ci in range(len(merged_keys)):
-                    checkbox_requests.append({
-                        "setDataValidation": {
-                            "range": {
-                                "sheetId": ws.id,
-                                "startRowIndex": 2,  # строка 3 (0-based)
-                                "endRowIndex": len(all_rows),
-                                "startColumnIndex": 2 + ci,
-                                "endColumnIndex": 3 + ci,
-                            },
-                            "rule": {
-                                "condition": {"type": "BOOLEAN"},
-                                "strict": True,
-                                "showCustomUi": True,
-                            },
+                    checkbox_requests.append(
+                        {
+                            "setDataValidation": {
+                                "range": {
+                                    "sheetId": ws.id,
+                                    "startRowIndex": 2,  # строка 3 (0-based)
+                                    "endRowIndex": len(all_rows),
+                                    "startColumnIndex": 2 + ci,
+                                    "endColumnIndex": 3 + ci,
+                                },
+                                "rule": {
+                                    "condition": {"type": "BOOLEAN"},
+                                    "strict": True,
+                                    "showCustomUi": True,
+                                },
+                            }
                         }
-                    })
+                    )
                 ws.spreadsheet.batch_update({"requests": checkbox_requests})
 
         except Exception:
@@ -1348,7 +1456,9 @@ async def sync_permissions_to_sheet(
                 },
             ]
             spreadsheet.batch_update({"requests": requests})
-            logger.info("[%s] batch_update прав: скрыта строка 1, ширины столбцов", LABEL)
+            logger.info(
+                "[%s] batch_update прав: скрыта строка 1, ширины столбцов", LABEL
+            )
         except Exception:
             logger.warning("[%s] Ошибка batch_update прав", LABEL, exc_info=True)
 
@@ -1358,7 +1468,9 @@ async def sync_permissions_to_sheet(
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Синхронизация прав → GSheet: %d сотрудников за %.1f сек",
-        LABEL, count, elapsed,
+        LABEL,
+        count,
+        elapsed,
     )
     return count
 
@@ -1427,14 +1539,12 @@ async def sync_request_stores_to_sheet(
         else:
             start_row = (len(all_values) + 2) if all_values else 2
 
-        data_row = start_row + 1    # строка с dropdown
-        ref_start = start_row + 3   # скрытый справочник (name → uuid)
+        data_row = start_row + 1  # строка с dropdown
+        ref_start = start_row + 3  # скрытый справочник (name → uuid)
 
         # ── Подготовка данных ──
         sorted_stores = sorted(stores, key=lambda s: s.get("name", ""))
-        name_to_id: dict[str, str] = {
-            s["name"]: str(s["id"]) for s in sorted_stores
-        }
+        name_to_id: dict[str, str] = {s["name"]: str(s["id"]) for s in sorted_stores}
         store_names = [s["name"] for s in sorted_stores]
 
         selected_name = old_selected_name if old_selected_name in name_to_id else ""
@@ -1443,10 +1553,14 @@ async def sync_request_stores_to_sheet(
 
         # VLOOKUP формула: ищет имя из C{data_row} в справочнике E:F
         vlookup = (
-            f'=IFERROR(VLOOKUP(C{data_row},'
-            f'$E${ref_start}:$F${ref_last},'
-            f'2,FALSE),"")'
-        ) if sorted_stores else ""
+            (
+                f"=IFERROR(VLOOKUP(C{data_row},"
+                f"$E${ref_start}:$F${ref_last},"
+                f'2,FALSE),"")'
+            )
+            if sorted_stores
+            else ""
+        )
 
         # ── Блок для записи ──
         # A=label, B=(скрыт), C=dropdown name, D=VLOOKUP uuid
@@ -1465,9 +1579,7 @@ async def sync_request_stores_to_sheet(
 
         # ── Очистить старую секцию ──
         if section_start_row is not None:
-            clear_end = section_end_row if section_end_row else (
-                section_start_row + 30
-            )
+            clear_end = section_end_row if section_end_row else (section_start_row + 30)
             clear_end = max(clear_end, section_start_row + len(block) + 5)
             try:
                 ws.batch_clear([f"A{section_start_row + 1}:Z{clear_end}"])
@@ -1488,141 +1600,164 @@ async def sync_request_stores_to_sheet(
         fmt_requests: list[dict] = []
 
         marker_0 = start_row - 1  # 0-based
-        data_0 = data_row - 1     # 0-based
+        data_0 = data_row - 1  # 0-based
 
         # 1. СНЯТЬ скрытие столбца C
-        fmt_requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": ws.id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 2, "endIndex": 3,
-                },
-                "properties": {"hiddenByUser": False},
-                "fields": "hiddenByUser",
+        fmt_requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 2,
+                        "endIndex": 3,
+                    },
+                    "properties": {"hiddenByUser": False},
+                    "fields": "hiddenByUser",
+                }
             }
-        })
+        )
 
         # 2. Скрыть столбцы E-F (справочник для VLOOKUP)
-        fmt_requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": ws.id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 4, "endIndex": 6,
-                },
-                "properties": {"hiddenByUser": True},
-                "fields": "hiddenByUser",
+        fmt_requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 4,
+                        "endIndex": 6,
+                    },
+                    "properties": {"hiddenByUser": True},
+                    "fields": "hiddenByUser",
+                }
             }
-        })
+        )
 
         # 3. Скрыть строки справочника
         if sorted_stores:
             ref_0 = ref_start - 1  # 0-based
             ref_end_0 = ref_0 + len(sorted_stores) + 1
-            fmt_requests.append({
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "dimension": "ROWS",
-                        "startIndex": ref_0, "endIndex": ref_end_0,
-                    },
-                    "properties": {"hiddenByUser": True},
-                    "fields": "hiddenByUser",
+            fmt_requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "ROWS",
+                            "startIndex": ref_0,
+                            "endIndex": ref_end_0,
+                        },
+                        "properties": {"hiddenByUser": True},
+                        "fields": "hiddenByUser",
+                    }
                 }
-            })
+            )
 
         # 4. Маркер секции — жирный, 12pt
-        fmt_requests.append({
-            "repeatCell": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": marker_0,
-                    "endRowIndex": marker_0 + 1,
-                    "startColumnIndex": 0, "endColumnIndex": 1,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "textFormat": {"bold": True, "fontSize": 12},
-                    }
-                },
-                "fields": "userEnteredFormat(textFormat)",
+        fmt_requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": marker_0,
+                        "endRowIndex": marker_0 + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {"bold": True, "fontSize": 12},
+                        }
+                    },
+                    "fields": "userEnteredFormat(textFormat)",
+                }
             }
-        })
+        )
 
         # 5. Ячейка A (label) — жирный, фон
-        fmt_requests.append({
-            "repeatCell": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": data_0,
-                    "endRowIndex": data_0 + 1,
-                    "startColumnIndex": 0, "endColumnIndex": 1,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": {
-                            "red": 0.82, "green": 0.88, "blue": 0.97,
-                        },
-                        "textFormat": {"bold": True, "fontSize": 10},
-                        "verticalAlignment": "MIDDLE",
-                    }
-                },
-                "fields": (
-                    "userEnteredFormat("
-                    "backgroundColor,textFormat,verticalAlignment)"
-                ),
-            }
-        })
-
-        # 6. Dropdown в столбце C (index=2)
-        if store_names:
-            dropdown_values = [
-                {"userEnteredValue": name} for name in store_names
-            ]
-            fmt_requests.append({
-                "setDataValidation": {
+        fmt_requests.append(
+            {
+                "repeatCell": {
                     "range": {
                         "sheetId": ws.id,
                         "startRowIndex": data_0,
                         "endRowIndex": data_0 + 1,
-                        "startColumnIndex": 2,
-                        "endColumnIndex": 3,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1,
                     },
-                    "rule": {
-                        "condition": {
-                            "type": "ONE_OF_LIST",
-                            "values": dropdown_values,
-                        },
-                        "strict": True,
-                        "showCustomUi": True,
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {
+                                "red": 0.82,
+                                "green": 0.88,
+                                "blue": 0.97,
+                            },
+                            "textFormat": {"bold": True, "fontSize": 10},
+                            "verticalAlignment": "MIDDLE",
+                        }
                     },
+                    "fields": (
+                        "userEnteredFormat("
+                        "backgroundColor,textFormat,verticalAlignment)"
+                    ),
                 }
-            })
+            }
+        )
+
+        # 6. Dropdown в столбце C (index=2)
+        if store_names:
+            dropdown_values = [{"userEnteredValue": name} for name in store_names]
+            fmt_requests.append(
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "startRowIndex": data_0,
+                            "endRowIndex": data_0 + 1,
+                            "startColumnIndex": 2,
+                            "endColumnIndex": 3,
+                        },
+                        "rule": {
+                            "condition": {
+                                "type": "ONE_OF_LIST",
+                                "values": dropdown_values,
+                            },
+                            "strict": True,
+                            "showCustomUi": True,
+                        },
+                    }
+                }
+            )
 
         # 7. Ширина столбца A = 300px, C = 320px
-        fmt_requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": ws.id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 0, "endIndex": 1,
-                },
-                "properties": {"pixelSize": 300},
-                "fields": "pixelSize",
+        fmt_requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 0,
+                        "endIndex": 1,
+                    },
+                    "properties": {"pixelSize": 300},
+                    "fields": "pixelSize",
+                }
             }
-        })
-        fmt_requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": ws.id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 2, "endIndex": 3,
-                },
-                "properties": {"pixelSize": 320},
-                "fields": "pixelSize",
+        )
+        fmt_requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 2,
+                        "endIndex": 3,
+                    },
+                    "properties": {"pixelSize": 320},
+                    "fields": "pixelSize",
+                }
             }
-        })
+        )
 
         # 8. Границы
         thin_border = {
@@ -1631,28 +1766,31 @@ async def sync_request_stores_to_sheet(
             "color": {"red": 0.75, "green": 0.75, "blue": 0.75},
         }
         for col_start, col_end in [(0, 1), (2, 3)]:
-            fmt_requests.append({
-                "updateBorders": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "startRowIndex": data_0,
-                        "endRowIndex": data_0 + 1,
-                        "startColumnIndex": col_start,
-                        "endColumnIndex": col_end,
-                    },
-                    "top": thin_border,
-                    "bottom": thin_border,
-                    "left": thin_border,
-                    "right": thin_border,
+            fmt_requests.append(
+                {
+                    "updateBorders": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "startRowIndex": data_0,
+                            "endRowIndex": data_0 + 1,
+                            "startColumnIndex": col_start,
+                            "endColumnIndex": col_end,
+                        },
+                        "top": thin_border,
+                        "bottom": thin_border,
+                        "left": thin_border,
+                        "right": thin_border,
+                    }
                 }
-            })
+            )
 
         try:
             spreadsheet.batch_update({"requests": fmt_requests})
         except Exception:
             logger.warning(
                 "[%s] Ошибка форматирования секции Заведение для заявок",
-                LABEL, exc_info=True,
+                LABEL,
+                exc_info=True,
             )
 
         return len(store_names)
@@ -1661,7 +1799,9 @@ async def sync_request_stores_to_sheet(
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Синхронизация заведений для заявок → GSheet: %d шт за %.1f сек",
-        LABEL, count, elapsed,
+        LABEL,
+        count,
+        elapsed,
     )
     return count
 
@@ -1722,7 +1862,9 @@ async def read_request_stores() -> list[dict[str, str]]:
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Заведение для заявок из GSheet: %d за %.1f сек",
-        LABEL, len(result), elapsed,
+        LABEL,
+        len(result),
+        elapsed,
     )
     return result
 
@@ -1791,7 +1933,9 @@ async def read_cloud_org_mapping() -> dict[str, str]:
     result = await asyncio.to_thread(_sync_read)
     logger.info(
         "[%s] cloud_org_mapping: %d привязок за %.1f сек",
-        LABEL, len(result), time.monotonic() - t0,
+        LABEL,
+        len(result),
+        time.monotonic() - t0,
     )
     return result
 
@@ -1904,8 +2048,8 @@ async def sync_cloud_org_mapping_to_sheet(
         for i, dr in enumerate(data_rows):
             row_num = first_data + i
             vlookup = (
-                f'=IFERROR(VLOOKUP(C{row_num},'
-                f'$A${ref_first}:$B${ref_last},'
+                f"=IFERROR(VLOOKUP(C{row_num},"
+                f"$A${ref_first}:$B${ref_last},"
                 f'2,FALSE),"")'
             )
             block.append([dr[0], dr[1], dr[2], vlookup])
@@ -1938,119 +2082,142 @@ async def sync_cloud_org_mapping_to_sheet(
         requests: list[dict] = []
 
         # ---- 1. Скрыть столбец B (dept_uuid) ----
-        requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": ws.id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 1, "endIndex": 2,
-                },
-                "properties": {"hiddenByUser": True},
-                "fields": "hiddenByUser",
+        requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 1,
+                        "endIndex": 2,
+                    },
+                    "properties": {"hiddenByUser": True},
+                    "fields": "hiddenByUser",
+                }
             }
-        })
+        )
         # ---- 2. Скрыть столбец D (cloud_org_uuid) ----
-        requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": ws.id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 3, "endIndex": 4,
-                },
-                "properties": {"hiddenByUser": True},
-                "fields": "hiddenByUser",
+        requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 3,
+                        "endIndex": 4,
+                    },
+                    "properties": {"hiddenByUser": True},
+                    "fields": "hiddenByUser",
+                }
             }
-        })
+        )
 
         # ---- 3. Ширина колонки A = 280px, C = 320px ----
-        requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": ws.id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 0, "endIndex": 1,
-                },
-                "properties": {"pixelSize": 280},
-                "fields": "pixelSize",
+        requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 0,
+                        "endIndex": 1,
+                    },
+                    "properties": {"pixelSize": 280},
+                    "fields": "pixelSize",
+                }
             }
-        })
-        requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": ws.id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 2, "endIndex": 3,
-                },
-                "properties": {"pixelSize": 320},
-                "fields": "pixelSize",
+        )
+        requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 2,
+                        "endIndex": 3,
+                    },
+                    "properties": {"pixelSize": 320},
+                    "fields": "pixelSize",
+                }
             }
-        })
+        )
 
         # ---- 4. Маркер секции — жирный, 12pt ----
         marker_0 = start_row - 1  # 0-based
-        requests.append({
-            "repeatCell": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": marker_0,
-                    "endRowIndex": marker_0 + 1,
-                    "startColumnIndex": 0, "endColumnIndex": 1,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "textFormat": {"bold": True, "fontSize": 12},
-                    }
-                },
-                "fields": "userEnteredFormat(textFormat)",
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": marker_0,
+                        "endRowIndex": marker_0 + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {"bold": True, "fontSize": 12},
+                        }
+                    },
+                    "fields": "userEnteredFormat(textFormat)",
+                }
             }
-        })
+        )
 
         # ---- 5. Заголовок — жирный, фон, центр ----
         hdr_0 = header_row - 1  # 0-based
-        requests.append({
-            "repeatCell": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": hdr_0,
-                    "endRowIndex": hdr_0 + 1,
-                    "startColumnIndex": 0, "endColumnIndex": 4,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": {
-                            "red": 0.82, "green": 0.88, "blue": 0.97,
-                        },
-                        "textFormat": {"bold": True, "fontSize": 10},
-                        "horizontalAlignment": "CENTER",
-                        "verticalAlignment": "MIDDLE",
-                    }
-                },
-                "fields": (
-                    "userEnteredFormat("
-                    "backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
-                ),
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": hdr_0,
+                        "endRowIndex": hdr_0 + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 4,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {
+                                "red": 0.82,
+                                "green": 0.88,
+                                "blue": 0.97,
+                            },
+                            "textFormat": {"bold": True, "fontSize": 10},
+                            "horizontalAlignment": "CENTER",
+                            "verticalAlignment": "MIDDLE",
+                        }
+                    },
+                    "fields": (
+                        "userEnteredFormat("
+                        "backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+                    ),
+                }
             }
-        })
+        )
 
         # ---- 6. Данные — вертикальное выравнивание по центру ----
         fd_0 = first_data - 1
         ld_0 = last_data  # endRowIndex exclusive
-        requests.append({
-            "repeatCell": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": fd_0,
-                    "endRowIndex": ld_0,
-                    "startColumnIndex": 0, "endColumnIndex": 4,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "verticalAlignment": "MIDDLE",
-                    }
-                },
-                "fields": "userEnteredFormat(verticalAlignment)",
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": fd_0,
+                        "endRowIndex": ld_0,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 4,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "verticalAlignment": "MIDDLE",
+                        }
+                    },
+                    "fields": "userEnteredFormat(verticalAlignment)",
+                }
             }
-        })
+        )
 
         # ---- 7. Границы для таблицы (заголовок + данные) ----
         thin_border = {
@@ -2058,86 +2225,95 @@ async def sync_cloud_org_mapping_to_sheet(
             "width": 1,
             "color": {"red": 0.75, "green": 0.75, "blue": 0.75},
         }
-        requests.append({
-            "updateBorders": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": hdr_0,
-                    "endRowIndex": ld_0,
-                    "startColumnIndex": 0, "endColumnIndex": 1,
-                },
-                "top": thin_border,
-                "bottom": thin_border,
-                "left": thin_border,
-                "right": thin_border,
-                "innerHorizontal": thin_border,
-            }
-        })
-        requests.append({
-            "updateBorders": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": hdr_0,
-                    "endRowIndex": ld_0,
-                    "startColumnIndex": 2, "endColumnIndex": 3,
-                },
-                "top": thin_border,
-                "bottom": thin_border,
-                "left": thin_border,
-                "right": thin_border,
-                "innerHorizontal": thin_border,
-            }
-        })
-
-        # ---- 8. Dropdown (выпадающий список) в колонке C ----
-        if cloud_org_name_list and data_rows:
-            dropdown_values = [
-                {"userEnteredValue": n} for n in cloud_org_name_list
-            ]
-            requests.append({
-                "setDataValidation": {
+        requests.append(
+            {
+                "updateBorders": {
                     "range": {
                         "sheetId": ws.id,
-                        "startRowIndex": fd_0,
+                        "startRowIndex": hdr_0,
+                        "endRowIndex": ld_0,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1,
+                    },
+                    "top": thin_border,
+                    "bottom": thin_border,
+                    "left": thin_border,
+                    "right": thin_border,
+                    "innerHorizontal": thin_border,
+                }
+            }
+        )
+        requests.append(
+            {
+                "updateBorders": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": hdr_0,
                         "endRowIndex": ld_0,
                         "startColumnIndex": 2,
                         "endColumnIndex": 3,
                     },
-                    "rule": {
-                        "condition": {
-                            "type": "ONE_OF_LIST",
-                            "values": dropdown_values,
-                        },
-                        "showCustomUi": True,
-                        "strict": False,
-                    },
+                    "top": thin_border,
+                    "bottom": thin_border,
+                    "left": thin_border,
+                    "right": thin_border,
+                    "innerHorizontal": thin_border,
                 }
-            })
+            }
+        )
+
+        # ---- 8. Dropdown (выпадающий список) в колонке C ----
+        if cloud_org_name_list and data_rows:
+            dropdown_values = [{"userEnteredValue": n} for n in cloud_org_name_list]
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "startRowIndex": fd_0,
+                            "endRowIndex": ld_0,
+                            "startColumnIndex": 2,
+                            "endColumnIndex": 3,
+                        },
+                        "rule": {
+                            "condition": {
+                                "type": "ONE_OF_LIST",
+                                "values": dropdown_values,
+                            },
+                            "showCustomUi": True,
+                            "strict": False,
+                        },
+                    }
+                }
+            )
 
         # ---- 9. Скрыть строки справочника ----
         if ref_rows:
             # Скрыть от пустой строки-разделителя до конца справочника
             hide_from_0 = ref_marker - 2  # пустая строка (0-based)
             hide_to_0 = ref_last  # exclusive
-            requests.append({
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "dimension": "ROWS",
-                        "startIndex": hide_from_0,
-                        "endIndex": hide_to_0,
-                    },
-                    "properties": {"hiddenByUser": True},
-                    "fields": "hiddenByUser",
+            requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": ws.id,
+                            "dimension": "ROWS",
+                            "startIndex": hide_from_0,
+                            "endIndex": hide_to_0,
+                        },
+                        "properties": {"hiddenByUser": True},
+                        "fields": "hiddenByUser",
+                    }
                 }
-            })
+            )
 
         try:
             spreadsheet.batch_update({"requests": requests})
         except Exception:
             logger.warning(
                 "[%s] Ошибка форматирования листа Настройки",
-                LABEL, exc_info=True,
+                LABEL,
+                exc_info=True,
             )
 
         return len(data_rows)
@@ -2146,7 +2322,9 @@ async def sync_cloud_org_mapping_to_sheet(
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Синхронизация cloud_org_mapping → GSheet: %d подразделений за %.1f сек",
-        LABEL, count, elapsed,
+        LABEL,
+        count,
+        elapsed,
     )
     return count
 
@@ -2155,10 +2333,14 @@ async def sync_cloud_org_mapping_to_sheet(
 # Маппинг: базовая таблица и трансфер (OCR ↔ iiko)
 # ═══════════════════════════════════════════════════════
 
-_MAPPING_BASE_TAB    = "Маппинг"
-_MAPPING_IMPORT_TAB  = "Маппинг Импорт"
-_MAPPING_REF_TAB     = "Маппинг Справочник"   # скрытый лист с полным списком товаров/поставщиков
-_MAPPING_MAX_DROPDOWN = 500   # лимит ONE_OF_LIST (для коротких списков — типы складов, поставщики)
+_MAPPING_BASE_TAB = "Маппинг"
+_MAPPING_IMPORT_TAB = "Маппинг Импорт"
+_MAPPING_REF_TAB = (
+    "Маппинг Справочник"  # скрытый лист с полным списком товаров/поставщиков
+)
+_MAPPING_MAX_DROPDOWN = (
+    500  # лимит ONE_OF_LIST (для коротких списков — типы складов, поставщики)
+)
 
 
 def _get_mapping_worksheet(tab_name: str) -> gspread.Worksheet:
@@ -2178,7 +2360,9 @@ def _get_mapping_worksheet(tab_name: str) -> gspread.Worksheet:
 _STORE_TYPES: list[str] = ["бар", "кухня", "тмц", "хозы"]
 
 
-def _set_dropdown(spreadsheet, ws, start_row: int, end_row: int, col: int, options: list[str]) -> None:
+def _set_dropdown(
+    spreadsheet, ws, start_row: int, end_row: int, col: int, options: list[str]
+) -> None:
     """Установить dropdown-валидацию для диапазона ячеек в столбце col (1-indexed).
     Использует ONE_OF_LIST — только для коротких списков (типы складов, поставщики).
     """
@@ -2191,11 +2375,11 @@ def _set_dropdown(spreadsheet, ws, start_row: int, end_row: int, col: int, optio
             {
                 "setDataValidation": {
                     "range": {
-                        "sheetId":          sheet_id,
-                        "startRowIndex":    start_row - 1,  # 0-indexed
-                        "endRowIndex":      end_row,        # exclusive
+                        "sheetId": sheet_id,
+                        "startRowIndex": start_row - 1,  # 0-indexed
+                        "endRowIndex": end_row,  # exclusive
                         "startColumnIndex": col - 1,
-                        "endColumnIndex":   col,
+                        "endColumnIndex": col,
                     },
                     "rule": {
                         "condition": {
@@ -2222,17 +2406,25 @@ def _write_ref_column(spreadsheet, col_index: int, values: list[str]) -> None:
     try:
         ws = spreadsheet.worksheet(_MAPPING_REF_TAB)
     except gspread.exceptions.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title=_MAPPING_REF_TAB, rows=max(len(values) + 10, 3000), cols=4)
+        ws = spreadsheet.add_worksheet(
+            title=_MAPPING_REF_TAB, rows=max(len(values) + 10, 3000), cols=4
+        )
         logger.info("[%s] Лист «%s» создан", LABEL, _MAPPING_REF_TAB)
 
     # Скрыть лист (не виден пользователю)
     try:
-        spreadsheet.batch_update({"requests": [{
-            "updateSheetProperties": {
-                "properties": {"sheetId": ws.id, "hidden": True},
-                "fields": "hidden",
+        spreadsheet.batch_update(
+            {
+                "requests": [
+                    {
+                        "updateSheetProperties": {
+                            "properties": {"sheetId": ws.id, "hidden": True},
+                            "fields": "hidden",
+                        }
+                    }
+                ]
             }
-        }]})
+        )
     except Exception:
         pass
 
@@ -2267,31 +2459,35 @@ def _set_range_dropdown(
     С䐛ылается на столбец в листе _MAPPING_REF_TAB.
     """
     body = {
-        "requests": [{
-            "setDataValidation": {
-                "range": {
-                    "sheetId":          target_ws.id,
-                    "startRowIndex":    start_row - 1,
-                    "endRowIndex":      end_row,
-                    "startColumnIndex": col - 1,
-                    "endColumnIndex":   col,
-                },
-                "rule": {
-                    "condition": {
-                        "type": "ONE_OF_RANGE",
-                        "values": [{
-                            "userEnteredValue": (
-                                f"='{_MAPPING_REF_TAB}'"
-                                f"!${chr(ord('A') + ref_col_index)}$1"
-                                f":${chr(ord('A') + ref_col_index)}${ref_count}"
-                            )
-                        }],
+        "requests": [
+            {
+                "setDataValidation": {
+                    "range": {
+                        "sheetId": target_ws.id,
+                        "startRowIndex": start_row - 1,
+                        "endRowIndex": end_row,
+                        "startColumnIndex": col - 1,
+                        "endColumnIndex": col,
                     },
-                    "showCustomUi": True,
-                    "strict": False,
-                },
+                    "rule": {
+                        "condition": {
+                            "type": "ONE_OF_RANGE",
+                            "values": [
+                                {
+                                    "userEnteredValue": (
+                                        f"='{_MAPPING_REF_TAB}'"
+                                        f"!${chr(ord('A') + ref_col_index)}$1"
+                                        f":${chr(ord('A') + ref_col_index)}${ref_count}"
+                                    )
+                                }
+                            ],
+                        },
+                        "showCustomUi": True,
+                        "strict": False,
+                    },
+                }
             }
-        }]
+        ]
     }
     try:
         spreadsheet.batch_update(body)
@@ -2314,26 +2510,28 @@ def read_base_mapping_sheet() -> list[dict[str, str]]:
         if len(row) < 3:
             continue
         entry_type = (row[0] or "").strip()
-        ocr_name   = (row[1] or "").strip()
-        iiko_name  = (row[2] or "").strip()
-        iiko_id    = (row[3] or "").strip() if len(row) > 3 else ""
+        ocr_name = (row[1] or "").strip()
+        iiko_name = (row[2] or "").strip()
+        iiko_id = (row[3] or "").strip() if len(row) > 3 else ""
         store_type = (row[4] or "").strip() if len(row) > 4 else ""
         if ocr_name and (entry_type or iiko_name):
-            result.append({
-                "type":       entry_type,
-                "ocr_name":   ocr_name,
-                "iiko_name":  iiko_name,
-                "iiko_id":    iiko_id,
-                "store_type": store_type,
-            })
+            result.append(
+                {
+                    "type": entry_type,
+                    "ocr_name": ocr_name,
+                    "iiko_name": iiko_name,
+                    "iiko_id": iiko_id,
+                    "store_type": store_type,
+                }
+            )
     return result
 
 
 def write_mapping_import_sheet(
     unmapped_suppliers: list[str],
-    unmapped_products:  list[str],
+    unmapped_products: list[str],
     iiko_supplier_names: list[str],
-    iiko_product_names:  list[str],
+    iiko_product_names: list[str],
 ) -> None:
     """
     Записать незамапленные имена в «Маппинг Импорт».
@@ -2346,6 +2544,7 @@ def write_mapping_import_sheet(
     Предыдущее содержимое листа полностью перезаписывается.
     """
     from config import MIN_STOCK_SHEET_ID
+
     client = _get_client()
     spreadsheet = client.open_by_key(MIN_STOCK_SHEET_ID)
     ws = _get_mapping_worksheet(_MAPPING_IMPORT_TAB)
@@ -2353,7 +2552,14 @@ def write_mapping_import_sheet(
     # Полная очистка
     ws.clear()
 
-    header = [["Тип", "OCR Имя (что распознал GPT)", "iiko Имя (выберите из списка)", "Тип склада"]]
+    header = [
+        [
+            "Тип",
+            "OCR Имя (что распознал GPT)",
+            "iiko Имя (выберите из списка)",
+            "Тип склада",
+        ]
+    ]
     rows: list[list[str]] = []
 
     sup_start_row = 2  # строка 1 = header
@@ -2386,46 +2592,96 @@ def write_mapping_import_sheet(
                 "cell": {
                     "userEnteredFormat": {
                         "backgroundColor": {"red": 0.23, "green": 0.47, "blue": 0.85},
-                        "textFormat":      {"bold": True, "foregroundColor": {"red": 1, "green": 1, "blue": 1}},
+                        "textFormat": {
+                            "bold": True,
+                            "foregroundColor": {"red": 1, "green": 1, "blue": 1},
+                        },
                     }
                 },
                 "fields": "userEnteredFormat(backgroundColor,textFormat)",
             }
         },
         # Ширина столбцов
-        {"updateDimensionProperties": {
-            "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1},
-            "properties": {"pixelSize": 120}, "fields": "pixelSize",
-        }},
-        {"updateDimensionProperties": {
-            "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 2},
-            "properties": {"pixelSize": 340}, "fields": "pixelSize",
-        }},
-        {"updateDimensionProperties": {
-            "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 2, "endIndex": 3},
-            "properties": {"pixelSize": 340}, "fields": "pixelSize",
-        }},
+        {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 0,
+                    "endIndex": 1,
+                },
+                "properties": {"pixelSize": 120},
+                "fields": "pixelSize",
+            }
+        },
+        {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 1,
+                    "endIndex": 2,
+                },
+                "properties": {"pixelSize": 340},
+                "fields": "pixelSize",
+            }
+        },
+        {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 2,
+                    "endIndex": 3,
+                },
+                "properties": {"pixelSize": 340},
+                "fields": "pixelSize",
+            }
+        },
         # Тип склада
-        {"updateDimensionProperties": {
-            "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 3, "endIndex": 4},
-            "properties": {"pixelSize": 160}, "fields": "pixelSize",
-        }},
+        {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 3,
+                    "endIndex": 4,
+                },
+                "properties": {"pixelSize": 160},
+                "fields": "pixelSize",
+            }
+        },
     ]
     try:
         spreadsheet.batch_update({"requests": fmt_requests})
     except Exception:
-        logger.warning("[%s] Ошибка форматирования листа маппинга", LABEL, exc_info=True)
+        logger.warning(
+            "[%s] Ошибка форматирования листа маппинга", LABEL, exc_info=True
+        )
 
     # ── Dropdown для поставщиков ──
     if unmapped_suppliers and iiko_supplier_names:
         end_row = sup_start_row + len(unmapped_suppliers) - 1
-        _set_dropdown(spreadsheet, ws, sup_start_row, end_row + 1, 3, iiko_supplier_names)
+        _set_dropdown(
+            spreadsheet, ws, sup_start_row, end_row + 1, 3, iiko_supplier_names
+        )
 
     # ── Dropdown для товаров: записываем все в справочный лист + ONE_OF_RANGE (без лимита 500) ──
     if iiko_product_names:
-        ref_sheet_id, _, ref_count = _write_ref_column(spreadsheet, col_index=0, values=iiko_product_names)
+        ref_sheet_id, _, ref_count = _write_ref_column(
+            spreadsheet, col_index=0, values=iiko_product_names
+        )
         # Применяем до 1000 строк — чтобы дропдаун работал в любой строке секции товаров
-        _set_range_dropdown(spreadsheet, ws, prd_start_row, prd_start_row + 1000, 3, ref_sheet_id, 0, ref_count)
+        _set_range_dropdown(
+            spreadsheet,
+            ws,
+            prd_start_row,
+            prd_start_row + 1000,
+            3,
+            ref_sheet_id,
+            0,
+            ref_count,
+        )
 
     # ── Dropdown типа склада (кол. D) — только для товаров ──
     if unmapped_products:
@@ -2434,7 +2690,10 @@ def write_mapping_import_sheet(
 
     logger.info(
         "[%s] «%s» обновлён: %d поставщиков, %d товаров",
-        LABEL, _MAPPING_IMPORT_TAB, len(unmapped_suppliers), len(unmapped_products),
+        LABEL,
+        _MAPPING_IMPORT_TAB,
+        len(unmapped_suppliers),
+        len(unmapped_products),
     )
 
 
@@ -2444,12 +2703,15 @@ def refresh_import_sheet_dropdown(iiko_product_names: list[str]) -> int:
     Возвращает кол-во товаров в справочнике.
     """
     from config import MIN_STOCK_SHEET_ID
+
     client = _get_client()
     spreadsheet = client.open_by_key(MIN_STOCK_SHEET_ID)
     ws = _get_mapping_worksheet(_MAPPING_IMPORT_TAB)
 
     # Записываем справочник
-    ref_sheet_id, _, ref_count = _write_ref_column(spreadsheet, col_index=0, values=iiko_product_names)
+    ref_sheet_id, _, ref_count = _write_ref_column(
+        spreadsheet, col_index=0, values=iiko_product_names
+    )
 
     # Находим первую строку с 'товар' в столбце A
     all_a = ws.col_values(1)
@@ -2460,9 +2722,23 @@ def refresh_import_sheet_dropdown(iiko_product_names: list[str]) -> int:
             break
 
     # Применяем валидацию на весь диапазон товаров
-    _set_range_dropdown(spreadsheet, ws, prd_start_row, prd_start_row + 1000, 3, ref_sheet_id, 0, ref_count)
-    logger.info("[%s] Дропдаун товаров обновлён: %d позиций, строки %d–%d",
-                LABEL, ref_count, prd_start_row, prd_start_row + 1000)
+    _set_range_dropdown(
+        spreadsheet,
+        ws,
+        prd_start_row,
+        prd_start_row + 1000,
+        3,
+        ref_sheet_id,
+        0,
+        ref_count,
+    )
+    logger.info(
+        "[%s] Дропдаун товаров обновлён: %d позиций, строки %d–%d",
+        LABEL,
+        ref_count,
+        prd_start_row,
+        prd_start_row + 1000,
+    )
     return ref_count
 
 
@@ -2481,16 +2757,18 @@ def read_mapping_import_sheet() -> list[dict[str, str]]:
         if not row or not any(row):
             continue
         entry_type = (row[0] or "").strip()
-        ocr_name   = (row[1] or "").strip()
-        iiko_name  = (row[2] or "").strip() if len(row) > 2 else ""
+        ocr_name = (row[1] or "").strip()
+        iiko_name = (row[2] or "").strip() if len(row) > 2 else ""
         store_type = (row[3] or "").strip() if len(row) > 3 else ""
         if ocr_name and entry_type:
-            result.append({
-                "type":       entry_type,
-                "ocr_name":   ocr_name,
-                "iiko_name":  iiko_name,
-                "store_type": store_type,
-            })
+            result.append(
+                {
+                    "type": entry_type,
+                    "ocr_name": ocr_name,
+                    "iiko_name": iiko_name,
+                    "store_type": store_type,
+                }
+            )
     return result
 
 
@@ -2549,7 +2827,9 @@ def upsert_base_mapping(items: list[dict[str, str]]) -> int:
     total = max(len(existing_rows) - 1, 0) + len(new_rows)
     logger.info(
         "[%s] upsert_base_mapping: обновлено %d, добавлено %d",
-        LABEL, len(updates), len(new_rows),
+        LABEL,
+        len(updates),
+        len(new_rows),
     )
     return total
 

@@ -42,7 +42,6 @@ from aiogram.types import CallbackQuery, Message
 from bot._utils import ocr_keyboard
 from bot.middleware import (
     auth_required,
-
     set_cancel_kb,
     track_task,
 )
@@ -58,7 +57,7 @@ _ALBUM_DEBOUNCE_SEC = 1.5
 
 # ── Album buffer ──
 _album_buffer: dict[str, dict[str, Any]] = {}
-_album_tasks:  dict[str, asyncio.Task]   = {}
+_album_tasks: dict[str, asyncio.Task] = {}
 
 # ── Pending invoices: накладные ожидающие отправки в iiko ──
 # tg_id → list[invoice_dict] (in-memory, теряется при рестарте)
@@ -78,6 +77,7 @@ _transfer_batch_doc_ids: list[str] = []
 # ════════════════════════════════════════════════════════
 #  Прогресс-хелперы: удалить старое → отправить новое снизу
 # ════════════════════════════════════════════════════════
+
 
 async def _push_progress(
     bot: Bot,
@@ -103,7 +103,7 @@ async def _push_progress(
 
 
 async def _repush(
-    msg,          # Message
+    msg,  # Message
     text: str,
     parse_mode: str | None = None,
     reply_markup=None,
@@ -112,9 +112,9 @@ async def _repush(
     Если редактирование не удалось, удаляет и создаёт новое внизу.
     Возвращает отредактированный/новый объект Message.
     """
-    bot_     = msg.bot
-    chat_id  = msg.chat.id
-    msg_id   = msg.message_id
+    bot_ = msg.bot
+    chat_id = msg.chat.id
+    msg_id = msg.message_id
     kw: dict = {"text": text}
     if parse_mode:
         kw["parse_mode"] = parse_mode
@@ -137,7 +137,10 @@ async def _repush(
 #  Helpers: статус документов в БД
 # ════════════════════════════════════════════════════════
 
-async def _disable_all_invoice_buttons(bot, sender_tg_id: int, result_text: str) -> None:
+
+async def _disable_all_invoice_buttons(
+    bot, sender_tg_id: int, result_text: str
+) -> None:
     """Убрать кнопки и обновить текст у ВСЕХ сообщений подтверждения накладной."""
     locations = _pending_invoice_messages.pop(sender_tg_id, [])
     for chat_id, msg_id in locations:
@@ -160,6 +163,7 @@ async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
     from db.engine import async_session_factory
     from models.ocr import OcrDocument
     from sqlalchemy import update
+
     async with async_session_factory() as session:
         await session.execute(
             update(OcrDocument)
@@ -174,6 +178,7 @@ async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
 #  FSM States
 # ════════════════════════════════════════════════════════
 
+
 class OcrStates(StatesGroup):
     waiting_photos = State()
 
@@ -182,12 +187,13 @@ class OcrStates(StatesGroup):
 #  Форматирование сводки
 # ════════════════════════════════════════════════════════
 
+
 def _format_summary(
-    invoices:    list[dict],
-    services:    list[dict],
+    invoices: list[dict],
+    services: list[dict],
     rejected_qr: list[dict],
     errors_list: list[dict],
-    elapsed:     float,
+    elapsed: float,
 ) -> str:
     """Форматировать итоговую сводку для загрузившего пользователя."""
     lines: list[str] = []
@@ -200,15 +206,17 @@ def _format_summary(
         for doc in invoices:
             supplier = doc.get("supplier") or {}
             sup_name = supplier.get("name") or "—"
-            num      = doc.get("doc_number") or "б/н"
+            num = doc.get("doc_number") or "б/н"
             date_str = doc.get("doc_date") or doc.get("date") or "—"
-            amount   = doc.get("total_amount")
-            conf     = doc.get("confidence_score")
-            amt_str  = f" — {amount:,.2f} ₽".replace(",", " ") if amount else ""
+            amount = doc.get("total_amount")
+            conf = doc.get("confidence_score")
+            amt_str = f" — {amount:,.2f} ₽".replace(",", " ") if amount else ""
             conf_str = f" [{conf:.0f}%]" if conf else ""
-            warns    = [w for w in (doc.get("warnings") or []) if w]
-            icon     = "✅" if not warns else "⚠️"
-            lines.append(f"  {icon} №{num} от {date_str}{amt_str} · {sup_name}{conf_str}")
+            warns = [w for w in (doc.get("warnings") or []) if w]
+            icon = "✅" if not warns else "⚠️"
+            lines.append(
+                f"  {icon} №{num} от {date_str}{amt_str} · {sup_name}{conf_str}"
+            )
             for w in warns[:2]:
                 lines.append(f"     ⚠️ {w}")
     else:
@@ -233,6 +241,7 @@ def _format_summary(
 #  Ядро обработки
 # ════════════════════════════════════════════════════════
 
+
 async def _do_process_photos(
     tg_id: int,
     chat_id: int,
@@ -246,7 +255,9 @@ async def _do_process_photos(
     logger.info("[ocr] Обработка %d фото tg:%d", len(photos), tg_id)
 
     prompt_msg_id = await _push_progress(
-        bot, chat_id, prompt_msg_id,
+        bot,
+        chat_id,
+        prompt_msg_id,
         f"⏳ Обрабатываю {len(photos)} фото, подождите...",
     )
 
@@ -256,21 +267,26 @@ async def _do_process_photos(
         results: list[OCRResult] = await process_photo_batch(photos, user_id=tg_id)
     except Exception as exc:
         logger.exception("[ocr] process_photo_batch failed tg:%d", tg_id)
-        await _push_progress(bot, chat_id, prompt_msg_id, f"❌ Ошибка обработки:\n{exc}\n\nПопробуйте ещё раз.")
+        await _push_progress(
+            bot,
+            chat_id,
+            prompt_msg_id,
+            f"❌ Ошибка обработки:\n{exc}\n\nПопробуйте ещё раз.",
+        )
         await state.clear()
         return
 
     elapsed = time.monotonic() - start_t
 
     # ── Классификация ──
-    invoices:    list[dict] = []
-    services:    list[dict] = []
+    invoices: list[dict] = []
+    services: list[dict] = []
     rejected_qr: list[dict] = []
     errors_list: list[dict] = []
 
     for r in results:
         d = r.to_dict() if isinstance(r, OCRResult) else dict(r)
-        status   = d.get("status") or ""
+        status = d.get("status") or ""
         doc_type = d.get("doc_type") or ""
 
         if status == "rejected_qr":
@@ -289,16 +305,23 @@ async def _do_process_photos(
     unmapped_prd: list[str] = []
 
     if invoices:
-        prompt_msg_id = await _push_progress(bot, chat_id, prompt_msg_id, "⏳ Применяю маппинг iiko...")
+        prompt_msg_id = await _push_progress(
+            bot, chat_id, prompt_msg_id, "⏳ Применяю маппинг iiko..."
+        )
 
         from use_cases import ocr_mapping as mapping_uc
+
         base_map = await mapping_uc.get_base_mapping()
-        invoices, unmapped_sup, unmapped_prd = mapping_uc.apply_mapping(invoices, base_map)
+        invoices, unmapped_sup, unmapped_prd = mapping_uc.apply_mapping(
+            invoices, base_map
+        )
         unmapped_total = len(unmapped_sup) + len(unmapped_prd)
 
         if unmapped_total > 0:
             prompt_msg_id = await _push_progress(
-                bot, chat_id, prompt_msg_id,
+                bot,
+                chat_id,
+                prompt_msg_id,
                 f"⏳ Записываю {unmapped_total} позиций в таблицу маппинга...",
             )
             await mapping_uc.write_transfer(unmapped_sup, unmapped_prd)
@@ -309,6 +332,7 @@ async def _do_process_photos(
         )
     elif services:
         from use_cases import ocr_mapping as mapping_uc
+
         asyncio.create_task(
             mapping_uc.notify_user_about_mapping(bot, tg_id, services, 0),
             name=f"ocr_notify_svc_{tg_id}",
@@ -316,7 +340,9 @@ async def _do_process_photos(
 
     # ── Сохранение в БД ──
     if invoices:
-        prompt_msg_id = await _push_progress(bot, chat_id, prompt_msg_id, "⏳ Сохраняю в базу данных...")
+        prompt_msg_id = await _push_progress(
+            bot, chat_id, prompt_msg_id, "⏳ Сохраняю в базу данных..."
+        )
     saved_doc_ids: list[str] = []
     for doc_data in invoices:
         try:
@@ -344,7 +370,10 @@ async def _do_process_photos(
 #  DB helper
 # ════════════════════════════════════════════════════════
 
-async def _save_ocr_document(tg_id: int, result_data: dict, file_ids: list[str] | None = None) -> str | None:
+
+async def _save_ocr_document(
+    tg_id: int, result_data: dict, file_ids: list[str] | None = None
+) -> str | None:
     """Сохранить распознанный документ в БД."""
     try:
         import datetime
@@ -360,27 +389,39 @@ async def _save_ocr_document(tg_id: int, result_data: dict, file_ids: list[str] 
             except ValueError:
                 continue
 
-        ctx      = await uctx.get_user_context(tg_id)
+        ctx = await uctx.get_user_context(tg_id)
         supplier = result_data.get("supplier") or {}
-        buyer    = result_data.get("buyer") or {}
+        buyer = result_data.get("buyer") or {}
 
         async with async_session_factory() as session:
             # Удаляем дубликаты с тем же номером/типом, которые ещё не финализированы
             _doc_number = result_data.get("doc_number")
-            _doc_type   = result_data.get("doc_type") or "unknown"
+            _doc_type = result_data.get("doc_type") or "unknown"
             if _doc_number:
-                from sqlalchemy import select as _sa_select, delete as _sa_delete, and_ as _sa_and
+                from sqlalchemy import (
+                    select as _sa_select,
+                    delete as _sa_delete,
+                    and_ as _sa_and,
+                )
                 from models.ocr import OcrItem as _OcrItem
+
                 dup_ids = (
-                    await session.execute(
-                        _sa_select(OcrDocument.id)
-                        .where(_sa_and(
-                            OcrDocument.doc_number == _doc_number,
-                            OcrDocument.doc_type   == _doc_type,
-                            OcrDocument.status.in_(["recognized", "pending_mapping"]),
-                        ))
+                    (
+                        await session.execute(
+                            _sa_select(OcrDocument.id).where(
+                                _sa_and(
+                                    OcrDocument.doc_number == _doc_number,
+                                    OcrDocument.doc_type == _doc_type,
+                                    OcrDocument.status.in_(
+                                        ["recognized", "pending_mapping"]
+                                    ),
+                                )
+                            )
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 if dup_ids:
                     # Сначала удаляем дочерние items, затем сам документ
                     await session.execute(
@@ -389,17 +430,25 @@ async def _save_ocr_document(tg_id: int, result_data: dict, file_ids: list[str] 
                     await session.execute(
                         _sa_delete(OcrDocument).where(OcrDocument.id.in_(dup_ids))
                     )
-                    logger.info("[ocr] Удалены дубликаты документа %s (%d шт.)", _doc_number, len(dup_ids))
+                    logger.info(
+                        "[ocr] Удалены дубликаты документа %s (%d шт.)",
+                        _doc_number,
+                        len(dup_ids),
+                    )
             doc = OcrDocument(
                 telegram_id=str(tg_id),
-                user_id=str(ctx.employee_id)     if ctx and ctx.employee_id   else None,
-                department_id=str(ctx.department_id) if ctx and ctx.department_id else None,
+                user_id=str(ctx.employee_id) if ctx and ctx.employee_id else None,
+                department_id=(
+                    str(ctx.department_id) if ctx and ctx.department_id else None
+                ),
                 doc_type=_doc_type,
                 doc_number=_doc_number,
                 doc_date=doc_date,
                 supplier_name=supplier.get("name"),
                 supplier_inn=supplier.get("inn"),
-                supplier_id=supplier.get("iiko_id"),  # сохраняем iiko UUID если уже замаплен
+                supplier_id=supplier.get(
+                    "iiko_id"
+                ),  # сохраняем iiko UUID если уже замаплен
                 buyer_name=buyer.get("name"),
                 buyer_inn=buyer.get("inn"),
                 total_amount=result_data.get("total_amount"),
@@ -414,25 +463,36 @@ async def _save_ocr_document(tg_id: int, result_data: dict, file_ids: list[str] 
             await session.flush()
 
             for i, item in enumerate(result_data.get("items") or [], start=1):
-                session.add(OcrItem(
-                    document_id=doc.id,
-                    num=i,
-                    raw_name=item.get("name") or "",
-                    unit=item.get("unit"),
-                    qty=item.get("qty"),
-                    price=item.get("price"),
-                    sum=item.get("sum"),
-                    vat_rate=str(item.get("vat_rate")) if item.get("vat_rate") is not None else None,
-                    iiko_name=item.get("iiko_name"),
-                    iiko_id=item.get("iiko_id"),
-                    store_type=item.get("store_type"),
-                ))
+                session.add(
+                    OcrItem(
+                        document_id=doc.id,
+                        num=i,
+                        raw_name=item.get("name") or "",
+                        unit=item.get("unit"),
+                        qty=item.get("qty"),
+                        price=item.get("price"),
+                        sum=item.get("sum"),
+                        vat_rate=(
+                            str(item.get("vat_rate"))
+                            if item.get("vat_rate") is not None
+                            else None
+                        ),
+                        iiko_name=item.get("iiko_name"),
+                        iiko_id=item.get("iiko_id"),
+                        store_type=item.get("store_type"),
+                    )
+                )
 
             await session.commit()
             doc_id = str(doc.id)
 
-        logger.info("[ocr] Сохранён id=%s tg:%d тип=%s №=%s",
-                    doc_id, tg_id, result_data.get("doc_type"), result_data.get("doc_number"))
+        logger.info(
+            "[ocr] Сохранён id=%s tg:%d тип=%s №=%s",
+            doc_id,
+            tg_id,
+            result_data.get("doc_type"),
+            result_data.get("doc_number"),
+        )
         return doc_id
 
     except Exception:
@@ -444,9 +504,14 @@ async def _save_ocr_document(tg_id: int, result_data: dict, file_ids: list[str] 
 #  Album debounce
 # ════════════════════════════════════════════════════════
 
+
 async def _process_album_debounce(
-    tg_id: int, chat_id: int, group_id: str,
-    bot: Bot, state: FSMContext, prompt_msg_id: int,
+    tg_id: int,
+    chat_id: int,
+    group_id: str,
+    bot: Bot,
+    state: FSMContext,
+    prompt_msg_id: int,
 ) -> None:
     await asyncio.sleep(_ALBUM_DEBOUNCE_SEC)
     if await state.get_state() != OcrStates.waiting_photos.state:
@@ -459,13 +524,21 @@ async def _process_album_debounce(
         # Берём актуальный prompt_msg_id из стейта (мог обновиться при первом фото альбома)
         fresh = await state.get_data()
         prompt_msg_id = fresh.get("prompt_msg_id", prompt_msg_id)
-        await _do_process_photos(tg_id, chat_id, buffer_data["photos"], bot, state, prompt_msg_id,
-                                 file_ids=buffer_data.get("file_ids", []))
+        await _do_process_photos(
+            tg_id,
+            chat_id,
+            buffer_data["photos"],
+            bot,
+            state,
+            prompt_msg_id,
+            file_ids=buffer_data.get("file_ids", []),
+        )
 
 
 # ════════════════════════════════════════════════════════
 #  Handlers
 # ════════════════════════════════════════════════════════
+
 
 @router.message(F.text == "📤 Загрузить накладные")
 @auth_required
@@ -494,14 +567,16 @@ async def btn_ocr_start(message: Message, state: FSMContext) -> None:
 @router.message(OcrStates.waiting_photos, F.photo)
 async def handle_ocr_photo(message: Message, state: FSMContext) -> None:
     """Принять фото и запустить OCR."""
-    tg_id   = message.from_user.id
+    tg_id = message.from_user.id
     chat_id = message.chat.id
 
     try:
-        best_size   = message.photo[-1]
-        file_id     = best_size.file_id          # сохраняем file_id до скачивания — позволит повторно отправить фото бухгалтеру
-        file_info   = await message.bot.get_file(file_id)
-        buf         = BytesIO()
+        best_size = message.photo[-1]
+        file_id = (
+            best_size.file_id
+        )  # сохраняем file_id до скачивания — позволит повторно отправить фото бухгалтеру
+        file_info = await message.bot.get_file(file_id)
+        buf = BytesIO()
         await message.bot.download_file(file_info.file_path, destination=buf)
         photo_bytes = buf.getvalue()
     except Exception as exc:
@@ -509,9 +584,9 @@ async def handle_ocr_photo(message: Message, state: FSMContext) -> None:
         await message.answer("❌ Не удалось загрузить фото. Попробуйте ещё раз.")
         return
 
-    data          = await state.get_data()
+    data = await state.get_data()
     prompt_msg_id = data.get("prompt_msg_id", 0)
-    group_id      = message.media_group_id
+    group_id = message.media_group_id
 
     if group_id:
         if group_id not in _album_buffer:
@@ -524,7 +599,10 @@ async def handle_ocr_photo(message: Message, state: FSMContext) -> None:
         if len(buf_data["photos"]) == 1 and prompt_msg_id:
             try:
                 new_id = await _push_progress(
-                    message.bot, chat_id, prompt_msg_id, "📥 Получаю фото альбома...",
+                    message.bot,
+                    chat_id,
+                    prompt_msg_id,
+                    "📥 Получаю фото альбома...",
                 )
                 await state.update_data(prompt_msg_id=new_id)
                 prompt_msg_id = new_id
@@ -535,12 +613,21 @@ async def handle_ocr_photo(message: Message, state: FSMContext) -> None:
         if old_task and not old_task.done():
             old_task.cancel()
         _album_tasks[group_id] = track_task(
-            _process_album_debounce(tg_id, chat_id, group_id, message.bot, state, prompt_msg_id)
+            _process_album_debounce(
+                tg_id, chat_id, group_id, message.bot, state, prompt_msg_id
+            )
         )
         return
 
-    await _do_process_photos(tg_id, chat_id, [photo_bytes], message.bot, state, prompt_msg_id,
-                             file_ids=[file_id])
+    await _do_process_photos(
+        tg_id,
+        chat_id,
+        [photo_bytes],
+        message.bot,
+        state,
+        prompt_msg_id,
+        file_ids=[file_id],
+    )
 
 
 @router.message(OcrStates.waiting_photos)
@@ -560,7 +647,10 @@ async def handle_ocr_non_photo(message: Message, state: FSMContext) -> None:
     if prompt_id:
         try:
             await message.bot.edit_message_text(
-                err_text, chat_id=message.chat.id, message_id=prompt_id, parse_mode="HTML",
+                err_text,
+                chat_id=message.chat.id,
+                message_id=prompt_id,
+                parse_mode="HTML",
             )
             return
         except Exception:
@@ -572,13 +662,14 @@ async def handle_ocr_non_photo(message: Message, state: FSMContext) -> None:
 #  Превью одного документа для бухгалтера
 # ════════════════════════════════════════════════════════
 
+
 def _format_doc_preview_text(doc: dict, invoices: list[dict]) -> str:
     """Превью одного документа: шапка (номер, дата, поставщик) + позиции по складам iiko."""
     lines: list[str] = []
-    num      = doc.get("doc_number") or "б/н"
+    num = doc.get("doc_number") or "б/н"
     doc_date = doc.get("doc_date")
     date_str = doc_date.strftime("%d.%m.%Y") if doc_date else "—"
-    sup      = doc.get("supplier_name") or "—"
+    sup = doc.get("supplier_name") or "—"
 
     lines.append(f"📄 <b>Накладная №{num}</b> от {date_str}")
     lines.append(f"🏭 {sup}")
@@ -593,19 +684,21 @@ def _format_doc_preview_text(doc: dict, invoices: list[dict]) -> str:
     for inv in invoices:
         store_type = inv.get("store_type") or ""
         store_name = inv.get("store_name") or ""
-        items      = inv.get("items") or []
-        doc_num    = inv.get("documentNumber") or ""
-        label      = store_type.capitalize() if store_type else "Склад"
+        items = inv.get("items") or []
+        doc_num = inv.get("documentNumber") or ""
+        label = store_type.capitalize() if store_type else "Склад"
         if store_name:
             label += f" ({store_name})"
         lines.append(f"\n🏪 <b>{label}</b>  №{doc_num}  —  {len(items)} поз.")
         for item in items[:10]:
-            name  = item.get("iiko_name") or item.get("raw_name") or "?"
-            qty   = round(float(item.get("amount") or 0), 4)
+            name = item.get("iiko_name") or item.get("raw_name") or "?"
+            qty = round(float(item.get("amount") or 0), 4)
             price = round(float(item.get("price") or 0), 2)
             # Убираем лишние нули: 60.0 → 60, 0.24 → 0.24
             qty_s = f"{qty:g}"
-            lines.append(f"  • {name} — {qty_s} × {price:,.2f} ₽".replace(",", "\u202f"))
+            lines.append(
+                f"  • {name} — {qty_s} × {price:,.2f} ₽".replace(",", "\u202f")
+            )
         if len(items) > 10:
             lines.append(f"  … ещё {len(items) - 10} позиций")
     return "\n".join(lines)
@@ -614,6 +707,7 @@ def _format_doc_preview_text(doc: dict, invoices: list[dict]) -> str:
 # ════════════════════════════════════════════════════════
 #  Кнопка «✅ Маппинг готов»
 # ════════════════════════════════════════════════════════
+
 
 @router.message(F.text == "✅ Маппинг готов")
 @auth_required
@@ -664,6 +758,7 @@ async def cb_refresh_mapping_ref(callback: CallbackQuery) -> None:
         pass
 
     from use_cases import ocr_mapping as mapping_uc
+
     count = await mapping_uc.refresh_ref_sheet()
 
     if count:
@@ -684,14 +779,23 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
     is_ready, total_count, missing = await mapping_uc.check_transfer_ready()
 
     if total_count == 0:
-        await _repush(placeholder, "ℹ️ Таблица «Маппинг Импорт» пуста — нечего переносить.")
+        await _repush(
+            placeholder, "ℹ️ Таблица «Маппинг Импорт» пуста — нечего переносить."
+        )
         return
 
     if not is_ready:
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        retry_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Маппинг готов", callback_data="mapping_done")],
-        ])
+
+        retry_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Маппинг готов", callback_data="mapping_done"
+                    )
+                ],
+            ]
+        )
         missing_str = "\n".join(f"• {m}" for m in missing[:10])
         suffix = f"\n... и ещё {len(missing) - 10}" if len(missing) > 10 else ""
         await _repush(
@@ -712,7 +816,7 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
         await _repush(
             placeholder,
             f"⚠️ Маппинг перенесён с ошибками.\n\n"
-            f"Сохранено: {saved_count}\nОшибки:\n{err_lines}"
+            f"Сохранено: {saved_count}\nОшибки:\n{err_lines}",
         )
         return
 
@@ -727,7 +831,7 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
     try:
         from use_cases import incoming_invoice as inv_uc
 
-        ctx     = await uctx.get_user_context(tg_id)
+        ctx = await uctx.get_user_context(tg_id)
         dept_id = str(ctx.department_id) if ctx and ctx.department_id else None
 
         # Загружаем только документы текущей сессии этого пользователя
@@ -783,7 +887,7 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
         )
 
         _pending_invoices[tg_id] = invoices
-        bot_     = placeholder.bot
+        bot_ = placeholder.bot
         chat_id_ = placeholder.chat.id
 
         # ── Превью: для каждого документа — фото + структурированные данные ──
@@ -796,6 +900,7 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
                         await bot_.send_photo(chat_id_, file_ids[0])
                     else:
                         from aiogram.types import InputMediaPhoto
+
                         media = [InputMediaPhoto(media=fid) for fid in file_ids]
                         await bot_.send_media_group(chat_id_, media)
                 except Exception as exc:
@@ -809,16 +914,21 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
         # ── Итоговое сообщение с кнопками ──
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         from use_cases.permissions import get_accountant_ids
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text="📤 Отправить в iiko",
-                callback_data=f"iiko_invoice_send:{tg_id}",
-            ),
-            InlineKeyboardButton(
-                text="❌ Отменить",
-                callback_data=f"iiko_invoice_cancel:{tg_id}",
-            ),
-        ]])
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📤 Отправить в iiko",
+                        callback_data=f"iiko_invoice_send:{tg_id}",
+                    ),
+                    InlineKeyboardButton(
+                        text="❌ Отменить",
+                        callback_data=f"iiko_invoice_cancel:{tg_id}",
+                    ),
+                ]
+            ]
+        )
         warn_text = ""
         if warnings:
             warn_text = "\n\n⚠️ " + "\n⚠️ ".join(warnings[:3])
@@ -828,7 +938,9 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
         _pending_invoice_messages[tg_id] = []
 
         # Отправляем отправителю
-        sent = await bot_.send_message(chat_id_, summary_text, parse_mode="HTML", reply_markup=kb)
+        sent = await bot_.send_message(
+            chat_id_, summary_text, parse_mode="HTML", reply_markup=kb
+        )
         _pending_invoice_messages[tg_id].append((sent.chat.id, sent.message_id))
 
         # Отправляем бухгалтерам
@@ -838,10 +950,20 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
                 continue
             try:
                 for doc in docs:
-                    doc_invoices = [inv for inv in invoices if inv["ocr_doc_id"] == doc["id"]]
-                    await bot_.send_message(acc_id, _format_doc_preview_text(doc, doc_invoices), parse_mode="HTML")
-                acc_msg = await bot_.send_message(acc_id, summary_text, parse_mode="HTML", reply_markup=kb)
-                _pending_invoice_messages[tg_id].append((acc_msg.chat.id, acc_msg.message_id))
+                    doc_invoices = [
+                        inv for inv in invoices if inv["ocr_doc_id"] == doc["id"]
+                    ]
+                    await bot_.send_message(
+                        acc_id,
+                        _format_doc_preview_text(doc, doc_invoices),
+                        parse_mode="HTML",
+                    )
+                acc_msg = await bot_.send_message(
+                    acc_id, summary_text, parse_mode="HTML", reply_markup=kb
+                )
+                _pending_invoice_messages[tg_id].append(
+                    (acc_msg.chat.id, acc_msg.message_id)
+                )
             except Exception:
                 logger.warning("[ocr] Не удалось уведомить бухгалтера %d", acc_id)
 
@@ -860,6 +982,7 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
 #  Callback: «📤 Отправить в iiko»
 # ════════════════════════════════════════════════════════
 
+
 @router.callback_query(F.data.startswith("iiko_invoice_send:"))
 async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
     """Отправить подготовленные накладные в iiko."""
@@ -874,13 +997,16 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
         sender_tg_id = int(callback.data.split(":", 1)[1])
     except (ValueError, IndexError):
         try:
-            await callback.message.edit_text("⚠️ Ошибка данных кнопки.", reply_markup=None)
+            await callback.message.edit_text(
+                "⚠️ Ошибка данных кнопки.", reply_markup=None
+            )
         except Exception:
             pass
         return
 
     # ── Только отправитель или бухгалтер может нажать ──
     from use_cases.permissions import get_accountant_ids
+
     accountant_ids = await get_accountant_ids()
     if tg_id != sender_tg_id and tg_id not in accountant_ids:
         await callback.answer("⛔ У вас нет прав на это действие.", show_alert=True)
@@ -891,15 +1017,15 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
     invoices = _pending_invoices.pop(sender_tg_id, None)
     if not invoices:
         await _disable_all_invoice_buttons(
-            callback.bot, sender_tg_id,
-            "⚠️ Накладные уже были обработаны или бот был перезапущен."
+            callback.bot,
+            sender_tg_id,
+            "⚠️ Накладные уже были обработаны или бот был перезапущен.",
         )
         return
 
     # Первым делом убираем кнопки у ВСЕХ сообщений
     await _disable_all_invoice_buttons(
-        callback.bot, sender_tg_id,
-        f"⏳ Загружаю {len(invoices)} накладных в iiko..."
+        callback.bot, sender_tg_id, f"⏳ Загружаю {len(invoices)} накладных в iiko..."
     )
 
     from use_cases import incoming_invoice as inv_uc
@@ -907,8 +1033,10 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
     try:
         results = await inv_uc.send_invoices_to_iiko(invoices)
 
-        ok_doc_ids   = list({r["invoice"]["ocr_doc_id"] for r in results if r.get("ok")})
-        fail_doc_ids = list({r["invoice"]["ocr_doc_id"] for r in results if not r.get("ok")})
+        ok_doc_ids = list({r["invoice"]["ocr_doc_id"] for r in results if r.get("ok")})
+        fail_doc_ids = list(
+            {r["invoice"]["ocr_doc_id"] for r in results if not r.get("ok")}
+        )
 
         if ok_doc_ids:
             await inv_uc.mark_documents_imported(ok_doc_ids)
@@ -929,13 +1057,17 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
         # Если нажал бухгалтер — уведомить отправителя тоже
         if tg_id != sender_tg_id:
             try:
-                await callback.bot.send_message(sender_tg_id, result_text, parse_mode="HTML")
+                await callback.bot.send_message(
+                    sender_tg_id, result_text, parse_mode="HTML"
+                )
             except Exception:
                 pass
 
     except Exception:
         logger.exception("[ocr] Ошибка отправки накладных в iiko tg:%d", tg_id)
-        err_text = "❌ Ошибка при отправке накладных в iiko. Обратитесь к администратору."
+        err_text = (
+            "❌ Ошибка при отправке накладных в iiko. Обратитесь к администратору."
+        )
         try:
             await callback.message.answer(err_text)
         except Exception:
@@ -945,6 +1077,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
 # ════════════════════════════════════════════════════════
 #  Callback: «❌ Отменить» (отмена отправки накладных)
 # ════════════════════════════════════════════════════════
+
 
 @router.callback_query(F.data.startswith("iiko_invoice_cancel:"))
 async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
@@ -963,6 +1096,7 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
 
     # ── Только отправитель или бухгалтер может нажать ──
     from use_cases.permissions import get_accountant_ids
+
     accountant_ids = await get_accountant_ids()
     if tg_id != sender_tg_id and tg_id not in accountant_ids:
         await callback.answer("⛔ У вас нет прав на это действие.", show_alert=True)
@@ -971,7 +1105,7 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
     logger.info("[ocr] Отмена отправки накладных tg:%d sender:%d", tg_id, sender_tg_id)
 
     invoices = _pending_invoices.pop(sender_tg_id, None)
-    doc_ids  = list({inv["ocr_doc_id"] for inv in invoices}) if invoices else []
+    doc_ids = list({inv["ocr_doc_id"] for inv in invoices}) if invoices else []
 
     cancel_text = (
         "❌ Загрузка накладных в iiko отменена.\n\n"
@@ -981,6 +1115,7 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
     await _disable_all_invoice_buttons(callback.bot, sender_tg_id, cancel_text)
 
     from use_cases import incoming_invoice as inv_uc
+
     if doc_ids:
         await inv_uc.mark_documents_cancelled(doc_ids)
 
@@ -995,6 +1130,7 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
 #  JSON-чек: автоматическая приходная накладная
 # ════════════════════════════════════════════════════════
 
+
 @router.message(F.document.file_name.endswith(".json"))
 @auth_required
 async def handle_json_receipt(message: Message, state: FSMContext) -> None:
@@ -1004,9 +1140,9 @@ async def handle_json_receipt(message: Message, state: FSMContext) -> None:
     Если все позиции замаплены → автоматически формируем накладную
     и отправляем бухгалтеру на подтверждение.
     """
-    tg_id   = message.from_user.id
+    tg_id = message.from_user.id
     chat_id = message.chat.id
-    fname   = message.document.file_name or "receipt.json"
+    fname = message.document.file_name or "receipt.json"
     logger.info("[json] Получен JSON файл '%s' tg:%d", fname, tg_id)
 
     # ── Скачиваем файл ──
@@ -1036,14 +1172,17 @@ async def handle_json_receipt(message: Message, state: FSMContext) -> None:
         await _repush(placeholder, f"❌ Ошибка обработки файла: {exc}")
         return
 
-    placeholder = await _repush(placeholder, f"⏳ Распознано {len(receipts)} чеков. Применяю маппинг...")
+    placeholder = await _repush(
+        placeholder, f"⏳ Распознано {len(receipts)} чеков. Применяю маппинг..."
+    )
 
     # ── Маппинг ──
     from use_cases import ocr_mapping as mapping_uc
 
     base_map = await mapping_uc.get_base_mapping()
     receipts, unmapped_sup, unmapped_prd = mapping_uc.apply_mapping(
-        _receipts_to_ocr_format(receipts), base_map,
+        _receipts_to_ocr_format(receipts),
+        base_map,
     )
     unmapped_total = len(unmapped_sup) + len(unmapped_prd)
     fully_mapped = unmapped_total == 0
@@ -1075,16 +1214,21 @@ async def handle_json_receipt(message: Message, state: FSMContext) -> None:
 
         # Уведомить пользователя о маппинге
         asyncio.create_task(
-            mapping_uc.notify_user_about_mapping(message.bot, tg_id, [], unmapped_total),
+            mapping_uc.notify_user_about_mapping(
+                message.bot, tg_id, [], unmapped_total
+            ),
             name=f"json_notify_{tg_id}",
         )
 
         # Сводка пользователю
         from use_cases.json_receipt import format_json_receipt_preview
+
         summary_parts: list[str] = []
         for doc_data in receipts:
             summary_parts.append(
-                format_json_receipt_preview(doc_data, [], False, unmapped_sup, unmapped_prd)
+                format_json_receipt_preview(
+                    doc_data, [], False, unmapped_sup, unmapped_prd
+                )
             )
         summary = "\n\n".join(summary_parts)
         summary += (
@@ -1095,12 +1239,19 @@ async def handle_json_receipt(message: Message, state: FSMContext) -> None:
         return
 
     # ── Всё замаплено → автоматическая сборка накладных ──
-    placeholder = await _repush(placeholder, "⏳ Все позиции замаплены! Собираю накладные...")
+    placeholder = await _repush(
+        placeholder, "⏳ Все позиции замаплены! Собираю накладные..."
+    )
 
     try:
         await _build_and_send_json_invoices(
-            tg_id, chat_id, message.bot, placeholder,
-            receipts, saved_doc_ids, base_map,
+            tg_id,
+            chat_id,
+            message.bot,
+            placeholder,
+            receipts,
+            saved_doc_ids,
+            base_map,
         )
     except Exception:
         logger.exception("[json] Ошибка сборки накладных tg:%d", tg_id)
@@ -1135,7 +1286,7 @@ async def _build_and_send_json_invoices(
     from use_cases import incoming_invoice as inv_uc
     from use_cases.json_receipt import format_json_receipt_preview
 
-    ctx     = await uctx.get_user_context(tg_id)
+    ctx = await uctx.get_user_context(tg_id)
     dept_id = str(ctx.department_id) if ctx and ctx.department_id else None
 
     if not dept_id:
@@ -1156,10 +1307,14 @@ async def _build_and_send_json_invoices(
         )
         return
 
-    invoices, warnings = await inv_uc.build_iiko_invoices(docs, dept_id, base_mapping=base_map)
+    invoices, warnings = await inv_uc.build_iiko_invoices(
+        docs, dept_id, base_mapping=base_map
+    )
 
     if not invoices:
-        warn_text = "\n".join(f"• {w}" for w in warnings[:5]) if warnings else "Нет данных"
+        warn_text = (
+            "\n".join(f"• {w}" for w in warnings[:5]) if warnings else "Нет данных"
+        )
         await _repush(
             placeholder,
             f"⚠️ Не удалось подготовить накладные для iiko:\n{warn_text}",
@@ -1188,18 +1343,20 @@ async def _build_and_send_json_invoices(
     # ── Итоговая кнопка бухгалтеру ──
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="📤 Отправить в iiko",
-                callback_data=f"iiko_invoice_send:{tg_id}",
-            ),
-            InlineKeyboardButton(
-                text="❌ Отменить",
-                callback_data=f"iiko_invoice_cancel:{tg_id}",
-            ),
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📤 Отправить в iiko",
+                    callback_data=f"iiko_invoice_send:{tg_id}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отменить",
+                    callback_data=f"iiko_invoice_cancel:{tg_id}",
+                ),
+            ]
         ]
-    ])
+    )
 
     warn_text = ""
     if warnings:
@@ -1215,6 +1372,7 @@ async def _build_and_send_json_invoices(
 
     # Отправляем бухгалтерам (только роль «📑 Бухгалтер»)
     from use_cases.permissions import get_accountant_ids
+
     accountant_ids = await get_accountant_ids()
     _pending_invoice_messages[tg_id] = []
 
@@ -1223,13 +1381,25 @@ async def _build_and_send_json_invoices(
             continue
         try:
             for doc in docs:
-                doc_invoices = [inv for inv in invoices if inv["ocr_doc_id"] == doc["id"]]
-                await bot.send_message(acc_id, _format_doc_preview_text(doc, doc_invoices), parse_mode="HTML")
-            acc_msg = await bot.send_message(acc_id, summary_text, parse_mode="HTML", reply_markup=kb)
-            _pending_invoice_messages[tg_id].append((acc_msg.chat.id, acc_msg.message_id))
+                doc_invoices = [
+                    inv for inv in invoices if inv["ocr_doc_id"] == doc["id"]
+                ]
+                await bot.send_message(
+                    acc_id,
+                    _format_doc_preview_text(doc, doc_invoices),
+                    parse_mode="HTML",
+                )
+            acc_msg = await bot.send_message(
+                acc_id, summary_text, parse_mode="HTML", reply_markup=kb
+            )
+            _pending_invoice_messages[tg_id].append(
+                (acc_msg.chat.id, acc_msg.message_id)
+            )
         except Exception:
             logger.warning("[json] Не удалось уведомить бухгалтера %d", acc_id)
 
     # Кнопки и для пользователя
-    sender_msg = await bot.send_message(chat_id, summary_text, parse_mode="HTML", reply_markup=kb)
+    sender_msg = await bot.send_message(
+        chat_id, summary_text, parse_mode="HTML", reply_markup=kb
+    )
     _pending_invoice_messages[tg_id].append((sender_msg.chat.id, sender_msg.message_id))

@@ -23,6 +23,7 @@ from use_cases.incoming_invoice import (
 # Хелперы — готовые словари
 # ─────────────────────────────────────────────────────
 
+
 def _make_invoice(
     doc_id="doc-001",
     doc_number="УПД-1",
@@ -36,32 +37,33 @@ def _make_invoice(
     if items is None:
         items = [
             {
-                "productId":     "aaaaaaaa-0000-0000-0000-000000000001",
-                "raw_name":      "Молоко",
-                "iiko_name":     "Молоко 3.2% 1л",
-                "amount":        10.0,
-                "price":         80.0,
-                "sum":           800.0,
+                "productId": "aaaaaaaa-0000-0000-0000-000000000001",
+                "raw_name": "Молоко",
+                "iiko_name": "Молоко 3.2% 1л",
+                "amount": 10.0,
+                "price": 80.0,
+                "sum": 800.0,
                 "measureUnitId": "bbbbbbbb-0000-0000-0000-000000000001",
             }
         ]
     return {
-        "ocr_doc_id":     doc_id,
+        "ocr_doc_id": doc_id,
         "ocr_doc_number": doc_number,
         "documentNumber": f"{doc_number}-КУХ",
-        "dateIncoming":   "15.02.2026",
-        "supplierId":     supplier_id,
-        "supplier_name":  supplier_name,
-        "storeId":        store_id,
-        "store_name":     store_name,
-        "store_type":     store_type,
-        "items":          items,
+        "dateIncoming": "15.02.2026",
+        "supplierId": supplier_id,
+        "supplier_name": supplier_name,
+        "storeId": store_id,
+        "store_name": store_name,
+        "store_type": store_type,
+        "items": items,
     }
 
 
 # ─────────────────────────────────────────────────────
 # Tests: _store_suffix
 # ─────────────────────────────────────────────────────
+
 
 class TestStoreSuffix:
     def test_bar(self):
@@ -90,9 +92,10 @@ class TestStoreSuffix:
 # Tests: format_invoice_preview
 # ─────────────────────────────────────────────────────
 
+
 class TestFormatInvoicePreview:
     def test_single_invoice(self):
-        inv  = _make_invoice()
+        inv = _make_invoice()
         text = format_invoice_preview([inv])
         assert "📦" in text
         assert "УПД-1-КУХ" in text
@@ -107,22 +110,26 @@ class TestFormatInvoicePreview:
         assert "Нет накладных" in text
 
     def test_warnings_shown(self):
-        inv  = _make_invoice()
+        inv = _make_invoice()
         text = format_invoice_preview([inv], warnings=["Тест предупреждения"])
         assert "Тест предупреждения" in text
         assert "⚠️" in text
 
     def test_many_warnings_truncated(self):
-        inv      = _make_invoice()
+        inv = _make_invoice()
         warnings = [f"Предупреждение {i}" for i in range(20)]
-        text     = format_invoice_preview([inv], warnings=warnings)
+        text = format_invoice_preview([inv], warnings=warnings)
         # Не должно выводить все 20
         assert "и ещё" in text
 
     def test_multiple_invoices(self):
         inv1 = _make_invoice(doc_id="doc-001", doc_number="УПД-1")
-        inv2 = _make_invoice(doc_id="doc-002", doc_number="УПД-2",
-                             store_type="бар", store_name="Бар (Московский)")
+        inv2 = _make_invoice(
+            doc_id="doc-002",
+            doc_number="УПД-2",
+            store_type="бар",
+            store_name="Бар (Московский)",
+        )
         text = format_invoice_preview([inv1, inv2])
         assert "1." in text
         assert "2." in text
@@ -130,7 +137,7 @@ class TestFormatInvoicePreview:
         assert "Бар" in text
 
     def test_footer_prompt(self):
-        inv  = _make_invoice()
+        inv = _make_invoice()
         text = format_invoice_preview([inv])
         assert "Отправить в iiko" in text
 
@@ -138,6 +145,7 @@ class TestFormatInvoicePreview:
 # ─────────────────────────────────────────────────────
 # Tests: format_send_result
 # ─────────────────────────────────────────────────────
+
 
 class TestFormatSendResult:
     def test_all_success(self):
@@ -158,8 +166,9 @@ class TestFormatSendResult:
 
     def test_mixed(self):
         inv1 = _make_invoice(doc_number="УПД-1")
-        inv2 = _make_invoice(doc_number="УПД-2", store_type="бар",
-                             store_name="Бар (Московский)")
+        inv2 = _make_invoice(
+            doc_number="УПД-2", store_type="бар", store_name="Бар (Московский)"
+        )
         results = [
             {"invoice": inv1, "ok": True, "error": ""},
             {"invoice": inv2, "ok": False, "error": "Неверный UUID склада"},
@@ -174,11 +183,13 @@ class TestFormatSendResult:
 # Tests: XML builder (из adapters/iiko_api.py)
 # ─────────────────────────────────────────────────────
 
+
 class TestBuildIncomingInvoiceXml:
     """Тесты генерации XML-документа приходной накладной."""
 
     def _build(self, document: dict) -> ET.Element:
         from adapters.iiko_api import _build_incoming_invoice_xml
+
         xml_str = _build_incoming_invoice_xml(document)
         assert xml_str.startswith("<?xml")
         return ET.fromstring(xml_str.split("\n", 1)[1])  # пропускаем XML-декларацию
@@ -186,16 +197,16 @@ class TestBuildIncomingInvoiceXml:
     def _make_doc(self, **kwargs) -> dict:
         base = {
             "documentNumber": "УПД-1-КУХ",
-            "dateIncoming":   "15.02.2026",
-            "status":         "NEW",
-            "storeId":        "11111111-0000-0000-0000-000000000000",
-            "supplierId":     "22222222-0000-0000-0000-000000000000",
+            "dateIncoming": "15.02.2026",
+            "status": "NEW",
+            "storeId": "11111111-0000-0000-0000-000000000000",
+            "supplierId": "22222222-0000-0000-0000-000000000000",
             "items": [
                 {
-                    "productId":     "aaaaaaaa-0000-0000-0000-000000000001",
-                    "amount":        10.0,
-                    "price":         80.0,
-                    "sum":           800.0,
+                    "productId": "aaaaaaaa-0000-0000-0000-000000000001",
+                    "amount": 10.0,
+                    "price": 80.0,
+                    "sum": 800.0,
                     "measureUnitId": "bbbbbbbb-0000-0000-0000-000000000001",
                 }
             ],
@@ -262,10 +273,24 @@ class TestBuildIncomingInvoiceXml:
         assert item.findtext("num") == "1"
 
     def test_multiple_items(self):
-        doc = self._make_doc(items=[
-            {"productId": "aaa", "amount": 1.0, "price": 100.0, "sum": 100.0, "measureUnitId": ""},
-            {"productId": "bbb", "amount": 2.0, "price": 200.0, "sum": 400.0, "measureUnitId": ""},
-        ])
+        doc = self._make_doc(
+            items=[
+                {
+                    "productId": "aaa",
+                    "amount": 1.0,
+                    "price": 100.0,
+                    "sum": 100.0,
+                    "measureUnitId": "",
+                },
+                {
+                    "productId": "bbb",
+                    "amount": 2.0,
+                    "price": 200.0,
+                    "sum": 400.0,
+                    "measureUnitId": "",
+                },
+            ]
+        )
         root = self._build(doc)
         items = root.findall("items/item")
         assert len(items) == 2
@@ -274,15 +299,23 @@ class TestBuildIncomingInvoiceXml:
 
     def test_no_amount_unit_omitted(self):
         """Если measureUnitId пуст — тег amountUnit не должен добавляться."""
-        doc = self._make_doc(items=[
-            {"productId": "aaa", "amount": 1.0, "price": 100.0, "sum": 100.0, "measureUnitId": ""},
-        ])
-        root  = self._build(doc)
-        item  = root.find("items/item")
+        doc = self._make_doc(
+            items=[
+                {
+                    "productId": "aaa",
+                    "amount": 1.0,
+                    "price": 100.0,
+                    "sum": 100.0,
+                    "measureUnitId": "",
+                },
+            ]
+        )
+        root = self._build(doc)
+        item = root.find("items/item")
         assert item.find("amountUnit") is None
 
     def test_comment_added(self):
-        doc  = self._make_doc(comment="Тестовый комментарий")
+        doc = self._make_doc(comment="Тестовый комментарий")
         root = self._build(doc)
         assert root.findtext("comment") == "Тестовый комментарий"
 

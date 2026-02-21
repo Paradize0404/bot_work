@@ -24,8 +24,11 @@ from aiogram.types import (
 
 from bot._utils import escape_md as _escape_md, reports_keyboard
 from bot.middleware import (
-    set_cancel_kb, restore_menu_kb,
-    parse_uuid, truncate_input, MAX_TEXT_SEARCH,
+    set_cancel_kb,
+    restore_menu_kb,
+    parse_uuid,
+    truncate_input,
+    MAX_TEXT_SEARCH,
 )
 from use_cases import edit_min_stock as ems_uc
 from use_cases import user_context as uctx
@@ -35,7 +38,7 @@ logger = logging.getLogger(__name__)
 router = Router(name="min_stock_edit_handlers")
 
 # Префиксы callback-данных
-CB_PROD = "ems:prod:"          # ems:prod:<product_id>
+CB_PROD = "ems:prod:"  # ems:prod:<product_id>
 CB_CANCEL = "ems:cancel"
 
 
@@ -43,15 +46,17 @@ CB_CANCEL = "ems:cancel"
 #  FSM States
 # ══════════════════════════════════════════════════════
 
+
 class EditMinStockStates(StatesGroup):
-    search_product = State()     # ожидание текста для поиска
-    choose_product = State()     # выбор товара (inline)
-    enter_min_level = State()    # ввод нового min
+    search_product = State()  # ожидание текста для поиска
+    choose_product = State()  # выбор товара (inline)
+    enter_min_level = State()  # ввод нового min
 
 
 # ══════════════════════════════════════════════════════
 #  1. Точка входа — кнопка «✏️ Изменить мин. остаток»
 # ══════════════════════════════════════════════════════
+
 
 @router.message(F.text == "✏️ Изменить мин. остаток")
 async def btn_edit_min_stock(message: Message, state: FSMContext) -> None:
@@ -82,6 +87,7 @@ async def btn_edit_min_stock(message: Message, state: FSMContext) -> None:
 #  2. Поиск товара по названию
 # ══════════════════════════════════════════════════════
 
+
 @router.message(EditMinStockStates.search_product)
 async def search_product(message: Message, state: FSMContext) -> None:
     """Пользователь ввёл текст → ищем товары."""
@@ -101,7 +107,9 @@ async def search_product(message: Message, state: FSMContext) -> None:
             try:
                 await message.bot.edit_message_text(
                     "⚠️ Введите минимум 2 символа для поиска.",
-                    chat_id=message.chat.id, message_id=prompt_id)
+                    chat_id=message.chat.id,
+                    message_id=prompt_id,
+                )
             except Exception:
                 pass
         return
@@ -114,7 +122,9 @@ async def search_product(message: Message, state: FSMContext) -> None:
                 await message.bot.edit_message_text(
                     f"😔 Ничего не найдено по запросу «{query}».\n"
                     "Попробуйте другое название:",
-                    chat_id=message.chat.id, message_id=prompt_id)
+                    chat_id=message.chat.id,
+                    message_id=prompt_id,
+                )
             except Exception:
                 pass
         return
@@ -125,15 +135,19 @@ async def search_product(message: Message, state: FSMContext) -> None:
         label = p["name"]
         if len(label) > 55:
             label = label[:52] + "..."
-        buttons.append([
-            InlineKeyboardButton(
-                text=label,
-                callback_data=f"{CB_PROD}{p['id']}",
-            )
-        ])
-    buttons.append([
-        InlineKeyboardButton(text="❌ Отмена", callback_data=CB_CANCEL),
-    ])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=label,
+                    callback_data=f"{CB_PROD}{p['id']}",
+                )
+            ]
+        )
+    buttons.append(
+        [
+            InlineKeyboardButton(text="❌ Отмена", callback_data=CB_CANCEL),
+        ]
+    )
 
     # Сохраним продукты для использования позже
     await state.update_data(
@@ -145,8 +159,10 @@ async def search_product(message: Message, state: FSMContext) -> None:
         try:
             await message.bot.edit_message_text(
                 f"📦 Найдено {len(products)} товаров. Выберите:",
-                chat_id=message.chat.id, message_id=prompt_id,
-                reply_markup=kb)
+                chat_id=message.chat.id,
+                message_id=prompt_id,
+                reply_markup=kb,
+            )
             return
         except Exception:
             pass
@@ -161,13 +177,18 @@ async def search_product(message: Message, state: FSMContext) -> None:
 #  3. Выбор товара → запрос нового минимума
 # ══════════════════════════════════════════════════════
 
+
 @router.callback_query(EditMinStockStates.choose_product, F.data.startswith(CB_PROD))
 async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
     """Пользователь выбрал товар → запрашиваем новый min."""
-    product_id = callback.data[len(CB_PROD):]
+    product_id = callback.data[len(CB_PROD) :]
     if parse_uuid(product_id) is None:
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
-        logger.warning("[security] Невалидный UUID product_id=%r tg:%d", product_id, callback.from_user.id)
+        logger.warning(
+            "[security] Невалидный UUID product_id=%r tg:%d",
+            product_id,
+            callback.from_user.id,
+        )
         return
     await callback.answer()
     data = await state.get_data()
@@ -177,16 +198,22 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
 
     logger.info(
         "[edit-min] Выбран товар %s tg:%d",
-        product_id, callback.from_user.id,
+        product_id,
+        callback.from_user.id,
     )
 
-    await state.update_data(product_id=product_id, product_name=product_name,
-                             _prompt_msg_id=callback.message.message_id)
+    await state.update_data(
+        product_id=product_id,
+        product_name=product_name,
+        _prompt_msg_id=callback.message.message_id,
+    )
     await state.set_state(EditMinStockStates.enter_min_level)
 
-    _cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_CANCEL)],
-    ])
+    _cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_CANCEL)],
+        ]
+    )
     await callback.message.edit_text(
         f"📦 *{_escape_md(product_name)}*\n\n"
         f"Введите новый минимальный остаток (число):\n"
@@ -200,11 +227,14 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
 #  4. Ввод нового значения → обновление в iiko
 # ══════════════════════════════════════════════════════
 
+
 @router.message(EditMinStockStates.enter_min_level)
 async def enter_min_level(message: Message, state: FSMContext) -> None:
     """Пользователь ввёл число → валидация → обновление в iiko."""
     logger.info(
-        "[edit-min] Ввод min=%s tg:%d", (message.text or "").strip(), message.from_user.id
+        "[edit-min] Ввод min=%s tg:%d",
+        (message.text or "").strip(),
+        message.from_user.id,
     )
 
     try:
@@ -221,8 +251,8 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
         if prompt_id:
             try:
                 await message.bot.edit_message_text(
-                    validated.text,
-                    chat_id=message.chat.id, message_id=prompt_id)
+                    validated.text, chat_id=message.chat.id, message_id=prompt_id
+                )
             except Exception:
                 pass
         return
@@ -242,8 +272,10 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
         try:
             await message.bot.edit_message_text(
                 f"⏳ Обновляю мин. остаток для *{_escape_md(product_name)}*...",
-                chat_id=message.chat.id, message_id=prompt_id,
-                parse_mode="Markdown")
+                chat_id=message.chat.id,
+                message_id=prompt_id,
+                parse_mode="Markdown",
+            )
         except Exception:
             pass
 
@@ -256,20 +288,25 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
     if prompt_id:
         try:
             await message.bot.edit_message_text(
-                result, chat_id=message.chat.id,
-                message_id=prompt_id, parse_mode="Markdown")
+                result,
+                chat_id=message.chat.id,
+                message_id=prompt_id,
+                parse_mode="Markdown",
+            )
         except Exception:
             await message.answer(result, parse_mode="Markdown")
     else:
         await message.answer(result, parse_mode="Markdown")
     await state.clear()
-    await restore_menu_kb(message.bot, message.chat.id, state,
-                          "📊 Отчёты:", reports_keyboard())
+    await restore_menu_kb(
+        message.bot, message.chat.id, state, "📊 Отчёты:", reports_keyboard()
+    )
 
 
 # ══════════════════════════════════════════════════════
 #  Вспомогательные callback'и
 # ══════════════════════════════════════════════════════
+
 
 @router.callback_query(F.data == CB_CANCEL)
 async def cancel_edit(callback: CallbackQuery, state: FSMContext) -> None:
@@ -278,8 +315,9 @@ async def cancel_edit(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[edit-min] Отмена tg:%d", callback.from_user.id)
     await callback.message.edit_text("🚫 Редактирование мин. остатка отменено.")
     await state.clear()
-    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
-                          "📊 Отчёты:", reports_keyboard())
+    await restore_menu_kb(
+        callback.bot, callback.message.chat.id, state, "📊 Отчёты:", reports_keyboard()
+    )
 
 
 @router.callback_query(F.data == "ems:research")
@@ -288,9 +326,7 @@ async def back_to_search(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     logger.info("[edit-min] Повторный поиск tg:%d", callback.from_user.id)
     await state.set_state(EditMinStockStates.search_product)
-    await callback.message.edit_text(
-        "🔍 Введите название товара для поиска:"
-    )
+    await callback.message.edit_text("🔍 Введите название товара для поиска:")
 
 
 # Guard: текст в inline-состояниях
@@ -302,6 +338,3 @@ async def _guard_inline_states(message: Message) -> None:
         await message.delete()
     except Exception:
         pass
-
-
-

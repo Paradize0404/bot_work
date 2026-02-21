@@ -25,7 +25,9 @@ LABEL = "iikoWebhook"
 
 # Последний снэпшот остатков (для дельта-сравнения)
 _last_snapshot_hash: str | None = None
-_last_snapshot_items: dict[tuple[str, str], float] = {}  # {(product_id, dept_id): amount}
+_last_snapshot_items: dict[tuple[str, str], float] = (
+    {}
+)  # {(product_id, dept_id): amount}
 _last_update_time: float | None = None  # timestamp последней отправки (monotonic)
 
 # ═══════════════════════════════════════════════════════
@@ -41,6 +43,7 @@ _stoplist_bot_ref: Any = None  # ссылка на bot для отложенно
 # ═══════════════════════════════════════════════════════
 # Парсинг входящего вебхука
 # ═══════════════════════════════════════════════════════
+
 
 def parse_webhook_events(body: list[dict]) -> list[dict[str, Any]]:
     """
@@ -59,7 +62,8 @@ def parse_webhook_events(body: list[dict]) -> list[dict[str, Any]]:
         # Логируем каждое событие для диагностики
         logger.info(
             "[%s] event: type=%s, org=%s, time=%s",
-            LABEL, event_type,
+            LABEL,
+            event_type,
             event.get("organizationId", "?"),
             event.get("eventTime", "?"),
         )
@@ -74,16 +78,20 @@ def parse_webhook_events(body: list[dict]) -> list[dict[str, Any]]:
 
         logger.info(
             "[%s] → order.status=%s, creationStatus=%s",
-            LABEL, status, event_info.get("creationStatus", "?"),
+            LABEL,
+            status,
+            event_info.get("creationStatus", "?"),
         )
 
         if status == "Closed":
-            closed_events.append({
-                "event_type": event_type,
-                "order_id": order.get("id"),
-                "organization_id": event.get("organizationId"),
-                "event_time": event.get("eventTime"),
-            })
+            closed_events.append(
+                {
+                    "event_type": event_type,
+                    "order_id": order.get("id"),
+                    "organization_id": event.get("organizationId"),
+                    "event_time": event.get("eventTime"),
+                }
+            )
     return closed_events
 
 
@@ -95,6 +103,7 @@ def has_stoplist_update(body: list[dict]) -> bool:
 # ═══════════════════════════════════════════════════════
 # Debounce: накопление и отложенный flush
 # ═══════════════════════════════════════════════════════
+
 
 def _schedule_stoplist_flush(org_ids: set[str], bot: Any) -> None:
     """
@@ -118,7 +127,10 @@ def _schedule_stoplist_flush(org_ids: set[str], bot: Any) -> None:
 
     logger.info(
         "[%s] StopListUpdate debounce: +%d org(s), буфер=%d, flush через %d сек",
-        LABEL, len(org_ids), len(_pending_stoplist_org_ids), _STOPLIST_DEBOUNCE_SEC,
+        LABEL,
+        len(org_ids),
+        len(_pending_stoplist_org_ids),
+        _STOPLIST_DEBOUNCE_SEC,
     )
 
 
@@ -139,13 +151,19 @@ async def _flush_stoplist() -> None:
     if not org_ids:
         return
 
-    logger.info("[%s] Debounce flush: обрабатываю StopListUpdate для %d org(s): %s",
-                LABEL, len(org_ids), org_ids)
+    logger.info(
+        "[%s] Debounce flush: обрабатываю StopListUpdate для %d org(s): %s",
+        LABEL,
+        len(org_ids),
+        org_ids,
+    )
     t0 = time.monotonic()
 
     try:
         from use_cases.stoplist import (
-            fetch_stoplist_items, sync_and_diff, format_stoplist_message,
+            fetch_stoplist_items,
+            sync_and_diff,
+            format_stoplist_message,
         )
         from use_cases.pinned_stoplist_message import update_all_stoplist_messages
         from use_cases.cloud_org_mapping import get_all_cloud_org_ids
@@ -170,7 +188,9 @@ async def _flush_stoplist() -> None:
         if not has_changes:
             logger.info(
                 "[%s] Стоп-лист без изменений (orgs: %s), пропускаем обновление (%.1f сек)",
-                LABEL, org_ids, time.monotonic() - t0,
+                LABEL,
+                org_ids,
+                time.monotonic() - t0,
             )
             return
 
@@ -180,8 +200,12 @@ async def _flush_stoplist() -> None:
         await update_all_stoplist_messages(bot, combined_text)
         logger.info(
             "[%s] Стоп-лист обновлён и разослан (orgs: %s, +%d -%d =%d) за %.1f сек",
-            LABEL, org_ids, len(all_added), len(all_removed),
-            len(all_existing), time.monotonic() - t0,
+            LABEL,
+            org_ids,
+            len(all_added),
+            len(all_removed),
+            len(all_existing),
+            time.monotonic() - t0,
         )
     except Exception:
         logger.exception("[%s] Ошибка при flush стоп-листа", LABEL)
@@ -190,6 +214,7 @@ async def _flush_stoplist() -> None:
 # ═══════════════════════════════════════════════════════
 # Хеширование снэпшота остатков
 # ═══════════════════════════════════════════════════════
+
 
 def _compute_snapshot_hash(items: list[dict]) -> str:
     """
@@ -218,22 +243,21 @@ def _compute_items_dict(items: list[dict]) -> dict[tuple[str, str], float]:
     Используется для покомпонентного сравнения (каждая позиция отдельно).
     """
     return {
-        (it["product_name"], it["department_name"]): it["total_amount"]
-        for it in items
+        (it["product_name"], it["department_name"]): it["total_amount"] for it in items
     }
 
 
 def _should_update(new_hash: str, new_items_dict: dict[tuple[str, str], float]) -> bool:
     """
     Определяем, нужно ли обновлять сообщения (защита от спама).
-    
+
     Обновляем если:
       1. Первая проверка (нет предыдущего снэпшота)
       2. ЛЮБАЯ позиция изменилась >= 3% от своего значения
       3. Появились новые позиции ниже минимума
       4. Позиции исчезли из списка (стали выше минимума)
       5. Прошло >= 30 мин с последней отправки И есть хоть какие-то изменения
-    
+
     НЕ обновляем если:
       - Хеш не изменился (ничего не изменилось)
       - Все изменения < 3% И прошло < 30 мин (мелкие продажи, антиспам)
@@ -253,73 +277,89 @@ def _should_update(new_hash: str, new_items_dict: dict[tuple[str, str], float]) 
     # Хеш изменился — проверяем КАЖДУЮ позицию
     old_keys = set(_last_snapshot_items.keys())
     new_keys = set(new_items_dict.keys())
-    
+
     # Проверяем новые позиции (появились в списке)
     added = new_keys - old_keys
     if added:
         logger.info(
             "[%s] Появилось %d новых позиций ниже минимума: %s — обновляем",
-            LABEL, len(added), list(added)[:3],
+            LABEL,
+            len(added),
+            list(added)[:3],
         )
         return True
-    
+
     # Проверяем удалённые позиции (исчезли из списка — стали выше минимума)
     removed = old_keys - new_keys
     if removed:
         logger.info(
             "[%s] Исчезло %d позиций (стали выше минимума): %s — обновляем",
-            LABEL, len(removed), list(removed)[:3],
+            LABEL,
+            len(removed),
+            list(removed)[:3],
         )
         return True
-    
+
     # Проверяем изменения существующих позиций
     max_change_pct = 0.0
     max_change_item = None
-    
+
     for key in new_keys & old_keys:
         old_val = _last_snapshot_items[key]
         new_val = new_items_dict[key]
-        
+
         if old_val == 0:
             continue  # пропускаем деление на 0
-        
+
         change_pct = abs(new_val - old_val) / old_val * 100
-        
+
         if change_pct > max_change_pct:
             max_change_pct = change_pct
             max_change_item = (key, old_val, new_val)
-        
+
         # Если хотя бы одна позиция изменилась >= порога — триггерим
         if change_pct >= STOCK_CHANGE_THRESHOLD_PCT:
             logger.info(
                 "[%s] Позиция '%s / %s' изменилась %.1f%% >= %.1f%% (%.2f → %.2f) — обновляем",
-                LABEL, key[0][:30], key[1][:20], change_pct, STOCK_CHANGE_THRESHOLD_PCT,
-                old_val, new_val,
+                LABEL,
+                key[0][:30],
+                key[1][:20],
+                change_pct,
+                STOCK_CHANGE_THRESHOLD_PCT,
+                old_val,
+                new_val,
             )
             return True
-    
+
     # Все изменения < порога — проверяем временное условие (30 мин)
     if _last_update_time is not None:
         elapsed_min = (time.monotonic() - _last_update_time) / 60
         if elapsed_min >= STOCK_UPDATE_INTERVAL_MIN:
             logger.info(
                 "[%s] Прошло %.1f мин >= %d мин + есть изменения (макс %.1f%%) — обновляем",
-                LABEL, elapsed_min, STOCK_UPDATE_INTERVAL_MIN, max_change_pct,
+                LABEL,
+                elapsed_min,
+                STOCK_UPDATE_INTERVAL_MIN,
+                max_change_pct,
             )
             return True
         else:
             logger.info(
                 "[%s] Все изменения < %.1f%% (макс %.1f%% у '%s') И прошло %.1f мин < %d мин — пропускаем (антиспам)",
-                LABEL, STOCK_CHANGE_THRESHOLD_PCT, max_change_pct,
+                LABEL,
+                STOCK_CHANGE_THRESHOLD_PCT,
+                max_change_pct,
                 max_change_item[0][0][:30] if max_change_item else "?",
-                elapsed_min, STOCK_UPDATE_INTERVAL_MIN,
+                elapsed_min,
+                STOCK_UPDATE_INTERVAL_MIN,
             )
             return False
-    
+
     # Первое изменение после старта (нет _last_update_time) — обновляем
     logger.info(
         "[%s] Первое изменение после старта (макс %.1f%%) — обновляем",
-        LABEL, max_change_pct,
+        LABEL,
+        max_change_pct,
     )
     return True
 
@@ -327,6 +367,7 @@ def _should_update(new_hash: str, new_items_dict: dict[tuple[str, str], float]) 
 # ═══════════════════════════════════════════════════════
 # Основной обработчик: инкремент + проверка
 # ═══════════════════════════════════════════════════════
+
 
 async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
     """
@@ -351,7 +392,8 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
     # ── StopListUpdate → debounce (60 сек) ──
     if has_stoplist_update(body):
         event_org_ids = {
-            e.get("organizationId") for e in body
+            e.get("organizationId")
+            for e in body
             if e.get("eventType") == "StopListUpdate" and e.get("organizationId")
         }
         _schedule_stoplist_flush(event_org_ids, bot)
@@ -366,7 +408,8 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
 
     logger.info(
         "[%s] Получено %d закрытых заказов (типы: %s)",
-        LABEL, len(closed),
+        LABEL,
+        len(closed),
         ", ".join(set(e["event_type"] for e in closed)),
     )
 
@@ -377,10 +420,12 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
     try:
         # 1. Синхронизируем остатки (через iiko REST API)
         from use_cases.sync_stock_balances import sync_stock_balances
+
         await sync_stock_balances(triggered_by="iiko_webhook")
 
         # 2. Проверяем минимальные остатки
         from use_cases.check_min_stock import check_min_stock_levels
+
         stock_result = await check_min_stock_levels()
 
         items = stock_result.get("items", [])
@@ -393,6 +438,7 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         if should:
             # 4. Обновляем закреплённые сообщения (per-department для каждого юзера)
             from use_cases.pinned_stock_message import update_all_stock_alerts
+
             await update_all_stock_alerts(bot)
 
             _last_snapshot_hash = new_hash
@@ -400,14 +446,17 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
             _last_update_time = time.monotonic()  # запоминаем время отправки
             logger.info(
                 "[%s] Остатки обновлены и разосланы за %.1f сек (items=%d)",
-                LABEL, time.monotonic() - t0, len(items),
+                LABEL,
+                time.monotonic() - t0,
+                len(items),
             )
             result["triggered_check"] = True
             result["updated_messages"] = True
         else:
             logger.info(
                 "[%s] Остатки без значимых изменений, пропускаем обновление (%.1f сек)",
-                LABEL, time.monotonic() - t0,
+                LABEL,
+                time.monotonic() - t0,
             )
             result["triggered_check"] = True
 
@@ -422,6 +471,7 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
 # Принудительное обновление (для ручного вызова)
 # ═══════════════════════════════════════════════════════
 
+
 async def force_stock_check(bot: Any) -> dict[str, Any]:
     """
     Принудительная проверка остатков и обновление сообщений.
@@ -433,9 +483,11 @@ async def force_stock_check(bot: Any) -> dict[str, Any]:
     logger.info("[%s] Принудительная проверка остатков...", LABEL)
 
     from use_cases.sync_stock_balances import sync_stock_balances
+
     await sync_stock_balances(triggered_by="manual_stock_check")
 
     from use_cases.check_min_stock import check_min_stock_levels
+
     result = await check_min_stock_levels()
 
     items = result.get("items", [])
@@ -443,6 +495,7 @@ async def force_stock_check(bot: Any) -> dict[str, Any]:
     new_items_dict = _compute_items_dict(items)
 
     from use_cases.pinned_stock_message import update_all_stock_alerts
+
     await update_all_stock_alerts(bot)
 
     _last_snapshot_hash = new_hash
@@ -452,7 +505,9 @@ async def force_stock_check(bot: Any) -> dict[str, Any]:
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Принудительная проверка завершена: %d позиций ниже min за %.1f сек",
-        LABEL, len(items), elapsed,
+        LABEL,
+        len(items),
+        elapsed,
     )
     return {
         "below_min_count": len(items),

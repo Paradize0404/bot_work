@@ -21,8 +21,12 @@ from sqlalchemy import select, func, or_
 
 from db.engine import async_session_factory
 from db.models import (
-    Store, Product, Entity,
-    GSheetExportGroup, WriteoffRequestStoreGroup, ProductGroup,
+    Store,
+    Product,
+    Entity,
+    GSheetExportGroup,
+    WriteoffRequestStoreGroup,
+    ProductGroup,
 )
 from adapters import iiko_api
 from use_cases import writeoff_cache as _cache
@@ -36,12 +40,21 @@ logger = logging.getLogger(__name__)
 
 # Ключевые слова в названии должности, определяющие тип
 _BAR_KEYWORDS = (
-    "бармен", "старший бармен", "кассир", "кассир-бариста",
-    "кассир-администратор", "ранер",
+    "бармен",
+    "старший бармен",
+    "кассир",
+    "кассир-бариста",
+    "кассир-администратор",
+    "ранер",
 )
 _KITCHEN_KEYWORDS = (
-    "повар", "шеф-повар", "кондитер", "старший кондитер",
-    "пекарь", "заготовщик", "посудомойка",
+    "повар",
+    "шеф-повар",
+    "кондитер",
+    "старший кондитер",
+    "пекарь",
+    "заготовщик",
+    "посудомойка",
 )
 
 
@@ -90,6 +103,7 @@ def get_store_keyword_for_role(role_type: str) -> str | None:
 # Склады подразделения (бар / кухня)
 # ─────────────────────────────────────────────────────
 
+
 async def get_stores_for_department(department_id: str) -> list[dict]:
     """
     Получить склады, привязанные к подразделению пользователя,
@@ -125,7 +139,9 @@ async def get_stores_for_department(department_id: str) -> list[dict]:
     _cache.set_stores(department_id, items)
     logger.info(
         "[writeoff] Склады для %s: %d шт за %.2f сек",
-        department_id, len(items), time.monotonic() - t0,
+        department_id,
+        len(items),
+        time.monotonic() - t0,
     )
     return items
 
@@ -133,6 +149,7 @@ async def get_stores_for_department(department_id: str) -> list[dict]:
 # ─────────────────────────────────────────────────────
 # Счета списания (Account)
 # ─────────────────────────────────────────────────────
+
 
 async def get_writeoff_accounts(store_name: str = "") -> list[dict]:
     """
@@ -149,7 +166,9 @@ async def get_writeoff_accounts(store_name: str = "") -> list[dict]:
     # --- кеш ---
     cached = _cache.get_accounts(store_name)
     if cached is not None:
-        logger.debug("[writeoff] Счета из кеша (%d шт, store=%s)", len(cached), store_name)
+        logger.debug(
+            "[writeoff] Счета из кеша (%d шт, store=%s)", len(cached), store_name
+        )
         return cached
 
     t0 = time.monotonic()
@@ -165,7 +184,8 @@ async def get_writeoff_accounts(store_name: str = "") -> list[dict]:
 
     logger.info(
         "[writeoff] Загрузка счетов списания (Account), store=%s segment=%s...",
-        store_name, segment,
+        store_name,
+        segment,
     )
 
     async with async_session_factory() as session:
@@ -186,7 +206,8 @@ async def get_writeoff_accounts(store_name: str = "") -> list[dict]:
     _cache.set_accounts(store_name, items)
     logger.info(
         "[writeoff] Счетов: %d за %.2f сек",
-        len(items), time.monotonic() - t0,
+        len(items),
+        time.monotonic() - t0,
     )
     return items
 
@@ -195,9 +216,11 @@ async def get_writeoff_accounts(store_name: str = "") -> list[dict]:
 # Вспомогательные функции: фильтрация по папкам
 # ─────────────────────────────────────────────────────
 
+
 async def _is_request_department(department_id: str) -> bool:
     """Проверить, является ли подразделение точкой-получателем заявок."""
     from use_cases.product_request import get_request_stores
+
     stores = await get_request_stores()
     return any(s["id"] == department_id for s in stores)
 
@@ -210,18 +233,19 @@ async def _bfs_allowed_groups(session, group_model_class) -> set[str]:
 
     Возвращает пустое множество, если таблица пуста.
     """
-    root_rows = (await session.execute(
-        select(group_model_class.group_id)
-    )).all()
+    root_rows = (await session.execute(select(group_model_class.group_id))).all()
     root_ids = [str(r.group_id) for r in root_rows]
 
     if not root_ids:
         return set()
 
-    group_rows = (await session.execute(
-        select(ProductGroup.id, ProductGroup.parent_id)
-        .where(ProductGroup.deleted.is_(False))
-    )).all()
+    group_rows = (
+        await session.execute(
+            select(ProductGroup.id, ProductGroup.parent_id).where(
+                ProductGroup.deleted.is_(False)
+            )
+        )
+    ).all()
 
     children_map: dict[str, list[str]] = {}
     for g in group_rows:
@@ -244,6 +268,7 @@ async def _bfs_allowed_groups(session, group_model_class) -> set[str]:
 # ─────────────────────────────────────────────────────
 # Кеш и поиск номенклатуры
 # ─────────────────────────────────────────────────────
+
 
 async def preload_products(department_id: str | None = None) -> None:
     """
@@ -273,12 +298,19 @@ async def preload_products(department_id: str | None = None) -> None:
             allowed_groups = await _bfs_allowed_groups(session, group_model)
             logger.info(
                 "[writeoff] Прогрев кеша для dept=%s (%s): %d разрешённых групп",
-                department_id, group_model.__tablename__, len(allowed_groups),
+                department_id,
+                group_model.__tablename__,
+                len(allowed_groups),
             )
 
         stmt = (
-            select(Product.id, Product.name, Product.parent_id,
-                   Product.main_unit, Product.product_type)
+            select(
+                Product.id,
+                Product.name,
+                Product.parent_id,
+                Product.main_unit,
+                Product.product_type,
+            )
             .where(Product.product_type.in_(["GOODS", "DISH", "PREPARED"]))
             .where(Product.deleted.is_(False))
             .order_by(Product.name)
@@ -289,10 +321,14 @@ async def preload_products(department_id: str | None = None) -> None:
         # Фильтр папок: GOODS+DISH — только из разрешённых групп, PREPARED — всегда
         if allowed_groups is not None:
             rows = [
-                r for r in rows
+                r
+                for r in rows
                 if r.product_type == "PREPARED"
-                or (r.product_type in ("GOODS", "DISH") and r.parent_id
-                    and str(r.parent_id) in allowed_groups)
+                or (
+                    r.product_type in ("GOODS", "DISH")
+                    and r.parent_id
+                    and str(r.parent_id) in allowed_groups
+                )
             ]
 
         # Батч-резолв единиц: собираем уникальные UUID → один запрос
@@ -326,20 +362,24 @@ async def preload_products(department_id: str | None = None) -> None:
         uid_str = str(r.main_unit) if r.main_unit else None
         uname = unit_map.get(uid_str, "шт") if uid_str else "шт"
         unorm = normalize_unit(uname)
-        items.append({
-            "id": str(r.id),
-            "name": r.name,
-            "name_lower": r.name.lower() if r.name else "",
-            "main_unit": uid_str,
-            "product_type": r.product_type,
-            "unit_name": uname,
-            "unit_norm": unorm,
-        })
+        items.append(
+            {
+                "id": str(r.id),
+                "name": r.name,
+                "name_lower": r.name.lower() if r.name else "",
+                "main_unit": uid_str,
+                "product_type": r.product_type,
+                "unit_name": uname,
+                "unit_norm": unorm,
+            }
+        )
 
     _cache.set_products(items, cache_key)
     logger.info(
         "[writeoff] Прогрев кеша номенклатуры (dept=%s): %d товаров за %.2f сек",
-        cache_key, len(items), time.monotonic() - t0,
+        cache_key,
+        len(items),
+        time.monotonic() - t0,
     )
 
 
@@ -379,7 +419,10 @@ async def search_products(
         ][:limit]
         logger.info(
             "[writeoff] Поиск «%s» → %d результатов за %.4f сек (кеш, dept=%s)",
-            pattern, len(results), time.monotonic() - t0, cache_key,
+            pattern,
+            len(results),
+            time.monotonic() - t0,
+            cache_key,
         )
         return results
 
@@ -395,7 +438,10 @@ async def search_products(
         ][:limit]
         logger.info(
             "[writeoff] Поиск «%s» → %d результатов за %.4f сек (после прогрева, dept=%s)",
-            pattern, len(results), time.monotonic() - t0, cache_key,
+            pattern,
+            len(results),
+            time.monotonic() - t0,
+            cache_key,
         )
         return results
 
@@ -444,18 +490,22 @@ async def search_products(
         uid_str = str(p.main_unit) if p.main_unit else None
         uname = unit_map.get(uid_str, "шт") if uid_str else "шт"
         unorm = normalize_unit(uname)
-        items.append({
-            "id": str(p.id),
-            "name": p.name,
-            "main_unit": uid_str,
-            "product_type": p.product_type,
-            "unit_name": uname,
-            "unit_norm": unorm,
-        })
+        items.append(
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "main_unit": uid_str,
+                "product_type": p.product_type,
+                "unit_name": uname,
+                "unit_norm": unorm,
+            }
+        )
 
     logger.info(
         "[writeoff] Поиск «%s» → %d результатов за %.2f сек (БД fallback)",
-        pattern, len(items), time.monotonic() - t0,
+        pattern,
+        len(items),
+        time.monotonic() - t0,
     )
     return items
 
@@ -463,6 +513,7 @@ async def search_products(
 # ─────────────────────────────────────────────────────
 # Единица измерения по UUID
 # ─────────────────────────────────────────────────────
+
 
 async def get_unit_name(unit_id: str) -> str:
     """
@@ -511,6 +562,7 @@ def normalize_unit(unit_name: str) -> str:
 # Формирование и отправка документа
 # ─────────────────────────────────────────────────────
 
+
 def build_writeoff_document(
     store_id: str,
     account_id: str,
@@ -525,6 +577,7 @@ def build_writeoff_document(
     comment = "причина (Автор: ФИО)" — для трекинга в iiko.
     """
     import uuid
+
     non_zero = [i for i in items if i.get("quantity", 0) > 0]
     comment_parts = [reason] if reason else []
     if author_name:
@@ -561,7 +614,9 @@ async def send_writeoff_document(document: dict) -> str:
 
     logger.info(
         "[writeoff] Отправка документа: store=%s, account=%s, items=%d",
-        document.get("storeId"), document.get("accountId"), n_items,
+        document.get("storeId"),
+        document.get("accountId"),
+        n_items,
     )
     try:
         await iiko_api.send_writeoff(document)
@@ -588,6 +643,7 @@ async def preload_for_user(department_id: str) -> None:
         # Прогрев admin_ids + складов + номенклатуры параллельно
         from use_cases import permissions as perm_uc
         from bot.permission_map import PERM_WRITEOFF_APPROVE
+
         stores, _, _ = await asyncio.gather(
             get_stores_for_department(department_id),
             perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE),
@@ -600,7 +656,8 @@ async def preload_for_user(department_id: str) -> None:
         )
         logger.info(
             "[writeoff] Прогрев кеша: %d складов + счета + admin_ids за %.2f сек",
-            len(stores), time.monotonic() - t0,
+            len(stores),
+            time.monotonic() - t0,
         )
     except Exception:
         logger.warning("[writeoff] Ошибка прогрева кеша", exc_info=True)
@@ -610,19 +667,22 @@ async def preload_for_user(department_id: str) -> None:
 # Высокоуровневые use-case функции
 # ═══════════════════════════════════════════════════════
 
+
 @dataclass(slots=True)
 class WriteoffStart:
     """Результат prepare_writeoff."""
+
     stores: list[dict]
     is_admin: bool
-    role_type: str               # 'bar', 'kitchen', 'admin', 'unknown'
-    auto_store: dict | None      # авто-выбранный склад или None
+    role_type: str  # 'bar', 'kitchen', 'admin', 'unknown'
+    auto_store: dict | None  # авто-выбранный склад или None
     accounts: list[dict] | None  # если авто-склад — счета для него
 
 
 @dataclass(slots=True)
 class ApprovalResult:
     """Результат approve_writeoff."""
+
     success: bool
     result_text: str
 

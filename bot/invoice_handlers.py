@@ -61,44 +61,59 @@ MAX_ITEMS = 50
 #  FSM States — создание шаблона
 # ══════════════════════════════════════════════════════
 
+
 class InvoiceTemplateStates(StatesGroup):
-    store = State()              # выбор склада
-    supplier_choose = State()    # выбор поставщика из прайс-листа
-    add_items = State()          # поиск и добавление товаров
-    template_name = State()      # ввод названия шаблона
+    store = State()  # выбор склада
+    supplier_choose = State()  # выбор поставщика из прайс-листа
+    add_items = State()  # поиск и добавление товаров
+    template_name = State()  # ввод названия шаблона
 
 
 # ══════════════════════════════════════════════════════
 #  FSM States — создание по шаблону
 # ══════════════════════════════════════════════════════
 
+
 class InvoiceFromTemplateStates(StatesGroup):
-    choose_template = State()    # выбор шаблона
-    enter_quantities = State()   # ввод количества для позиций
-    confirm = State()            # подтверждение и отправка
+    choose_template = State()  # выбор шаблона
+    enter_quantities = State()  # ввод количества для позиций
+    confirm = State()  # подтверждение и отправка
 
 
 # ══════════════════════════════════════════════════════
 #  Клавиатуры
 # ══════════════════════════════════════════════════════
 
+
 def _stores_kb(stores: list[dict], page: int = 0) -> InlineKeyboardMarkup:
-    return items_inline_kb(stores, prefix="inv_store", cancel_data="inv_cancel", page=page)
+    return items_inline_kb(
+        stores, prefix="inv_store", cancel_data="inv_cancel", page=page
+    )
 
 
 def _suppliers_kb(suppliers: list[dict], page: int = 0) -> InlineKeyboardMarkup:
-    return items_inline_kb(suppliers, prefix="inv_sup", cancel_data="inv_cancel", page=page)
+    return items_inline_kb(
+        suppliers, prefix="inv_sup", cancel_data="inv_cancel", page=page
+    )
 
 
 def _products_kb(products: list[dict], page: int = 0) -> InlineKeyboardMarkup:
-    return items_inline_kb(products, prefix="inv_prod", cancel_data="inv_cancel", page=page)
+    return items_inline_kb(
+        products, prefix="inv_prod", cancel_data="inv_cancel", page=page
+    )
 
 
 def _add_more_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Сохранить шаблон", callback_data="inv_save")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
-    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Сохранить шаблон", callback_data="inv_save"
+                )
+            ],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
+        ]
+    )
 
 
 def _templates_kb(templates: list[dict], page: int = 0) -> InlineKeyboardMarkup:
@@ -109,24 +124,38 @@ def _templates_kb(templates: list[dict], page: int = 0) -> InlineKeyboardMarkup:
     page_items = templates[start:end]
 
     buttons = [
-        [InlineKeyboardButton(
-            text=f"{t['name']} ({t['counteragent_name']}, {t['items_count']} поз.)",
-            callback_data=f"inv_tmpl:{t['pk']}",
-        )]
+        [
+            InlineKeyboardButton(
+                text=f"{t['name']} ({t['counteragent_name']}, {t['items_count']} поз.)",
+                callback_data=f"inv_tmpl:{t['pk']}",
+            )
+        ]
         for t in page_items
     ]
-    
+
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"inv_tmpl_page:{page - 1}"))
+        nav.append(
+            InlineKeyboardButton(
+                text="◀️ Назад", callback_data=f"inv_tmpl_page:{page - 1}"
+            )
+        )
     if end < total:
-        nav.append(InlineKeyboardButton(text="▶️ Далее", callback_data=f"inv_tmpl_page:{page + 1}"))
-    
+        nav.append(
+            InlineKeyboardButton(
+                text="▶️ Далее", callback_data=f"inv_tmpl_page:{page + 1}"
+            )
+        )
+
     if nav:
         total_pages = (total + page_size - 1) // page_size
-        nav.insert(len(nav) // 2, InlineKeyboardButton(
-            text=f"{page + 1}/{total_pages}", callback_data="noop",
-        ))
+        nav.insert(
+            len(nav) // 2,
+            InlineKeyboardButton(
+                text=f"{page + 1}/{total_pages}",
+                callback_data="noop",
+            ),
+        )
         buttons.append(nav)
 
     buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")])
@@ -134,16 +163,27 @@ def _templates_kb(templates: list[dict], page: int = 0) -> InlineKeyboardMarkup:
 
 
 def _confirm_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Отправить накладную", callback_data="inv_confirm_send")],
-        [InlineKeyboardButton(text="✏️ Ввести заново", callback_data="inv_reenter_qty")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
-    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Отправить накладную", callback_data="inv_confirm_send"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✏️ Ввести заново", callback_data="inv_reenter_qty"
+                )
+            ],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
+        ]
+    )
 
 
 # ══════════════════════════════════════════════════════
 #  Summary-сообщение
 # ══════════════════════════════════════════════════════
+
 
 def _build_summary(data: dict) -> str:
     store = data.get("store_name", "—")
@@ -174,8 +214,11 @@ async def _update_summary(bot: Bot, chat_id: int, state: FSMContext) -> None:
 
 
 async def _send_prompt(
-    bot: Bot, chat_id: int, state: FSMContext,
-    text: str, reply_markup: InlineKeyboardMarkup | None = None,
+    bot: Bot,
+    chat_id: int,
+    state: FSMContext,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
     await send_prompt_msg(bot, chat_id, state, text, reply_markup, log_tag="invoice")
 
@@ -183,6 +226,7 @@ async def _send_prompt(
 # ══════════════════════════════════════════════════════
 #  Защита: текст в inline-состояниях
 # ══════════════════════════════════════════════════════
+
 
 @router.message(InvoiceTemplateStates.store)
 async def _ignore_text_store(message: Message) -> None:
@@ -226,6 +270,7 @@ async def _ignore_text_confirm(message: Message) -> None:
 
 # ── 1. Старт — «📑 Создать шаблон накладной» ──
 
+
 @router.message(F.text == "📑 Создать шаблон накладной")
 async def start_template(message: Message, state: FSMContext) -> None:
     try:
@@ -242,7 +287,9 @@ async def start_template(message: Message, state: FSMContext) -> None:
 
     logger.info(
         "[invoice] Старт создания шаблона tg:%d, dept=%s (%s)",
-        message.from_user.id, ctx.department_id, ctx.department_name,
+        message.from_user.id,
+        ctx.department_id,
+        ctx.department_name,
     )
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -255,7 +302,7 @@ async def start_template(message: Message, state: FSMContext) -> None:
     logger.info(
         "[invoice][template] Загружено: stores=%d, account=%s, price_suppliers=%d",
         len(stores) if stores else 0,
-        account.get('name') if account else None,
+        account.get("name") if account else None,
         len(price_suppliers) if price_suppliers else 0,
     )
 
@@ -286,7 +333,8 @@ async def start_template(message: Message, state: FSMContext) -> None:
 
     # Summary-сообщение
     summary_msg = await message.answer(
-        _build_summary(await state.get_data()), parse_mode="HTML",
+        _build_summary(await state.get_data()),
+        parse_mode="HTML",
     )
     await state.update_data(header_msg_id=summary_msg.message_id)
 
@@ -301,6 +349,7 @@ async def start_template(message: Message, state: FSMContext) -> None:
 
 # ── 2. Выбор склада ──
 
+
 @router.callback_query(InvoiceTemplateStates.store, F.data.startswith("inv_store:"))
 async def choose_store(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
@@ -312,7 +361,9 @@ async def choose_store(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("❌ Ошибка данных", show_alert=True)
         return
 
-    logger.info("[invoice] Выбор склада tg:%d, store_id=%s", callback.from_user.id, store_id)
+    logger.info(
+        "[invoice] Выбор склада tg:%d, store_id=%s", callback.from_user.id, store_id
+    )
     data = await state.get_data()
     stores = data.get("_stores_cache") or await inv_uc.get_stores_for_department(
         data["department_id"],
@@ -330,7 +381,9 @@ async def choose_store(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.set_state(InvoiceTemplateStates.supplier_choose)
     await _send_prompt(
-        callback.bot, callback.message.chat.id, state,
+        callback.bot,
+        callback.message.chat.id,
+        state,
         "🏢 Выберите поставщика из прайс-листа:",
         reply_markup=_suppliers_kb(suppliers),
     )
@@ -338,8 +391,10 @@ async def choose_store(callback: CallbackQuery, state: FSMContext) -> None:
 
 # ── 3. Выбор поставщика ──
 
+
 @router.callback_query(
-    InvoiceTemplateStates.supplier_choose, F.data.startswith("inv_sup:"),
+    InvoiceTemplateStates.supplier_choose,
+    F.data.startswith("inv_sup:"),
 )
 async def choose_supplier(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
@@ -351,7 +406,11 @@ async def choose_supplier(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("❌ Ошибка данных", show_alert=True)
         return
 
-    logger.info("[invoice][template] Выбор поставщика tg:%d, sup_id=%s", callback.from_user.id, sup_id)
+    logger.info(
+        "[invoice][template] Выбор поставщика tg:%d, sup_id=%s",
+        callback.from_user.id,
+        sup_id,
+    )
     data = await state.get_data()
     suppliers = data.get("_suppliers_cache") or await inv_uc.get_price_list_suppliers()
     supplier = next((s for s in suppliers if s["id"] == sup_id), None)
@@ -363,7 +422,9 @@ async def choose_supplier(callback: CallbackQuery, state: FSMContext) -> None:
     supplier_prices = await inv_uc.get_supplier_prices(sup_id)
     logger.info(
         "[invoice][template] Поставщик «%s» выбран, предзагружено цен: %d, tg:%d",
-        supplier['name'], len(supplier_prices), callback.from_user.id,
+        supplier["name"],
+        len(supplier_prices),
+        callback.from_user.id,
     )
 
     await state.update_data(
@@ -376,12 +437,15 @@ async def choose_supplier(callback: CallbackQuery, state: FSMContext) -> None:
     # Переход к добавлению товаров
     await state.set_state(InvoiceTemplateStates.add_items)
     await _send_prompt(
-        callback.bot, callback.message.chat.id, state,
+        callback.bot,
+        callback.message.chat.id,
+        state,
         "🔍 Введите название товара для поиска:",
     )
 
 
 # ── 4. Поиск и добавление товаров ──
+
 
 @router.message(InvoiceTemplateStates.add_items)
 async def search_product(message: Message, state: FSMContext) -> None:
@@ -394,14 +458,18 @@ async def search_product(message: Message, state: FSMContext) -> None:
 
     if not query:
         await _send_prompt(
-            message.bot, message.chat.id, state,
+            message.bot,
+            message.chat.id,
+            state,
             "⚠️ Введите название товара для поиска:",
         )
         return
 
     if len(query) > 200:
         await _send_prompt(
-            message.bot, message.chat.id, state,
+            message.bot,
+            message.chat.id,
+            state,
             "⚠️ Макс. 200 символов. Попробуйте короче:",
         )
         return
@@ -410,7 +478,9 @@ async def search_product(message: Message, state: FSMContext) -> None:
     items = data.get("items", [])
     if len(items) >= MAX_ITEMS:
         await _send_prompt(
-            message.bot, message.chat.id, state,
+            message.bot,
+            message.chat.id,
+            state,
             f"⚠️ Максимум {MAX_ITEMS} позиций. Нажмите «✅ Сохранить шаблон».",
             reply_markup=_add_more_kb(),
         )
@@ -422,7 +492,9 @@ async def search_product(message: Message, state: FSMContext) -> None:
 
     if not products:
         await _send_prompt(
-            message.bot, message.chat.id, state,
+            message.bot,
+            message.chat.id,
+            state,
             f"🔍 По запросу «{query}» ничего не найдено в прайс-листе.\n"
             "Введите другое название или нажмите «✅ Сохранить»:",
             reply_markup=_add_more_kb() if items else None,
@@ -431,7 +503,9 @@ async def search_product(message: Message, state: FSMContext) -> None:
 
     await state.update_data(_products_cache=products)
     await _send_prompt(
-        message.bot, message.chat.id, state,
+        message.bot,
+        message.chat.id,
+        state,
         f"🔍 Найдено {len(products)}. Выберите товар:",
         reply_markup=_products_kb(products, page=0),
     )
@@ -457,7 +531,9 @@ async def invoice_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
     if not suppliers:
         await callback.answer("Контрагенты не найдены", show_alert=True)
         return
-    await callback.message.edit_reply_markup(reply_markup=_suppliers_kb(suppliers, page=page))
+    await callback.message.edit_reply_markup(
+        reply_markup=_suppliers_kb(suppliers, page=page)
+    )
     await callback.answer()
 
 
@@ -469,7 +545,9 @@ async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
     if not products:
         await callback.answer("Товары не найдены", show_alert=True)
         return
-    await callback.message.edit_reply_markup(reply_markup=_products_kb(products, page=page))
+    await callback.message.edit_reply_markup(
+        reply_markup=_products_kb(products, page=page)
+    )
     await callback.answer()
 
 
@@ -481,11 +559,14 @@ async def invoice_tmpl_page(callback: CallbackQuery, state: FSMContext) -> None:
     if not templates:
         await callback.answer("Шаблоны не найдены", show_alert=True)
         return
-    await callback.message.edit_reply_markup(reply_markup=_templates_kb(templates, page=page))
+    await callback.message.edit_reply_markup(
+        reply_markup=_templates_kb(templates, page=page)
+    )
     await callback.answer()
 
 
 # ── 5. Выбор товара → добавление ──
+
 
 @router.callback_query(InvoiceTemplateStates.add_items, F.data.startswith("inv_prod:"))
 async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
@@ -498,7 +579,9 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("❌ Ошибка данных", show_alert=True)
         return
 
-    logger.info("[invoice] Выбор товара tg:%d, prod_id=%s", callback.from_user.id, prod_id)
+    logger.info(
+        "[invoice] Выбор товара tg:%d, prod_id=%s", callback.from_user.id, prod_id
+    )
     data = await state.get_data()
     products = data.get("_products_cache") or []
     product = next((p for p in products if p["id"] == prod_id), None)
@@ -519,31 +602,46 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
     effective_price = sell_price or cost_price
     used_cost = (not sell_price) and bool(cost_price)
 
-    items.append({
-        "product_id": prod_id,
-        "name": product["name"],
-        "unit_name": product.get("unit_name", "шт"),
-        "main_unit": product.get("main_unit"),
-        "cost_price": cost_price,
-        "sell_price": effective_price,
-    })
+    items.append(
+        {
+            "product_id": prod_id,
+            "name": product["name"],
+            "unit_name": product.get("unit_name", "шт"),
+            "main_unit": product.get("main_unit"),
+            "cost_price": cost_price,
+            "sell_price": effective_price,
+        }
+    )
     await state.update_data(items=items)
     await _update_summary(callback.bot, callback.message.chat.id, state)
 
     if effective_price:
-        price_info = f" (себест.: {effective_price:.2f}₽)" if used_cost else f" (цена: {effective_price:.2f}₽)"
+        price_info = (
+            f" (себест.: {effective_price:.2f}₽)"
+            if used_cost
+            else f" (цена: {effective_price:.2f}₽)"
+        )
     else:
         price_info = " (цена не задана)"
     logger.info(
         "[invoice][template] Добавлен товар #%d: «%s» prod_id=%s, "
         "unit=%s, main_unit=%s, cost=%.2f, sell=%.2f, effective=%.2f, used_cost=%s, tg:%d",
-        len(items), product["name"], prod_id,
-        product.get("unit_name", "шт"), product.get("main_unit"),
-        cost_price, sell_price, effective_price, used_cost, callback.from_user.id,
+        len(items),
+        product["name"],
+        prod_id,
+        product.get("unit_name", "шт"),
+        product.get("main_unit"),
+        cost_price,
+        sell_price,
+        effective_price,
+        used_cost,
+        callback.from_user.id,
     )
 
     await _send_prompt(
-        callback.bot, callback.message.chat.id, state,
+        callback.bot,
+        callback.message.chat.id,
+        state,
         f"✅ Добавлено: {product['name']}{price_info}\n"
         f"Всего позиций: {len(items)}\n\n"
         "🔍 Введите название следующего товара или сохраните шаблон:",
@@ -552,6 +650,7 @@ async def choose_product(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 # ── 6. Сохранить шаблон → ввод названия ──
+
 
 @router.callback_query(InvoiceTemplateStates.add_items, F.data == "inv_save")
 async def ask_template_name(callback: CallbackQuery, state: FSMContext) -> None:
@@ -564,11 +663,14 @@ async def ask_template_name(callback: CallbackQuery, state: FSMContext) -> None:
 
     logger.info(
         "[invoice] Переход к вводу имени шаблона tg:%d, items=%d",
-        callback.from_user.id, len(items),
+        callback.from_user.id,
+        len(items),
     )
     await state.set_state(InvoiceTemplateStates.template_name)
     await _send_prompt(
-        callback.bot, callback.message.chat.id, state,
+        callback.bot,
+        callback.message.chat.id,
+        state,
         "📝 Введите название шаблона (макс. 200 символов):",
     )
 
@@ -576,7 +678,9 @@ async def ask_template_name(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(InvoiceTemplateStates.template_name)
 async def save_template(message: Message, state: FSMContext) -> None:
     name = (message.text or "").strip()
-    logger.info("[invoice] Ввод названия шаблона tg:%d, name='%s'", message.from_user.id, name)
+    logger.info(
+        "[invoice] Ввод названия шаблона tg:%d, name='%s'", message.from_user.id, name
+    )
     try:
         await message.delete()
     except Exception:
@@ -584,14 +688,18 @@ async def save_template(message: Message, state: FSMContext) -> None:
 
     if not name:
         await _send_prompt(
-            message.bot, message.chat.id, state,
+            message.bot,
+            message.chat.id,
+            state,
             "⚠️ Название не может быть пустым. Введите название шаблона:",
         )
         return
 
     if len(name) > 200:
         await _send_prompt(
-            message.bot, message.chat.id, state,
+            message.bot,
+            message.chat.id,
+            state,
             "⚠️ Макс. 200 символов. Введите покороче:",
         )
         return
@@ -617,17 +725,22 @@ async def save_template(message: Message, state: FSMContext) -> None:
     await _update_summary(message.bot, message.chat.id, state)
 
     await _send_prompt(
-        message.bot, message.chat.id, state,
+        message.bot,
+        message.chat.id,
+        state,
         f"✅ Шаблон «{name}» сохранён! (#{pk}, {len(data.get('items', []))} позиций)",
     )
 
     logger.info(
         "[invoice] ✅ Шаблон pk=%d «%s» сохранён tg:%d",
-        pk, name, message.from_user.id,
+        pk,
+        name,
+        message.from_user.id,
     )
     await state.clear()
-    await restore_menu_kb(message.bot, message.chat.id, state,
-                          "📦 Накладные:", invoices_keyboard())
+    await restore_menu_kb(
+        message.bot, message.chat.id, state, "📦 Накладные:", invoices_keyboard()
+    )
 
 
 # ══════════════════════════════════════════════════════
@@ -635,6 +748,7 @@ async def save_template(message: Message, state: FSMContext) -> None:
 # ══════════════════════════════════════════════════════
 
 # ── 1. Старт — «📦 Создать по шаблону» ──
+
 
 @router.message(F.text == "📦 Создать по шаблону")
 async def start_from_template(message: Message, state: FSMContext) -> None:
@@ -652,7 +766,8 @@ async def start_from_template(message: Message, state: FSMContext) -> None:
 
     logger.info(
         "[invoice] Старт создания по шаблону tg:%d, dept=%s",
-        message.from_user.id, ctx.department_id,
+        message.from_user.id,
+        ctx.department_id,
     )
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -674,8 +789,10 @@ async def start_from_template(message: Message, state: FSMContext) -> None:
 
 # ── 2. Выбор шаблона ──
 
+
 @router.callback_query(
-    InvoiceFromTemplateStates.choose_template, F.data.startswith("inv_tmpl:"),
+    InvoiceFromTemplateStates.choose_template,
+    F.data.startswith("inv_tmpl:"),
 )
 async def choose_template_cb(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
@@ -713,7 +830,9 @@ async def choose_template_cb(callback: CallbackQuery, state: FSMContext) -> None
 
     logger.info(
         "[invoice][from_tpl] Динамические цены: supplier=%d, cost=%d, tg:%d",
-        len(supplier_prices), len(cost_prices), callback.from_user.id,
+        len(supplier_prices),
+        len(cost_prices),
+        callback.from_user.id,
     )
 
     # Показываем позиции с ценами и подсказкой единиц ввода
@@ -758,20 +877,29 @@ async def choose_template_cb(callback: CallbackQuery, state: FSMContext) -> None
     )
     await state.set_state(InvoiceFromTemplateStates.enter_quantities)
 
-    _cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
-    ])
+    _cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
+        ]
+    )
     # Новое сообщение (может быть длинным)
-    msg = await callback.message.answer(text, parse_mode="HTML", reply_markup=_cancel_kb)
+    msg = await callback.message.answer(
+        text, parse_mode="HTML", reply_markup=_cancel_kb
+    )
     await state.update_data(prompt_msg_id=msg.message_id)
 
 
 # ── 3. Ввод количества ──
 
+
 @router.message(InvoiceFromTemplateStates.enter_quantities)
 async def enter_quantities(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").strip()[:2000]
-    logger.info("[invoice][from_tpl] Ввод количества tg:%d, raw='%s'", message.from_user.id, raw[:100])
+    logger.info(
+        "[invoice][from_tpl] Ввод количества tg:%d, raw='%s'",
+        message.from_user.id,
+        raw[:100],
+    )
     try:
         await message.delete()
     except Exception:
@@ -779,7 +907,9 @@ async def enter_quantities(message: Message, state: FSMContext) -> None:
 
     if not raw:
         await _send_prompt(
-            message.bot, message.chat.id, state,
+            message.bot,
+            message.chat.id,
+            state,
             "⚠️ Введите количество для каждой позиции (по числу на строке):",
         )
         return
@@ -799,7 +929,9 @@ async def enter_quantities(message: Message, state: FSMContext) -> None:
             quantities.append(q)
         except ValueError:
             await _send_prompt(
-                message.bot, message.chat.id, state,
+                message.bot,
+                message.chat.id,
+                state,
                 f"⚠️ Не удалось распознать число: «{p}»\n"
                 "Введите количества заново (по числу на строке):",
             )
@@ -807,7 +939,9 @@ async def enter_quantities(message: Message, state: FSMContext) -> None:
 
     if len(quantities) != len(items):
         await _send_prompt(
-            message.bot, message.chat.id, state,
+            message.bot,
+            message.chat.id,
+            state,
             f"⚠️ Ожидается {len(items)} чисел (позиций), получено {len(quantities)}.\n"
             "Введите количества заново:",
         )
@@ -849,35 +983,49 @@ async def enter_quantities(message: Message, state: FSMContext) -> None:
         logger.debug(
             "[invoice][from_tpl] Позиция %d: «%s» qty_input=%.4g %s → converted=%.4g %s, "
             "price=%.2f, line_sum=%.2f, main_unit=%s",
-            i, item['name'], qty, display_unit, converted, api_unit,
-            price, line_sum, item.get('main_unit'),
+            i,
+            item["name"],
+            qty,
+            display_unit,
+            converted,
+            api_unit,
+            price,
+            line_sum,
+            item.get("main_unit"),
         )
-        items_with_qty.append({
-            "product_id": item.get("product_id") or item.get("id"),
-            "name": item["name"],
-            "amount": converted,
-            "price": price,
-            "main_unit": item.get("main_unit"),
-            "unit_name": unit,
-        })
+        items_with_qty.append(
+            {
+                "product_id": item.get("product_id") or item.get("id"),
+                "name": item["name"],
+                "amount": converted,
+                "price": price,
+                "main_unit": item.get("main_unit"),
+                "unit_name": unit,
+            }
+        )
 
     text += f"\n<b>Итого: {total_sum:.2f}₽</b>"
 
     logger.info(
         "[invoice][from_tpl] Итоги: items=%d, total_sum=%.2f, tg:%d",
-        len(items_with_qty), total_sum, message.from_user.id,
+        len(items_with_qty),
+        total_sum,
+        message.from_user.id,
     )
     await state.update_data(_items_with_qty=items_with_qty, _total_sum=total_sum)
     await state.set_state(InvoiceFromTemplateStates.confirm)
 
     await _send_prompt(
-        message.bot, message.chat.id, state,
+        message.bot,
+        message.chat.id,
+        state,
         text,
         reply_markup=_confirm_kb(),
     )
 
 
 # ── 4. Подтверждение → отправка ──
+
 
 @router.callback_query(InvoiceFromTemplateStates.confirm, F.data == "inv_confirm_send")
 async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
@@ -893,18 +1041,27 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info(
         "[invoice][from_tpl] ▶ Отправка расходной tg:%d, шаблон=«%s» (pk=%s), "
         "store=%s (%s), counteragent=%s (%s), account=%s, items=%d",
-        callback.from_user.id, template.get("name"), template.get("id"),
-        template.get("store_id"), template.get("store_name"),
-        template.get("counteragent_id"), template.get("counteragent_name"),
-        template.get("account_id"), len(items_with_qty),
+        callback.from_user.id,
+        template.get("name"),
+        template.get("id"),
+        template.get("store_id"),
+        template.get("store_name"),
+        template.get("counteragent_id"),
+        template.get("counteragent_name"),
+        template.get("account_id"),
+        len(items_with_qty),
     )
     for idx, it in enumerate(items_with_qty, 1):
         logger.info(
             "[invoice][from_tpl]   item #%d: prod=%s, amount=%.4g, price=%.2f, "
             "sum=%.2f, unit=%s, main_unit=%s",
-            idx, it.get("product_id"), it.get("amount", 0), it.get("price", 0),
+            idx,
+            it.get("product_id"),
+            it.get("amount", 0),
+            it.get("price", 0),
             round(it.get("amount", 0) * it.get("price", 0), 2),
-            it.get("unit_name"), it.get("main_unit"),
+            it.get("unit_name"),
+            it.get("main_unit"),
         )
 
     ctx = await uctx.get_user_context(callback.from_user.id)
@@ -929,15 +1086,20 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info(
         "[invoice][from_tpl] Документ построен: dateIncoming=%s, status=%s, "
         "store=%s, counteragent=%s, comment='%s', items_count=%d",
-        document.get("dateIncoming"), document.get("status"),
-        document.get("storeId"), document.get("counteragentId"),
-        document.get("comment", "")[:80], len(document.get("items", [])),
+        document.get("dateIncoming"),
+        document.get("status"),
+        document.get("storeId"),
+        document.get("counteragentId"),
+        document.get("comment", "")[:80],
+        len(document.get("items", [])),
     )
 
     result_text = await inv_uc.send_outgoing_invoice_document(document)
 
     await _send_prompt(
-        callback.bot, callback.message.chat.id, state,
+        callback.bot,
+        callback.message.chat.id,
+        state,
         result_text,
     )
 
@@ -969,8 +1131,11 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
                 BufferedInputFile(pdf_bytes, filename=filename),
                 caption="📄 Расходная накладная (2 копии)",
             )
-            logger.info("[invoice][from_tpl] PDF отправлен: %s (%.1f КБ)",
-                        filename, len(pdf_bytes) / 1024)
+            logger.info(
+                "[invoice][from_tpl] PDF отправлен: %s (%.1f КБ)",
+                filename,
+                len(pdf_bytes) / 1024,
+            )
         except Exception:
             logger.exception("[invoice][from_tpl] Ошибка генерации PDF")
 
@@ -985,11 +1150,17 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
             pass
 
     await state.clear()
-    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
-                          "📦 Накладные:", invoices_keyboard())
+    await restore_menu_kb(
+        callback.bot,
+        callback.message.chat.id,
+        state,
+        "📦 Накладные:",
+        invoices_keyboard(),
+    )
 
 
 # ── Ввести заново (кол-во) ──
+
 
 @router.callback_query(InvoiceFromTemplateStates.confirm, F.data == "inv_reenter_qty")
 async def reenter_quantities(callback: CallbackQuery, state: FSMContext) -> None:
@@ -1015,7 +1186,9 @@ async def reenter_quantities(callback: CallbackQuery, state: FSMContext) -> None
 
     await state.set_state(InvoiceFromTemplateStates.enter_quantities)
     await _send_prompt(
-        callback.bot, callback.message.chat.id, state,
+        callback.bot,
+        callback.message.chat.id,
+        state,
         text,
     )
 
@@ -1023,6 +1196,7 @@ async def reenter_quantities(callback: CallbackQuery, state: FSMContext) -> None
 # ══════════════════════════════════════════════════════
 #  Отмена (общая для обоих потоков)
 # ══════════════════════════════════════════════════════
+
 
 @router.callback_query(F.data == "inv_cancel")
 async def cancel_template(callback: CallbackQuery, state: FSMContext) -> None:
@@ -1043,5 +1217,10 @@ async def cancel_template(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.edit_text("❌ Действие отменено.")
     except Exception:
         pass
-    await restore_menu_kb(callback.bot, callback.message.chat.id, state,
-                          "📦 Накладные:", invoices_keyboard())
+    await restore_menu_kb(
+        callback.bot,
+        callback.message.chat.id,
+        state,
+        "📦 Накладные:",
+        invoices_keyboard(),
+    )

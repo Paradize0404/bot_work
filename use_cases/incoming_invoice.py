@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 #  1. Загрузка pending документов
 # ═══════════════════════════════════════════════════════
 
+
 async def get_pending_ocr_documents(
     doc_ids: list[str] | None = None,
     status: str | None = None,
@@ -50,6 +51,7 @@ async def get_pending_ocr_documents(
     Возвращает list[dict] с вложенным полем «items».
     """
     import datetime as _dt
+
     t0 = time.monotonic()
     from sqlalchemy import and_
     from sqlalchemy.orm import selectinload
@@ -72,6 +74,7 @@ async def get_pending_ocr_documents(
         else:
             # Фоллбек: recognized за последние 24 ч
             from use_cases._helpers import now_kgd
+
             since = now_kgd() - _dt.timedelta(hours=24)
             conditions = [
                 OcrDocument.status == target_status,
@@ -85,46 +88,53 @@ async def get_pending_ocr_documents(
             .options(selectinload(OcrDocument.items))
             .order_by(OcrDocument.created_at)
         )
-        result   = await session.execute(stmt)
+        result = await session.execute(stmt)
         doc_objs = result.scalars().all()
 
     # Дедупликация: по паре (doc_number, doc_type) оставляем только последний документ
     _seen: dict = {}
     for d in doc_objs:
         key = (d.doc_number or d.id, d.doc_type)
-        _seen[key] = d  # поздний перезаписывает раннее (doc_objs сортирован по created_at)
+        _seen[key] = (
+            d  # поздний перезаписывает раннее (doc_objs сортирован по created_at)
+        )
     doc_objs = list(_seen.values())
 
     docs: list[dict] = []
     for d in doc_objs:
         items: list[dict] = []
-        for item in (d.items or []):
-            items.append({
-                "id":         item.id,
-                "raw_name":   item.raw_name or "",
-                "iiko_id":    item.iiko_id or "",
-                "iiko_name":  item.iiko_name or "",
-                "store_type": item.store_type or "",
-                "qty":        round(item.qty, 4)  if item.qty  else item.qty,
-                "price":      round(item.price, 2) if item.price else item.price,
-                "sum":        round(item.sum, 2)   if item.sum   else item.sum,
-                "unit":       item.unit or "",
-            })
-        docs.append({
-            "id":            d.id,
-            "doc_number":    d.doc_number or "",
-            "doc_date":      d.doc_date,
-            "doc_type":      d.doc_type,
-            "supplier_name": d.supplier_name or "",
-            "supplier_id":   d.supplier_id or "",
-            "department_id": d.department_id or "",
-            "tg_file_ids":   d.tg_file_ids or [],
-            "items":         items,
-        })
+        for item in d.items or []:
+            items.append(
+                {
+                    "id": item.id,
+                    "raw_name": item.raw_name or "",
+                    "iiko_id": item.iiko_id or "",
+                    "iiko_name": item.iiko_name or "",
+                    "store_type": item.store_type or "",
+                    "qty": round(item.qty, 4) if item.qty else item.qty,
+                    "price": round(item.price, 2) if item.price else item.price,
+                    "sum": round(item.sum, 2) if item.sum else item.sum,
+                    "unit": item.unit or "",
+                }
+            )
+        docs.append(
+            {
+                "id": d.id,
+                "doc_number": d.doc_number or "",
+                "doc_date": d.doc_date,
+                "doc_type": d.doc_type,
+                "supplier_name": d.supplier_name or "",
+                "supplier_id": d.supplier_id or "",
+                "department_id": d.department_id or "",
+                "tg_file_ids": d.tg_file_ids or [],
+                "items": items,
+            }
+        )
 
     logger.info(
         "[incoming_invoice] Загружено %d pending документов за %.2f сек",
-        len(docs), time.monotonic() - t0,
+        len(docs),
+        time.monotonic() - t0,
     )
     return docs
 
@@ -132,6 +142,7 @@ async def get_pending_ocr_documents(
 # ═══════════════════════════════════════════════════════
 #  2. Сборка iiko-invoice словарей
 # ═══════════════════════════════════════════════════════
+
 
 async def build_iiko_invoices(
     docs: list[dict],
@@ -155,7 +166,7 @@ async def build_iiko_invoices(
     from use_cases.product_request import build_store_type_map
     from use_cases import ocr_mapping as mapping_uc
 
-    t0       = time.monotonic()
+    t0 = time.monotonic()
     warnings: list[str] = []
 
     if not docs:
@@ -168,7 +179,9 @@ async def build_iiko_invoices(
             f"Не найдены склады для подразделения {department_id}. "
             "Проверьте, что склады синхронизированы (iiko ↔ БД)."
         )
-        logger.warning("[incoming_invoice] store_type_map пуст для dept=%s", department_id)
+        logger.warning(
+            "[incoming_invoice] store_type_map пуст для dept=%s", department_id
+        )
 
     # Б. Актуальный базовый маппинг (для дообогащения позиций без iiko_id)
     if base_mapping is None:
@@ -186,13 +199,13 @@ async def build_iiko_invoices(
             if pid:
                 product_ids.add(pid)
 
-    unit_map    = await _load_product_units(product_ids)
+    unit_map = await _load_product_units(product_ids)
     supplier_db = await _load_supplier_ids_from_db()
 
     invoices: list[dict] = []
 
     for doc in docs:
-        doc_num  = doc["doc_number"] or "б/н"
+        doc_num = doc["doc_number"] or "б/н"
         doc_date = doc.get("doc_date")
         sup_name = (doc.get("supplier_name") or "").strip()
 
@@ -213,7 +226,8 @@ async def build_iiko_invoices(
             )
             logger.warning(
                 "[incoming_invoice] Поставщик не найден: «%s» doc_id=%s",
-                sup_name, doc["id"],
+                sup_name,
+                doc["id"],
             )
 
         # ── Дата (iiko ожидает ISO: YYYY-MM-DDTHH:MM:SS) ──
@@ -221,24 +235,29 @@ async def build_iiko_invoices(
             date_incoming = doc_date.strftime("%Y-%m-%dT%H:%M:%S")
         else:
             from use_cases._helpers import now_kgd
-            today         = now_kgd()
+
+            today = now_kgd()
             date_incoming = today.strftime("%Y-%m-%dT%H:%M:%S")
-            warnings.append(f"№{doc_num}: дата не распознана — используем сегодня ({today.strftime('%d.%m.%Y')})")
+            warnings.append(
+                f"№{doc_num}: дата не распознана — используем сегодня ({today.strftime('%d.%m.%Y')})"
+            )
 
         # ── Группировка товаров по store_type ──
         store_groups: dict[str, list[dict]] = {}
         for item in doc["items"]:
-            iiko_id  = (item.get("iiko_id") or "").strip()
+            iiko_id = (item.get("iiko_id") or "").strip()
             raw_name = item.get("raw_name") or ""
 
             # Дообогащаем если нет iiko_id (маппинг был добавлен позже)
             if not iiko_id:
                 match = base_mapping.get(raw_name.lower())
                 if match and match.get("iiko_id"):
-                    iiko_id            = match["iiko_id"]
-                    item["iiko_id"]    = iiko_id
-                    item["store_type"] = match.get("store_type") or item.get("store_type") or ""
-                    item["iiko_name"]  = match.get("iiko_name") or ""
+                    iiko_id = match["iiko_id"]
+                    item["iiko_id"] = iiko_id
+                    item["store_type"] = (
+                        match.get("store_type") or item.get("store_type") or ""
+                    )
+                    item["iiko_name"] = match.get("iiko_name") or ""
 
             if not iiko_id:
                 warnings.append(
@@ -264,31 +283,40 @@ async def build_iiko_invoices(
                 )
                 logger.warning(
                     "[incoming_invoice] store_type «%s» не найден в store_type_map=%s",
-                    store_type, list(store_type_map.keys()),
+                    store_type,
+                    list(store_type_map.keys()),
                 )
 
-            store_id   = store_info["id"]   if store_info else ""
-            store_name = store_info["name"] if store_info else (store_type or "Склад не определён")
+            store_id = store_info["id"] if store_info else ""
+            store_name = (
+                store_info["name"]
+                if store_info
+                else (store_type or "Склад не определён")
+            )
 
             iiko_items: list[dict] = []
             for item in group_items:
-                pid   = item["iiko_id"]
-                qty   = round(float(item.get("qty") or 0.0), 4)
+                pid = item["iiko_id"]
+                qty = round(float(item.get("qty") or 0.0), 4)
                 price = round(float(item.get("price") or 0.0), 2)
                 total = round(float(item.get("sum") or round(qty * price, 2)), 2)
-                iiko_items.append({
-                    "productId":     pid,
-                    "raw_name":      item.get("raw_name") or "",
-                    "iiko_name":     item.get("iiko_name") or item.get("raw_name") or "",
-                    "amount":        qty,
-                    "price":         price,
-                    "sum":           total,
-                    "measureUnitId": unit_map.get(pid, ""),
-                })
+                iiko_items.append(
+                    {
+                        "productId": pid,
+                        "raw_name": item.get("raw_name") or "",
+                        "iiko_name": item.get("iiko_name")
+                        or item.get("raw_name")
+                        or "",
+                        "amount": qty,
+                        "price": price,
+                        "sum": total,
+                        "measureUnitId": unit_map.get(pid, ""),
+                    }
+                )
 
             # Номер накладной: base-num + суффикс склада (если несколько складов)
-            suffix     = _store_suffix(store_type)
-            multi      = len(store_groups) > 1
+            suffix = _store_suffix(store_type)
+            multi = len(store_groups) > 1
             inv_number = f"{doc_num}-{suffix}" if (multi and store_type) else doc_num
 
             if not store_id:
@@ -305,22 +333,26 @@ async def build_iiko_invoices(
                 )
                 continue
 
-            invoices.append({
-                "ocr_doc_id":     doc["id"],
-                "ocr_doc_number": doc_num,
-                "documentNumber": inv_number,
-                "dateIncoming":   date_incoming,
-                "supplierId":     supplier_iiko_id,
-                "supplier_name":  sup_name,
-                "storeId":        store_id,
-                "store_name":     store_name,
-                "store_type":     store_type,
-                "items":          iiko_items,
-            })
+            invoices.append(
+                {
+                    "ocr_doc_id": doc["id"],
+                    "ocr_doc_number": doc_num,
+                    "documentNumber": inv_number,
+                    "dateIncoming": date_incoming,
+                    "supplierId": supplier_iiko_id,
+                    "supplier_name": sup_name,
+                    "storeId": store_id,
+                    "store_name": store_name,
+                    "store_type": store_type,
+                    "items": iiko_items,
+                }
+            )
 
     logger.info(
         "[incoming_invoice] Подготовлено %d накладных из %d документов за %.2f сек",
-        len(invoices), len(docs), time.monotonic() - t0,
+        len(invoices),
+        len(docs),
+        time.monotonic() - t0,
     )
     return invoices, warnings
 
@@ -334,6 +366,7 @@ def _store_suffix(store_type: str) -> str:
 # ═══════════════════════════════════════════════════════
 #  3. Форматирование превью
 # ═══════════════════════════════════════════════════════
+
 
 def format_invoice_preview(
     invoices: list[dict],
@@ -358,14 +391,16 @@ def format_invoice_preview(
         # dateIncoming в ISO (2026-02-16T09:00:00) → красиво для пользователя
         raw_date = inv.get("dateIncoming") or ""
         display_date = raw_date[:10] if "T" in raw_date else raw_date
-        lines.append(
-            f"<b>{idx}. №{inv['documentNumber']}</b> от {display_date}"
-        )
+        lines.append(f"<b>{idx}. №{inv['documentNumber']}</b> от {display_date}")
         lines.append(f"   📋 Поставщик: {inv['supplier_name'] or '—'}")
         lines.append(f"   🏪 Склад: {inv['store_name']}")
         lines.append(
             f"   📦 Позиций: {len(inv['items'])}"
-            + (f", сумма: {total_sum:,.2f}\u202f₽".replace(",", "\u00a0") if total_sum else "")
+            + (
+                f", сумма: {total_sum:,.2f}\u202f₽".replace(",", "\u00a0")
+                if total_sum
+                else ""
+            )
         )
         lines.append("")
 
@@ -377,13 +412,15 @@ def format_invoice_preview(
             lines.append(f"  … и ещё {len(warnings) - 6}")
         lines.append("")
 
-    lines.append("Нажмите <b>«📤 Отправить в iiko»</b> для загрузки или <b>«❌ Отменить»</b>.")
+    lines.append(
+        "Нажмите <b>«📤 Отправить в iiko»</b> для загрузки или <b>«❌ Отменить»</b>."
+    )
     return "\n".join(lines)
 
 
 def format_send_result(results: list[dict]) -> str:
     """Форматировать итог отправки в iiko."""
-    ok_list   = [r for r in results if r.get("ok")]
+    ok_list = [r for r in results if r.get("ok")]
     fail_list = [r for r in results if not r.get("ok")]
     lines: list[str] = []
 
@@ -409,6 +446,7 @@ def format_send_result(results: list[dict]) -> str:
 #  4. Отправка в iiko
 # ═══════════════════════════════════════════════════════
 
+
 async def send_invoices_to_iiko(invoices: list[dict]) -> list[dict]:
     """
     Отправить каждую накладную в iiko через REST API (XML import).
@@ -420,18 +458,23 @@ async def send_invoices_to_iiko(invoices: list[dict]) -> list[dict]:
     for inv in invoices:
         logger.info(
             "[incoming_invoice] Отправляю №%s склад=%s позиций=%d",
-            inv["documentNumber"], inv["store_name"], len(inv["items"]),
+            inv["documentNumber"],
+            inv["store_name"],
+            len(inv["items"]),
         )
         try:
             resp = await send_incoming_invoice(inv)
-            results.append({
-                "invoice": inv,
-                "ok":      resp.get("ok", False),
-                "error":   resp.get("error", ""),
-            })
+            results.append(
+                {
+                    "invoice": inv,
+                    "ok": resp.get("ok", False),
+                    "error": resp.get("error", ""),
+                }
+            )
         except Exception as exc:
             logger.exception(
-                "[incoming_invoice] Ошибка отправки №%s", inv["documentNumber"],
+                "[incoming_invoice] Ошибка отправки №%s",
+                inv["documentNumber"],
             )
             err_msg = str(exc)
             # Сокращаем HTTP-ошибки — пользователю не нужен полный URL с ключом
@@ -442,7 +485,9 @@ async def send_invoices_to_iiko(invoices: list[dict]) -> list[dict]:
     ok_count = sum(1 for r in results if r["ok"])
     logger.info(
         "[incoming_invoice] Итог: %d ✓, %d ✗ из %d",
-        ok_count, len(results) - ok_count, len(results),
+        ok_count,
+        len(results) - ok_count,
+        len(results),
     )
     return results
 
@@ -451,11 +496,13 @@ async def send_invoices_to_iiko(invoices: list[dict]) -> list[dict]:
 #  5. Обновление статуса документов
 # ═══════════════════════════════════════════════════════
 
+
 async def mark_documents_imported(doc_ids: list[str]) -> None:
     """Установить status='imported' + sent_to_iiko_at для переданных OcrDocument."""
     if not doc_ids:
         return
     from use_cases._helpers import now_kgd
+
     async with async_session_factory() as session:
         await session.execute(
             update(OcrDocument)
@@ -484,6 +531,7 @@ async def mark_documents_cancelled(doc_ids: list[str]) -> None:
 #  6. Вспомогательные DB-функции
 # ═══════════════════════════════════════════════════════
 
+
 async def _load_product_units(product_ids: set[str]) -> dict[str, str]:
     """
     Загрузить main_unit UUID для списка product UUID.
@@ -492,6 +540,7 @@ async def _load_product_units(product_ids: set[str]) -> dict[str, str]:
     if not product_ids:
         return {}
     from db.models import Product
+
     try:
         uuids = []
         for pid in product_ids:
@@ -519,17 +568,13 @@ async def _load_supplier_ids_from_db() -> dict[str, str]:
     Используется как fallback если supplier_id не сохранён в OcrDocument.
     """
     from db.models import Supplier
+
     try:
         async with async_session_factory() as session:
             result = await session.execute(
-                select(Supplier.id, Supplier.name)
-                .where(Supplier.deleted.is_(False))
+                select(Supplier.id, Supplier.name).where(Supplier.deleted.is_(False))
             )
-            return {
-                (r.name or "").strip().lower(): str(r.id)
-                for r in result
-                if r.name
-            }
+            return {(r.name or "").strip().lower(): str(r.id) for r in result if r.name}
     except Exception:
         logger.exception("[incoming_invoice] Ошибка загрузки поставщиков из БД")
         return {}

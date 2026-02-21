@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 # Заведения для заявок — настраиваемый список из GSheet
 # ═══════════════════════════════════════════════════════
 
+
 async def get_request_stores() -> list[dict[str, str]]:
     """
     Получить выбранное заведение для заявок из GSheet «Настройки».
@@ -39,6 +40,7 @@ async def get_request_stores() -> list[dict[str, str]]:
     Возвращает [{id, name}] (0 или 1 элемент — одно выбранное заведение).
     """
     from adapters import google_sheets as gsheet
+
     stores = await gsheet.read_request_stores()
     logger.info("[request] Заведение для заявок из GSheet: %d шт", len(stores))
     return stores
@@ -80,11 +82,11 @@ async def sync_request_stores_sheet() -> int:
 # Алиасы для нормализации имён складов → канонические типы
 # (должны совпадать с _STORE_TYPES в adapters/google_sheets.py)
 _STORE_TYPE_ALIASES: dict[str, str] = {
-    "хоз. товары":          "хозы",
-    "хоз товары":           "хозы",
-    "хоз.товары":           "хозы",
-    "хозтовары":            "хозы",
-    "хоз-товары":           "хозы",
+    "хоз. товары": "хозы",
+    "хоз товары": "хозы",
+    "хоз.товары": "хозы",
+    "хозтовары": "хозы",
+    "хоз-товары": "хозы",
     "хозяйственные товары": "хозы",
 }
 
@@ -165,7 +167,8 @@ async def build_store_type_map(department_id: str) -> dict[str, dict[str, str]]:
             result[stype] = {"id": s["id"], "name": s["name"]}
     logger.debug(
         "[request] store_type_map для dept=%s: %s",
-        department_id, list(result.keys()),
+        department_id,
+        list(result.keys()),
     )
     return result
 
@@ -207,7 +210,9 @@ async def find_counteragent_for_store(store_name: str) -> dict[str, str] | None:
         )
         row = (await session.execute(stmt)).first()
         if row:
-            logger.debug("[request] counteragent exact match: '%s' → '%s'", store_name, row.name)
+            logger.debug(
+                "[request] counteragent exact match: '%s' → '%s'", store_name, row.name
+            )
             return {"id": str(row.id), "name": row.name}
 
         # 2) Частичное (contains)
@@ -219,7 +224,11 @@ async def find_counteragent_for_store(store_name: str) -> dict[str, str] | None:
         )
         row = (await session.execute(stmt)).first()
         if row:
-            logger.debug("[request] counteragent partial match: '%s' → '%s'", store_name, row.name)
+            logger.debug(
+                "[request] counteragent partial match: '%s' → '%s'",
+                store_name,
+                row.name,
+            )
             return {"id": str(row.id), "name": row.name}
 
         logger.warning("[request] counteragent not found for store '%s'", store_name)
@@ -230,21 +239,25 @@ async def find_counteragent_for_store(store_name: str) -> dict[str, str] | None:
 # Получатели заявок — делегируем в permissions (GSheet)
 # ═══════════════════════════════════════════════════════
 
+
 async def get_receiver_ids(role_type: str = None) -> list[int]:
     """Список telegram_id получателей заявок (из GSheet кеша)."""
     from use_cases import permissions as perm_uc
+
     return await perm_uc.get_receiver_ids(role_type)
 
 
 async def is_receiver(telegram_id: int) -> bool:
     """Проверить, является ли пользователь получателем заявок (из GSheet кеша)."""
     from use_cases import permissions as perm_uc
+
     return await perm_uc.is_receiver(telegram_id)
 
 
 # ═══════════════════════════════════════════════════════
 # Создание / получение заявок
 # ═══════════════════════════════════════════════════════
+
 
 async def create_request(
     *,
@@ -287,8 +300,13 @@ async def create_request(
 
     logger.info(
         "[request] ✅ Заявка pk=%d создана: tg:%d, dept=%s, store=%s, items=%d, sum=%.2f (%.2f сек)",
-        pk, requester_tg, department_name, store_name,
-        len(items), total_sum, time.monotonic() - t0,
+        pk,
+        requester_tg,
+        department_name,
+        store_name,
+        len(items),
+        total_sum,
+        time.monotonic() - t0,
     )
     return pk
 
@@ -467,17 +485,24 @@ async def update_request_items(pk: int, items: list[dict], total_sum: float) -> 
         r.total_sum = total_sum
         await session.commit()
 
-    logger.info("[request] ✏️ Заявка pk=%d items обновлены (%d поз., sum=%.2f)", pk, len(items), total_sum)
+    logger.info(
+        "[request] ✏️ Заявка pk=%d items обновлены (%d поз., sum=%.2f)",
+        pk,
+        len(items),
+        total_sum,
+    )
     return True
 
 
-def format_request_text(req: dict, settings_dept_name: str = "", items_filter: list[dict] = None) -> str:
+def format_request_text(
+    req: dict, settings_dept_name: str = "", items_filter: list[dict] = None
+) -> str:
     """HTML-текст заявки для отображения (плоский список, без деления по складам)."""
     items = items_filter if items_filter is not None else req.get("items", [])
     created = req.get("created_at")
     date_str = created.strftime("%d.%m.%Y %H:%M") if created else "?"
 
-    dept_name = req.get('department_name', '?')
+    dept_name = req.get("department_name", "?")
     header = f"📤 {dept_name}"
     if settings_dept_name:
         header += f" → 📥 {settings_dept_name}"
@@ -489,7 +514,7 @@ def format_request_text(req: dict, settings_dept_name: str = "", items_filter: l
         f"{header}\n\n"
         f"<b>Позиции ({len(items)}):</b>\n"
     )
-    
+
     total = 0.0
     for i, item in enumerate(items, 1):
         name = item.get("name", "?")
@@ -505,13 +530,17 @@ def format_request_text(req: dict, settings_dept_name: str = "", items_filter: l
 
     if items_filter is None:
         total = req.get("total_sum", 0)
-        
+
     text += f"\n<b>Итого: {total:.2f}₽</b>"
 
     if req.get("comment"):
         text += f"\n💬 {req['comment']}"
 
-    status_map = {"pending": "⏳ Ожидает", "approved": "✅ Отправлена", "cancelled": "❌ Отменена"}
+    status_map = {
+        "pending": "⏳ Ожидает",
+        "approved": "✅ Отправлена",
+        "cancelled": "❌ Отменена",
+    }
     text += f"\n\n<b>Статус:</b> {status_map.get(req.get('status', ''), req.get('status', ''))}"
     return text
 
@@ -520,24 +549,36 @@ def format_request_text(req: dict, settings_dept_name: str = "", items_filter: l
 # Группы кондитеров (Pastry Groups)
 # ═══════════════════════════════════════════════════════
 
+
 async def get_pastry_groups() -> list[dict]:
     """Получить список номенклатурных групп кондитеров."""
     from db.models import PastryNomenclatureGroup
+
     async with async_session_factory() as session:
-        stmt = select(PastryNomenclatureGroup).order_by(PastryNomenclatureGroup.group_name)
+        stmt = select(PastryNomenclatureGroup).order_by(
+            PastryNomenclatureGroup.group_name
+        )
         rows = (await session.execute(stmt)).scalars().all()
-    return [{"id": str(r.id), "group_id": str(r.group_id), "group_name": r.group_name} for r in rows]
+    return [
+        {"id": str(r.id), "group_id": str(r.group_id), "group_name": r.group_name}
+        for r in rows
+    ]
 
 
 async def add_pastry_group(group_id: str, group_name: str) -> bool:
     """Добавить группу кондитеров."""
     from db.models import PastryNomenclatureGroup
+
     async with async_session_factory() as session:
-        stmt = select(PastryNomenclatureGroup).where(PastryNomenclatureGroup.group_id == UUID(group_id))
+        stmt = select(PastryNomenclatureGroup).where(
+            PastryNomenclatureGroup.group_id == UUID(group_id)
+        )
         existing = (await session.execute(stmt)).scalar_one_or_none()
         if existing:
             return False
-        new_group = PastryNomenclatureGroup(group_id=UUID(group_id), group_name=group_name)
+        new_group = PastryNomenclatureGroup(
+            group_id=UUID(group_id), group_name=group_name
+        )
         session.add(new_group)
         await session.commit()
     return True
@@ -546,8 +587,11 @@ async def add_pastry_group(group_id: str, group_name: str) -> bool:
 async def remove_pastry_group(pk: str) -> bool:
     """Удалить группу кондитеров по ID записи."""
     from db.models import PastryNomenclatureGroup
+
     async with async_session_factory() as session:
-        stmt = select(PastryNomenclatureGroup).where(PastryNomenclatureGroup.id == UUID(pk))
+        stmt = select(PastryNomenclatureGroup).where(
+            PastryNomenclatureGroup.id == UUID(pk)
+        )
         group = (await session.execute(stmt)).scalar_one_or_none()
         if not group:
             return False
@@ -559,27 +603,30 @@ async def remove_pastry_group(pk: str) -> bool:
 async def is_pastry_product(product_id: str) -> bool:
     """Проверить, относится ли товар к кондитерской группе (включая подгруппы)."""
     from db.models import Product, ProductGroup, PastryNomenclatureGroup
+
     async with async_session_factory() as session:
         # Получаем parent_id товара
         stmt = select(Product.parent_id).where(Product.id == UUID(product_id))
         current_group_id = (await session.execute(stmt)).scalar_one_or_none()
-        
+
         if not current_group_id:
             return False
-            
+
         # Получаем все группы кондитеров
         stmt_pastry = select(PastryNomenclatureGroup.group_id)
         pastry_group_ids = set((await session.execute(stmt_pastry)).scalars().all())
-        
+
         if not pastry_group_ids:
             return False
-            
+
         # Поднимаемся по иерархии групп
         while current_group_id:
             if current_group_id in pastry_group_ids:
                 return True
-                
-            stmt_parent = select(ProductGroup.parent_id).where(ProductGroup.id == current_group_id)
+
+            stmt_parent = select(ProductGroup.parent_id).where(
+                ProductGroup.id == current_group_id
+            )
             current_group_id = (await session.execute(stmt_parent)).scalar_one_or_none()
-            
+
         return False

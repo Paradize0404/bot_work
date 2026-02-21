@@ -24,10 +24,10 @@ engine = create_async_engine(
     pool_size=5,
     max_overflow=5,
     pool_pre_ping=True,
-    pool_recycle=300,           # переподключаться каждые 5 мин (Railway дропает idle)
+    pool_recycle=300,  # переподключаться каждые 5 мин (Railway дропает idle)
     connect_args={
         "server_settings": {
-            "jit": "off",       # быстрее планирование batch INSERT (без JIT-компиляции)
+            "jit": "off",  # быстрее планирование batch INSERT (без JIT-компиляции)
         },
     },
 )

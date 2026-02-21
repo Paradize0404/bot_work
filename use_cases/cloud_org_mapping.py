@@ -31,9 +31,11 @@ _CACHE_KEY = "cloud_org_mapping"
 
 async def _ensure_cache() -> dict[str, str]:
     """Обновить кеш из GSheet если просрочен."""
+
     async def _fetch() -> dict[str, str] | None:
         try:
             from adapters.google_sheets import read_cloud_org_mapping
+
             fresh = await read_cloud_org_mapping()
             if fresh:
                 logger.info("[%s] Кеш обновлён: %d привязок", LABEL, len(fresh))
@@ -50,7 +52,7 @@ async def _ensure_cache() -> dict[str, str]:
         _fetch,
         ttl_seconds=_CACHE_TTL,
         serializer=json.dumps,
-        deserializer=json.loads
+        deserializer=json.loads,
     )
     return data or {}
 
@@ -81,6 +83,7 @@ async def resolve_cloud_org_id_for_user(telegram_id: int) -> str | None:
     Получить cloud_org_id для пользователя (по его department_id из авторизации).
     """
     from use_cases.user_context import get_user_context
+
     ctx = await get_user_context(telegram_id)
     if not ctx or not ctx.department_id:
         return None

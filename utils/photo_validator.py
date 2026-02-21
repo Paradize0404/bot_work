@@ -19,6 +19,7 @@ from PIL import Image
 
 class QualityResult(NamedTuple):
     """Результат проверки качества."""
+
     is_good: bool
     issues: list[str]
     blur_score: float
@@ -39,7 +40,7 @@ MIN_HEIGHT = 300  # Минимальная высота
 def _validate_photo_sync(image_bytes: bytes) -> QualityResult:
     """Синхронная проверка качества фото (CPU-bound: PIL + OpenCV)."""
     img = Image.open(BytesIO(image_bytes))
-    img_np = np.array(img.convert('L'))  # Ч/б для анализа
+    img_np = np.array(img.convert("L"))  # Ч/б для анализа
 
     width, height = img.size
 
@@ -106,11 +107,11 @@ def get_quality_message(result: QualityResult) -> str:
     """
     if result.is_good:
         return "✅ Качество фото в порядке!"
-    
+
     message = "⚠️ Проблемы с качеством фото:\n\n"
     for issue in result.issues:
         message += f"• {issue}\n"
-    
+
     message += (
         "\nПожалуйста, переснимите фото:\n"
         "• Положите документ на ровную поверхность\n"
@@ -118,5 +119,5 @@ def get_quality_message(result: QualityResult) -> str:
         "• Держите камеру над документом\n"
         "• Убедитесь, что текст чёткий и читаемый"
     )
-    
+
     return message

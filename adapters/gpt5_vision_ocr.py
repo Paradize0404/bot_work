@@ -193,21 +193,21 @@ def _auto_rotate(image_bytes: bytes) -> bytes:
     """
     try:
         img = Image.open(io.BytesIO(image_bytes))
-        img = ImageOps.exif_transpose(img)   # убираем EXIF-поворот, если есть
+        img = ImageOps.exif_transpose(img)  # убираем EXIF-поворот, если есть
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=95)
         return buf.getvalue()
     except Exception:
-        return image_bytes                   # при ошибке возвращаем исходные байты
+        return image_bytes  # при ошибке возвращаем исходные байты
 
 
 async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
     """
     Распознать документ через GPT-5.2 Vision.
-    
+
     Args:
         image_bytes: Изображение в формате JPEG/PNG
-    
+
     Returns:
         Словарь с распознанными данными
     """
@@ -217,8 +217,8 @@ async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
     image_bytes = _auto_rotate(image_bytes)
 
     # Кодируем изображение в base64
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    
+    base64_image = base64.b64encode(image_bytes).decode("utf-8")
+
     # Вызываем GPT-5.2 Vision
     response = await client.chat.completions.create(
         model=OCR_MODEL,
@@ -236,47 +236,49 @@ async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
                             "2. Пиши названия товаров и имена ТОЧНО как видишь — букву за буквой.\n"
                             "3. НЕ заменяй непонятные слова похожими по смыслу — если не уверен, пиши то что видишь.\n"
                             "4. Количество items в JSON = количество строк в таблице (не больше, не меньше)."
-                        )
+                        ),
                     },
                     {
                         "type": "image_url",
                         "image_url": {
                             "url": f"data:image/jpeg;base64,{base64_image}",
-                            "detail": "high"
-                        }
-                    }
-                ]
-            }
+                            "detail": "high",
+                        },
+                    },
+                ],
+            },
         ],
-        max_completion_tokens=4096  # GPT-5.2 использует этот параметр
+        max_completion_tokens=4096,  # GPT-5.2 использует этот параметр
         # temperature не поддерживается (только 1 по умолчанию)
     )
-    
+
     # Парсим ответ
     content = response.choices[0].message.content.strip()
-    
+
     # Извлекаем JSON (если есть markdown-обёртка)
-    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+    json_match = re.search(r"\{.*\}", content, re.DOTALL)
     if json_match:
         content = json_match.group()
 
     try:
         result = json.loads(content)
     except json.JSONDecodeError as exc:
-        logger.error("[gpt5_ocr] GPT вернул невалидный JSON: %s … (%s)", content[:200], exc)
+        logger.error(
+            "[gpt5_ocr] GPT вернул невалидный JSON: %s … (%s)", content[:200], exc
+        )
         return {
             "error": "Не удалось распознать документ (невалидный JSON от GPT)",
             "_raw_response": content,
             "_model": OCR_MODEL,
         }
-    
+
     # Добавляем метаинформацию
-    result['_raw_response'] = content
-    result['_model'] = OCR_MODEL
-    result['_usage'] = {
-        'prompt_tokens': response.usage.prompt_tokens,
-        'completion_tokens': response.usage.completion_tokens,
-        'total_tokens': response.usage.total_tokens,
+    result["_raw_response"] = content
+    result["_model"] = OCR_MODEL
+    result["_usage"] = {
+        "prompt_tokens": response.usage.prompt_tokens,
+        "completion_tokens": response.usage.completion_tokens,
+        "total_tokens": response.usage.total_tokens,
     }
-    
+
     return result

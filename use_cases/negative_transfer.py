@@ -51,19 +51,23 @@ _SYNC_LOCK = asyncio.Lock()
 # чтобы подхватывать обновлённые env-переменные без рестарта)
 # ═══════════════════════════════════════════════════════
 
+
 def _cfg_source_prefix() -> str:
     import config
+
     return getattr(config, "NEGATIVE_TRANSFER_SOURCE_PREFIX", "Хоз. товары")
 
 
 def _cfg_target_prefixes() -> list[str]:
     import config
+
     raw = getattr(config, "NEGATIVE_TRANSFER_TARGET_PREFIXES", "Бар,Кухня")
     return [p.strip() for p in raw.split(",") if p.strip()]
 
 
 def _cfg_product_group() -> str:
     import config
+
     return getattr(config, "NEGATIVE_TRANSFER_PRODUCT_GROUP", "Расходные материалы")
 
 
@@ -87,7 +91,7 @@ def _parse_store_name(name: str) -> tuple[str, str] | None:
 
 
 def _build_restaurant_map(
-    stores: list[tuple[str, str]],   # [(id_str, name), ...]
+    stores: list[tuple[str, str]],  # [(id_str, name), ...]
     source_prefix: str,
     target_prefixes: list[str],
 ) -> dict[str, dict]:
@@ -128,12 +132,17 @@ def _build_restaurant_map(
         elif source:
             logger.debug(
                 "[%s] Ресторан '%s': источник '%s' есть, целевых складов не найдено — пропуск",
-                LABEL, restaurant, source[1],
+                LABEL,
+                restaurant,
+                source[1],
             )
         elif targets:
             logger.debug(
                 "[%s] Ресторан '%s': есть цели %s, источника '%s' нет — пропуск",
-                LABEL, restaurant, [t[1] for t in targets], source_prefix,
+                LABEL,
+                restaurant,
+                [t[1] for t in targets],
+                source_prefix,
             )
 
     return result
@@ -142,6 +151,7 @@ def _build_restaurant_map(
 # ═══════════════════════════════════════════════════════
 # Загрузка данных из БД
 # ═══════════════════════════════════════════════════════
+
 
 async def _load_stores() -> list[tuple[str, str]]:
     """Загрузить все активные склады из БД. Возвращает [(id_str, name), ...]."""
@@ -180,6 +190,7 @@ async def _load_products_by_name(names: set[str]) -> dict[str, dict]:
 # Получение остатков через OLAP
 # ═══════════════════════════════════════════════════════
 
+
 async def _fetch_balances_today() -> list[dict[str, Any]]:
     """Получить остатки по всем складам на сегодня через OLAP v1 GET."""
     today = datetime.now().strftime("%d.%m.%Y")
@@ -189,6 +200,7 @@ async def _fetch_balances_today() -> list[dict[str, Any]]:
 # ═══════════════════════════════════════════════════════
 # Фильтрация отрицательных позиций
 # ═══════════════════════════════════════════════════════
+
 
 def _collect_negative_items(
     rows: list[dict],
@@ -217,16 +229,19 @@ def _collect_negative_items(
         product_name = (row.get("Product.Name") or "").strip()
         if not product_name:
             continue
-        result[store_name].append({
-            "product_name": product_name,
-            "amount": abs(amount),
-        })
+        result[store_name].append(
+            {
+                "product_name": product_name,
+                "amount": abs(amount),
+            }
+        )
     return dict(result)
 
 
 # ═══════════════════════════════════════════════════════
 # Основная логика
 # ═══════════════════════════════════════════════════════
+
 
 async def run_negative_transfer_all_restaurants(
     triggered_by: str = "scheduler",
@@ -249,16 +264,20 @@ async def run_negative_transfer_all_restaurants(
     t0 = time.monotonic()
     logger.info(
         "[%s] ===== Старт авто-перемещения расх.мат. (triggered_by=%s) =====",
-        LABEL, triggered_by,
+        LABEL,
+        triggered_by,
     )
 
-    source_prefix   = _cfg_source_prefix()
+    source_prefix = _cfg_source_prefix()
     target_prefixes = _cfg_target_prefixes()
-    product_group   = _cfg_product_group()
+    product_group = _cfg_product_group()
 
     logger.info(
         "[%s] Конфиг: source_prefix=%r, target_prefixes=%r, product_group=%r",
-        LABEL, source_prefix, target_prefixes, product_group,
+        LABEL,
+        source_prefix,
+        target_prefixes,
+        product_group,
     )
 
     result_data: dict[str, Any] = {}
@@ -281,7 +300,9 @@ async def run_negative_transfer_all_restaurants(
 
         logger.info(
             "[%s] Заведений для перемещения: %d — %s",
-            LABEL, len(restaurant_map), ", ".join(sorted(restaurant_map.keys())),
+            LABEL,
+            len(restaurant_map),
+            ", ".join(sorted(restaurant_map.keys())),
         )
 
         # ── 2. Получить остатки через OLAP (один запрос для всех) ──
@@ -289,7 +310,10 @@ async def run_negative_transfer_all_restaurants(
         t_olap = time.monotonic()
         all_rows = await _fetch_balances_today()
         logger.info(
-            "[%s] OLAP: %d строк за %.1f сек", LABEL, len(all_rows), time.monotonic() - t_olap,
+            "[%s] OLAP: %d строк за %.1f сек",
+            LABEL,
+            len(all_rows),
+            time.monotonic() - t_olap,
         )
 
         # ── 3. Собрать целевые склады всех ресторанов ──
@@ -299,12 +323,15 @@ async def run_negative_transfer_all_restaurants(
                 all_target_names.add(tname)
 
         # ── 4. Фильтровать отрицательные позиции по расх.материалам ──
-        negative_by_store = _collect_negative_items(all_rows, all_target_names, product_group)
+        negative_by_store = _collect_negative_items(
+            all_rows, all_target_names, product_group
+        )
 
         if not negative_by_store:
             logger.info(
                 "[%s] Нет отрицательных остатков группы '%s' ни на одном целевом складе — нечего перемещать",
-                LABEL, product_group,
+                LABEL,
+                product_group,
             )
             _write_sync_log(started, "success", 0, triggered_by)
             return {"status": "nothing_to_transfer", "restaurants": {}}
@@ -312,7 +339,9 @@ async def run_negative_transfer_all_restaurants(
         total_negative = sum(len(v) for v in negative_by_store.values())
         logger.info(
             "[%s] Отрицательных позиций: %d по %d складам",
-            LABEL, total_negative, len(negative_by_store),
+            LABEL,
+            total_negative,
+            len(negative_by_store),
         )
 
         # ── 5. Загрузить product UUID + main_unit из БД ──
@@ -326,7 +355,9 @@ async def run_negative_transfer_all_restaurants(
         if missing_in_db:
             logger.warning(
                 "[%s] Не найдены в БД %d товаров (пропускаем): %s",
-                LABEL, len(missing_in_db), ", ".join(sorted(missing_in_db)),
+                LABEL,
+                len(missing_in_db),
+                ", ".join(sorted(missing_in_db)),
             )
 
         # ── 6. Для каждого ресторана: отправить перемещения ──
@@ -341,7 +372,9 @@ async def run_negative_transfer_all_restaurants(
                 if not negative_items:
                     logger.debug(
                         "[%s] %s: на складе '%s' отрицательных позиций нет — пропуск",
-                        LABEL, restaurant, target_name,
+                        LABEL,
+                        restaurant,
+                        target_name,
                     )
                     continue
 
@@ -356,20 +389,25 @@ async def run_negative_transfer_all_restaurants(
                     if not pdata.get("main_unit"):
                         logger.warning(
                             "[%s] '%s' — нет main_unit в БД, пропускаем",
-                            LABEL, pname,
+                            LABEL,
+                            pname,
                         )
                         rest_result["skipped_products"].append(pname)
                         continue
-                    transfer_items.append({
-                        "productId":     pdata["id"],
-                        "amount":        round(item["amount"], 6),
-                        "measureUnitId": pdata["main_unit"],
-                    })
+                    transfer_items.append(
+                        {
+                            "productId": pdata["id"],
+                            "amount": round(item["amount"], 6),
+                            "measureUnitId": pdata["main_unit"],
+                        }
+                    )
 
                 if not transfer_items:
                     logger.info(
                         "[%s] %s → %s: все позиции пропущены (нет в БД / нет unit)",
-                        LABEL, source_name, target_name,
+                        LABEL,
+                        source_name,
+                        target_name,
                     )
                     continue
 
@@ -379,7 +417,10 @@ async def run_negative_transfer_all_restaurants(
                 )
                 logger.info(
                     "[%s] %s → %s: %d позиций: %s",
-                    LABEL, source_name, target_name, len(transfer_items),
+                    LABEL,
+                    source_name,
+                    target_name,
+                    len(transfer_items),
                     ", ".join(
                         f"{it.get('productName', it['productId'][:8])}×{it['amount']}"
                         for it in transfer_items[:5]
@@ -389,41 +430,53 @@ async def run_negative_transfer_all_restaurants(
                 try:
                     doc = {
                         "dateIncoming": now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
-                        "status":       "PROCESSED",
-                        "comment":      comment,
-                        "storeFromId":  source_id,
-                        "storeToId":    target_id,
-                        "items":        transfer_items,
+                        "status": "PROCESSED",
+                        "comment": comment,
+                        "storeFromId": source_id,
+                        "storeToId": target_id,
+                        "items": transfer_items,
                     }
                     await iiko_api.send_internal_transfer(doc)
-                    rest_result["transfers"].append({
-                        "from":  source_name,
-                        "to":    target_name,
-                        "count": len(transfer_items),
-                    })
+                    rest_result["transfers"].append(
+                        {
+                            "from": source_name,
+                            "to": target_name,
+                            "count": len(transfer_items),
+                        }
+                    )
                     total_transfers += 1
                     logger.info(
                         "[%s] ✅ Перемещение отправлено: %s → %s (%d поз.)",
-                        LABEL, source_name, target_name, len(transfer_items),
+                        LABEL,
+                        source_name,
+                        target_name,
+                        len(transfer_items),
                     )
 
                 except Exception as exc:
                     logger.exception(
                         "[%s] ❌ Ошибка перемещения %s → %s: %s",
-                        LABEL, source_name, target_name, exc,
+                        LABEL,
+                        source_name,
+                        target_name,
+                        exc,
                     )
-                    rest_result["transfers"].append({
-                        "from":  source_name,
-                        "to":    target_name,
-                        "count": len(transfer_items),
-                        "error": str(exc)[:300],
-                    })
+                    rest_result["transfers"].append(
+                        {
+                            "from": source_name,
+                            "to": target_name,
+                            "count": len(transfer_items),
+                            "error": str(exc)[:300],
+                        }
+                    )
 
         # ── 7. SyncLog ──
         elapsed = time.monotonic() - t0
         logger.info(
             "[%s] ===== Завершено: %d перемещений за %.1f сек =====",
-            LABEL, total_transfers, elapsed,
+            LABEL,
+            total_transfers,
+            elapsed,
         )
         _write_sync_log(started, "success", total_transfers, triggered_by)
 
@@ -443,7 +496,9 @@ def _write_sync_log(
     error: str | None = None,
 ) -> None:
     """Записать запись в iiko_sync_log без await (создаём task)."""
-    asyncio.create_task(_async_write_sync_log(started, status, records, triggered_by, error))
+    asyncio.create_task(
+        _async_write_sync_log(started, status, records, triggered_by, error)
+    )
 
 
 async def _async_write_sync_log(
@@ -455,15 +510,17 @@ async def _async_write_sync_log(
 ) -> None:
     try:
         async with async_session_factory() as session:
-            session.add(SyncLog(
-                entity_type=LABEL,
-                started_at=started,
-                finished_at=now_kgd(),
-                status=status,
-                records_synced=records,
-                triggered_by=triggered_by,
-                error_message=error,
-            ))
+            session.add(
+                SyncLog(
+                    entity_type=LABEL,
+                    started_at=started,
+                    finished_at=now_kgd(),
+                    status=status,
+                    records_synced=records,
+                    triggered_by=triggered_by,
+                    error_message=error,
+                )
+            )
             await session.commit()
     except Exception:
         logger.exception("[%s] Не удалось записать SyncLog", LABEL)
@@ -473,6 +530,7 @@ async def _async_write_sync_log(
 # Публичный API — с Lock
 # ═══════════════════════════════════════════════════════
 
+
 async def run_negative_transfer_once(
     triggered_by: str = "scheduler",
 ) -> dict[str, Any]:
@@ -481,7 +539,9 @@ async def run_negative_transfer_once(
     Если уже запущено — немедленно возвращает {"status": "locked"}.
     """
     if _SYNC_LOCK.locked():
-        logger.warning("[%s] Уже запущено, пропускаю (triggered_by=%s)", LABEL, triggered_by)
+        logger.warning(
+            "[%s] Уже запущено, пропускаю (triggered_by=%s)", LABEL, triggered_by
+        )
         return {"status": "locked"}
 
     async with _SYNC_LOCK:

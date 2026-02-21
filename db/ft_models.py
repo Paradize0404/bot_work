@@ -23,54 +23,66 @@ from db.models import Base, _utcnow  # noqa: F401 — _utcnow used in column def
 class FTSyncMixin:
     """Общие поля для всех таблиц FinTablo."""
 
-    synced_at = Column(DateTime, default=_utcnow, onupdate=_utcnow,
-                       nullable=False, comment="Время последней синхронизации")
-    raw_json = Column(JSONB, nullable=True,
-                      comment="Полный JSON ответа из FinTablo (для дебага)")
+    synced_at = Column(
+        DateTime,
+        default=_utcnow,
+        onupdate=_utcnow,
+        nullable=False,
+        comment="Время последней синхронизации",
+    )
+    raw_json = Column(
+        JSONB, nullable=True, comment="Полный JSON ответа из FinTablo (для дебага)"
+    )
 
 
 # ─────────────────────────────────────────────────────
 # 1. Статьи ДДС (/v1/category)
 # ─────────────────────────────────────────────────────
 
+
 class FTCategory(Base, FTSyncMixin):
     """Статья ДДС."""
+
     __tablename__ = "ft_category"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=False,
-                comment="ID из FinTablo")
+    id = Column(
+        BigInteger, primary_key=True, autoincrement=False, comment="ID из FinTablo"
+    )
     name = Column(String(500), nullable=True)
-    parent_id = Column(BigInteger, nullable=True, index=True,
-                       comment="ID родительской статьи")
-    group = Column(String(50), nullable=True,
-                   comment="income / outcome / transfer")
-    type = Column(String(50), nullable=True,
-                  comment="operating / financial / investment")
-    pnl_type = Column(String(100), nullable=True,
-                      comment="Тип дохода/расхода для ОПиУ")
+    parent_id = Column(
+        BigInteger, nullable=True, index=True, comment="ID родительской статьи"
+    )
+    group = Column(String(50), nullable=True, comment="income / outcome / transfer")
+    type = Column(
+        String(50), nullable=True, comment="operating / financial / investment"
+    )
+    pnl_type = Column(String(100), nullable=True, comment="Тип дохода/расхода для ОПиУ")
     description = Column(Text, nullable=True)
-    is_built_in = Column(Integer, nullable=True,
-                         comment="1 = системная статья")
+    is_built_in = Column(Integer, nullable=True, comment="1 = системная статья")
 
 
 # ─────────────────────────────────────────────────────
 # 2. Счета (/v1/moneybag)
 # ─────────────────────────────────────────────────────
 
+
 class FTMoneybag(Base, FTSyncMixin):
     """Счёт ДДС."""
+
     __tablename__ = "ft_moneybag"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
     name = Column(String(500), nullable=True)
-    type = Column(String(50), nullable=True,
-                  comment="nal / bank / card / electron / acquiring")
+    type = Column(
+        String(50), nullable=True, comment="nal / bank / card / electron / acquiring"
+    )
     number = Column(String(200), nullable=True, comment="Номер банковского счёта")
     currency = Column(String(10), nullable=True, comment="RUB, USD, EUR...")
     balance = Column(Numeric(15, 2), nullable=True, comment="Текущий остаток")
     surplus = Column(Numeric(15, 2), nullable=True, comment="Зафиксированный остаток")
-    surplus_timestamp = Column(BigInteger, nullable=True,
-                               comment="Unix timestamp зафикс. остатка")
+    surplus_timestamp = Column(
+        BigInteger, nullable=True, comment="Unix timestamp зафикс. остатка"
+    )
     group_id = Column(BigInteger, nullable=True, index=True, comment="ID группы счетов")
     archived = Column(Integer, nullable=True, comment="1 = архивный")
     hide_in_total = Column(Integer, nullable=True, comment="1 = не учитывать в итого")
@@ -81,15 +93,18 @@ class FTMoneybag(Base, FTSyncMixin):
 # 3. Контрагенты (/v1/partner)
 # ─────────────────────────────────────────────────────
 
+
 class FTPartner(Base, FTSyncMixin):
     """Контрагент."""
+
     __tablename__ = "ft_partner"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
     name = Column(String(500), nullable=True)
     inn = Column(String(50), nullable=True, comment="ИНН")
-    group_id = Column(BigInteger, nullable=True, index=True,
-                      comment="ID группы контрагентов")
+    group_id = Column(
+        BigInteger, nullable=True, index=True, comment="ID группы контрагентов"
+    )
     comment = Column(Text, nullable=True)
 
 
@@ -97,8 +112,10 @@ class FTPartner(Base, FTSyncMixin):
 # 4. Направления (/v1/direction)
 # ─────────────────────────────────────────────────────
 
+
 class FTDirection(Base, FTSyncMixin):
     """Направление (проект)."""
+
     __tablename__ = "ft_direction"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
@@ -112,8 +129,10 @@ class FTDirection(Base, FTSyncMixin):
 # 5. Группы счетов (/v1/moneybag-group)
 # ─────────────────────────────────────────────────────
 
+
 class FTMoneybagGroup(Base, FTSyncMixin):
     """Группа счетов."""
+
     __tablename__ = "ft_moneybag_group"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
@@ -125,8 +144,10 @@ class FTMoneybagGroup(Base, FTSyncMixin):
 # 6. Товары (/v1/goods)
 # ─────────────────────────────────────────────────────
 
+
 class FTGoods(Base, FTSyncMixin):
     """Товар."""
+
     __tablename__ = "ft_goods"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
@@ -142,8 +163,10 @@ class FTGoods(Base, FTSyncMixin):
 # 7. Закупки (/v1/obtaining)
 # ─────────────────────────────────────────────────────
 
+
 class FTObtaining(Base, FTSyncMixin):
     """Закупка товара."""
+
     __tablename__ = "ft_obtaining"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
@@ -162,24 +185,29 @@ class FTObtaining(Base, FTSyncMixin):
 # 8. Услуги (/v1/job)
 # ─────────────────────────────────────────────────────
 
+
 class FTJob(Base, FTSyncMixin):
     """Услуга."""
+
     __tablename__ = "ft_job"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
     name = Column(String(500), nullable=True)
     cost = Column(Numeric(15, 2), nullable=True, comment="Стоимость")
     comment = Column(Text, nullable=True)
-    direction_id = Column(BigInteger, nullable=True, index=True,
-                          comment="ID направления")
+    direction_id = Column(
+        BigInteger, nullable=True, index=True, comment="ID направления"
+    )
 
 
 # ─────────────────────────────────────────────────────
 # 9. Сделки (/v1/deal)
 # ─────────────────────────────────────────────────────
 
+
 class FTDeal(Base, FTSyncMixin):
     """Сделка."""
+
     __tablename__ = "ft_deal"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
@@ -190,8 +218,9 @@ class FTDeal(Base, FTSyncMixin):
     custom_cost_price = Column(Numeric(15, 2), nullable=True, comment="Себестоимость")
     status_id = Column(BigInteger, nullable=True, index=True, comment="ID статуса")
     partner_id = Column(BigInteger, nullable=True, index=True)
-    responsible_id = Column(BigInteger, nullable=True, index=True,
-                            comment="ID ответственного")
+    responsible_id = Column(
+        BigInteger, nullable=True, index=True, comment="ID ответственного"
+    )
     comment = Column(Text, nullable=True)
     start_date = Column(String(20), nullable=True)
     end_date = Column(String(20), nullable=True)
@@ -204,8 +233,10 @@ class FTDeal(Base, FTSyncMixin):
 # 10. Статусы обязательств (/v1/obligation-status)
 # ─────────────────────────────────────────────────────
 
+
 class FTObligationStatus(Base, FTSyncMixin):
     """Статус обязательства."""
+
     __tablename__ = "ft_obligation_status"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
@@ -216,8 +247,10 @@ class FTObligationStatus(Base, FTSyncMixin):
 # 11. Обязательства (/v1/obligation)
 # ─────────────────────────────────────────────────────
 
+
 class FTObligation(Base, FTSyncMixin):
     """Обязательство."""
+
     __tablename__ = "ft_obligation"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
@@ -238,18 +271,21 @@ class FTObligation(Base, FTSyncMixin):
 # 12. Статьи ПиУ (/v1/pnl-category)
 # ─────────────────────────────────────────────────────
 
+
 class FTPnlCategory(Base, FTSyncMixin):
     """Статья Прибылей и Убытков."""
+
     __tablename__ = "ft_pnl_category"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
     name = Column(String(500), nullable=True)
-    type = Column(String(50), nullable=True,
-                  comment="income / costprice / outcome / refund")
-    pnl_type = Column(String(100), nullable=True,
-                      comment="Категория ОПиУ")
-    category_id = Column(BigInteger, nullable=True, index=True,
-                         comment="ID связанной статьи ДДС")
+    type = Column(
+        String(50), nullable=True, comment="income / costprice / outcome / refund"
+    )
+    pnl_type = Column(String(100), nullable=True, comment="Категория ОПиУ")
+    category_id = Column(
+        BigInteger, nullable=True, index=True, comment="ID связанной статьи ДДС"
+    )
     comment = Column(Text, nullable=True)
 
 
@@ -257,14 +293,17 @@ class FTPnlCategory(Base, FTSyncMixin):
 # 13. Сотрудники (/v1/employees)
 # ─────────────────────────────────────────────────────
 
+
 class FTEmployee(Base, FTSyncMixin):
     """Сотрудник FinTablo."""
+
     __tablename__ = "ft_employee"
 
     id = Column(BigInteger, primary_key=True, autoincrement=False)
     name = Column(String(500), nullable=True)
-    date = Column(String(20), nullable=True,
-                  comment="Дата изменения начисления (MM.yyyy)")
+    date = Column(
+        String(20), nullable=True, comment="Дата изменения начисления (MM.yyyy)"
+    )
     currency = Column(String(10), nullable=True)
     regularfix = Column(Numeric(15, 2), nullable=True, comment="Фикс зарплата")
     regularfee = Column(Numeric(15, 2), nullable=True, comment="Страховые взносы")

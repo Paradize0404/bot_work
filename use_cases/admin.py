@@ -24,12 +24,13 @@ logger = logging.getLogger(__name__)
 # Проверка админов — делегируем в permissions (GSheet)
 # ═══════════════════════════════════════════════════════
 
+
 async def alert_admins(bot, message: str) -> None:
     """Отправить алерт всем сисадминам. Fire-and-forget."""
     from use_cases import permissions as perm_uc
-    
+
     sys_admins = await perm_uc.get_sysadmin_ids()
-        
+
     for admin_id in sys_admins:
         try:
             await bot.send_message(admin_id, f"🚨 ALERT\n\n{message[:4000]}")
@@ -63,6 +64,9 @@ async def get_employees_with_telegram() -> list[dict]:
         }
         for emp in employees
     ]
-    logger.info("[admin] Сотрудников с telegram_id: %d (%.2f сек)",
-                len(items), time.monotonic() - t0)
+    logger.info(
+        "[admin] Сотрудников с telegram_id: %d (%.2f сек)",
+        len(items),
+        time.monotonic() - t0,
+    )
     return items

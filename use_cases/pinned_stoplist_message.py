@@ -35,6 +35,7 @@ def _compute_hash(text: str) -> str:
 # CRUD для StoplistMessage
 # ═══════════════════════════════════════════════════════
 
+
 async def _get_msg(chat_id: int) -> StoplistMessage | None:
     async with async_session_factory() as session:
         result = await session.execute(
@@ -53,11 +54,13 @@ async def _upsert_msg(chat_id: int, message_id: int, snapshot_hash: str) -> None
             row.message_id = message_id
             row.snapshot_hash = snapshot_hash
         else:
-            session.add(StoplistMessage(
-                chat_id=chat_id,
-                message_id=message_id,
-                snapshot_hash=snapshot_hash,
-            ))
+            session.add(
+                StoplistMessage(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    snapshot_hash=snapshot_hash,
+                )
+            )
         await session.commit()
 
 
@@ -72,6 +75,7 @@ async def _delete_msg(chat_id: int) -> None:
 # ═══════════════════════════════════════════════════════
 # Обновление сообщения для одного пользователя
 # ═══════════════════════════════════════════════════════
+
 
 async def _update_single(
     bot: Any,
@@ -102,7 +106,9 @@ async def _update_single(
             # Сообщение уже удалено пользователем или недоступно
             logger.debug(
                 "[%s] delete не удался chat_id=%d (msg=%d) — продолжаю",
-                LABEL, chat_id, existing.message_id,
+                LABEL,
+                chat_id,
+                existing.message_id,
             )
         await _delete_msg(chat_id)
 
@@ -130,6 +136,7 @@ async def _update_single(
 # (при авторизации / смене ресторана)
 # ═══════════════════════════════════════════════════════
 
+
 async def send_stoplist_for_user(bot: Any, telegram_id: int) -> bool:
     """
     Получить текущий стоп-лист и отправить/обновить пользователю.
@@ -141,9 +148,11 @@ async def send_stoplist_for_user(bot: Any, telegram_id: int) -> bool:
     try:
         # Определяем cloud_org_id для пользователя (по его подразделению)
         from use_cases.cloud_org_mapping import resolve_cloud_org_id_for_user
+
         user_org_id = await resolve_cloud_org_id_for_user(telegram_id)
 
         from use_cases.stoplist import fetch_stoplist_items, format_full_stoplist
+
         items = await fetch_stoplist_items(org_id=user_org_id)
         text = format_full_stoplist(items)
         text_hash = _compute_hash(text)
@@ -151,8 +160,11 @@ async def send_stoplist_for_user(bot: Any, telegram_id: int) -> bool:
         ok = await _update_single(bot, telegram_id, text, text_hash, force=True)
         logger.info(
             "[%s] tg:%d → %s (items=%d, %.1f сек)",
-            LABEL, telegram_id, "sent" if ok else "failed",
-            len(items), time.monotonic() - t0,
+            LABEL,
+            telegram_id,
+            "sent" if ok else "failed",
+            len(items),
+            time.monotonic() - t0,
         )
         return ok
     except Exception:
@@ -163,6 +175,7 @@ async def send_stoplist_for_user(bot: Any, telegram_id: int) -> bool:
 # ═══════════════════════════════════════════════════════
 # Массовое обновление (при StopListUpdate вебхуке)
 # ═══════════════════════════════════════════════════════
+
 
 async def update_all_stoplist_messages(bot: Any, text: str) -> int:
     """
@@ -178,6 +191,7 @@ async def update_all_stoplist_messages(bot: Any, text: str) -> int:
     text_hash = _compute_hash(text)
 
     from use_cases.permissions import get_stoplist_subscriber_ids
+
     user_ids = await get_stoplist_subscriber_ids()
     if not user_ids:
         # Bootstrap: никто не отмечен — шлём всем
@@ -196,5 +210,7 @@ async def update_all_stoplist_messages(bot: Any, text: str) -> int:
             updated += 1
 
     elapsed = time.monotonic() - t0
-    logger.info("[%s] Обновлено %d/%d за %.1f сек", LABEL, updated, len(user_ids), elapsed)
+    logger.info(
+        "[%s] Обновлено %d/%d за %.1f сек", LABEL, updated, len(user_ids), elapsed
+    )
     return updated

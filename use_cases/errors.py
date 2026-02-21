@@ -8,6 +8,7 @@ _TRANSIENT = (
     httpx.PoolTimeout,
 )
 
+
 def is_transient(exc: Exception) -> bool:
     """Определяет, является ли ошибка транзиентной (стоит retry)."""
     if isinstance(exc, _TRANSIENT):

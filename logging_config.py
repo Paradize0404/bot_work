@@ -59,6 +59,7 @@ class TelegramAlertHandler(logging.Handler):
             # Технические алерты — только сисадминам (🔧 Сис.Админ).
             # Если сисадмин не назначен — fallback на обычных админов.
             from use_cases.permissions import get_sysadmin_ids
+
             recipient_ids = await get_sysadmin_ids()
             for aid in recipient_ids[:5]:  # макс 5 получателей чтобы не спамить
                 try:
@@ -119,8 +120,12 @@ def setup_logging() -> None:
     logging.getLogger("aiogram.event").setLevel(logging.INFO)
     logging.getLogger("aiogram.dispatcher").setLevel(logging.INFO)
     logging.getLogger("aiogram.middlewares").setLevel(logging.WARNING)
-    logging.getLogger("aiogram.session").setLevel(logging.INFO)   # видим ошибки HTTP к Telegram
+    logging.getLogger("aiogram.session").setLevel(
+        logging.INFO
+    )  # видим ошибки HTTP к Telegram
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("aiohttp.access").setLevel(logging.INFO)
 
-    logging.info("Logging initialised  level=%s  file=%s", LOG_LEVEL, log_dir / "app.log")
+    logging.info(
+        "Logging initialised  level=%s  file=%s", LOG_LEVEL, log_dir / "app.log"
+    )

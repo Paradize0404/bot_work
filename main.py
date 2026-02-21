@@ -29,7 +29,11 @@ logger = logging.getLogger(__name__)
 
 def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from config import TELEGRAM_BOT_TOKEN
-    from bot.global_commands import router as global_router, NavResetMiddleware, PermissionMiddleware
+    from bot.global_commands import (
+        router as global_router,
+        NavResetMiddleware,
+        PermissionMiddleware,
+    )
     from bot.handlers import router
     from bot.writeoff_handlers import router as writeoff_router
     from bot.min_stock_handlers import router as min_stock_router
@@ -51,12 +55,12 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     # Outer-middleware: централизованная проверка прав (permission_map.py)
     dp.message.outer_middleware(PermissionMiddleware())
     dp.callback_query.outer_middleware(PermissionMiddleware())
-    dp.include_router(global_router)      # /cancel — первый, перехватывает всегда
+    dp.include_router(global_router)  # /cancel — первый, перехватывает всегда
     dp.include_router(writeoff_router)
     dp.include_router(min_stock_router)
     dp.include_router(invoice_router)
     dp.include_router(request_router)
-    dp.include_router(document_router)    # OCR распознавание накладных
+    dp.include_router(document_router)  # OCR распознавание накладных
     dp.include_router(pastry_router)
     dp.include_router(router)
 
@@ -70,30 +74,37 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
         if isinstance(exception, (TelegramNetworkError, TelegramServerError)):
             logger.warning(
                 "[error-handler] %s suppressed after retries: %s",
-                type(exception).__name__, exception,
+                type(exception).__name__,
+                exception,
             )
             return True  # mark handled, don't crash
-        
+
         # Логируем с маскировкой секретов
         error_msg = mask_secrets(str(exception))
         logger.exception("[error-handler] Unhandled exception: %s", error_msg)
-        
+
         # Отправляем алерт админам
         try:
-            await alert_admins(bot, f"Unhandled exception:\n{type(exception).__name__}: {error_msg}")
+            await alert_admins(
+                bot, f"Unhandled exception:\n{type(exception).__name__}: {error_msg}"
+            )
         except Exception:
             pass
-            
+
         # Пытаемся ответить пользователю
         try:
             if event.update.message:
-                await event.update.message.answer("⚠️ Произошла техническая ошибка. Администраторы уже уведомлены.")
+                await event.update.message.answer(
+                    "⚠️ Произошла техническая ошибка. Администраторы уже уведомлены."
+                )
             elif event.update.callback_query:
-                await event.update.callback_query.answer("⚠️ Техническая ошибка", show_alert=True)
+                await event.update.callback_query.answer(
+                    "⚠️ Техническая ошибка", show_alert=True
+                )
         except Exception:
             pass
-            
-        return True # mark handled
+
+        return True  # mark handled
 
     return bot, dp
 
@@ -101,6 +112,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
 async def _check_db() -> None:
     from db.engine import engine
     from sqlalchemy import text
+
     logger.info("Checking DB connection...")
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
@@ -110,6 +122,7 @@ async def _check_db() -> None:
 async def _init_db() -> None:
     """Инициализация БД: создание таблиц + миграции (идемпотентно)."""
     from db.init_db import create_tables
+
     logger.info("Initializing database (tables + migrations)...")
     await create_tables()
     logger.info("Database initialized OK")
@@ -119,6 +132,7 @@ async def _check_iiko() -> None:
     """Startup self-check: iiko API доступен."""
     try:
         from iiko_auth import get_auth_token
+
         token = await get_auth_token()
         logger.info("iiko API OK (token len=%d)", len(token))
     except Exception:
@@ -129,6 +143,7 @@ async def _check_fintablo() -> None:
     """Startup self-check: FinTablo API доступен."""
     try:
         from adapters.fintablo_api import fetch_categories
+
         cats = await fetch_categories()
         logger.info("FinTablo API OK (%d categories)", len(cats))
     except Exception:
@@ -140,20 +155,25 @@ async def _check_staleness() -> None:
     try:
         from db.engine import async_session_factory
         from sqlalchemy import text
+
         async with async_session_factory() as session:
             row = await session.execute(
                 text("SELECT MAX(started_at) FROM iiko_sync_log")
             )
             last_sync = row.scalar()
             if last_sync is None:
-                logger.warning("[startup] SyncLog пуст — синхронизация никогда не запускалась!")
+                logger.warning(
+                    "[startup] SyncLog пуст — синхронизация никогда не запускалась!"
+                )
                 return
             from use_cases._helpers import now_kgd
+
             age_hours = (now_kgd() - last_sync).total_seconds() / 3600
             if age_hours > 24:
                 logger.warning(
                     "[startup] ⚠️ Последняя синхронизация %.1f ч назад (>24ч)! last=%s",
-                    age_hours, last_sync,
+                    age_hours,
+                    last_sync,
                 )
             else:
                 logger.info("[startup] Last sync %.1fч ago — OK", age_hours)
@@ -164,24 +184,31 @@ async def _check_staleness() -> None:
 async def _warmup_caches() -> None:
     """Прогрев кешей при старте бота: permissions + user_context."""
     import time as _time
+
     t0 = _time.monotonic()
     try:
         from use_cases.permissions import _ensure_cache
+
         await _ensure_cache()
 
         from use_cases.user_context import get_user_context
         from db.engine import async_session_factory
         from sqlalchemy import text
+
         async with async_session_factory() as session:
             rows = await session.execute(
-                text("SELECT telegram_id FROM iiko_employee WHERE telegram_id IS NOT NULL")
+                text(
+                    "SELECT telegram_id FROM iiko_employee WHERE telegram_id IS NOT NULL"
+                )
             )
             tg_ids = [r[0] for r in rows]
         for tg_id in tg_ids:
             await get_user_context(tg_id)
 
         elapsed = _time.monotonic() - t0
-        logger.info("[startup] Cache warmup done: %d users, %.1fs", len(tg_ids), elapsed)
+        logger.info(
+            "[startup] Cache warmup done: %d users, %.1fs", len(tg_ids), elapsed
+        )
     except Exception:
         logger.warning("[startup] Cache warmup failed (non-critical)", exc_info=True)
 
@@ -197,6 +224,7 @@ async def _cleanup() -> None:
     # Pending writeoffs теперь в PostgreSQL — переживают рестарт, логировать не нужно
     try:
         from use_cases.pending_writeoffs import all_pending
+
         pending = await all_pending()
         if pending:
             logger.info(
@@ -217,6 +245,7 @@ async def _cleanup() -> None:
     # Закрываем Redis-соединение FSM storage
     try:
         from aiogram.fsm.storage.redis import RedisStorage
+
         # dp.storage уже может быть закрыт диспатчером, suppress ошибки
     except Exception:
         pass
@@ -228,6 +257,7 @@ async def _cleanup() -> None:
 async def on_startup(bot: Bot) -> None:
     # Привязываем бот к Telegram-оповещениям об ошибках
     from logging_config import get_telegram_handler
+
     get_telegram_handler().attach_bot(bot)
 
     # Инициализация БД: создание таблиц + миграции (идемпотентно)
@@ -246,6 +276,7 @@ async def on_startup(bot: Bot) -> None:
     await _warmup_caches()
 
     from config import WEBHOOK_URL, WEBHOOK_PATH, WEBHOOK_SECRET
+
     url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
     logger.info("Setting webhook → %s", url)
     if not url.startswith("https://"):
@@ -272,20 +303,31 @@ async def on_startup(bot: Bot) -> None:
                     ok += 1
                 except Exception:
                     logger.warning("[startup] iikoCloud webhook failed for org %s", oid)
-            logger.info("[startup] iikoCloud webhook registered for %d/%d orgs → %s", ok, len(org_ids), wh_url)
+            logger.info(
+                "[startup] iikoCloud webhook registered for %d/%d orgs → %s",
+                ok,
+                len(org_ids),
+                wh_url,
+            )
         else:
-            logger.info("[startup] No iikoCloud orgs mapped — skipping webhook registration")
+            logger.info(
+                "[startup] No iikoCloud orgs mapped — skipping webhook registration"
+            )
     except Exception:
-        logger.warning("[startup] iikoCloud webhook registration skipped (error)", exc_info=True)
+        logger.warning(
+            "[startup] iikoCloud webhook registration skipped (error)", exc_info=True
+        )
 
     # Запускаем планировщик ежедневной синхронизации (07:00 Калининград)
     from use_cases.scheduler import start_scheduler
+
     start_scheduler(bot)
 
 
 async def on_shutdown(bot: Bot) -> None:
     # Останавливаем планировщик
     from use_cases.scheduler import stop_scheduler
+
     stop_scheduler()
     # НЕ удаляем вебхук при shutdown — иначе при редеплое Railway
     # старый контейнер удалит вебхук, который новый уже поставил (гонка).
@@ -298,6 +340,7 @@ async def _process_iiko_webhook(body: list[dict], bot: "Bot") -> None:
     """Фоновая обработка вебхука от iikoCloud (не блокирует HTTP-ответ)."""
     try:
         from use_cases.iiko_webhook_handler import handle_webhook
+
         result = await handle_webhook(body, bot)
         logger.info("[iiko-webhook] Обработано: %s", result)
     except Exception:
@@ -318,12 +361,14 @@ def run_webhook() -> None:
         try:
             from db.engine import async_session_factory
             from sqlalchemy import text
+
             async with async_session_factory() as session:
                 await session.execute(text("SELECT 1"))
             return web.json_response({"status": "ok", "db": "connected"})
         except Exception as e:
             logger.error("[health] DB check failed: %s", e)
             return web.json_response({"status": "error", "db": str(e)}, status=503)
+
     app.router.add_get("/health", health)
 
     # iikoCloud webhook endpoint — принимает события от iikoCloud
@@ -336,8 +381,11 @@ def run_webhook() -> None:
             logger.warning(
                 "[iiko-webhook] Невалидный auth: %s (headers: %s)",
                 repr(auth[:30]) if auth else "empty",
-                {k: v[:20] for k, v in request.headers.items()
-                 if k.lower() not in ("cookie",)},
+                {
+                    k: v[:20]
+                    for k, v in request.headers.items()
+                    if k.lower() not in ("cookie",)
+                },
             )
             return web.Response(status=401, text="Unauthorized")
 
@@ -349,6 +397,7 @@ def run_webhook() -> None:
 
         # Логируем сырое тело для диагностики (первые 500 символов)
         import json as _json
+
         logger.info(
             "[iiko-webhook] Получен вебхук: %d событий, body[:500]=%s",
             len(body) if isinstance(body, list) else 1,
@@ -368,7 +417,9 @@ def run_webhook() -> None:
     app.router.add_post("/iiko-webhook", iiko_webhook)
 
     SimpleRequestHandler(
-        dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET,
+        dispatcher=dp,
+        bot=bot,
+        secret_token=WEBHOOK_SECRET,
     ).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
 
@@ -382,6 +433,7 @@ async def run_polling() -> None:
 
     # Привязываем бот к Telegram-оповещениям об ошибках
     from logging_config import get_telegram_handler
+
     get_telegram_handler().attach_bot(bot)
 
     # Инициализация БД: создание таблиц + миграции (идемпотентно)
@@ -405,6 +457,7 @@ async def run_polling() -> None:
 
     # Запускаем планировщик ежедневной синхронизации (07:00 Калининград)
     from use_cases.scheduler import start_scheduler
+
     start_scheduler(bot)
 
     # Graceful shutdown по SIGTERM (Docker / Railway)
@@ -422,12 +475,14 @@ async def run_polling() -> None:
         polling_task = asyncio.create_task(dp.start_polling(bot))
         stop_task = asyncio.create_task(stop_event.wait())
         done, pending = await asyncio.wait(
-            {polling_task, stop_task}, return_when=asyncio.FIRST_COMPLETED,
+            {polling_task, stop_task},
+            return_when=asyncio.FIRST_COMPLETED,
         )
         for t in pending:
             t.cancel()
     finally:
         from use_cases.scheduler import stop_scheduler
+
         stop_scheduler()
         await _cleanup()
 

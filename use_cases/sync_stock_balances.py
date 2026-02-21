@@ -39,6 +39,7 @@ LABEL = "StockBalance"
 # Helpers
 # ═══════════════════════════════════════════════════════
 
+
 async def _load_name_maps() -> tuple[dict, dict]:
     """
     Загрузить справочники store_id→name и product_id→name из БД.
@@ -56,7 +57,9 @@ async def _load_name_maps() -> tuple[dict, dict]:
     async def _products():
         async with async_session_factory() as s:
             rows = await s.execute(
-                select(Product.id, Product.name).where(Product.deleted == False)  # noqa: E712
+                select(Product.id, Product.name).where(
+                    Product.deleted == False
+                )  # noqa: E712
             )
             return {r.id: r.name for r in rows.all()}
 
@@ -64,7 +67,10 @@ async def _load_name_maps() -> tuple[dict, dict]:
 
     logger.info(
         "[%s] Загружены справочники: %d складов, %d товаров за %.1f сек",
-        LABEL, len(store_map), len(product_map), time.monotonic() - t0,
+        LABEL,
+        len(store_map),
+        len(product_map),
+        time.monotonic() - t0,
     )
     return store_map, product_map
 
@@ -72,6 +78,7 @@ async def _load_name_maps() -> tuple[dict, dict]:
 # ═══════════════════════════════════════════════════════
 # Batch INSERT (без ON CONFLICT — после full DELETE)
 # ═══════════════════════════════════════════════════════
+
 
 async def _batch_insert(session, rows: list[dict]) -> int:
     """Plain batch INSERT (быстрее upsert после TRUNCATE)."""
@@ -90,6 +97,7 @@ async def _batch_insert(session, rows: list[dict]) -> int:
 # Public API
 # ═══════════════════════════════════════════════════════
 
+
 async def sync_stock_balances(
     triggered_by: str | None = None,
     timestamp: str | None = None,
@@ -107,7 +115,11 @@ async def sync_stock_balances(
     """
     started = now_kgd()
     t0 = time.monotonic()
-    logger.info("[%s] Начинаю синхронизацию остатков (timestamp=%s)...", LABEL, timestamp or "now")
+    logger.info(
+        "[%s] Начинаю синхронизацию остатков (timestamp=%s)...",
+        LABEL,
+        timestamp or "now",
+    )
 
     try:
         # 1. Параллельно: API + справочники из БД (независимые операции)
@@ -116,7 +128,9 @@ async def sync_stock_balances(
             _load_name_maps(),
         )
         t_api = time.monotonic() - t0
-        logger.info("[%s] API + справочники: %d строк за %.1f сек", LABEL, len(items), t_api)
+        logger.info(
+            "[%s] API + справочники: %d строк за %.1f сек", LABEL, len(items), t_api
+        )
 
         # 2–4. В одной сессии: map + delete + insert
         t1 = time.monotonic()
@@ -147,21 +161,26 @@ async def sync_stock_balances(
                     store_name = store_name or f"unknown:{store_id}"
                     product_name = product_name or f"unknown:{product_id}"
 
-                rows.append({
-                    "store_id": store_id,
-                    "store_name": store_name,
-                    "product_id": product_id,
-                    "product_name": product_name,
-                    "amount": amount,
-                    "money": safe_float(item.get("sum")),
-                    "synced_at": now,
-                    "raw_json": item,
-                })
+                rows.append(
+                    {
+                        "store_id": store_id,
+                        "store_name": store_name,
+                        "product_id": product_id,
+                        "product_name": product_name,
+                        "amount": amount,
+                        "money": safe_float(item.get("sum")),
+                        "synced_at": now,
+                        "raw_json": item,
+                    }
+                )
 
             logger.info(
                 "[%s] После фильтрации: %d строк (пропущено %d c amount=0/невалид, "
                 "%d без имени в справочнике)",
-                LABEL, len(rows), skipped, no_name,
+                LABEL,
+                len(rows),
+                skipped,
+                no_name,
             )
 
             # DELETE all → INSERT
@@ -172,20 +191,27 @@ async def sync_stock_balances(
             count = await _batch_insert(session, rows)
 
             # SyncLog
-            session.add(SyncLog(
-                entity_type=LABEL,
-                started_at=started,
-                finished_at=now_kgd(),
-                status="success",
-                records_synced=count,
-                triggered_by=triggered_by,
-            ))
+            session.add(
+                SyncLog(
+                    entity_type=LABEL,
+                    started_at=started,
+                    finished_at=now_kgd(),
+                    status="success",
+                    records_synced=count,
+                    triggered_by=triggered_by,
+                )
+            )
             await session.commit()
 
         t_db = time.monotonic() - t1
         logger.info(
             "[%s] Готово: %d записей | удалено %d | API %.1f сек, БД %.1f сек | Итого %.1f сек",
-            LABEL, count, deleted, t_api, t_db, time.monotonic() - t0,
+            LABEL,
+            count,
+            deleted,
+            t_api,
+            t_db,
+            time.monotonic() - t0,
         )
         return count
 
@@ -193,14 +219,16 @@ async def sync_stock_balances(
         logger.exception("[%s] ОШИБКА: %s", LABEL, exc)
         try:
             async with async_session_factory() as session:
-                session.add(SyncLog(
-                    entity_type=LABEL,
-                    started_at=started,
-                    finished_at=now_kgd(),
-                    status="error",
-                    error_message=str(exc)[:2000],
-                    triggered_by=triggered_by,
-                ))
+                session.add(
+                    SyncLog(
+                        entity_type=LABEL,
+                        started_at=started,
+                        finished_at=now_kgd(),
+                        status="error",
+                        error_message=str(exc)[:2000],
+                        triggered_by=triggered_by,
+                    )
+                )
                 await session.commit()
         except Exception:
             logger.exception("[%s] Не удалось записать ошибку в sync_log", LABEL)

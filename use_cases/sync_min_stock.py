@@ -21,7 +21,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.engine import async_session_factory
 from db.models import (
-    Product, ProductGroup, Department, MinStockLevel, GSheetExportGroup,
+    Product,
+    ProductGroup,
+    Department,
+    MinStockLevel,
+    GSheetExportGroup,
 )
 
 from adapters import google_sheets as gsheet
@@ -34,6 +38,7 @@ LABEL = "SyncMinStock"
 # ═══════════════════════════════════════════════════════
 # 1. Номенклатура → Google Таблица
 # ═══════════════════════════════════════════════════════
+
 
 async def sync_nomenclature_to_gsheet(triggered_by: str | None = None) -> int:
     """
@@ -49,9 +54,7 @@ async def sync_nomenclature_to_gsheet(triggered_by: str | None = None) -> int:
 
     async with async_session_factory() as session:
         # ── 1. Корневые группы из БД (gsheet_export_group) ──
-        root_rows = (await session.execute(
-            select(GSheetExportGroup.group_id)
-        )).all()
+        root_rows = (await session.execute(select(GSheetExportGroup.group_id))).all()
         root_ids = [str(r.group_id) for r in root_rows]
 
         if not root_ids:
@@ -62,10 +65,13 @@ async def sync_nomenclature_to_gsheet(triggered_by: str | None = None) -> int:
             return 0
 
         # ── 2. Построим дерево номенклатурных групп ──
-        group_rows = (await session.execute(
-            select(ProductGroup.id, ProductGroup.parent_id)
-            .where(ProductGroup.deleted == False)  # noqa: E712
-        )).all()
+        group_rows = (
+            await session.execute(
+                select(ProductGroup.id, ProductGroup.parent_id).where(
+                    ProductGroup.deleted == False
+                )  # noqa: E712
+            )
+        ).all()
 
         # parent_id → list[child_id]
         children_map: dict[str, list[str]] = {}
@@ -86,34 +92,47 @@ async def sync_nomenclature_to_gsheet(triggered_by: str | None = None) -> int:
 
         logger.info(
             "[%s] Корневых групп: %d, всего в дереве: %d (из %d общих)",
-            LABEL, len(root_ids), len(allowed_groups), len(group_rows),
+            LABEL,
+            len(root_ids),
+            len(allowed_groups),
+            len(group_rows),
         )
 
         # ── 3. Товары GOODS + DISH из разрешённых групп ──
-        products_rows = (await session.execute(
-            select(Product.id, Product.name, Product.parent_id)
-            .where(Product.product_type.in_(["GOODS", "DISH"]))
-            .where(Product.deleted == False)  # noqa: E712
-            .order_by(Product.name)
-        )).all()
+        products_rows = (
+            await session.execute(
+                select(Product.id, Product.name, Product.parent_id)
+                .where(Product.product_type.in_(["GOODS", "DISH"]))
+                .where(Product.deleted == False)  # noqa: E712
+                .order_by(Product.name)
+            )
+        ).all()
 
         # Фильтруем: parent_id товара должен быть в дереве разрешённых групп
         products_rows = [
-            r for r in products_rows
+            r
+            for r in products_rows
             if r.parent_id and str(r.parent_id) in allowed_groups
         ]
 
-        dept_rows = (await session.execute(
-            select(Department.id, Department.name)
-            .where(Department.department_type == "DEPARTMENT")
-            .where(Department.deleted == False)  # noqa: E712
-            .order_by(Department.name)
-        )).all()
+        dept_rows = (
+            await session.execute(
+                select(Department.id, Department.name)
+                .where(Department.department_type == "DEPARTMENT")
+                .where(Department.deleted == False)  # noqa: E712
+                .order_by(Department.name)
+            )
+        ).all()
 
     products = [{"id": str(r.id), "name": r.name} for r in products_rows]
     departments = [{"id": str(r.id), "name": r.name} for r in dept_rows]
 
-    logger.info("[%s] Из БД: %d товаров (GOODS+DISH), %d подразделений", LABEL, len(products), len(departments))
+    logger.info(
+        "[%s] Из БД: %d товаров (GOODS+DISH), %d подразделений",
+        LABEL,
+        len(products),
+        len(departments),
+    )
 
     if not products:
         logger.warning("[%s] Нет товаров в БД — пропускаю", LABEL)
@@ -129,6 +148,7 @@ async def sync_nomenclature_to_gsheet(triggered_by: str | None = None) -> int:
 # ═══════════════════════════════════════════════════════
 # 2. Google Таблица → min_stock_level (БД)
 # ═══════════════════════════════════════════════════════
+
 
 async def sync_min_stock_from_gsheet(triggered_by: str | None = None) -> int:
     """
@@ -149,14 +169,16 @@ async def sync_min_stock_from_gsheet(triggered_by: str | None = None) -> int:
         values = []
         for r in rows:
             try:
-                values.append({
-                    "product_id": UUID(r["product_id"]),
-                    "product_name": r["product_name"],
-                    "department_id": UUID(r["department_id"]),
-                    "department_name": r["department_name"],
-                    "min_level": r["min_level"],
-                    "max_level": r["max_level"],
-                })
+                values.append(
+                    {
+                        "product_id": UUID(r["product_id"]),
+                        "product_name": r["product_name"],
+                        "department_id": UUID(r["department_id"]),
+                        "department_name": r["department_name"],
+                        "min_level": r["min_level"],
+                        "max_level": r["max_level"],
+                    }
+                )
             except (ValueError, KeyError) as exc:
                 logger.warning("[%s] Пропускаю битую строку: %s", LABEL, exc)
                 continue
@@ -164,7 +186,7 @@ async def sync_min_stock_from_gsheet(triggered_by: str | None = None) -> int:
         if values:
             BATCH = 500
             for i in range(0, len(values), BATCH):
-                batch = values[i:i + BATCH]
+                batch = values[i : i + BATCH]
                 stmt = pg_insert(MinStockLevel).values(batch)
                 stmt = stmt.on_conflict_do_update(
                     constraint="uq_min_stock_product_dept",
@@ -186,9 +208,11 @@ async def sync_min_stock_from_gsheet(triggered_by: str | None = None) -> int:
                 continue
 
         if rows:  # Не удаляем если таблица пуста (защита от сбоя API)
-            existing = (await session.execute(
-                select(MinStockLevel.product_id, MinStockLevel.department_id)
-            )).all()
+            existing = (
+                await session.execute(
+                    select(MinStockLevel.product_id, MinStockLevel.department_id)
+                )
+            ).all()
 
             to_delete = [
                 (row.product_id, row.department_id)
@@ -209,7 +233,9 @@ async def sync_min_stock_from_gsheet(triggered_by: str | None = None) -> int:
                             ).in_(batch)
                         )
                     )
-                logger.info("[%s] Удалено %d устаревших записей из БД", LABEL, len(to_delete))
+                logger.info(
+                    "[%s] Удалено %d устаревших записей из БД", LABEL, len(to_delete)
+                )
 
         await session.commit()
 

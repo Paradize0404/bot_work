@@ -41,10 +41,16 @@ from use_cases import reports as reports_uc
 from use_cases import permissions as perm_uc
 from use_cases import price_list as price_uc
 from bot.middleware import (
-    auth_required, permission_required,
-    sync_with_progress, track_task, get_sync_lock,
-    reply_menu, with_cooldown,
-    validate_callback_uuid, truncate_input, MAX_TEXT_NAME,
+    auth_required,
+    permission_required,
+    sync_with_progress,
+    track_task,
+    get_sync_lock,
+    reply_menu,
+    with_cooldown,
+    validate_callback_uuid,
+    truncate_input,
+    MAX_TEXT_NAME,
 )
 from bot.permission_map import PERM_SETTINGS
 
@@ -56,6 +62,7 @@ router = Router(name="sync_handlers")
 # -----------------------------------------------------
 # FSM States
 # -----------------------------------------------------
+
 
 class AuthStates(StatesGroup):
     waiting_last_name = State()
@@ -71,7 +78,10 @@ class ChangeDeptStates(StatesGroup):
 # Keyboard
 # -----------------------------------------------------
 
-def _main_keyboard(allowed: set[str] | None = None, dept_name: str | None = None) -> ReplyKeyboardMarkup:
+
+def _main_keyboard(
+    allowed: set[str] | None = None, dept_name: str | None = None
+) -> ReplyKeyboardMarkup:
     """
     ������� ����: ��������� �� ����� + ������ + ���������.
     ������������ ������ ������, �� ������� � ������������ ���� �����.
@@ -98,13 +108,15 @@ def _main_keyboard(allowed: set[str] | None = None, dept_name: str | None = None
     # �������� ������ �� 2 ������
     rows: list[list[KeyboardButton]] = []
     for i in range(0, len(visible), 2):
-        rows.append(visible[i:i + 2])
+        rows.append(visible[i : i + 2])
 
     # ������-���� � ������ ����� ���� �������������
     rows.append([KeyboardButton(text="?? �����-����")])
 
     # �������� �������� � ������ �����, ���������� ������� ��������
-    dept_label = f"?? ������� �������� ({dept_name})" if dept_name else "?? ������� ��������"
+    dept_label = (
+        f"?? ������� �������� ({dept_name})" if dept_name else "?? ������� ��������"
+    )
     rows.append([KeyboardButton(text=dept_label)])
 
     # ���������� � ������ ���� ���� �����
@@ -149,8 +161,14 @@ def _sync_keyboard() -> ReplyKeyboardMarkup:
     """������� '�������������'."""
     buttons = [
         [KeyboardButton(text="? �����. �Ѩ (iiko + FT)")],
-        [KeyboardButton(text="?? �����. �Ѩ iiko"), KeyboardButton(text="?? FT: �����. �Ѩ")],
-        [KeyboardButton(text="?? �����. �����������"), KeyboardButton(text="?? �����. ������������")],
+        [
+            KeyboardButton(text="?? �����. �Ѩ iiko"),
+            KeyboardButton(text="?? FT: �����. �Ѩ"),
+        ],
+        [
+            KeyboardButton(text="?? �����. �����������"),
+            KeyboardButton(text="?? �����. ������������"),
+        ],
         [KeyboardButton(text="?? �����. �������������")],
         [KeyboardButton(text="?? � ����������")],
     ]
@@ -168,25 +186,29 @@ def _gsheet_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
-
 # -----------------------------------------------------
 # Helpers: inline-���������� ��� �����������
 # -----------------------------------------------------
 
+
 def _employees_inline_kb(employees: list[dict]) -> InlineKeyboardMarkup:
     """Inline-������ ������ ����������."""
     buttons = [
-        [InlineKeyboardButton(
-            text=emp["name"] or f"{emp['last_name']} {emp['first_name']}",
-            callback_data=f"auth_emp:{emp['id']}",
-        )]
+        [
+            InlineKeyboardButton(
+                text=emp["name"] or f"{emp['last_name']} {emp['first_name']}",
+                callback_data=f"auth_emp:{emp['id']}",
+            )
+        ]
         for emp in employees
     ]
     buttons.append([InlineKeyboardButton(text="? ������", callback_data="auth_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _departments_inline_kb(departments: list[dict], prefix: str = "auth_dept") -> InlineKeyboardMarkup:
+def _departments_inline_kb(
+    departments: list[dict], prefix: str = "auth_dept"
+) -> InlineKeyboardMarkup:
     """Inline-������ ������ ���������."""
     buttons = [
         [InlineKeyboardButton(text=d["name"], callback_data=f"{prefix}:{d['id']}")]
@@ -201,6 +223,7 @@ def _departments_inline_kb(departments: list[dict], prefix: str = "auth_dept") -
 # /start  � �����������
 # -----------------------------------------------------
 
+
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
     """������ �����������: ���������� �������."""
@@ -210,16 +233,14 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     if result.status == AuthStatus.AUTHORIZED:
         kb = await _get_main_kb(message.from_user.id)
         await message.answer(
-            f"?? � ������������, {result.first_name}!\n"
-            "�������� ��������:",
+            f"?? � ������������, {result.first_name}!\n" "�������� ��������:",
             reply_markup=kb,
         )
         return
 
     await state.set_state(AuthStates.waiting_last_name)
     await message.answer(
-        "?? ����� ����������!\n\n"
-        "��� ����������� ������� ���� **�������**:",
+        "?? ����� ����������!\n\n" "��� ����������� ������� ���� **�������**:",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -228,6 +249,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 # -----------------------------------------------------
 # ��� 2: �������� ������� > ���� ����������
 # -----------------------------------------------------
+
 
 @router.message(AuthStates.waiting_last_name)
 async def process_last_name(message: Message, state: FSMContext) -> None:
@@ -248,8 +270,7 @@ async def process_last_name(message: Message, state: FSMContext) -> None:
 
     if not result.employees:
         await message.answer(
-            f"? ��������� � �������� �{last_name}� �� ������.\n"
-            "���������� ��� ���:"
+            f"? ��������� � �������� �{last_name}� �� ������.\n" "���������� ��� ���:"
         )
         return
 
@@ -286,6 +307,7 @@ async def process_last_name(message: Message, state: FSMContext) -> None:
 # ��� 2�: ����� �� ���������� ����������� (inline)
 # -----------------------------------------------------
 
+
 @router.callback_query(AuthStates.choosing_employee, F.data.startswith("auth_emp:"))
 async def process_choose_employee(callback: CallbackQuery, state: FSMContext) -> None:
     """������������ ������ ���������� �� ������."""
@@ -293,10 +315,14 @@ async def process_choose_employee(callback: CallbackQuery, state: FSMContext) ->
     employee_id = await validate_callback_uuid(callback, callback.data)
     if not employee_id:
         return
-    logger.info("[auth] ������ ��������� tg:%d, emp_id=%s", callback.from_user.id, employee_id)
+    logger.info(
+        "[auth] ������ ��������� tg:%d, emp_id=%s", callback.from_user.id, employee_id
+    )
     await callback.message.edit_text("? ��������...")
 
-    result = await auth_uc.complete_employee_selection(callback.from_user.id, employee_id)
+    result = await auth_uc.complete_employee_selection(
+        callback.from_user.id, employee_id
+    )
     await state.update_data(employee_id=employee_id)
 
     if not result.restaurants:
@@ -309,8 +335,7 @@ async def process_choose_employee(callback: CallbackQuery, state: FSMContext) ->
 
     await state.set_state(AuthStates.choosing_department)
     await callback.message.edit_text(
-        f"?? ������, {result.first_name}!\n\n"
-        "?? �������� ��� ��������:",
+        f"?? ������, {result.first_name}!\n\n" "?? �������� ��� ��������:",
         reply_markup=_departments_inline_kb(result.restaurants, prefix="auth_dept"),
     )
 
@@ -319,6 +344,7 @@ async def process_choose_employee(callback: CallbackQuery, state: FSMContext) ->
 # ��� 3: ����� ��������� (inline) � �����������
 # -----------------------------------------------------
 
+
 @router.callback_query(AuthStates.choosing_department, F.data.startswith("auth_dept:"))
 async def process_choose_department(callback: CallbackQuery, state: FSMContext) -> None:
     """������������ ������ �������� ��� �����������."""
@@ -326,17 +352,20 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
     department_id = await validate_callback_uuid(callback, callback.data)
     if not department_id:
         return
-    logger.info("[auth] ������ �������� tg:%d, dept_id=%s", callback.from_user.id, department_id)
+    logger.info(
+        "[auth] ������ �������� tg:%d, dept_id=%s", callback.from_user.id, department_id
+    )
 
     data = await state.get_data()
     dept_name = await auth_uc.complete_department_selection(
-        callback.from_user.id, department_id, data.get("employee_id"),
+        callback.from_user.id,
+        department_id,
+        data.get("employee_id"),
     )
 
     await state.clear()
     await callback.message.edit_text(
-        f"? ��������: **{dept_name}**\n\n"
-        "����������� ���������!",
+        f"? ��������: **{dept_name}**\n\n" "����������� ���������!",
         parse_mode="Markdown",
     )
     kb = await _get_main_kb(callback.from_user.id)
@@ -352,7 +381,9 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
                 triggered_by=f"auth:{callback.from_user.id}",
             )
         except Exception:
-            logger.warning("[auth] �� ������� ���������������� ����� �������", exc_info=True)
+            logger.warning(
+                "[auth] �� ������� ���������������� ����� �������", exc_info=True
+            )
 
     asyncio.create_task(
         _sync_perms(),
@@ -375,13 +406,16 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
 # ������ ����������� / ����� ���������
 # -----------------------------------------------------
 
+
 @router.callback_query(F.data == "auth_cancel")
 async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     """������ �� ����� ���� �����������."""
     await callback.answer("��������")
     await state.clear()
     try:
-        await callback.message.edit_text("? ����������� ��������.\n������� /start ����� ������ ������.")
+        await callback.message.edit_text(
+            "? ����������� ��������.\n������� /start ����� ������ ������."
+        )
     except Exception:
         pass
 
@@ -401,6 +435,7 @@ async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None
 # ����� ��������� (�� �������� ����)
 # -----------------------------------------------------
 
+
 @router.message(F.text.startswith("?? ������� ��������"))
 async def btn_change_department(message: Message, state: FSMContext) -> None:
     """������� ����������� ��������."""
@@ -413,7 +448,9 @@ async def btn_change_department(message: Message, state: FSMContext) -> None:
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     restaurants = await auth_uc.get_restaurants()
     if not restaurants:
-        await message.answer("?? ��������� �� ���������. ������� ��������������� �������������.")
+        await message.answer(
+            "?? ��������� �� ���������. ������� ��������������� �������������."
+        )
         return
 
     await state.set_state(ChangeDeptStates.choosing_department)
@@ -423,18 +460,26 @@ async def btn_change_department(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(ChangeDeptStates.choosing_department, F.data.startswith("change_dept:"))
+@router.callback_query(
+    ChangeDeptStates.choosing_department, F.data.startswith("change_dept:")
+)
 async def process_change_department(callback: CallbackQuery, state: FSMContext) -> None:
     """��������� ����� ��������."""
     await callback.answer()
     department_id = await validate_callback_uuid(callback, callback.data)
     if not department_id:
         return
-    logger.info("[nav] �������� ������ tg:%d, dept_id=%s", callback.from_user.id, department_id)
-    dept_name = await auth_uc.complete_department_selection(callback.from_user.id, department_id)
+    logger.info(
+        "[nav] �������� ������ tg:%d, dept_id=%s", callback.from_user.id, department_id
+    )
+    dept_name = await auth_uc.complete_department_selection(
+        callback.from_user.id, department_id
+    )
 
     await state.clear()
-    await callback.message.edit_text(f"? �������� ������ ��: **{dept_name}**", parse_mode="Markdown")
+    await callback.message.edit_text(
+        f"? �������� ������ ��: **{dept_name}**", parse_mode="Markdown"
+    )
 
     # ��������� reply-���������� (�������� ��������� � ������)
     kb = await _get_main_kb(callback.from_user.id)
@@ -455,6 +500,7 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
 # -----------------------------------------------------
 # ������: ����� � inline-���������� �����������
 # -----------------------------------------------------
+
 
 @router.message(AuthStates.choosing_employee)
 async def _guard_auth_employee(message: Message) -> None:
@@ -484,6 +530,7 @@ async def _guard_change_dept(message: Message) -> None:
 # ���������: �������
 # -----------------------------------------------------
 
+
 @router.message(F.text == "?? ��������")
 @auth_required
 async def btn_writeoffs_menu(message: Message, state: FSMContext) -> None:
@@ -510,6 +557,7 @@ async def btn_invoices_menu(message: Message, state: FSMContext) -> None:
     ctx = await uctx.get_user_context(tg_id)
     if ctx and ctx.department_id:
         from use_cases import outgoing_invoice as inv_uc
+
         track_task(inv_uc.preload_for_invoice(ctx.department_id))
 
 
@@ -545,20 +593,22 @@ async def btn_documents_menu(message: Message, state: FSMContext) -> None:
 async def btn_price_list(message: Message, state: FSMContext) -> None:
     """�������� �����-���� ���� ������������."""
     logger.info("[price_list] ������ �����-����� tg:%d", message.from_user.id)
-    
+
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    
+
     try:
         dishes = await price_uc.get_dishes_price_list()
         text = price_uc.format_price_list(dishes)
-        
+
         await message.answer(
             text,
             parse_mode="HTML",
             reply_markup=await _get_main_kb(message.from_user.id),
         )
     except Exception as exc:
-        logger.exception("[price_list] ������ ��������� �����-����� tg:%d", message.from_user.id)
+        logger.exception(
+            "[price_list] ������ ��������� �����-����� tg:%d", message.from_user.id
+        )
         await message.answer(
             "? ������ ��� �������� �����-�����. ���������� �����.",
             reply_markup=await _get_main_kb(message.from_user.id),
@@ -617,7 +667,9 @@ async def btn_check_min_stock(message: Message) -> None:
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    placeholder = await message.answer("? ������������� �������, �������� ����������� ������ � ��������...")
+    placeholder = await message.answer(
+        "? ������������� �������, �������� ����������� ������ � ��������..."
+    )
     try:
         text = await reports_uc.run_min_stock_report(ctx.department_id, triggered)
         await placeholder.edit_text(text, parse_mode="Markdown")
@@ -631,9 +683,16 @@ async def btn_check_min_stock(message: Message) -> None:
 async def btn_sync_nomenclature_gsheet(message: Message) -> None:
     """��������� ������ (GOODS) + ������������� � Google �������."""
     from use_cases.sync_min_stock import sync_nomenclature_to_gsheet
+
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ������������ > GSheet tg:%d", message.from_user.id)
-    await sync_with_progress(message, "������������ > GSheet", sync_nomenclature_to_gsheet, lock_key="gsheet_nomenclature", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "������������ > GSheet",
+        sync_nomenclature_to_gsheet,
+        lock_key="gsheet_nomenclature",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? ���. ������� GSheet > ��")
@@ -641,9 +700,16 @@ async def btn_sync_nomenclature_gsheet(message: Message) -> None:
 async def btn_sync_min_stock_gsheet(message: Message) -> None:
     """���������������� ���. �������: Google ������� > ��."""
     from use_cases.sync_min_stock import sync_min_stock_from_gsheet
+
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ���. ������� GSheet > �� tg:%d", message.from_user.id)
-    await sync_with_progress(message, "̳�. ������� GSheet > ��", sync_min_stock_from_gsheet, lock_key="gsheet_min_stock", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "̳�. ������� GSheet > ��",
+        sync_min_stock_from_gsheet,
+        lock_key="gsheet_min_stock",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? �����-���� > GSheet")
@@ -651,9 +717,16 @@ async def btn_sync_min_stock_gsheet(message: Message) -> None:
 async def btn_sync_price_sheet(message: Message) -> None:
     """������ ������������� + �������� �����-����� ��������� � Google �������."""
     from use_cases.outgoing_invoice import sync_price_sheet
+
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] �����-���� > GSheet tg:%d", message.from_user.id)
-    await sync_with_progress(message, "�����-���� > GSheet", sync_price_sheet, lock_key="gsheet_price", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "�����-���� > GSheet",
+        sync_price_sheet,
+        lock_key="gsheet_price",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? ����� ������� > GSheet")
@@ -668,21 +741,31 @@ async def btn_sync_permissions_gsheet(message: Message) -> None:
     any_admin = await perm_uc.has_any_admin()
     if any_admin and not await perm_uc.has_permission(tg_id, PERM_SETTINGS):
         await message.answer("? � ��� ��� ���� ��������������")
-        logger.warning("[auth] ������� admin-������� ��� ���� tg:%d > btn_sync_permissions_gsheet", tg_id)
+        logger.warning(
+            "[auth] ������� admin-������� ��� ���� tg:%d > btn_sync_permissions_gsheet",
+            tg_id,
+        )
         return
     if not any_admin:
-        logger.warning("[auth] BOOTSTRAP: ��� �� ������ ������ > ��������� sync ���� ��� tg:%d", tg_id)
+        logger.warning(
+            "[auth] BOOTSTRAP: ��� �� ������ ������ > ��������� sync ���� ��� tg:%d",
+            tg_id,
+        )
     triggered = f"tg:{tg_id}"
     logger.info("[sync] ����� ������� > GSheet tg:%d", tg_id)
     await sync_with_progress(
-        message, "����� ������� > GSheet",
-        perm_uc.sync_permissions_to_gsheet, lock_key="gsheet_permissions", triggered_by=triggered,
+        message,
+        "����� ������� > GSheet",
+        perm_uc.sync_permissions_to_gsheet,
+        lock_key="gsheet_permissions",
+        triggered_by=triggered,
     )
 
 
 # -----------------------------------------------------
 # ����������� ������ ������������� (������� ���������)
 # -----------------------------------------------------
+
 
 @router.message(F.text == "?? �����. �����������")
 @permission_required(PERM_SETTINGS)
@@ -716,7 +799,13 @@ async def btn_sync_entities(message: Message) -> None:
 async def btn_sync_departments(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ������������� tg:%d", message.from_user.id)
-    await sync_with_progress(message, "�������������", sync_uc.sync_departments, lock_key="sync_departments", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "�������������",
+        sync_uc.sync_departments,
+        lock_key="sync_departments",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? �����. ������")
@@ -725,7 +814,13 @@ async def btn_sync_departments(message: Message) -> None:
 async def btn_sync_stores(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ������ tg:%d", message.from_user.id)
-    await sync_with_progress(message, "������", sync_uc.sync_stores, lock_key="sync_stores", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "������",
+        sync_uc.sync_stores,
+        lock_key="sync_stores",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? �����. ������")
@@ -734,7 +829,13 @@ async def btn_sync_stores(message: Message) -> None:
 async def btn_sync_groups(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ������ tg:%d", message.from_user.id)
-    await sync_with_progress(message, "������", sync_uc.sync_groups, lock_key="sync_groups", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "������",
+        sync_uc.sync_groups,
+        lock_key="sync_groups",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? �����. ������������")
@@ -743,7 +844,13 @@ async def btn_sync_groups(message: Message) -> None:
 async def btn_sync_products(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ������������ tg:%d", message.from_user.id)
-    await sync_with_progress(message, "������������", sync_uc.sync_products, lock_key="sync_products", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "������������",
+        sync_uc.sync_products,
+        lock_key="sync_products",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? �����. �����������")
@@ -752,7 +859,13 @@ async def btn_sync_products(message: Message) -> None:
 async def btn_sync_suppliers(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ���������� tg:%d", message.from_user.id)
-    await sync_with_progress(message, "����������", sync_uc.sync_suppliers, lock_key="sync_suppliers", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "����������",
+        sync_uc.sync_suppliers,
+        lock_key="sync_suppliers",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? �����. �����������")
@@ -761,7 +874,13 @@ async def btn_sync_suppliers(message: Message) -> None:
 async def btn_sync_employees(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ���������� tg:%d", message.from_user.id)
-    await sync_with_progress(message, "����������", sync_uc.sync_employees, lock_key="sync_employees", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "����������",
+        sync_uc.sync_employees,
+        lock_key="sync_employees",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? �����. ���������")
@@ -770,7 +889,13 @@ async def btn_sync_employees(message: Message) -> None:
 async def btn_sync_roles(message: Message) -> None:
     triggered = f"tg:{message.from_user.id}"
     logger.info("[sync] ��������� tg:%d", message.from_user.id)
-    await sync_with_progress(message, "���������", sync_uc.sync_employee_roles, lock_key="sync_roles", triggered_by=triggered)
+    await sync_with_progress(
+        message,
+        "���������",
+        sync_uc.sync_employee_roles,
+        lock_key="sync_roles",
+        triggered_by=triggered,
+    )
 
 
 @router.message(F.text == "?? �����. �Ѩ iiko")
@@ -784,7 +909,9 @@ async def btn_sync_all_iiko(message: Message) -> None:
     if lock.locked():
         await message.answer("? ������ ������������� iiko ��� �����������. ���������.")
         return
-    placeholder = await message.answer("? �������� ������ ������������� iiko (�����������)...")
+    placeholder = await message.answer(
+        "? �������� ������ ������������� iiko (�����������)..."
+    )
     async with lock:
         report = await sync_uc.sync_all_iiko_with_report(triggered)
     await placeholder.edit_text("?? iiko � ���������:\n\n" + "\n".join(report))
@@ -793,6 +920,7 @@ async def btn_sync_all_iiko(message: Message) -> None:
 # -----------------------------------------------------
 # FinTablo handlers
 # -----------------------------------------------------
+
 
 async def _ft_sync_one(message: Message, label: str, sync_func) -> None:
     """������ ��� ���������� FT-������."""
@@ -866,9 +994,13 @@ async def btn_ft_sync_all(message: Message) -> None:
     logger.info("[sync-ft] �Ѩ FT tg:%d", message.from_user.id)
     lock = get_sync_lock("sync_all_ft")
     if lock.locked():
-        await message.answer("? ������ ������������� FinTablo ��� �����������. ���������.")
+        await message.answer(
+            "? ������ ������������� FinTablo ��� �����������. ���������."
+        )
         return
-    placeholder = await message.answer("? FinTablo: ������������� ��� 13 ������������ �����������...")
+    placeholder = await message.answer(
+        "? FinTablo: ������������� ��� 13 ������������ �����������..."
+    )
 
     try:
         async with lock:
@@ -890,18 +1022,23 @@ async def btn_sync_everything(message: Message) -> None:
     if lock.locked():
         await message.answer("? ������ ������������� ��� �����������. ���������.")
         return
-    placeholder = await message.answer("? �������� ������ ������������� iiko + FinTablo...")
+    placeholder = await message.answer(
+        "? �������� ������ ������������� iiko + FinTablo..."
+    )
 
     async with lock:
         iiko_lines, ft_lines = await sync_uc.sync_everything_with_report(triggered)
 
     lines = ["-- iiko --"] + iiko_lines + ["\n-- FinTablo --"] + ft_lines
-    await placeholder.edit_text("? ��������� ������ �������������:\n\n" + "\n".join(lines))
+    await placeholder.edit_text(
+        "? ��������� ������ �������������:\n\n" + "\n".join(lines)
+    )
 
 
 # -----------------------------------------------------
 # iikoCloud ������: ��������� + �������������� �������� ��������
 # -----------------------------------------------------
+
 
 @router.message(F.text == "?? iikoCloud ������")
 @permission_required(PERM_SETTINGS)
@@ -929,6 +1066,7 @@ async def btn_cloud_get_orgs(message: Message) -> None:
 
     try:
         from adapters.iiko_cloud_api import get_organizations
+
         orgs = await get_organizations()
         if not orgs:
             await message.answer("? ����������� �� �������. ������� apiLogin.")
@@ -938,7 +1076,9 @@ async def btn_cloud_get_orgs(message: Message) -> None:
             name = org.get("name", "�")
             org_id = org.get("id", "�")
             lines.append(f"?? *{name}*\n`{org_id}`\n")
-        lines.append("����� ��������� ����������� � ��������������, ����� \xab?? ��������� �����������\xbb")
+        lines.append(
+            "����� ��������� ����������� � ��������������, ����� \xab?? ��������� �����������\xbb"
+        )
         await message.answer("\n".join(lines), parse_mode="Markdown")
     except Exception as exc:
         logger.exception("[cloud] ������ ��������� �����������")
@@ -950,7 +1090,9 @@ async def btn_cloud_get_orgs(message: Message) -> None:
 async def btn_cloud_sync_org_mapping(message: Message) -> None:
     """��������� ������������� + Cloud-����������� � GSheet ��� ��������."""
     logger.info("[cloud] �������� ����������� tg:%d", message.from_user.id)
-    placeholder = await message.answer("? �������� ������������� � ����������� � Google �������...")
+    placeholder = await message.answer(
+        "? �������� ������������� � ����������� � Google �������..."
+    )
 
     try:
         from sqlalchemy import select
@@ -999,10 +1141,13 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
 async def btn_cloud_register_webhook(message: Message) -> None:
     """����������������/�������� ������ � iikoCloud ��� ���� ����������� �����������."""
     from config import WEBHOOK_URL
+
     logger.info("[cloud] ����������� ������� tg:%d", message.from_user.id)
 
     if not WEBHOOK_URL:
-        await message.answer("? ��� �������� � polling-������. ������ �������� ������ �� Railway (webhook-�����).")
+        await message.answer(
+            "? ��� �������� � polling-������. ������ �������� ������ �� Railway (webhook-�����)."
+        )
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -1026,6 +1171,7 @@ async def btn_cloud_register_webhook(message: Message) -> None:
     try:
         from adapters.iiko_cloud_api import register_webhook
         from config import IIKO_CLOUD_WEBHOOK_SECRET
+
         webhook_url = f"{WEBHOOK_URL}/iiko-webhook"
 
         ok_ids: list[str] = []
@@ -1046,7 +1192,9 @@ async def btn_cloud_register_webhook(message: Message) -> None:
                 logger.warning("[cloud] ������ ����������� ��� org %s: %s", oid, exc)
                 fail_ids.append(oid)
 
-        lines = [f"? ������ ��������������� ��� {len(ok_ids)}/{len(org_ids)} �����������\n"]
+        lines = [
+            f"? ������ ��������������� ��� {len(ok_ids)}/{len(org_ids)} �����������\n"
+        ]
         lines.append(f"URL: `{webhook_url}`")
         lines.append("������: Closed ������ + StopListUpdate")
         if fail_ids:
@@ -1064,11 +1212,13 @@ async def btn_cloud_webhook_status(message: Message) -> None:
     logger.info("[cloud] ������ ������� tg:%d", message.from_user.id)
 
     from use_cases.cloud_org_mapping import get_all_cloud_org_ids
+
     all_org_ids = await get_all_cloud_org_ids()
     org_id = all_org_ids[0] if all_org_ids else None
 
     if not org_id:
         from config import IIKO_CLOUD_ORG_ID
+
         org_id = IIKO_CLOUD_ORG_ID
 
     if not org_id:
@@ -1079,6 +1229,7 @@ async def btn_cloud_webhook_status(message: Message) -> None:
 
     try:
         from adapters.iiko_cloud_api import get_webhook_settings
+
         settings = await get_webhook_settings(org_id)
         uri = settings.get("webHooksUri") or "�� �����"
         login = settings.get("apiLoginName") or "�"
@@ -1095,16 +1246,18 @@ async def btn_cloud_webhook_status(message: Message) -> None:
         await message.answer(f"? ������: {exc}")
 
 
-
 @router.message(F.text == "?? �������� ������� ������")
 @permission_required(PERM_SETTINGS)
 async def btn_force_stock_check(message: Message) -> None:
     """�������������� �������� �������� + ���������� ��������� � ���� �������������."""
     logger.info("[cloud] �������������� �������� �������� tg:%d", message.from_user.id)
-    placeholder = await message.answer("? ������������� ������� � �������� ���������...")
+    placeholder = await message.answer(
+        "? ������������� ������� � �������� ���������..."
+    )
 
     try:
         from use_cases.iiko_webhook_handler import force_stock_check
+
         result = await force_stock_check(message.bot)
         await placeholder.edit_text(
             f"? ������� ���������!\n\n"

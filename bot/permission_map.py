@@ -32,8 +32,12 @@ ROLE_ACCOUNTANT = "📑 Бухгалтер"
 
 ROLE_KEYS: list[str] = [
     ROLE_SYSADMIN,
-    ROLE_RECEIVER_KITCHEN, ROLE_RECEIVER_BAR, ROLE_RECEIVER_PASTRY,
-    ROLE_STOCK, ROLE_STOPLIST, ROLE_ACCOUNTANT,
+    ROLE_RECEIVER_KITCHEN,
+    ROLE_RECEIVER_BAR,
+    ROLE_RECEIVER_PASTRY,
+    ROLE_STOCK,
+    ROLE_STOPLIST,
+    ROLE_ACCOUNTANT,
 ]
 
 # ═══════════════════════════════════════════════════════
@@ -117,50 +121,43 @@ MENU_BUTTON_GROUPS: dict[str, list[str]] = {
 
 TEXT_PERMISSIONS: dict[str, str] = {
     # ── Подменю «Списания» ──
-    "📝 Создать списание":           PERM_WRITEOFF_CREATE,
-    "🗂 История списаний":           PERM_WRITEOFF_HISTORY,
-
+    "📝 Создать списание": PERM_WRITEOFF_CREATE,
+    "🗂 История списаний": PERM_WRITEOFF_HISTORY,
     # ── Подменю «Накладные» ──
-    "📑 Создать шаблон накладной":   PERM_INVOICE_TEMPLATE,
-    "📦 Создать по шаблону":         PERM_INVOICE_CREATE,
-
+    "📑 Создать шаблон накладной": PERM_INVOICE_TEMPLATE,
+    "📦 Создать по шаблону": PERM_INVOICE_CREATE,
     # ── Подменю «Заявки» ──
-    "✏️ Создать заявку":             PERM_REQUEST_CREATE,
-    "📒 История заявок":             PERM_REQUEST_HISTORY,
-    "📬 Входящие заявки":            PERM_REQUEST_APPROVE,
-
+    "✏️ Создать заявку": PERM_REQUEST_CREATE,
+    "📒 История заявок": PERM_REQUEST_HISTORY,
+    "📬 Входящие заявки": PERM_REQUEST_APPROVE,
     # ── Подменю «Отчёты» ──
-    "📊 Мин. остатки по складам":    PERM_REPORT_VIEW,
-    "✏️ Изменить мин. остаток":      PERM_REPORT_EDIT_MIN,
-
+    "📊 Мин. остатки по складам": PERM_REPORT_VIEW,
+    "✏️ Изменить мин. остаток": PERM_REPORT_EDIT_MIN,
     # ── Подменю «Документы (OCR)» ──
-    "📤 Загрузить накладные":        PERM_OCR_UPLOAD,
-    "✅ Маппинг готов":              PERM_OCR_UPLOAD,
-
+    "📤 Загрузить накладные": PERM_OCR_UPLOAD,
+    "✅ Маппинг готов": PERM_OCR_UPLOAD,
     # ── Подменю «Настройки» (только админ, но middleware проверяет) ──
-    "⚙️ Настройки":                  PERM_SETTINGS,
-    "🔄 Синхронизация":              PERM_SETTINGS,
-    "📤 Google Таблицы":             PERM_SETTINGS,
-    "☁️ iikoCloud вебхук":           PERM_SETTINGS,
-    "🍰 Группы кондитеров":          PERM_SETTINGS,
-
+    "⚙️ Настройки": PERM_SETTINGS,
+    "🔄 Синхронизация": PERM_SETTINGS,
+    "📤 Google Таблицы": PERM_SETTINGS,
+    "☁️ iikoCloud вебхук": PERM_SETTINGS,
+    "🍰 Группы кондитеров": PERM_SETTINGS,
     # ── GSheet / Sync (admin-only через PERM_SETTINGS + admin_required) ──
-    "📤 Номенклатура → GSheet":      PERM_SETTINGS,
-    "📥 Мин. остатки GSheet → БД":   PERM_SETTINGS,
-    "💰 Прайс-лист → GSheet":        PERM_SETTINGS,
-    "⚡ Синхр. ВСЁ (iiko + FT)":     PERM_SETTINGS,
-    "🔄 Синхр. ВСЁ iiko":            PERM_SETTINGS,
-    "💹 FT: Синхр. ВСЁ":             PERM_SETTINGS,
-    "📋 Синхр. справочники":         PERM_SETTINGS,
-    "📦 Синхр. номенклатуру":        PERM_SETTINGS,
-    "🏢 Синхр. подразделения":       PERM_SETTINGS,
-
+    "📤 Номенклатура → GSheet": PERM_SETTINGS,
+    "📥 Мин. остатки GSheet → БД": PERM_SETTINGS,
+    "💰 Прайс-лист → GSheet": PERM_SETTINGS,
+    "⚡ Синхр. ВСЁ (iiko + FT)": PERM_SETTINGS,
+    "🔄 Синхр. ВСЁ iiko": PERM_SETTINGS,
+    "💹 FT: Синхр. ВСЁ": PERM_SETTINGS,
+    "📋 Синхр. справочники": PERM_SETTINGS,
+    "📦 Синхр. номенклатуру": PERM_SETTINGS,
+    "🏢 Синхр. подразделения": PERM_SETTINGS,
     # ── Кнопки главного меню (проверяем через группы) ──
-    "📝 Списания":                   PERM_WRITEOFF_CREATE,
-    "📦 Накладные":                   PERM_INVOICE_CREATE,
-    "📋 Заявки":                      PERM_REQUEST_CREATE,
-    "📊 Отчёты":                      PERM_REPORT_VIEW,
-    "📑 Документы":                   PERM_OCR_UPLOAD,
+    "📝 Списания": PERM_WRITEOFF_CREATE,
+    "📦 Накладные": PERM_INVOICE_CREATE,
+    "📋 Заявки": PERM_REQUEST_CREATE,
+    "📊 Отчёты": PERM_REPORT_VIEW,
+    "📑 Документы": PERM_OCR_UPLOAD,
 }
 
 # ═══════════════════════════════════════════════════════
@@ -170,21 +167,18 @@ TEXT_PERMISSIONS: dict[str, str] = {
 
 CALLBACK_PERMISSIONS: dict[str, str] = {
     # OCR: отправка / отмена документов в iiko
-    "iiko_invoice_send:":   PERM_OCR_SEND,
+    "iiko_invoice_send:": PERM_OCR_SEND,
     "iiko_invoice_cancel:": PERM_OCR_SEND,
-    "mapping_done":         PERM_OCR_UPLOAD,
-    "refresh_mapping_ref":  PERM_OCR_UPLOAD,
-
+    "mapping_done": PERM_OCR_UPLOAD,
+    "refresh_mapping_ref": PERM_OCR_UPLOAD,
     # Списания: одобрение / отклонение / редактирование
-    "woa_approve:":         PERM_WRITEOFF_APPROVE,
-    "woa_reject:":          PERM_WRITEOFF_APPROVE,
-    "woa_edit:":            PERM_WRITEOFF_APPROVE,
-
+    "woa_approve:": PERM_WRITEOFF_APPROVE,
+    "woa_reject:": PERM_WRITEOFF_APPROVE,
+    "woa_edit:": PERM_WRITEOFF_APPROVE,
     # Заявки: одобрение / отклонение / редактирование
-    "req_approve:":         PERM_REQUEST_APPROVE,
-    "req_edit:":            PERM_REQUEST_APPROVE,
-    "req_reject:":          PERM_REQUEST_APPROVE,
-
+    "req_approve:": PERM_REQUEST_APPROVE,
+    "req_edit:": PERM_REQUEST_APPROVE,
+    "req_reject:": PERM_REQUEST_APPROVE,
     # Настройки: группы кондитеров
-    "pastry_":              PERM_SETTINGS,
+    "pastry_": PERM_SETTINGS,
 }

@@ -34,17 +34,20 @@ _TTL = timedelta(hours=24)
 @dataclass
 class PendingWriteoff:
     """DTO: один ожидающий документ списания."""
-    doc_id: str                      # уникальный короткий ID
-    created_at: datetime             # время создания (Калининград)
-    author_chat_id: int              # chat_id создателя (для уведомления о результате)
-    author_name: str                 # ФИО автора
+
+    doc_id: str  # уникальный короткий ID
+    created_at: datetime  # время создания (Калининград)
+    author_chat_id: int  # chat_id создателя (для уведомления о результате)
+    author_name: str  # ФИО автора
     store_id: str
     store_name: str
     account_id: str
     account_name: str
     reason: str
     department_id: str
-    items: list[dict]                # [{id, name, quantity, user_quantity, unit_label, main_unit}, ...]
+    items: list[
+        dict
+    ]  # [{id, name, quantity, user_quantity, unit_label, main_unit}, ...]
     admin_msg_ids: dict[int, int] = field(default_factory=dict)
     # {admin_chat_id: message_id} — для удаления/обновления кнопок у всех
 
@@ -114,8 +117,12 @@ async def create(
         session.add(row)
         await session.commit()
         await session.refresh(row)
-    logger.info("[pending] Создан документ %s от «%s» (%d позиций)",
-                doc_id, author_name, len(items))
+    logger.info(
+        "[pending] Создан документ %s от «%s» (%d позиций)",
+        doc_id,
+        author_name,
+        len(items),
+    )
     return _row_to_dto(row)
 
 
@@ -181,8 +188,9 @@ async def unlock(doc_id: str) -> None:
 async def is_locked(doc_id: str) -> bool:
     async with async_session_factory() as session:
         result = await session.execute(
-            select(PendingWriteoffDoc.is_locked)
-            .where(PendingWriteoffDoc.doc_id == doc_id)
+            select(PendingWriteoffDoc.is_locked).where(
+                PendingWriteoffDoc.doc_id == doc_id
+            )
         )
         val = result.scalar_one_or_none()
         return bool(val)
@@ -266,14 +274,22 @@ def build_summary_text(doc: PendingWriteoff) -> str:
 
 def admin_keyboard(doc_id: str) -> InlineKeyboardMarkup:
     """Клавиатура для админа: одобрить / редактировать / отклонить."""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Отправить в iiko", callback_data=f"woa_approve:{doc_id}"),
-        ],
-        [
-            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"woa_edit:{doc_id}"),
-        ],
-        [
-            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"woa_reject:{doc_id}"),
-        ],
-    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Отправить в iiko", callback_data=f"woa_approve:{doc_id}"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✏️ Редактировать", callback_data=f"woa_edit:{doc_id}"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Отклонить", callback_data=f"woa_reject:{doc_id}"
+                ),
+            ],
+        ]
+    )

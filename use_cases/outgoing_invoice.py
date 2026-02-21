@@ -20,8 +20,16 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.engine import async_session_factory
 from db.models import (
-    Supplier, Entity, Store, Product, ProductGroup, GSheetExportGroup,
-    InvoiceTemplate, PriceProduct, PriceSupplierColumn, PriceSupplierPrice,
+    Supplier,
+    Entity,
+    Store,
+    Product,
+    ProductGroup,
+    GSheetExportGroup,
+    InvoiceTemplate,
+    PriceProduct,
+    PriceSupplierColumn,
+    PriceSupplierPrice,
 )
 from use_cases import invoice_cache as _cache
 
@@ -31,6 +39,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════
 # Контрагенты (suppliers)
 # ═══════════════════════════════════════════════════════
+
 
 async def load_all_suppliers() -> list[dict]:
     """
@@ -57,7 +66,8 @@ async def load_all_suppliers() -> list[dict]:
     _cache.set_suppliers(items)
     logger.info(
         "[invoice] Поставщиков: %d за %.2f сек",
-        len(items), time.monotonic() - t0,
+        len(items),
+        time.monotonic() - t0,
     )
     return items
 
@@ -77,13 +87,14 @@ async def search_suppliers(query: str, limit: int = 15) -> list[dict]:
     # Попробуем в кеше
     cached = _cache.get_suppliers()
     if cached is not None:
-        results = [
-            s for s in cached
-            if s["name"] and pattern in s["name"].lower()
-        ][:limit]
+        results = [s for s in cached if s["name"] and pattern in s["name"].lower()][
+            :limit
+        ]
         logger.info(
             "[invoice] Поиск поставщиков «%s» → %d результатов за %.4f сек (кеш)",
-            pattern, len(results), time.monotonic() - t0,
+            pattern,
+            len(results),
+            time.monotonic() - t0,
         )
         return results
 
@@ -103,7 +114,9 @@ async def search_suppliers(query: str, limit: int = 15) -> list[dict]:
     items = [{"id": str(r.id), "name": r.name} for r in rows]
     logger.info(
         "[invoice] Поиск поставщиков «%s» → %d результатов за %.2f сек (БД)",
-        pattern, len(items), time.monotonic() - t0,
+        pattern,
+        len(items),
+        time.monotonic() - t0,
     )
     return items
 
@@ -111,6 +124,7 @@ async def search_suppliers(query: str, limit: int = 15) -> list[dict]:
 # ═══════════════════════════════════════════════════════
 # Счёт реализации
 # ═══════════════════════════════════════════════════════
+
 
 async def get_revenue_account() -> dict | None:
     """
@@ -143,7 +157,9 @@ async def get_revenue_account() -> dict | None:
     _cache.set_revenue_account(account)
     logger.info(
         "[invoice] Счёт реализации: %s (%s) за %.2f сек",
-        account["name"], account["id"], time.monotonic() - t0,
+        account["name"],
+        account["id"],
+        time.monotonic() - t0,
     )
     return account
 
@@ -151,6 +167,7 @@ async def get_revenue_account() -> dict | None:
 # ═══════════════════════════════════════════════════════
 # Склады подразделения (бар / кухня)
 # ═══════════════════════════════════════════════════════
+
 
 async def get_stores_for_department(department_id: str) -> list[dict]:
     """
@@ -186,7 +203,9 @@ async def get_stores_for_department(department_id: str) -> list[dict]:
     _cache.set_stores(department_id, items)
     logger.info(
         "[invoice] Склады для %s: %d шт за %.2f сек",
-        department_id, len(items), time.monotonic() - t0,
+        department_id,
+        len(items),
+        time.monotonic() - t0,
     )
     return items
 
@@ -194,6 +213,7 @@ async def get_stores_for_department(department_id: str) -> list[dict]:
 # ═══════════════════════════════════════════════════════
 # Номенклатура по дереву gsheet_export_group (GOODS + DISH)
 # ═══════════════════════════════════════════════════════
+
 
 async def preload_products_tree() -> None:
     """
@@ -207,9 +227,7 @@ async def preload_products_tree() -> None:
     t0 = time.monotonic()
     async with async_session_factory() as session:
         # 1. Корневые группы
-        root_rows = (await session.execute(
-            select(GSheetExportGroup.group_id)
-        )).all()
+        root_rows = (await session.execute(select(GSheetExportGroup.group_id))).all()
         root_ids = [str(r.group_id) for r in root_rows]
 
         if not root_ids:
@@ -218,10 +236,13 @@ async def preload_products_tree() -> None:
             return
 
         # 2. BFS по дереву номенклатурных групп
-        group_rows = (await session.execute(
-            select(ProductGroup.id, ProductGroup.parent_id)
-            .where(ProductGroup.deleted == False)  # noqa: E712
-        )).all()
+        group_rows = (
+            await session.execute(
+                select(ProductGroup.id, ProductGroup.parent_id).where(
+                    ProductGroup.deleted == False
+                )  # noqa: E712
+            )
+        ).all()
 
         children_map: dict[str, list[str]] = {}
         for g in group_rows:
@@ -239,17 +260,25 @@ async def preload_products_tree() -> None:
             queue.extend(children_map.get(gid, []))
 
         # 3. Товары GOODS + DISH из разрешённых групп + единицы измерения
-        products_rows = (await session.execute(
-            select(Product.id, Product.name, Product.parent_id,
-                   Product.product_type, Product.main_unit)
-            .where(Product.product_type.in_(["GOODS", "DISH"]))
-            .where(Product.deleted == False)  # noqa: E712
-            .order_by(Product.name)
-        )).all()
+        products_rows = (
+            await session.execute(
+                select(
+                    Product.id,
+                    Product.name,
+                    Product.parent_id,
+                    Product.product_type,
+                    Product.main_unit,
+                )
+                .where(Product.product_type.in_(["GOODS", "DISH"]))
+                .where(Product.deleted == False)  # noqa: E712
+                .order_by(Product.name)
+            )
+        ).all()
 
         # Фильтруем по дереву
         products_rows = [
-            r for r in products_rows
+            r
+            for r in products_rows
             if r.parent_id and str(r.parent_id) in allowed_groups
         ]
 
@@ -271,19 +300,22 @@ async def preload_products_tree() -> None:
     for pid, pname, p_parent, ptype, pmain_unit in products_rows:
         uid_str = str(pmain_unit) if pmain_unit else None
         uname = unit_map.get(uid_str, "шт") if uid_str else "шт"
-        items.append({
-            "id": str(pid),
-            "name": pname,
-            "name_lower": pname.lower() if pname else "",
-            "product_type": ptype,
-            "unit_name": uname,
-            "main_unit": uid_str,
-        })
+        items.append(
+            {
+                "id": str(pid),
+                "name": pname,
+                "name_lower": pname.lower() if pname else "",
+                "product_type": ptype,
+                "unit_name": uname,
+                "main_unit": uid_str,
+            }
+        )
 
     _cache.set_products(items)
     logger.info(
         "[invoice] Прогрев кеша номенклатуры (дерево): %d товаров за %.2f сек",
-        len(items), time.monotonic() - t0,
+        len(items),
+        time.monotonic() - t0,
     )
 
 
@@ -315,7 +347,9 @@ async def search_products_tree(query: str, limit: int = 15) -> list[dict]:
 
     logger.info(
         "[invoice] Поиск товаров «%s» → %d результатов за %.4f сек",
-        pattern, len(results), time.monotonic() - t0,
+        pattern,
+        len(results),
+        time.monotonic() - t0,
     )
     return results
 
@@ -323,6 +357,7 @@ async def search_products_tree(query: str, limit: int = 15) -> list[dict]:
 # ═══════════════════════════════════════════════════════
 # CRUD шаблонов
 # ═══════════════════════════════════════════════════════
+
 
 async def save_template(
     *,
@@ -344,15 +379,14 @@ async def save_template(
     t0 = time.monotonic()
     logger.info(
         "[invoice] Сохранение шаблона «%s» (by=%d, items=%d)...",
-        name, created_by, len(items),
+        name,
+        created_by,
+        len(items),
     )
 
     # Шаблон хранит только позиции (без цен — они подтягиваются динамически)
     clean_items = [
-        {
-            k: v for k, v in it.items()
-            if k not in ("cost_price", "sell_price", "price")
-        }
+        {k: v for k, v in it.items() if k not in ("cost_price", "sell_price", "price")}
         for it in items
     ]
 
@@ -375,7 +409,8 @@ async def save_template(
 
     logger.info(
         "[invoice] Шаблон pk=%d сохранён за %.2f сек",
-        pk, time.monotonic() - t0,
+        pk,
+        time.monotonic() - t0,
     )
     return pk
 
@@ -397,19 +432,23 @@ async def get_templates_for_department(department_id: str) -> list[dict]:
 
     items = []
     for t in templates:
-        items.append({
-            "pk": t.pk,
-            "name": t.name,
-            "counteragent_name": t.counteragent_name,
-            "store_name": t.store_name,
-            "account_name": t.account_name,
-            "items_count": len(t.items) if t.items else 0,
-            "created_at": t.created_at,
-        })
+        items.append(
+            {
+                "pk": t.pk,
+                "name": t.name,
+                "counteragent_name": t.counteragent_name,
+                "store_name": t.store_name,
+                "account_name": t.account_name,
+                "items_count": len(t.items) if t.items else 0,
+                "created_at": t.created_at,
+            }
+        )
 
     logger.info(
         "[invoice] Шаблоны для dept=%s: %d шт за %.2f сек",
-        department_id, len(items), time.monotonic() - t0,
+        department_id,
+        len(items),
+        time.monotonic() - t0,
     )
     return items
 
@@ -461,6 +500,7 @@ async def delete_template(pk: int) -> bool:
 # Прогрев кеша
 # ═══════════════════════════════════════════════════════
 
+
 async def preload_for_invoice(department_id: str) -> None:
     """
     Прогрев кеша при входе в раздел «Накладные».
@@ -485,6 +525,7 @@ async def preload_for_invoice(department_id: str) -> None:
 # ═══════════════════════════════════════════════════════
 # Себестоимости: товары по последнему приходу + техкарты
 # ═══════════════════════════════════════════════════════
+
 
 async def calculate_goods_cost_prices(
     days_back: int = 90,
@@ -517,7 +558,9 @@ async def calculate_goods_cost_prices(
             len(store_ids),
         )
     else:
-        logger.info("[invoice] Расчёт себестоимости GOODS: СЦС из остатков всех складов")
+        logger.info(
+            "[invoice] Расчёт себестоимости GOODS: СЦС из остатков всех складов"
+        )
 
     # ── 1. Остатки склада → СЦС ─────────────────────────────────────────────
     balances = await iiko_api.fetch_stock_balances()
@@ -536,7 +579,7 @@ async def calculate_goods_cost_prices(
                 continue
             pid = (entry.get("product") or "").lower().strip()
             amt = float(entry.get("amount") or 0)
-            sm  = float(entry.get("sum")    or 0)
+            sm = float(entry.get("sum") or 0)
             if pid and amt > 0 and sm > 0:
                 p_sum[pid] = p_sum.get(pid, 0.0) + sm
                 p_amt[pid] = p_amt.get(pid, 0.0) + amt
@@ -558,22 +601,25 @@ async def calculate_goods_cost_prices(
         logger.info(
             "[invoice] СЦС из остатков: %d товаров "
             "(подразделение: %d, all-stores fallback: %d) из %d записей за %.2f сек",
-            len(cost_map), len(cost_map_dept), all_stores_fallback,
-            len(balances), time.monotonic() - t0,
+            len(cost_map),
+            len(cost_map_dept),
+            all_stores_fallback,
+            len(balances),
+            time.monotonic() - t0,
         )
     else:
         cost_map = cost_map_all
         logger.info(
             "[invoice] СЦС из остатков: %d товаров из %d записей за %.2f сек",
-            len(cost_map), len(balances), time.monotonic() - t0,
+            len(cost_map),
+            len(balances),
+            time.monotonic() - t0,
         )
 
     # ── 2. Fallback: последняя накладная для товаров без остатка ─────────────
-    date_to   = today.strftime("%Y-%m-%d")
+    date_to = today.strftime("%Y-%m-%d")
     date_from = (today - timedelta(days=days_back)).strftime("%Y-%m-%d")
-    logger.info(
-        "[invoice] Fallback: приходные накладные %s..%s", date_from, date_to
-    )
+    logger.info("[invoice] Fallback: приходные накладные %s..%s", date_from, date_to)
     invoices = await iiko_api.fetch_incoming_invoices(date_from, date_to)
 
     def _parse_date(inv: dict) -> str:
@@ -641,20 +687,28 @@ async def calculate_dish_cost_prices(
     t0 = time.monotonic()
     logger.info("[invoice] Расчёт себестоимости DISH по техкартам (дата=%s)...", today)
 
-    chart_data = await iiko_api.fetch_assembly_charts(today, today, include_prepared=True)
-    assembly_charts = chart_data.get("assemblyCharts") or []   # DISH,     amount = amountOut
-    prepared_charts = chart_data.get("preparedCharts") or []   # PREPARED, amount = amountOut (same!)
+    chart_data = await iiko_api.fetch_assembly_charts(
+        today, today, include_prepared=True
+    )
+    assembly_charts = (
+        chart_data.get("assemblyCharts") or []
+    )  # DISH,     amount = amountOut
+    prepared_charts = (
+        chart_data.get("preparedCharts") or []
+    )  # PREPARED, amount = amountOut (same!)
 
     # Общая карта: {assembledProductId: (chart, amount_field)}
     # Для каждого продукта берём самую свежую действующую версию (dateFrom ≤ today, dateTo is null или ≥ today)
-    def _pick_effective(charts: list[dict], amount_field: str) -> dict[str, tuple[dict, str]]:
+    def _pick_effective(
+        charts: list[dict], amount_field: str
+    ) -> dict[str, tuple[dict, str]]:
         best: dict[str, tuple[str, dict]] = {}  # pid → (dateFrom_str, chart)
         for c in charts:
             pid = (c.get("assembledProductId") or "").lower()  # нормализуем к lowercase
             if not pid:
                 continue
             date_from = (c.get("dateFrom") or "")[:10]
-            date_to   = (c.get("dateTo")   or "")[:10]
+            date_to = (c.get("dateTo") or "")[:10]
             # датаTo = null значит бессрочно; если указана — должна быть ≥ today
             if date_to and date_to < today:
                 continue
@@ -735,18 +789,18 @@ async def calculate_dish_cost_prices(
 
     # Возвращаем только DISH (PREPARED остаётся в all_costs для расчёта, в таблицу не идёт)
     dish_costs: dict[str, float] = {
-        pid: cost
-        for pid, cost in all_costs.items()
-        if product_types.get(pid) == "DISH"
+        pid: cost for pid, cost in all_costs.items() if product_types.get(pid) == "DISH"
     }
 
     logger.info(
         "[invoice] DISH: %d блюд с себестоимостью (%d assembly + %d prepared техкарт, итераций=%d)",
-        len(dish_costs), len(assembly_charts), len(prepared_charts), iteration + 1,
+        len(dish_costs),
+        len(assembly_charts),
+        len(prepared_charts),
+        iteration + 1,
     )
 
     return dish_costs
-
 
 
 async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
@@ -796,7 +850,8 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
             dept_store_ids = {s["id"] for s in stores_for_dropdown}
             logger.info(
                 "[invoice] Склады заведения '%s': %d — СЦС будет по ним",
-                selected[0]["name"], len(dept_store_ids),
+                selected[0]["name"],
+                len(dept_store_ids),
             )
         else:
             logger.warning(
@@ -823,10 +878,11 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
     dish_products = []
     goods_products = []
     other_products = []
-    
+
     for p in products:
         product_dict = {
-            "id": p["id"], "name": p["name"],
+            "id": p["id"],
+            "name": p["name"],
             "product_type": p.get("product_type", ""),
             "main_unit": p.get("main_unit"),
             "unit_name": p.get("unit_name", "шт"),
@@ -840,15 +896,21 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
         elif product_type == "GOODS":
             goods_products.append(product_dict)
         else:
-            logger.debug("[invoice] Неизвестный тип '%s' у товара: %s", product_type, p.get("name"))
+            logger.debug(
+                "[invoice] Неизвестный тип '%s' у товара: %s",
+                product_type,
+                p.get("name"),
+            )
             other_products.append(product_dict)
-    
+
     # Сначала блюда, потом товары, потом остальное
     products_for_sheet = dish_products + goods_products + other_products
-    
+
     logger.info(
         "[invoice] Прайс-лист: разделение на блоки — %d блюд, %d товаров, %d прочих",
-        len(dish_products), len(goods_products), len(other_products),
+        len(dish_products),
+        len(goods_products),
+        len(other_products),
     )
 
     # 6. Загружаем поставщиков для dropdown в Google Sheet
@@ -857,7 +919,9 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
 
     # 7. Записываем в Google Sheet
     count = await gs.sync_invoice_prices_to_sheet(
-        products_for_sheet, all_costs, suppliers,
+        products_for_sheet,
+        all_costs,
+        suppliers,
         stores_for_dropdown=stores_for_dropdown,
     )
 
@@ -866,7 +930,10 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
         store_id_map = {s["name"]: s["id"] for s in stores_for_dropdown}
         gsheet_data = await gs.read_invoice_prices(store_id_map=store_id_map)
         db_count = await _sync_prices_to_db(
-            products_for_sheet, all_costs, gsheet_data, suppliers,
+            products_for_sheet,
+            all_costs,
+            gsheet_data,
+            suppliers,
         )
         logger.info("[invoice] Прайс-лист → БД: %d товаров, prices synced", db_count)
     except Exception:
@@ -875,7 +942,10 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
     elapsed = time.monotonic() - t0
     logger.info(
         "[invoice] Прайс-лист: %d товаров, %d GOODS + %d DISH себестоимостей за %.1f сек",
-        count, len(goods_costs), len(dish_costs), elapsed,
+        count,
+        len(goods_costs),
+        len(dish_costs),
+        elapsed,
     )
     return f"{count} товаров ({len(goods_costs)} GOODS + {len(dish_costs)} DISH себестоимостей)"
 
@@ -883,6 +953,7 @@ async def sync_price_sheet(days_back: int = 90, **kwargs) -> str:
 # ═══════════════════════════════════════════════════════
 # Синхронизация прайс-листа → БД
 # ═══════════════════════════════════════════════════════
+
 
 async def _sync_prices_to_db(
     products: list[dict],
@@ -919,26 +990,28 @@ async def _sync_prices_to_db(
             pid = item["product_id"]
             info = prod_info.get(pid, {})
             product_type = info.get("product_type", "")
-            
+
             # Для DISH берём ТОЛЬКО расчётную себестоимость (无 fallback из GSheet)
             # Для GOODS берём расчётную, а если нет — fallback из GSheet (ручное значение)
             if product_type == "DISH":
                 cost = cost_prices.get(pid)  # None если не рассчитано
             else:
                 cost = cost_prices.get(pid, item.get("cost_price"))
-            
+
             main_unit_str = info.get("main_unit")
             store_id_str = item.get("store_id", "")
-            product_rows.append({
-                "product_id": UUID(pid),
-                "product_name": item.get("product_name") or info.get("name", ""),
-                "product_type": info.get("product_type", ""),
-                "cost_price": cost,
-                "main_unit": UUID(main_unit_str) if main_unit_str else None,
-                "unit_name": info.get("unit_name", "шт"),
-                "store_id": UUID(store_id_str) if store_id_str else None,
-                "store_name": item.get("store_name", "") or None,
-            })
+            product_rows.append(
+                {
+                    "product_id": UUID(pid),
+                    "product_name": item.get("product_name") or info.get("name", ""),
+                    "product_type": info.get("product_type", ""),
+                    "cost_price": cost,
+                    "main_unit": UUID(main_unit_str) if main_unit_str else None,
+                    "unit_name": info.get("unit_name", "шт"),
+                    "store_id": UUID(store_id_str) if store_id_str else None,
+                    "store_name": item.get("store_name", "") or None,
+                }
+            )
         for i in range(0, len(product_rows), CHUNK):
             chunk = product_rows[i : i + CHUNK]
             stmt = pg_insert(PriceProduct).values(chunk)
@@ -976,11 +1049,13 @@ async def _sync_prices_to_db(
             pid = item["product_id"]
             for sid, price in item.get("supplier_prices", {}).items():
                 if price and price > 0:
-                    price_rows.append({
-                        "product_id": UUID(pid),
-                        "supplier_id": UUID(sid),
-                        "price": price,
-                    })
+                    price_rows.append(
+                        {
+                            "product_id": UUID(pid),
+                            "supplier_id": UUID(sid),
+                            "price": price,
+                        }
+                    )
         price_count = len(price_rows)
         for i in range(0, len(price_rows), CHUNK):
             chunk = price_rows[i : i + CHUNK]
@@ -990,7 +1065,9 @@ async def _sync_prices_to_db(
 
     logger.info(
         "[invoice] Прайс-лист → БД: %d товаров, %d поставщиков, %d цен за %.2f сек",
-        len(gsheet_data), len(active_supplier_ids), price_count,
+        len(gsheet_data),
+        len(active_supplier_ids),
+        price_count,
         time.monotonic() - t0,
     )
     return len(gsheet_data)
@@ -1000,16 +1077,16 @@ async def _sync_prices_to_db(
 # Запросы к прайс-листу из БД
 # ═══════════════════════════════════════════════════════
 
+
 async def get_price_list_suppliers() -> list[dict]:
     """
     Поставщики из прайс-листа (те, у кого назначены столбцы в GSheet).
     Возвращает [{id, name}, ...] отсортированные по имени.
     """
     async with async_session_factory() as session:
-        stmt = (
-            select(PriceSupplierColumn.supplier_id, PriceSupplierColumn.supplier_name)
-            .order_by(PriceSupplierColumn.supplier_name)
-        )
+        stmt = select(
+            PriceSupplierColumn.supplier_id, PriceSupplierColumn.supplier_name
+        ).order_by(PriceSupplierColumn.supplier_name)
         rows = (await session.execute(stmt)).all()
     return [{"id": str(r.supplier_id), "name": r.supplier_name} for r in rows]
 
@@ -1053,9 +1130,8 @@ async def get_supplier_prices(supplier_id: str) -> dict[str, float]:
     Возвращает {product_id: price}.
     """
     async with async_session_factory() as session:
-        stmt = (
-            select(PriceSupplierPrice.product_id, PriceSupplierPrice.price)
-            .where(PriceSupplierPrice.supplier_id == UUID(supplier_id))
+        stmt = select(PriceSupplierPrice.product_id, PriceSupplierPrice.price).where(
+            PriceSupplierPrice.supplier_id == UUID(supplier_id)
         )
         rows = (await session.execute(stmt)).all()
     return {str(r.product_id): float(r.price) for r in rows}
@@ -1078,9 +1154,8 @@ async def get_cost_prices_bulk(product_ids: list[str]) -> dict[str, float]:
         return {}
 
     async with async_session_factory() as session:
-        stmt = (
-            select(PriceProduct.product_id, PriceProduct.cost_price)
-            .where(PriceProduct.product_id.in_(uuids))
+        stmt = select(PriceProduct.product_id, PriceProduct.cost_price).where(
+            PriceProduct.product_id.in_(uuids)
         )
         rows = (await session.execute(stmt)).all()
 
@@ -1112,9 +1187,13 @@ async def get_supplier_prices_by_store(target_store_name: str) -> dict[str, floa
         row = (await session.execute(stmt)).first()
         if not row:
             # Частичное: supplier_name содержит store_name
-            stmt = select(PriceSupplierColumn.supplier_id).where(
-                func.lower(PriceSupplierColumn.supplier_name).contains(name_lower)
-            ).limit(1)
+            stmt = (
+                select(PriceSupplierColumn.supplier_id)
+                .where(
+                    func.lower(PriceSupplierColumn.supplier_name).contains(name_lower)
+                )
+                .limit(1)
+            )
             row = (await session.execute(stmt)).first()
         if not row:
             # Обратное: store_name содержит supplier_name
@@ -1135,9 +1214,8 @@ async def get_supplier_prices_by_store(target_store_name: str) -> dict[str, floa
             return {}
 
         # Получаем все цены этого поставщика
-        stmt = (
-            select(PriceSupplierPrice.product_id, PriceSupplierPrice.price)
-            .where(PriceSupplierPrice.supplier_id == row.supplier_id)
+        stmt = select(PriceSupplierPrice.product_id, PriceSupplierPrice.price).where(
+            PriceSupplierPrice.supplier_id == row.supplier_id
         )
         price_rows = (await session.execute(stmt)).all()
 
@@ -1148,13 +1226,15 @@ async def get_supplier_prices_by_store(target_store_name: str) -> dict[str, floa
     }
     logger.debug(
         "[invoice] Supplier prices for store '%s': %d products",
-        target_store_name, len(result),
+        target_store_name,
+        len(result),
     )
     return result
 
 
 async def get_supplier_price_for_product(
-    product_id: str, target_store_name: str,
+    product_id: str,
+    target_store_name: str,
 ) -> float | None:
     """
     Получить цену товара из столбца поставщика, соответствующего целевому складу.
@@ -1177,9 +1257,13 @@ async def get_supplier_price_for_product(
         )
         row = (await session.execute(stmt)).first()
         if not row:
-            stmt = select(PriceSupplierColumn.supplier_id).where(
-                func.lower(PriceSupplierColumn.supplier_name).contains(name_lower)
-            ).limit(1)
+            stmt = (
+                select(PriceSupplierColumn.supplier_id)
+                .where(
+                    func.lower(PriceSupplierColumn.supplier_name).contains(name_lower)
+                )
+                .limit(1)
+            )
             row = (await session.execute(stmt)).first()
         if not row:
             stmt = select(
@@ -1195,12 +1279,9 @@ async def get_supplier_price_for_product(
             return None
 
         # Получить цену для конкретного товара
-        stmt = (
-            select(PriceSupplierPrice.price)
-            .where(
-                PriceSupplierPrice.product_id == prod_uuid,
-                PriceSupplierPrice.supplier_id == row.supplier_id,
-            )
+        stmt = select(PriceSupplierPrice.price).where(
+            PriceSupplierPrice.product_id == prod_uuid,
+            PriceSupplierPrice.supplier_id == row.supplier_id,
         )
         price_row = (await session.execute(stmt)).first()
         if price_row and price_row.price and float(price_row.price) > 0:
@@ -1225,19 +1306,25 @@ async def get_product_store_map(product_ids: list[str]) -> dict[str, dict[str, s
         return {}
     async with async_session_factory() as session:
         stmt = (
-            select(PriceProduct.product_id, PriceProduct.store_id, PriceProduct.store_name)
+            select(
+                PriceProduct.product_id, PriceProduct.store_id, PriceProduct.store_name
+            )
             .where(PriceProduct.product_id.in_(uuids))
             .where(PriceProduct.store_id.isnot(None))
         )
         rows = (await session.execute(stmt)).all()
     return {
-        str(r.product_id): {"store_id": str(r.store_id), "store_name": r.store_name or ""}
+        str(r.product_id): {
+            "store_id": str(r.store_id),
+            "store_name": r.store_name or "",
+        }
         for r in rows
     }
 
 
 async def get_product_price_for_supplier(
-    product_id: str, supplier_id: str,
+    product_id: str,
+    supplier_id: str,
 ) -> float | None:
     """Цена конкретного товара у конкретного поставщика."""
     async with async_session_factory() as session:
@@ -1275,9 +1362,8 @@ async def get_product_containers(product_ids: list[str]) -> dict[str, str]:
     t0 = time.monotonic()
     result: dict[str, str] = {}
     async with async_session_factory() as session:
-        stmt = (
-            select(IikoProduct.id, IikoProduct.raw_json)
-            .where(IikoProduct.id.in_(uuids))
+        stmt = select(IikoProduct.id, IikoProduct.raw_json).where(
+            IikoProduct.id.in_(uuids)
         )
         rows = (await session.execute(stmt)).all()
 
@@ -1296,7 +1382,9 @@ async def get_product_containers(product_ids: list[str]) -> dict[str, str]:
     elapsed = time.monotonic() - t0
     logger.info(
         "[invoice][containers] Найдено %d/%d контейнеров за %.2f сек",
-        len(result), len(product_ids), elapsed,
+        len(result),
+        len(product_ids),
+        elapsed,
     )
     for pid, cid in result.items():
         logger.debug("[invoice][containers]   prod=%s → container=%s", pid, cid)
@@ -1356,15 +1444,25 @@ def build_outgoing_invoice_document(
     logger.info(
         "[invoice][build] Документ: date=%s, status=%s, store=%s, "
         "counteragent=%s, account=%s, items=%d (of %d input), comment='%s'",
-        doc["dateIncoming"], doc["status"], store_id,
-        counteragent_id, account_id, len(doc["items"]), len(items),
+        doc["dateIncoming"],
+        doc["status"],
+        store_id,
+        counteragent_id,
+        account_id,
+        len(doc["items"]),
+        len(items),
         comment[:80],
     )
     for idx, di in enumerate(doc["items"], 1):
         logger.debug(
             "[invoice][build]   #%d prod=%s amt=%.4g price=%.2f sum=%.2f unit=%s container=%s",
-            idx, di["productId"], di["amount"], di["price"], di["sum"],
-            di["measureUnitId"], di.get("containerId", ""),
+            idx,
+            di["productId"],
+            di["amount"],
+            di["price"],
+            di["sum"],
+            di["measureUnitId"],
+            di.get("containerId", ""),
         )
     return doc
 
@@ -1378,13 +1476,17 @@ async def send_outgoing_invoice_document(document: dict) -> str:
 
     n_items = len(document.get("items", []))
     if n_items == 0:
-        logger.warning("[invoice][send] Документ пустой — все позиции с количеством 0 или без unit")
+        logger.warning(
+            "[invoice][send] Документ пустой — все позиции с количеством 0 или без unit"
+        )
         return "⚠️ Документ пустой (все позиции с количеством 0)"
 
     t0 = time.monotonic()
     logger.info(
         "[invoice] Отправка расходной накладной: store=%s, counteragent=%s, items=%d",
-        document.get("storeId"), document.get("counteragentId"), n_items,
+        document.get("storeId"),
+        document.get("counteragentId"),
+        n_items,
     )
     try:
         result = await iiko_api.send_outgoing_invoice(document)
@@ -1394,11 +1496,17 @@ async def send_outgoing_invoice_document(document: dict) -> str:
             doc_num = result.get("documentNumber", "?")
             logger.error(
                 "[invoice] ❌ Валидация iiko отклонила документ %s за %.2f сек: %s",
-                doc_num, elapsed, err,
+                doc_num,
+                elapsed,
+                err,
             )
             return f"❌ Ошибка валидации iiko: {err[:300]}"
         resp_info = result.get("response", "")
-        logger.info("[invoice] ✅ Расходная накладная отправлена за %.2f сек, resp=%s", elapsed, resp_info[:200])
+        logger.info(
+            "[invoice] ✅ Расходная накладная отправлена за %.2f сек, resp=%s",
+            elapsed,
+            resp_info[:200],
+        )
         return "✅ Расходная накладная создана в iiko (статус: Проведена)"
     except Exception as exc:
         elapsed = time.monotonic() - t0

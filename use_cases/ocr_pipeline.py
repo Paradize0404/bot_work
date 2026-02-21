@@ -33,6 +33,7 @@ STATUS_NEEDS_REVIEW = "needs_review"
 @dataclass
 class DocumentGroup:
     """Группа страниц одного документа."""
+
     group_key: str
     pages: List[Dict[str, Any]] = field(default_factory=list)
     total_pages: int = 1
@@ -48,6 +49,7 @@ class DocumentGroup:
 @dataclass
 class OCRResult:
     """Результат обработки документа."""
+
     status: str  # "success", "rejected_qr", "incomplete", "error"
     doc_type: str
     doc_number: Optional[str]
@@ -64,7 +66,7 @@ class OCRResult:
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     raw_json: Optional[Dict[str, Any]] = None
-    
+
     def to_dict(self) -> dict:
         return {
             "status": self.status,
@@ -93,11 +95,11 @@ async def process_photo_batch(
 ) -> List[OCRResult]:
     """
     Обработать пачку фото документов.
-    
+
     Args:
         photos: Список изображений в байтах
         user_id: ID пользователя (для логирования)
-    
+
     Returns:
         Список результатов OCR для каждого документа
     """
@@ -108,7 +110,7 @@ async def process_photo_batch(
         invoices_only,
         min_confidence,
     )
-    
+
     results: List[OCRResult] = []
 
     # ── Шаг 1: Параллельная проверка качества + OCR всех фото ──
@@ -116,13 +118,18 @@ async def process_photo_batch(
 
     async def _process_one(idx: int, photo: bytes):
         """Проверить качество + распознать одно фото. Возвращает (idx, outcome).
-        outcome — либо dict с recognized-данными, либо OCRResult с ошибкой/отклонением."""
+        outcome — либо dict с recognized-данными, либо OCRResult с ошибкой/отклонением.
+        """
         logger.info("[OCR Pipeline] Processing photo %d/%d", idx + 1, len(photos))
 
         # 1.1 Проверка качества
         quality = await validate_photo(photo)
         if not quality.is_good:
-            logger.warning("[OCR Pipeline] Photo %d failed quality check: %s", idx + 1, quality.issues)
+            logger.warning(
+                "[OCR Pipeline] Photo %d failed quality check: %s",
+                idx + 1,
+                quality.issues,
+            )
             return idx, OCRResult(
                 status="error",
                 doc_type="unknown",
@@ -145,7 +152,8 @@ async def process_photo_batch(
             if invoices_only and result.get("doc_type") not in ALLOWED_INVOICE_TYPES:
                 logger.info(
                     "[OCR Pipeline] Photo %d rejected: doc_type=%s is not invoice",
-                    idx + 1, result.get("doc_type"),
+                    idx + 1,
+                    result.get("doc_type"),
                 )
                 return idx, OCRResult(
                     status=STATUS_REJECTED_NON_INVOICE,
@@ -158,10 +166,16 @@ async def process_photo_batch(
                     total_amount=result.get("total_amount"),
                     page_count=1,
                     total_pages=1,
-                    warnings=["Документ не является накладной/УПД и не будет загружен в систему."],
+                    warnings=[
+                        "Документ не является накладной/УПД и не будет загружен в систему."
+                    ],
                 )
 
-            logger.info("[OCR Pipeline] Photo %d recognized: %s", idx + 1, result.get("doc_type"))
+            logger.info(
+                "[OCR Pipeline] Photo %d recognized: %s",
+                idx + 1,
+                result.get("doc_type"),
+            )
             return idx, {"photo_index": idx, "result": result, "image_bytes": photo}
 
         except Exception as e:
@@ -190,7 +204,7 @@ async def process_photo_batch(
             results.append(outcome)
         else:
             recognized.append(outcome)
-    
+
     # Шаг 2: Проверка QR-кодов (чеки с QR → отклонять)
     logger.info("[OCR Pipeline] Checking QR codes")
     filtered = []
@@ -198,28 +212,34 @@ async def process_photo_batch(
         result = item["result"]
         doc_type = result.get("doc_type", "unknown")
         has_qr = result.get("has_qr", False)
-        
+
         # Отклоняем ТОЛЬКО чеки с QR
         if doc_type == "receipt" and has_qr:
-            logger.warning(f"[OCR Pipeline] Receipt with QR rejected: {result.get('doc_number')}")
-            results.append(OCRResult(
-                status="rejected_qr",
-                doc_type=doc_type,
-                doc_number=result.get("doc_number"),
-                doc_date=result.get("date"),
-                supplier=result.get("supplier"),
-                buyer=result.get("buyer"),
-                items=[],
-                total_amount=None,
-                page_count=1,
-                total_pages=1,
-                warnings=["Чек с QR-кодом. Используйте ФНС: https://check.nalog.ru/"]
-            ))
+            logger.warning(
+                f"[OCR Pipeline] Receipt with QR rejected: {result.get('doc_number')}"
+            )
+            results.append(
+                OCRResult(
+                    status="rejected_qr",
+                    doc_type=doc_type,
+                    doc_number=result.get("doc_number"),
+                    doc_date=result.get("date"),
+                    supplier=result.get("supplier"),
+                    buyer=result.get("buyer"),
+                    items=[],
+                    total_amount=None,
+                    page_count=1,
+                    total_pages=1,
+                    warnings=[
+                        "Чек с QR-кодом. Используйте ФНС: https://check.nalog.ru/"
+                    ],
+                )
+            )
         else:
             filtered.append(item)
-    
+
     logger.info(f"[OCR Pipeline] {len(filtered)} photos passed QR check")
-    
+
     # Шаг 3: Группировка по group_key (двухпроходная)
     logger.info("[OCR Pipeline] Grouping by group_key")
     groups: Dict[str, DocumentGroup] = {}
@@ -270,7 +290,9 @@ async def process_photo_batch(
                     matched_key = gk
                     logger.info(
                         "[OCR Pipeline] Orphan page matched to group %s by INN=%s date=%s",
-                        gk, inn, date_val,
+                        gk,
+                        inn,
+                        date_val,
                     )
                     break
 
@@ -286,20 +308,22 @@ async def process_photo_batch(
             )
             logger.warning(
                 "[OCR Pipeline] Orphan page %d: no matching group found (INN=%s date=%s)",
-                item['photo_index'], inn, date_val,
+                item["photo_index"],
+                inn,
+                date_val,
             )
 
         groups[matched_key].pages.append(result)
         page_total = result.get("total_pages", 1)
         if page_total > groups[matched_key].total_pages:
             groups[matched_key].total_pages = page_total
-    
+
     # Шаг 4: Проверка полноты страниц
     logger.info("[OCR Pipeline] Checking page completeness")
     for group_key, group in groups.items():
         page_count = len(group.pages)
         total_pages = group.total_pages
-        
+
         if page_count < total_pages:
             group.missing_pages = total_pages - page_count
             group.is_complete = False
@@ -309,47 +333,51 @@ async def process_photo_batch(
             )
         else:
             group.is_complete = True
-            logger.info(f"[OCR Pipeline] Complete document {group_key}: {page_count} pages")
-    
+            logger.info(
+                f"[OCR Pipeline] Complete document {group_key}: {page_count} pages"
+            )
+
     # Шаг 5: Обработка каждой группы
     logger.info("[OCR Pipeline] Processing groups")
     for group_key, group in groups.items():
         ocr_result = await process_document_group(group, min_confidence=min_confidence)
         results.append(ocr_result)
-    
+
     logger.info(f"[OCR Pipeline] Finished. {len(results)} documents processed")
     return results
 
 
-async def process_document_group(group: DocumentGroup, min_confidence: int = 70) -> OCRResult:
+async def process_document_group(
+    group: DocumentGroup, min_confidence: int = 70
+) -> OCRResult:
     """
     Обработать группу страниц одного документа.
-    
+
     Args:
         group: Группа страниц
-    
+
     Returns:
         Результат OCR
     """
     warnings = []
     errors = []
-    
+
     # Проверка на неполноту
     if not group.is_complete:
         warnings.append(
             f"Документ неполный: загружено {len(group.pages)} из {group.total_pages} стр. "
             f"Не хватает {group.missing_pages} стр."
         )
-    
+
     # Сортировка страниц по номеру
     group.pages.sort(key=lambda p: p.get("page_number", 1))
-    
+
     # Объединение страниц
     merged = merge_pages(group.pages)
-    
+
     # Пост-валидация и автопоправки для стабильного импорта накладных.
-    merged, validation_warnings, validation_errors, needs_review = _validate_invoice_document(
-        merged, min_confidence=min_confidence
+    merged, validation_warnings, validation_errors, needs_review = (
+        _validate_invoice_document(merged, min_confidence=min_confidence)
     )
     warnings.extend(validation_warnings)
     errors.extend(validation_errors)
@@ -357,16 +385,16 @@ async def process_document_group(group: DocumentGroup, min_confidence: int = 70)
     # Извлекаем данные из объединённого документа
     supplier = merged.get("supplier")
     buyer = merged.get("buyer")
-    
+
     # Собираем все warnings
     quality_check = merged.get("quality_check", {})
     if quality_check.get("warnings"):
         warnings.extend(quality_check["warnings"])
-    
+
     # Добавляем предупреждение о неполноте
     if not group.is_complete:
         quality_check["missing_pages_warning"] = True
-    
+
     status = "success" if group.is_complete else "incomplete"
     if needs_review:
         status = STATUS_NEEDS_REVIEW
@@ -387,43 +415,43 @@ async def process_document_group(group: DocumentGroup, min_confidence: int = 70)
         confidence_score=quality_check.get("confidence_score"),
         warnings=warnings,
         errors=errors,
-        raw_json=merged
+        raw_json=merged,
     )
 
 
 def merge_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Объединить несколько страниц в один документ.
-    
+
     Args:
         pages: Список результатов распознавания страниц
-    
+
     Returns:
         Объединённый документ
     """
     if not pages:
         return {}
-    
+
     if len(pages) == 1:
         return pages[0]
-    
+
     # Берём данные из первой страницы
     merged = pages[0].copy()
-    
+
     # Объединяем товары из всех страниц
     all_items = []
     for page in pages:
         items = page.get("items", [])
         all_items.extend(items)
-    
+
     merged["items"] = all_items
     merged["page_count"] = len(pages)
     merged["is_merged"] = True
-    
+
     # Пересчитываем total_amount
     total = sum(item.get("sum", 0) for item in all_items)
     merged["total_amount"] = round(total, 2)
-    
+
     # Обновляем quality_check
     quality_check = merged.get("quality_check", {})
     quality_check["merged_from_pages"] = [p.get("page_number") for p in pages]
@@ -431,9 +459,11 @@ def merge_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
         p.get("quality_check", {}).get("confidence_score", 100) for p in pages
     )
     merged["quality_check"] = quality_check
-    
-    logger.info(f"[OCR Pipeline] Merged {len(pages)} pages, {len(all_items)} items, total={total}")
-    
+
+    logger.info(
+        f"[OCR Pipeline] Merged {len(pages)} pages, {len(all_items)} items, total={total}"
+    )
+
     return merged
 
 
@@ -447,24 +477,30 @@ def _normalize_invoice_result(result: Dict[str, Any]) -> Dict[str, Any]:
         "name": (supplier.get("name") or "").strip() or None,
         "inn": _normalize_inn(supplier.get("inn")),
     }
-    result["buyer"] = {
-        "name": (buyer.get("name") or "").strip() or None,
-        "inn": _normalize_inn(buyer.get("inn")),
-    } if buyer else None
+    result["buyer"] = (
+        {
+            "name": (buyer.get("name") or "").strip() or None,
+            "inn": _normalize_inn(buyer.get("inn")),
+        }
+        if buyer
+        else None
+    )
 
     result["doc_number"] = (result.get("doc_number") or "").strip() or None
     result["date"] = (result.get("date") or "").strip() or None
 
     normalized_items: List[Dict[str, Any]] = []
     for item in result.get("items", []) or []:
-        normalized_items.append({
-            "name": (item.get("name") or "").strip(),
-            "unit": (item.get("unit") or "").strip() or None,
-            "qty": _to_float(item.get("qty")),
-            "price": _to_float(item.get("price")),
-            "sum": _to_float(item.get("sum")),
-            "vat_rate": item.get("vat_rate"),
-        })
+        normalized_items.append(
+            {
+                "name": (item.get("name") or "").strip(),
+                "unit": (item.get("unit") or "").strip() or None,
+                "qty": _to_float(item.get("qty")),
+                "price": _to_float(item.get("price")),
+                "sum": _to_float(item.get("sum")),
+                "vat_rate": item.get("vat_rate"),
+            }
+        )
     result["items"] = normalized_items
     result["total_amount"] = _to_float(result.get("total_amount"))
 
@@ -478,14 +514,14 @@ def _normalize_invoice_result(result: Dict[str, Any]) -> Dict[str, Any]:
 
 
 _VAT_RATE_MAP: Dict[str, Decimal] = {
-    "10%":      Decimal("0.10"),
-    "20%":      Decimal("0.20"),
-    "22%":      Decimal("0.22"),  # OCR иногда читает 20% как 22%, плюс акцизы
-    "5%":       Decimal("0.05"),
-    "7%":       Decimal("0.07"),
-    "без ндс":  Decimal("0.00"),
-    "без нДС":  Decimal("0.00"),
-    "без НДС":  Decimal("0.00"),
+    "10%": Decimal("0.10"),
+    "20%": Decimal("0.20"),
+    "22%": Decimal("0.22"),  # OCR иногда читает 20% как 22%, плюс акцизы
+    "5%": Decimal("0.05"),
+    "7%": Decimal("0.07"),
+    "без ндс": Decimal("0.00"),
+    "без нДС": Decimal("0.00"),
+    "без НДС": Decimal("0.00"),
 }
 
 
@@ -501,7 +537,7 @@ def _validate_invoice_document(
     min_confidence: int = 70,
 ) -> tuple[Dict[str, Any], List[str], List[str], bool]:
     """Проверка критических полей и арифметики с мягкой автокоррекцией.
-    
+
     Для УПД/акта: sum по позиции = стоимость С НДС (последний столбец).
     Если GPT вернул sum = qty × price (без НДС) — автокорректируем.
     """
@@ -527,7 +563,7 @@ def _validate_invoice_document(
 
     fixed_items: List[Dict[str, Any]] = []
     for idx, item in enumerate(doc.get("items", []) or [], start=1):
-        qty   = _to_float(item.get("qty"))
+        qty = _to_float(item.get("qty"))
         price = _to_float(item.get("price"))
         row_sum = _to_float(item.get("sum"))
 
@@ -536,12 +572,20 @@ def _validate_invoice_document(
             p = Decimal(str(price))
             excl = (q * p).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)  # без НДС
 
-            raw_vat = _parse_vat(item.get("vat_rate")) if apply_vat_correction else Decimal("0")
-            vat_unknown = raw_vat is None  # ставка есть в документе но не в нашей таблице
+            raw_vat = (
+                _parse_vat(item.get("vat_rate"))
+                if apply_vat_correction
+                else Decimal("0")
+            )
+            vat_unknown = (
+                raw_vat is None
+            )  # ставка есть в документе но не в нашей таблице
             vat_dec = raw_vat if raw_vat is not None else Decimal("0")
 
             if vat_dec > 0:
-                expected_incl = (excl * (1 + vat_dec)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                expected_incl = (excl * (1 + vat_dec)).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
             else:
                 expected_incl = excl
 
@@ -551,16 +595,26 @@ def _validate_invoice_document(
             if row_sum is None:
                 # Нет суммы — ставим с НДС
                 item["sum"] = incl_f
-                warnings.append(f"Позиция {idx}: сумма не указана, подставлено {incl_f}.")
+                warnings.append(
+                    f"Позиция {idx}: сумма не указана, подставлено {incl_f}."
+                )
             elif apply_vat_correction and vat_dec > 0 and abs(row_sum - excl_f) <= 0.51:
                 # GPT вернул сумму без НДС → корректируем
                 item["sum"] = incl_f
-                warnings.append(f"Позиция {idx}: сумма без НДС исправлена {row_sum} → {incl_f}.")
-            elif not vat_unknown and abs(row_sum - incl_f) > 0.51 and abs(row_sum - excl_f) > 0.51:
+                warnings.append(
+                    f"Позиция {idx}: сумма без НДС исправлена {row_sum} → {incl_f}."
+                )
+            elif (
+                not vat_unknown
+                and abs(row_sum - incl_f) > 0.51
+                and abs(row_sum - excl_f) > 0.51
+            ):
                 # Не совпадает ни с тем ни с тем — предупреждаем, оставляем.
                 # Если ставка НДС нам неизвестна — молчим: сумма из документа
                 # берётся как достоверная (столбец 9 «Стоимость с налогом»).
-                warnings.append(f"Позиция {idx}: сумма {row_sum} не совпадает с расчётной {incl_f}.")
+                warnings.append(
+                    f"Позиция {idx}: сумма {row_sum} не совпадает с расчётной {incl_f}."
+                )
 
         fixed_items.append(item)
 
@@ -571,13 +625,17 @@ def _validate_invoice_document(
         doc["total_amount"] = calc_total
         warnings.append(f"Итоговая сумма не найдена: подставлена {calc_total}.")
     elif abs(total_amount - calc_total) > 5:
-        warnings.append(f"Итоговая сумма скорректирована {total_amount} → {calc_total}.")
+        warnings.append(
+            f"Итоговая сумма скорректирована {total_amount} → {calc_total}."
+        )
         doc["total_amount"] = calc_total
 
     confidence = doc.get("quality_check", {}).get("confidence_score")
     confidence_num = _to_float(confidence)
     if confidence_num is not None and confidence_num < min_confidence:
-        warnings.append(f"Низкая уверенность OCR: {confidence_num}% (< {min_confidence}%).")
+        warnings.append(
+            f"Низкая уверенность OCR: {confidence_num}% (< {min_confidence}%)."
+        )
         needs_review = True
 
     # Любая критическая нехватка полей отправляет документ в ручную проверку.

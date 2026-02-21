@@ -37,6 +37,7 @@ LABEL = "MinStockCheck"
 # Основная проверка
 # ═══════════════════════════════════════════════════════
 
+
 async def check_min_stock_levels(
     department_id: str | None = None,
 ) -> dict[str, Any]:
@@ -90,8 +91,18 @@ async def check_min_stock_levels(
         logger.info("[%s] Позиций с min > 0: %d", LABEL, len(limits))
 
         if not limits:
-            dept_stmt = select(Department.name).where(Department.id == _uuid.UUID(department_id)) if department_id else None
-            dept_name = (await session.execute(dept_stmt)).scalar_one_or_none() if dept_stmt else None
+            dept_stmt = (
+                select(Department.name).where(
+                    Department.id == _uuid.UUID(department_id)
+                )
+                if department_id
+                else None
+            )
+            dept_name = (
+                (await session.execute(dept_stmt)).scalar_one_or_none()
+                if dept_stmt
+                else None
+            )
             return {
                 "checked_at": now_kgd(),
                 "total_products": 0,
@@ -101,30 +112,34 @@ async def check_min_stock_levels(
             }
 
         # ── 2. Справочники: store → department mapping ──
-        store_rows = (await session.execute(
-            select(Store.id, Store.parent_id)
-            .where(Store.deleted == False)  # noqa: E712
-        )).all()
+        store_rows = (
+            await session.execute(
+                select(Store.id, Store.parent_id).where(
+                    Store.deleted == False
+                )  # noqa: E712
+            )
+        ).all()
 
         store_dept_map: dict[_uuid.UUID, _uuid.UUID] = {
             row.id: row.parent_id for row in store_rows
         }
 
-        dept_rows = (await session.execute(
-            select(Department.id, Department.name)
-        )).all()
+        dept_rows = (
+            await session.execute(select(Department.id, Department.name))
+        ).all()
         dept_names: dict[str, str] = {str(d.id): d.name for d in dept_rows}
 
         # ── 3. Фактические остатки: SQL агрегация (store_id, product_id) → SUM(amount) ──
         # Вместо загрузки всех строк в Python → агрегируем на стороне БД
-        balance_agg = (await session.execute(
-            select(
-                StockBalance.store_id,
-                StockBalance.product_id,
-                func.sum(StockBalance.amount).label("total"),
+        balance_agg = (
+            await session.execute(
+                select(
+                    StockBalance.store_id,
+                    StockBalance.product_id,
+                    func.sum(StockBalance.amount).label("total"),
+                ).group_by(StockBalance.store_id, StockBalance.product_id)
             )
-            .group_by(StockBalance.store_id, StockBalance.product_id)
-        )).all()
+        ).all()
 
         # Пересчитываем по dept: (dept_id_str, product_id) → total_amount
         dept_product_totals: dict[tuple[str, _uuid.UUID], float] = {}
@@ -132,7 +147,9 @@ async def check_min_stock_levels(
             dept_id = store_dept_map.get(br.store_id)
             if dept_id:
                 key = (str(dept_id), br.product_id)
-                dept_product_totals[key] = dept_product_totals.get(key, 0.0) + float(br.total)
+                dept_product_totals[key] = dept_product_totals.get(key, 0.0) + float(
+                    br.total
+                )
 
         # ── 4. Сравниваем ──
         below_min: list[dict[str, Any]] = []
@@ -143,15 +160,18 @@ async def check_min_stock_levels(
             max_level = float(row.max_level) if row.max_level else None
 
             if total < min_level:
-                below_min.append({
-                    "product_name": row.product_name,
-                    "department_name": row.department_name or dept_names.get(dept_id_str, dept_id_str),
-                    "department_id": dept_id_str,
-                    "total_amount": round(total, 3),
-                    "min_level": min_level,
-                    "max_level": max_level,
-                    "deficit": round(min_level - total, 3),
-                })
+                below_min.append(
+                    {
+                        "product_name": row.product_name,
+                        "department_name": row.department_name
+                        or dept_names.get(dept_id_str, dept_id_str),
+                        "department_id": dept_id_str,
+                        "total_amount": round(total, 3),
+                        "min_level": min_level,
+                        "max_level": max_level,
+                        "deficit": round(min_level - total, 3),
+                    }
+                )
 
         # Сортировка: по дефициту убывание
         below_min.sort(key=lambda x: -x["deficit"])
@@ -160,8 +180,11 @@ async def check_min_stock_levels(
 
         logger.info(
             "[%s] Готово: %d/%d ниже минимума за %.1f сек (department=%s)",
-            LABEL, len(below_min), len(limits),
-            time.monotonic() - t0, dept_name,
+            LABEL,
+            len(below_min),
+            len(limits),
+            time.monotonic() - t0,
+            dept_name,
         )
 
         return {
@@ -177,18 +200,25 @@ async def check_min_stock_levels(
 # Форматирование для Telegram
 # ═══════════════════════════════════════════════════════
 
+
 def format_min_stock_report(data: dict[str, Any]) -> str:
     """
     Форматирует результат check_min_stock_levels() в Telegram-сообщение.
     """
     if data["below_min_count"] == 0:
-        dept_info = f" ({data['department_name']})" if data.get("department_name") else ""
+        dept_info = (
+            f" ({data['department_name']})" if data.get("department_name") else ""
+        )
         return (
             f"✅ *Все товары выше минимальных остатков!*{dept_info}\n\n"
             f"Проверено позиций: {data['total_products']}"
         )
 
-    dept_info = f" — {_escape_md(data['department_name'])}" if data.get("department_name") else ""
+    dept_info = (
+        f" — {_escape_md(data['department_name'])}"
+        if data.get("department_name")
+        else ""
+    )
     lines = [
         f"⚠️ *Нужно заказать: {data['below_min_count']} поз.*{dept_info}\n"
         f"Проверено: {data['total_products']} позиций с минимумами\n"

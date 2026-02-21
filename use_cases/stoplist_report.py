@@ -29,6 +29,7 @@ _KGD_TZ = ZoneInfo("Europe/Kaliningrad")
 # Получение статистики за день
 # ═══════════════════════════════════════════════════════
 
+
 async def fetch_daily_stats() -> list[dict]:
     """
     Получить статистику стоп-листа за сегодня (08:00–21:00 Калининград).
@@ -55,7 +56,8 @@ async def fetch_daily_stats() -> list[dict]:
                 StoplistHistory.ended_at,
             ).where(
                 StoplistHistory.started_at < day_end,
-                (StoplistHistory.ended_at.is_(None)) | (StoplistHistory.ended_at > day_start),
+                (StoplistHistory.ended_at.is_(None))
+                | (StoplistHistory.ended_at > day_start),
             )
         )
         rows = result.all()
@@ -79,13 +81,16 @@ async def fetch_daily_stats() -> list[dict]:
             product_stats[pid] = {"product_id": pid, "name": name, "total_seconds": 0}
         product_stats[pid]["total_seconds"] += seconds
 
-    stats = sorted(product_stats.values(), key=lambda x: x["total_seconds"], reverse=True)
+    stats = sorted(
+        product_stats.values(), key=lambda x: x["total_seconds"], reverse=True
+    )
     return stats
 
 
 # ═══════════════════════════════════════════════════════
 # Форматирование отчёта
 # ═══════════════════════════════════════════════════════
+
 
 def _format_duration(seconds: int) -> str:
     """Перевод секунд в ЧЧ:ММ."""
@@ -133,6 +138,7 @@ def build_daily_report(stats: list[dict]) -> str:
 # Отправка отчёта всем пользователям
 # ═══════════════════════════════════════════════════════
 
+
 async def send_daily_stoplist_report(bot) -> int:
     """
     Ежедневный отчёт по стоп-листу → отправка всем авторизованным пользователям.
@@ -151,6 +157,7 @@ async def send_daily_stoplist_report(bot) -> int:
     # Получаем подписчиков стоп-листа (роль 🚫 Стоп-лист)
     # Если ни у кого нет флага — рассылка всем авторизованным (bootstrap)
     from use_cases.permissions import get_stoplist_subscriber_ids
+
     user_ids = await get_stoplist_subscriber_ids()
 
     if not user_ids:
@@ -166,5 +173,7 @@ async def send_daily_stoplist_report(bot) -> int:
             logger.warning("[%s] Не удалось отправить отчёт tg:%d", LABEL, uid)
 
     elapsed = time.monotonic() - t0
-    logger.info("[%s] Отчёт отправлен %d/%d за %.1f сек", LABEL, sent, len(user_ids), elapsed)
+    logger.info(
+        "[%s] Отчёт отправлен %d/%d за %.1f сек", LABEL, sent, len(user_ids), elapsed
+    )
     return sent

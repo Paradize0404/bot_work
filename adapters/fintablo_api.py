@@ -23,7 +23,9 @@ from config import FINTABLO_BASE_URL, FINTABLO_TOKEN
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = httpx.Timeout(connect=15.0, read=60.0, write=15.0, pool=15.0)
-_LIMITS = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=120)
+_LIMITS = httpx.Limits(
+    max_connections=20, max_keepalive_connections=10, keepalive_expiry=120
+)
 
 # Семафор: макс 4 одновременных запроса к FinTablo (300 req/min → safe margin)
 _semaphore = asyncio.Semaphore(4)
@@ -68,6 +70,7 @@ async def close_client() -> None:
 # записи за один запрос. Пагинация убрана.
 # ═══════════════════════════════════════════════════════
 
+
 async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any]]:
     """
     Универсальный fetch для всех FinTablo list-эндпоинтов.
@@ -93,7 +96,10 @@ async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any
                     delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
                     logger.warning(
                         "[FT-API] %s — 429 Too Many Requests, retry %d/%d через %.0f сек",
-                        endpoint, attempt, _MAX_RETRIES, delay,
+                        endpoint,
+                        attempt,
+                        _MAX_RETRIES,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                 else:
@@ -102,7 +108,8 @@ async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any
             # Все попытки исчерпаны (все 429)
             raise httpx.HTTPStatusError(
                 f"[FT-API] {endpoint} — 429 после {_MAX_RETRIES} попыток",
-                request=resp.request, response=resp,
+                request=resp.request,
+                response=resp,
             )
 
     data = resp.json()
@@ -116,6 +123,7 @@ async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any
 # ═══════════════════════════════════════════════════════
 # Public API — 1 функция = 1 эндпоинт
 # ═══════════════════════════════════════════════════════
+
 
 async def fetch_categories() -> list[dict[str, Any]]:
     """Статьи ДДС."""

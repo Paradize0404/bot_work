@@ -20,7 +20,7 @@ from use_cases._ttl_cache import TtlCache
 logger = logging.getLogger(__name__)
 
 # TTL в секундах
-CACHE_TTL = 600        # 10 минут для складов / счетов
+CACHE_TTL = 600  # 10 минут для складов / счетов
 UNIT_CACHE_TTL = 1800  # 30 минут для единиц измерения
 
 _cache = TtlCache(default_ttl=CACHE_TTL)

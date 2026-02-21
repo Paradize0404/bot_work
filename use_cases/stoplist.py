@@ -35,6 +35,7 @@ LABEL = "Stoplist"
 # Получение стоп-листа из iikoCloud
 # ═══════════════════════════════════════════════════════
 
+
 async def fetch_stoplist_items(
     org_id: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -55,6 +56,7 @@ async def fetch_stoplist_items(
     # Fallback на env для обратной совместимости (вебхуки, CLI)
     if not org_id:
         from config import IIKO_CLOUD_ORG_ID
+
         org_id = IIKO_CLOUD_ORG_ID
 
     if not org_id:
@@ -81,14 +83,16 @@ async def fetch_stoplist_items(
         for tg_stoplist in org_group.get("items", []):
             tg_id = tg_stoplist.get("terminalGroupId", "")
             for item in tg_stoplist.get("items", []):
-                flat_items.append({
-                    "product_id": item.get("productId", ""),
-                    "balance": float(item.get("balance", 0)),
-                    "terminal_group_id": tg_id,
-                    "organization_id": org_id_val,
-                    "sku": item.get("sku"),
-                    "date_add": item.get("dateAdd"),
-                })
+                flat_items.append(
+                    {
+                        "product_id": item.get("productId", ""),
+                        "balance": float(item.get("balance", 0)),
+                        "terminal_group_id": tg_id,
+                        "organization_id": org_id_val,
+                        "sku": item.get("sku"),
+                        "date_add": item.get("dateAdd"),
+                    }
+                )
 
     # 3. Маппим product_id → name из iiko_product
     product_ids = list({it["product_id"] for it in flat_items if it["product_id"]})
@@ -99,7 +103,10 @@ async def fetch_stoplist_items(
 
     logger.info(
         "[%s] Получено %d позиций стоп-листа из %d терминальных групп за %.1f сек",
-        LABEL, len(flat_items), len(tg_ids), time.monotonic() - t0,
+        LABEL,
+        len(flat_items),
+        len(tg_ids),
+        time.monotonic() - t0,
     )
     return flat_items
 
@@ -110,6 +117,7 @@ async def _map_product_names(product_ids: list[str]) -> dict[str, str]:
         return {}
 
     import uuid as _uuid
+
     uuids = []
     for pid in product_ids:
         try:
@@ -129,6 +137,7 @@ async def _map_product_names(product_ids: list[str]) -> dict[str, str]:
 # ═══════════════════════════════════════════════════════
 # Diff: сравнение нового стоп-листа со старым (active_stoplist)
 # ═══════════════════════════════════════════════════════
+
 
 async def sync_and_diff(
     new_items: list[dict[str, Any]],
@@ -197,18 +206,24 @@ async def sync_and_diff(
             del_stmt = del_stmt.where(ActiveStoplist.organization_id == org_id)
         await session.execute(del_stmt)
         for key, item in new_map.items():
-            session.add(ActiveStoplist(
-                product_id=item["product_id"],
-                name=item.get("name"),
-                balance=item["balance"],
-                terminal_group_id=item.get("terminal_group_id"),
-                organization_id=item.get("organization_id"),
-            ))
+            session.add(
+                ActiveStoplist(
+                    product_id=item["product_id"],
+                    name=item.get("name"),
+                    balance=item["balance"],
+                    terminal_group_id=item.get("terminal_group_id"),
+                    organization_id=item.get("organization_id"),
+                )
+            )
         await session.commit()
 
     logger.info(
         "[%s] Diff: +%d -%d =%d (%.1f сек)",
-        LABEL, len(added), len(removed), len(existing), time.monotonic() - t0,
+        LABEL,
+        len(added),
+        len(removed),
+        len(existing),
+        time.monotonic() - t0,
     )
     return added, removed, existing
 
@@ -216,6 +231,7 @@ async def sync_and_diff(
 # ═══════════════════════════════════════════════════════
 # История: вход/выход из стопа
 # ═══════════════════════════════════════════════════════
+
 
 async def _update_history(
     old_map: dict[str, dict],
@@ -233,7 +249,7 @@ async def _update_history(
     new_zero = {k for k, v in new_map.items() if v["balance"] == 0}
 
     entered_stop = new_zero - old_zero  # вошли в стоп
-    left_stop = old_zero - new_zero      # вышли из стопа
+    left_stop = old_zero - new_zero  # вышли из стопа
 
     if not entered_stop and not left_stop:
         return
@@ -242,13 +258,15 @@ async def _update_history(
         # Вошли в стоп
         for key in entered_stop:
             item = new_map[key]
-            session.add(StoplistHistory(
-                product_id=item["product_id"],
-                name=item.get("name"),
-                terminal_group_id=item.get("terminal_group_id"),
-                started_at=now,
-                date=now,
-            ))
+            session.add(
+                StoplistHistory(
+                    product_id=item["product_id"],
+                    name=item.get("name"),
+                    terminal_group_id=item.get("terminal_group_id"),
+                    started_at=now,
+                    date=now,
+                )
+            )
 
         # Вышли из стопа — закрываем открытые записи
         for key in left_stop:
@@ -270,13 +288,16 @@ async def _update_history(
 
     logger.info(
         "[%s] История: %d вошли в стоп, %d вышли из стопа",
-        LABEL, len(entered_stop), len(left_stop),
+        LABEL,
+        len(entered_stop),
+        len(left_stop),
     )
 
 
 # ═══════════════════════════════════════════════════════
 # Форматирование сообщения для Telegram
 # ═══════════════════════════════════════════════════════
+
 
 def format_stoplist_message(
     added: list[dict],
@@ -298,6 +319,7 @@ def format_stoplist_message(
 
       #стоплист
     """
+
     def _fmt(item: dict) -> str:
         if item["balance"] > 0:
             return f"{item['name']} ({int(item['balance'])})"
@@ -390,6 +412,7 @@ def format_full_stoplist(items: list[dict]) -> str:
 # ═══════════════════════════════════════════════════════
 # Полный цикл: fetch → diff → format
 # ═══════════════════════════════════════════════════════
+
 
 async def run_stoplist_cycle(
     org_id: str | None = None,

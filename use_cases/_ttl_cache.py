@@ -31,7 +31,7 @@ class TtlCache:
             return None
         return data
 
-    def set(self, key: str, data: Any) -> None:   # noqa: A003
+    def set(self, key: str, data: Any) -> None:  # noqa: A003
         """Store *data* with the current timestamp."""
         self._store[key] = (data, time.monotonic())
 
@@ -56,5 +56,7 @@ class TtlCache:
         """Return basic cache statistics."""
         effective_ttl = ttl if ttl is not None else self._default_ttl
         now = time.monotonic()
-        alive = sum(1 for _, (__, ts) in self._store.items() if now - ts < effective_ttl)
+        alive = sum(
+            1 for _, (__, ts) in self._store.items() if now - ts < effective_ttl
+        )
         return {"total_keys": len(self._store), "alive": alive}

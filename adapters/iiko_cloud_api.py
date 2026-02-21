@@ -56,6 +56,7 @@ async def close_client() -> None:
 # Токен из БД (read-only, внешний cron обновляет)
 # ═══════════════════════════════════════════════════════
 
+
 async def get_cloud_token() -> str:
     """
     Получить последний iikoCloud access token из таблицы iiko_access_tokens.
@@ -63,11 +64,15 @@ async def get_cloud_token() -> str:
     """
     async with async_session_factory() as session:
         result = await session.execute(
-            text("SELECT token FROM iiko_access_tokens ORDER BY created_at DESC LIMIT 1")
+            text(
+                "SELECT token FROM iiko_access_tokens ORDER BY created_at DESC LIMIT 1"
+            )
         )
         token = result.scalar_one_or_none()
     if not token:
-        raise RuntimeError("No iikoCloud token in iiko_access_tokens — проверь внешний cron")
+        raise RuntimeError(
+            "No iikoCloud token in iiko_access_tokens — проверь внешний cron"
+        )
     return token
 
 
@@ -83,6 +88,7 @@ async def _headers() -> dict[str, str]:
 # ═══════════════════════════════════════════════════════
 # Организации
 # ═══════════════════════════════════════════════════════
+
 
 async def get_organizations() -> list[dict[str, Any]]:
     """
@@ -104,7 +110,9 @@ async def get_organizations() -> list[dict[str, Any]]:
     orgs = data.get("organizations", [])
     logger.info(
         "[%s] Получено %d организаций за %.1f сек",
-        LABEL, len(orgs), time.monotonic() - t0,
+        LABEL,
+        len(orgs),
+        time.monotonic() - t0,
     )
     return orgs
 
@@ -112,6 +120,7 @@ async def get_organizations() -> list[dict[str, Any]]:
 # ═══════════════════════════════════════════════════════
 # Вебхуки: настройка
 # ═══════════════════════════════════════════════════════
+
 
 async def get_webhook_settings(organization_id: str) -> dict[str, Any]:
     """
@@ -174,7 +183,10 @@ async def register_webhook(
 
     logger.info(
         "[%s] Вебхук зарегистрирован: %s (org=%s) за %.1f сек",
-        LABEL, webhook_url, organization_id, time.monotonic() - t0,
+        LABEL,
+        webhook_url,
+        organization_id,
+        time.monotonic() - t0,
     )
     return result
 
@@ -182,6 +194,7 @@ async def register_webhook(
 # ═══════════════════════════════════════════════════════
 # Верификация входящего вебхука
 # ═══════════════════════════════════════════════════════
+
 
 def verify_webhook_auth(auth_header: str | None) -> bool:
     """
@@ -200,6 +213,7 @@ def verify_webhook_auth(auth_header: str | None) -> bool:
 # ═══════════════════════════════════════════════════════
 # Терминальные группы
 # ═══════════════════════════════════════════════════════
+
 
 async def fetch_terminal_groups(organization_id: str) -> list[dict[str, Any]]:
     """
@@ -225,7 +239,10 @@ async def fetch_terminal_groups(organization_id: str) -> list[dict[str, Any]]:
 
     logger.info(
         "[%s] Получено %d терминальных групп (org=%s) за %.1f сек",
-        LABEL, len(all_items), organization_id, time.monotonic() - t0,
+        LABEL,
+        len(all_items),
+        organization_id,
+        time.monotonic() - t0,
     )
     return all_items
 
@@ -233,6 +250,7 @@ async def fetch_terminal_groups(organization_id: str) -> list[dict[str, Any]]:
 # ═══════════════════════════════════════════════════════
 # Стоп-листы
 # ═══════════════════════════════════════════════════════
+
 
 async def fetch_stop_lists(
     organization_id: str,
@@ -270,6 +288,10 @@ async def fetch_stop_lists(
     )
     logger.info(
         "[%s] Стоп-лист: %d групп, %d позиций (org=%s) за %.1f сек",
-        LABEL, len(result), total_items, organization_id, time.monotonic() - t0,
+        LABEL,
+        len(result),
+        total_items,
+        organization_id,
+        time.monotonic() - t0,
     )
     return result

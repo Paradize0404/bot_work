@@ -39,6 +39,7 @@ TRIGGERED_BY = "scheduler"
 # Основная задача: полная синхронизация
 # ═══════════════════════════════════════════════════════
 
+
 async def _daily_full_sync() -> None:
     """
     Ежедневная полная синхронизация всех данных:
@@ -51,14 +52,20 @@ async def _daily_full_sync() -> None:
     """
     t0 = time.monotonic()
     started = now_kgd()
-    logger.info("=== [scheduler] Ежедневная синхронизация СТАРТ (%s) ===", started.strftime("%Y-%m-%d %H:%M"))
+    logger.info(
+        "=== [scheduler] Ежедневная синхронизация СТАРТ (%s) ===",
+        started.strftime("%Y-%m-%d %H:%M"),
+    )
 
     report_lines: list[str] = []
 
     # ── 1. iiko + FinTablo (параллельно) ──
     try:
         from use_cases.sync import sync_everything_with_report
-        iiko_lines, ft_lines = await sync_everything_with_report(triggered_by=TRIGGERED_BY)
+
+        iiko_lines, ft_lines = await sync_everything_with_report(
+            triggered_by=TRIGGERED_BY
+        )
         report_lines.append("📊 <b>iiko:</b>")
         report_lines.extend(iiko_lines)
         report_lines.append("")
@@ -71,6 +78,7 @@ async def _daily_full_sync() -> None:
     # ── 2. Остатки по складам ──
     try:
         from use_cases.sync_stock_balances import sync_stock_balances
+
         stock_count = await sync_stock_balances(triggered_by=TRIGGERED_BY)
         report_lines.append(f"\n📦 Остатки: ✅ {stock_count} позиций")
     except Exception:
@@ -80,6 +88,7 @@ async def _daily_full_sync() -> None:
     # ── 3. Min/max из Google Таблицы (GSheet → БД) ──
     try:
         from use_cases.sync_min_stock import sync_min_stock_from_gsheet
+
         gs_count = await sync_min_stock_from_gsheet(triggered_by=TRIGGERED_BY)
         report_lines.append(f"📋 Min/max GSheet→БД: ✅ {gs_count} записей")
     except Exception:
@@ -89,6 +98,7 @@ async def _daily_full_sync() -> None:
     # ── 4. Номенклатура БД → GSheet (обновляет лист мин.остатков) ──
     try:
         from use_cases.sync_min_stock import sync_nomenclature_to_gsheet
+
         nomen_count = await sync_nomenclature_to_gsheet(triggered_by=TRIGGERED_BY)
         report_lines.append(f"📦 Номенкл.→GSheet: ✅ {nomen_count} товаров")
     except Exception:
@@ -98,6 +108,7 @@ async def _daily_full_sync() -> None:
     # ── 5. Обновить справочник товаров для маппинга ──
     try:
         from use_cases.ocr_mapping import refresh_ref_sheet
+
         ref_count = await refresh_ref_sheet()
         report_lines.append(f"🗂 Маппинг справочник: ✅ {ref_count} товаров")
     except Exception:
@@ -106,7 +117,9 @@ async def _daily_full_sync() -> None:
 
     elapsed = time.monotonic() - t0
     report_lines.append(f"\n⏱ Время: {elapsed:.1f} сек")
-    logger.info("=== [scheduler] Ежедневная синхронизация ЗАВЕРШЕНА за %.1f сек ===", elapsed)
+    logger.info(
+        "=== [scheduler] Ежедневная синхронизация ЗАВЕРШЕНА за %.1f сек ===", elapsed
+    )
 
     # ── 6. Уведомление админов ──
     try:
@@ -118,6 +131,7 @@ async def _daily_full_sync() -> None:
 # ═══════════════════════════════════════════════════════
 # Вечерний отчёт по стоп-листу (22:00)
 # ═══════════════════════════════════════════════════════
+
 
 async def _daily_stoplist_report() -> None:
     """
@@ -131,6 +145,7 @@ async def _daily_stoplist_report() -> None:
 
     try:
         from use_cases.stoplist_report import send_daily_stoplist_report
+
         sent = await send_daily_stoplist_report(bot)
         logger.info("[scheduler] Отчёт по стоп-листу отправлен: %d сообщений", sent)
     except Exception:
@@ -141,6 +156,7 @@ async def _daily_stoplist_report() -> None:
 # Ночное авто-перемещение расходных материалов (23:00)
 # ═══════════════════════════════════════════════════════
 
+
 async def _daily_negative_transfer() -> None:
     """
     Авто-перемещение отрицательных остатков расходных материалов.
@@ -150,6 +166,7 @@ async def _daily_negative_transfer() -> None:
     logger.info("[scheduler] Старт авто-перемещения расходных материалов (23:00)")
     try:
         from use_cases.negative_transfer import run_negative_transfer_once
+
         result = await run_negative_transfer_once(triggered_by=TRIGGERED_BY)
         status = result.get("status", "?")
         restaurants = result.get("restaurants", {})
@@ -159,13 +176,11 @@ async def _daily_negative_transfer() -> None:
         elif status == "nothing_to_transfer":
             logger.info("[scheduler] Авто-перемещение: нет отрицательных остатков")
         elif status == "ok":
-            total = sum(
-                len(r.get("transfers", []))
-                for r in restaurants.values()
-            )
+            total = sum(len(r.get("transfers", [])) for r in restaurants.values())
             logger.info(
                 "[scheduler] Авто-перемещение завершено: %d перемещений по %d ресторанам",
-                total, len(restaurants),
+                total,
+                len(restaurants),
             )
         else:
             logger.info("[scheduler] Авто-перемещение: status=%s", status)
@@ -198,7 +213,9 @@ async def _notify_admins_negative_transfer(result: dict) -> None:
     elif status == "error":
         text = "🚚 Авто-перемещение расх.мат.: ❌ ОШИБКА — смотрите логи"
     else:
-        lines = [f"🚚 <b>Авто-перемещение расх.мат.</b> ({now_kgd().strftime('%d.%m.%Y 23:00')})"]
+        lines = [
+            f"🚚 <b>Авто-перемещение расх.мат.</b> ({now_kgd().strftime('%d.%m.%Y 23:00')})"
+        ]
         for rest, data in sorted(restaurants.items()):
             transfers = data.get("transfers", [])
             skipped = data.get("skipped_products", [])
@@ -218,7 +235,9 @@ async def _notify_admins_negative_transfer(result: dict) -> None:
             try:
                 await bot.send_message(admin_id, text, parse_mode="HTML")
             except Exception:
-                logger.warning("[scheduler] Не удалось уведомить tg:%d о перемещении", admin_id)
+                logger.warning(
+                    "[scheduler] Не удалось уведомить tg:%d о перемещении", admin_id
+                )
     except Exception:
         logger.exception("[scheduler] Ошибка при уведомлении о перемещении")
 
@@ -248,7 +267,9 @@ async def _notify_admins_about_sync(report_lines: list[str]) -> None:
         try:
             await bot.send_message(admin_id, text, parse_mode="HTML")
         except Exception:
-            logger.warning("[scheduler] Не удалось отправить уведомление админу tg:%d", admin_id)
+            logger.warning(
+                "[scheduler] Не удалось отправить уведомление админу tg:%d", admin_id
+            )
 
 
 # ═══════════════════════════════════════════════════════

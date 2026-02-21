@@ -47,8 +47,8 @@ logger = logging.getLogger(__name__)
 # Паттерн: число + единица измерения (шт, г, гр, кг)
 # Ищем ПОСЛЕДНЕЕ вхождение перед концом строки / скобками
 _FASOVKA_RE = re.compile(
-    r'(\d+(?:[.,]\d+)?)\s*(шт|штук|штуки|г|гр|грамм|грамма|граммов|кг)'
-    r'\.?(?:\s|,|$)',
+    r"(\d+(?:[.,]\d+)?)\s*(шт|штук|штуки|г|гр|грамм|грамма|граммов|кг)"
+    r"\.?(?:\s|,|$)",
     re.IGNORECASE,
 )
 
@@ -71,7 +71,7 @@ def extract_fasovka(name: str) -> tuple[float, str] | None:
     multiplier уже переведён в базовую единицу (г→кг).
     """
     # Убираем скобочные суффиксы: (1000 шт./20 уп./кор.) (арт. 3002П)
-    clean = re.sub(r'\s*\(.*?\)\s*', ' ', name).strip()
+    clean = re.sub(r"\s*\(.*?\)\s*", " ", name).strip()
 
     matches = list(_FASOVKA_RE.finditer(clean))
     if not matches:
@@ -79,18 +79,18 @@ def extract_fasovka(name: str) -> tuple[float, str] | None:
 
     # Последнее совпадение — наиболее вероятная фасовка
     m = matches[-1]
-    value = float(m.group(1).replace(',', '.'))
+    value = float(m.group(1).replace(",", "."))
     unit = m.group(2).lower()
 
     if value <= 0:
         return None
 
-    if unit in ('шт', 'штук', 'штуки'):
-        return (value, 'шт')
-    elif unit in ('г', 'гр', 'грамм', 'грамма', 'граммов'):
-        return (value / 1000, 'кг')  # граммы → килограммы
-    elif unit == 'кг':
-        return (value, 'кг')
+    if unit in ("шт", "штук", "штуки"):
+        return (value, "шт")
+    elif unit in ("г", "гр", "грамм", "грамма", "граммов"):
+        return (value / 1000, "кг")  # граммы → килограммы
+    elif unit == "кг":
+        return (value, "кг")
 
     return None
 
@@ -152,7 +152,9 @@ def _parse_single_receipt(entry: dict, idx: int) -> dict[str, Any] | None:
     receipt = document.get("receipt") or {}
 
     if not receipt:
-        logger.debug("[json_receipt] Чек #%d: нет ticket.document.receipt — пропуск", idx)
+        logger.debug(
+            "[json_receipt] Чек #%d: нет ticket.document.receipt — пропуск", idx
+        )
         return None
 
     # ── Поставщик ──
@@ -200,22 +202,30 @@ def _parse_single_receipt(entry: dict, idx: int) -> dict[str, Any] | None:
                 logger.debug(
                     "[json_receipt] Фасовка: '%s' → ×%.3f %s "
                     "(qty: %.1f упак → %.4f %s, цена: %.2f → %.2f/%s)",
-                    name, multiplier, base_unit,
-                    qty_packs, actual_qty, base_unit,
-                    price_rub, price_per_unit, base_unit,
+                    name,
+                    multiplier,
+                    base_unit,
+                    qty_packs,
+                    actual_qty,
+                    base_unit,
+                    price_rub,
+                    price_per_unit,
+                    base_unit,
                 )
                 qty_packs = actual_qty
                 price_rub = price_per_unit
             unit = base_unit
         # Если фасовка = 1 шт — qty и price остаются без изменений
 
-        items.append({
-            "name": name,
-            "qty": qty_packs,
-            "price": price_rub,
-            "sum": sum_rub,   # сумма не меняется (qty×price = sum)
-            "unit": unit,
-        })
+        items.append(
+            {
+                "name": name,
+                "qty": qty_packs,
+                "price": price_rub,
+                "sum": sum_rub,  # сумма не меняется (qty×price = sum)
+                "unit": unit,
+            }
+        )
 
     if not items:
         logger.debug("[json_receipt] Чек #%d: нет позиций — пропуск", idx)
@@ -288,7 +298,9 @@ def format_json_receipt_preview(
         price = item.get("price") or 0
         mapped_icon = "✅" if item.get("iiko_id") else "❌"
         mapped_name = item.get("iiko_name") or ""
-        display = f"{mapped_icon} {name} — {qty} × {price:,.2f}\u202f₽".replace(",", "\u00a0")
+        display = f"{mapped_icon} {name} — {qty} × {price:,.2f}\u202f₽".replace(
+            ",", "\u00a0"
+        )
         if mapped_name and mapped_name != name:
             display += f"\n      → {mapped_name}"
         lines.append(f"  {display}")

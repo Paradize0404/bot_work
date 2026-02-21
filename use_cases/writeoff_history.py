@@ -44,6 +44,7 @@ def _detect_store_type(store_name: str) -> str | None:
 @dataclass(slots=True)
 class HistoryEntry:
     """Одна запись из истории списаний."""
+
     pk: int
     employee_name: str
     store_id: str
@@ -82,14 +83,16 @@ async def save_to_history(
     # Очищаем items от лишних полей (product_cache и т.п.)
     clean_items = []
     for item in items:
-        clean_items.append({
-            "id": item.get("id"),
-            "name": item.get("name"),
-            "quantity": item.get("quantity"),
-            "user_quantity": item.get("user_quantity"),
-            "unit_label": item.get("unit_label", "шт"),
-            "main_unit": item.get("main_unit"),
-        })
+        clean_items.append(
+            {
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "quantity": item.get("quantity"),
+                "user_quantity": item.get("user_quantity"),
+                "unit_label": item.get("unit_label", "шт"),
+                "main_unit": item.get("main_unit"),
+            }
+        )
 
     async with async_session_factory() as session:
         record = WriteoffHistory(
@@ -114,11 +117,19 @@ async def save_to_history(
     try:
         await _cleanup_old_records(telegram_id)
     except Exception:
-        logger.warning("[wo_history] Ошибка очистки старых записей tg:%d", telegram_id, exc_info=True)
+        logger.warning(
+            "[wo_history] Ошибка очистки старых записей tg:%d",
+            telegram_id,
+            exc_info=True,
+        )
 
     logger.info(
         "[wo_history] Сохранено: tg:%d, store=%s, items=%d, pk=%d (%.2f сек)",
-        telegram_id, store_name, len(clean_items), pk, time.monotonic() - t0,
+        telegram_id,
+        store_name,
+        len(clean_items),
+        pk,
+        time.monotonic() - t0,
     )
     return pk
 
@@ -162,15 +173,11 @@ async def get_history(
         total = (await session.execute(count_stmt)).scalar_one()
 
         # Выборка страницы
-        stmt = (
-            select(WriteoffHistory)
-            .where(base_filter)
-        )
+        stmt = select(WriteoffHistory).where(base_filter)
         if role_filter is not None:
             stmt = stmt.where(role_filter)
         stmt = (
-            stmt
-            .order_by(desc(WriteoffHistory.created_at))
+            stmt.order_by(desc(WriteoffHistory.created_at))
             .offset(page * HISTORY_PAGE_SIZE)
             .limit(HISTORY_PAGE_SIZE)
         )
@@ -197,7 +204,13 @@ async def get_history(
 
     logger.info(
         "[wo_history] История: tg:%d, dept=%s, role=%s, page=%d → %d/%d (%.2f сек)",
-        telegram_id, department_id, role_type, page, len(entries), total, time.monotonic() - t0,
+        telegram_id,
+        department_id,
+        role_type,
+        page,
+        len(entries),
+        total,
+        time.monotonic() - t0,
     )
     return entries, total
 
@@ -248,9 +261,8 @@ def build_history_summary(entry: HistoryEntry) -> str:
 async def _cleanup_old_records(telegram_id: int) -> None:
     """Удалить самые старые записи сверх лимита MAX_HISTORY_PER_USER."""
     async with async_session_factory() as session:
-        count_stmt = (
-            select(func.count(WriteoffHistory.pk))
-            .where(WriteoffHistory.telegram_id == telegram_id)
+        count_stmt = select(func.count(WriteoffHistory.pk)).where(
+            WriteoffHistory.telegram_id == telegram_id
         )
         total = (await session.execute(count_stmt)).scalar_one()
 
@@ -269,6 +281,7 @@ async def _cleanup_old_records(telegram_id: int) -> None:
 
         # Удаляем остальные
         from sqlalchemy import delete
+
         del_stmt = (
             delete(WriteoffHistory)
             .where(WriteoffHistory.telegram_id == telegram_id)
@@ -278,5 +291,6 @@ async def _cleanup_old_records(telegram_id: int) -> None:
         await session.commit()
         logger.info(
             "[wo_history] Очистка: tg:%d, удалено %d старых записей",
-            telegram_id, result.rowcount,
+            telegram_id,
+            result.rowcount,
         )

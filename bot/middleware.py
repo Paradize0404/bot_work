@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # 1. Валидация callback_data
 # ═══════════════════════════════════════════════════════
 
+
 def parse_uuid(raw: str) -> UUID | None:
     """Безопасный парсинг UUID из callback_data."""
     try:
@@ -68,7 +69,9 @@ def extract_callback_value(callback_data: str) -> str | None:
     return parts[1]
 
 
-async def validate_callback_uuid(callback: "CallbackQuery", callback_data: str) -> str | None:
+async def validate_callback_uuid(
+    callback: "CallbackQuery", callback_data: str
+) -> str | None:
     """
     Извлечь и валидировать UUID из callback_data.
     При ошибке — callback.answer + warning лог. Возвращает str UUID или None.
@@ -76,12 +79,18 @@ async def validate_callback_uuid(callback: "CallbackQuery", callback_data: str) 
     raw = extract_callback_value(callback_data)
     if raw is None or parse_uuid(raw) is None:
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
-        logger.warning("[security] Невалидный UUID в callback_data: %r tg:%d", callback_data, callback.from_user.id)
+        logger.warning(
+            "[security] Невалидный UUID в callback_data: %r tg:%d",
+            callback_data,
+            callback.from_user.id,
+        )
         return None
     return raw
 
 
-async def validate_callback_int(callback: "CallbackQuery", callback_data: str) -> int | None:
+async def validate_callback_int(
+    callback: "CallbackQuery", callback_data: str
+) -> int | None:
     """
     Извлечь и валидировать int из callback_data.
     При ошибке — callback.answer + warning лог. Возвращает int или None.
@@ -89,21 +98,29 @@ async def validate_callback_int(callback: "CallbackQuery", callback_data: str) -
     raw = extract_callback_value(callback_data)
     if raw is None:
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
-        logger.warning("[security] Невалидный int в callback_data: %r tg:%d", callback_data, callback.from_user.id)
+        logger.warning(
+            "[security] Невалидный int в callback_data: %r tg:%d",
+            callback_data,
+            callback.from_user.id,
+        )
         return None
     val = parse_int(raw)
     if val is None:
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
-        logger.warning("[security] Невалидный int в callback_data: %r tg:%d", callback_data, callback.from_user.id)
+        logger.warning(
+            "[security] Невалидный int в callback_data: %r tg:%d",
+            callback_data,
+            callback.from_user.id,
+        )
         return None
     return val
 
 
 # Максимальная длина текстовых вводов
-MAX_TEXT_SEARCH = 200       # поисковый запрос
-MAX_TEXT_REASON = 500       # причина списания
-MAX_TEXT_GENERAL = 2000     # общий текст
-MAX_TEXT_NAME = 100         # имя / фамилия
+MAX_TEXT_SEARCH = 200  # поисковый запрос
+MAX_TEXT_REASON = 500  # причина списания
+MAX_TEXT_GENERAL = 2000  # общий текст
+MAX_TEXT_NAME = 100  # имя / фамилия
 
 
 def truncate_input(text: str, max_len: int = MAX_TEXT_GENERAL) -> str:
@@ -117,8 +134,10 @@ def truncate_input(text: str, max_len: int = MAX_TEXT_GENERAL) -> str:
 # 2. Декораторы авторизации
 # ═══════════════════════════════════════════════════════
 
+
 def auth_required(handler):
     """Декоратор: требует авторизации (user_context существует)."""
+
     @wraps(handler)
     async def wrapper(event, *args, **kwargs):
         tg_id = event.from_user.id
@@ -128,9 +147,12 @@ def auth_required(handler):
                 await event.answer("⚠️ Сначала авторизуйтесь: /start")
             else:
                 await event.answer("⚠️ Вы не авторизованы. Нажмите /start")
-            logger.warning("[auth] Неавторизованный доступ tg:%d → %s", tg_id, handler.__name__)
+            logger.warning(
+                "[auth] Неавторизованный доступ tg:%d → %s", tg_id, handler.__name__
+            )
             return
         return await handler(event, *args, **kwargs)
+
     return wrapper
 
 
@@ -138,6 +160,7 @@ def permission_required(perm_key: str):
     """
     Декоратор: требует конкретного права из Google Таблицы.
     """
+
     def decorator(handler):
         @wraps(handler)
         async def wrapper(event, *args, **kwargs):
@@ -149,11 +172,15 @@ def permission_required(perm_key: str):
                     await event.answer("⛔ У вас нет доступа к этому разделу")
                 logger.warning(
                     "[perm] Доступ запрещён tg:%d → %s (требуется '%s')",
-                    tg_id, handler.__name__, perm_key,
+                    tg_id,
+                    handler.__name__,
+                    perm_key,
                 )
                 return
             return await handler(event, *args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -182,10 +209,12 @@ async def run_sync_with_lock(entity: str, sync_coro):
 
 def with_cooldown(action: str, seconds: float = 1.0):
     """Декоратор: rate limiting для handler'ов."""
+
     def decorator(handler):
         @wraps(handler)
         async def wrapper(event, *args, **kwargs):
             from use_cases.cooldown import check_cooldown
+
             tg_id = event.from_user.id
             if not check_cooldown(tg_id, action, seconds):
                 if isinstance(event, CallbackQuery):
@@ -195,8 +224,11 @@ def with_cooldown(action: str, seconds: float = 1.0):
                     asyncio.create_task(delete_message_delayed(msg, 3.0))
                 return
             return await handler(event, *args, **kwargs)
+
         return wrapper
+
     return decorator
+
 
 async def delete_message_delayed(message: Message, delay: float):
     await asyncio.sleep(delay)
@@ -210,7 +242,10 @@ async def delete_message_delayed(message: Message, delay: float):
 # 4. Хелпер sync с прогрессом (placeholder → edit)
 # ═══════════════════════════════════════════════════════
 
-async def sync_with_progress(message: Message, label: str, sync_fn, *, lock_key: str | None = None, **kwargs) -> None:
+
+async def sync_with_progress(
+    message: Message, label: str, sync_fn, *, lock_key: str | None = None, **kwargs
+) -> None:
     """
     Единый паттерн для sync-кнопок:
       1. Проверить sync-lock (если lock_key задан)
@@ -304,7 +339,9 @@ async def set_cancel_kb(bot, chat_id: int, state: FSMContext) -> None:
         pass
 
 
-async def restore_menu_kb(bot, chat_id: int, state: FSMContext, menu_text: str, kb) -> None:
+async def restore_menu_kb(
+    bot, chat_id: int, state: FSMContext, menu_text: str, kb
+) -> None:
     """
     Восстановить Reply-клавиатуру подменю при ВЫХОДЕ из flow.
     menu_text — заголовок подменю (напр. «📝 Списания:»).
