@@ -871,7 +871,6 @@ async def btn_ft_sync_all(message: Message) -> None:
     try:
         async with lock:
             results = await ft_uc.sync_all_fintablo(triggered_by=triggered)
-@with_cooldown("sync", 10.0)
         lines = ft_uc.format_ft_report(results)
         await placeholder.edit_text("💹 FinTablo — результат:\n\n" + "\n".join(lines))
     except Exception as exc:
