@@ -44,6 +44,7 @@ COST_PRESET = SALES_PRESET
 @dataclass(slots=True)
 class SalesLine:
     """Строка продаж по типу оплаты."""
+
     pay_type: str
     amount: float
 
@@ -51,6 +52,7 @@ class SalesLine:
 @dataclass(slots=True)
 class CostLine:
     """Строка себестоимости по месту приготовления."""
+
     place: str
     sales: float
     cost_rub: float
@@ -60,6 +62,7 @@ class CostLine:
 @dataclass(slots=True)
 class DayReportData:
     """Данные отчёта дня из iiko."""
+
     sales_lines: list[SalesLine]
     total_sales: float
     cost_lines: list[CostLine]
@@ -91,14 +94,15 @@ async def fetch_day_report_data() -> DayReportData:
     date_to_str = date_to.strftime("%Y-%m-%dT%H:%M:%S")
 
     try:
-        rows = await fetch_olap_by_preset(
-            SALES_PRESET, date_from_str, date_to_str
-        )
+        rows = await fetch_olap_by_preset(SALES_PRESET, date_from_str, date_to_str)
     except Exception as exc:
         logger.exception("[day_report] Ошибка получения данных из iiko")
         return DayReportData(
-            sales_lines=[], total_sales=0,
-            cost_lines=[], total_cost=0, avg_cost_pct=0,
+            sales_lines=[],
+            total_sales=0,
+            cost_lines=[],
+            total_cost=0,
+            avg_cost_pct=0,
             error=f"Ошибка iiko: {exc}",
         )
 
@@ -144,12 +148,14 @@ async def fetch_day_report_data() -> DayReportData:
         cost_rub = place_sales * weighted_pct
         cost_pct = weighted_pct * 100
 
-        cost_lines.append(CostLine(
-            place=place,
-            sales=place_sales,
-            cost_rub=cost_rub,
-            cost_pct=cost_pct,
-        ))
+        cost_lines.append(
+            CostLine(
+                place=place,
+                sales=place_sales,
+                cost_rub=cost_rub,
+                cost_pct=cost_pct,
+            )
+        )
         total_cost_rub += cost_rub
         total_cost_sales += place_sales
 
@@ -158,7 +164,9 @@ async def fetch_day_report_data() -> DayReportData:
     elapsed = time.monotonic() - t0
     logger.info(
         "[day_report] Данные получены: %d продаж, %d мест, %.1f сек",
-        len(sales_lines), len(cost_lines), elapsed,
+        len(sales_lines),
+        len(cost_lines),
+        elapsed,
     )
 
     return DayReportData(

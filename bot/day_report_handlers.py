@@ -48,8 +48,8 @@ router = Router(name="day_report_handlers")
 
 
 class DayReportStates(StatesGroup):
-    positives = State()   # ввод плюсов
-    negatives = State()   # ввод минусов
+    positives = State()  # ввод плюсов
+    negatives = State()  # ввод минусов
 
 
 # ══════════════════════════════════════════════════════
@@ -72,9 +72,7 @@ async def btn_day_report_start(message: Message, state: FSMContext) -> None:
     # Контекст пользователя — имя + подразделение
     ctx = await uctx.get_user_context(tg_id)
     if not ctx or not ctx.department_id:
-        await message.answer(
-            "⚠️ Сначала выберите подразделение через /start"
-        )
+        await message.answer("⚠️ Сначала выберите подразделение через /start")
         return
 
     # Сохраняем данные в FSM
@@ -202,7 +200,9 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
 
     logger.info(
         "[day_report] Отчёт отправлен %d/%d получателям, tg:%d",
-        sent_count, len(recipients), tg_id,
+        sent_count,
+        len(recipients),
+        tg_id,
     )
 
     # ── Возврат в меню ──

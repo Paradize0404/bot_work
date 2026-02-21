@@ -4,6 +4,40 @@
 
 ---
 
+### 2026-02-21 — Отчёт дня (смены): плюсы/минусы + продажи/себестоимость из iiko
+
+**Файлы:** `use_cases/day_report.py` (новый), `bot/day_report_handlers.py` (новый), `adapters/iiko_api.py`, `bot/permission_map.py`, `bot/_utils.py`, `bot/global_commands.py`, `main.py`
+
+#### Что сделано
+
+1. **Новый адаптер `fetch_olap_by_preset(preset_id, date_from, date_to)`** в `adapters/iiko_api.py`:
+   - GET `/resto/api/v2/reports/olap/byPresetId/{preset_id}` с retry-логикой
+   - Универсальный метод для получения данных из любого сохранённого OLAP-пресета iiko
+
+2. **Use-case `use_cases/day_report.py`:**
+   - `fetch_day_report_data()` — запрос пресета «Выручка себестоимость бот» (96df1c31-...)
+   - Парсинг результатов: продажи по PayTypes, себестоимость по CookingPlaceType
+   - Средневзвешенный расчёт % себестоимости (по сумме продаж)
+   - `format_day_report()` — HTML-форматирование итогового текста
+
+3. **Handler `bot/day_report_handlers.py`:**
+   - FSM: `DayReportStates.positives → negatives`
+   - Кнопка «📋 Отчёт дня» в подменю «📊 Отчёты»
+   - Плюсы → Минусы → ⏳ placeholder → данные iiko → отправка всем 👑 Админ
+   - Guard-хэндлеры для нетекстового ввода
+   - `set_cancel_kb` / `restore_menu_kb` (UX-паттерн)
+
+4. **Права доступа:**
+   - Новый perm_key `📋 Отчёт дня` (`PERM_DAY_REPORT`) в `permission_map.py`
+   - Добавлен в `TEXT_PERMISSIONS`, `MENU_BUTTON_GROUPS`, `PERMISSION_KEYS`
+   - Кнопка в `NAV_BUTTONS` для `NavResetMiddleware`
+
+5. **Регистрация:**
+   - Router `day_report_router` подключён в `main.py`
+   - Кнопка добавлена в `reports_keyboard()` (`bot/_utils.py`)
+
+---
+
 ### 2026-02-22 — Глобальные улучшения стабильности, производительности и UX
 
 **Файлы:** `bot/middleware.py`, `use_cases/admin.py`, `use_cases/_helpers.py`, `use_cases/cooldown.py`, `use_cases/sync_lock.py`, `bot/handlers.py`, `use_cases/errors.py`, `use_cases/writeoff.py`, `adapters/iiko_api.py`, `main.py`, `use_cases/redis_cache.py`, `use_cases/user_context.py`, `use_cases/cloud_org_mapping.py`, `use_cases/permissions.py`, `bot/_utils.py`, `bot/writeoff_handlers.py`, `bot/invoice_handlers.py`, `bot/request_handlers.py`, `.github/workflows/ci.yml`
