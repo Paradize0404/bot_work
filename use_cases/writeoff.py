@@ -586,10 +586,11 @@ async def preload_for_user(department_id: str) -> None:
     t0 = time.monotonic()
     try:
         # Прогрев admin_ids + складов + номенклатуры параллельно
-        from use_cases import admin as _admin_uc
+        from use_cases import permissions as perm_uc
+        from bot.permission_map import PERM_WRITEOFF_APPROVE
         stores, _, _ = await asyncio.gather(
             get_stores_for_department(department_id),
-            _admin_uc.get_admin_ids(),
+            perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE),
             preload_products(department_id),
         )
         # параллельно грузим счета для всех складов

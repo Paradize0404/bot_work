@@ -275,27 +275,18 @@ async def finalize_transfer() -> tuple[int, list[str]]:
 #  Уведомление бухгалтеров
 # ═══════════════════════════════════════════════════════
 
-async def notify_accountants(
+async def notify_user_about_mapping(
     bot,
+    user_id: int,
     services: list[dict[str, Any]],
     unmapped_count: int,
     sheet_name: str = "Маппинг Импорт",
 ) -> None:
     """
-    Отправить сообщения администраторам/бухгалтерам:
+    Отправить сообщения пользователю, загрузившему документ:
       - о каждой услуге (cash_order / act)
       - о необходимости маппинга (если есть незамапленные)
-
-    В качестве получателей: администраторы бота.
-    TODO: расширить до отдельной роли «Бухгалтер» через GSheet «Права доступа».
     """
-    from use_cases.admin import get_admin_ids
-
-    admin_ids = await get_admin_ids()
-    if not admin_ids:
-        logger.warning("[ocr_mapping] Нет администраторов для уведомления")
-        return
-
     # ── Уведомление об услугах ──
     if services:
         service_lines = ["📋 <b>Получены услуги / ордера:</b>\n"]
@@ -325,11 +316,10 @@ async def notify_accountants(
             service_lines.append("")
 
         service_text = "\n".join(service_lines).strip()
-        for admin_id in admin_ids:
-            try:
-                await bot.send_message(admin_id, service_text, parse_mode="HTML")
-            except Exception:
-                logger.warning("[ocr_mapping] Не удалось уведомить admin %d об услугах", admin_id)
+        try:
+            await bot.send_message(user_id, service_text, parse_mode="HTML")
+        except Exception:
+            logger.warning("[ocr_mapping] Не удалось уведомить пользователя %d об услугах", user_id)
 
     # ── Уведомление о маппинге ──
     if unmapped_count > 0:
@@ -346,12 +336,11 @@ async def notify_accountants(
             f"из выпадающего списка.\n\n"
             f"После заполнения нажмите кнопку ниже. 👇"
         )
-        for admin_id in admin_ids:
-            try:
-                await bot.send_message(admin_id, mapping_text, parse_mode="HTML",
-                                       reply_markup=mapping_kb)
-            except Exception:
-                logger.warning("[ocr_mapping] Не удалось уведомить admin %d о маппинге", admin_id)
+        try:
+            await bot.send_message(user_id, mapping_text, parse_mode="HTML",
+                                   reply_markup=mapping_kb)
+        except Exception:
+            logger.warning("[ocr_mapping] Не удалось уведомить пользователя %d о маппинге", user_id)
 
 
 # ═══════════════════════════════════════════════════════

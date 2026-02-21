@@ -134,26 +134,9 @@ def auth_required(handler):
     return wrapper
 
 
-def admin_required(handler):
-    """Декоратор: требует admin-прав (проверяет is_admin)."""
-    @wraps(handler)
-    async def wrapper(event, *args, **kwargs):
-        tg_id = event.from_user.id
-        if not await admin_uc.is_admin(tg_id):
-            if isinstance(event, CallbackQuery):
-                await event.answer("⛔ Только для администраторов")
-            else:
-                await event.answer("⛔ У вас нет прав администратора")
-            logger.warning("[auth] Попытка admin-доступа без прав tg:%d → %s", tg_id, handler.__name__)
-            return
-        return await handler(event, *args, **kwargs)
-    return wrapper
-
-
 def permission_required(perm_key: str):
     """
     Декоратор: требует конкретного права из Google Таблицы.
-    Админы имеют все права (bypass внутри has_permission).
     """
     def decorator(handler):
         @wraps(handler)

@@ -22,7 +22,6 @@ PermissionMiddleware (global_commands.py) использует эти слова
 # Роли (флаги, не кнопки) — столбцы в GSheet
 # ═══════════════════════════════════════════════════════
 
-ROLE_ADMIN = "👑 Админ"
 ROLE_SYSADMIN = "🔧 Сис.Админ"
 ROLE_RECEIVER = "📬 Получатель"
 ROLE_STOCK = "📦 Остатки"
@@ -30,7 +29,7 @@ ROLE_STOPLIST = "🚫 Стоп-лист"
 ROLE_ACCOUNTANT = "📑 Бухгалтер"
 
 ROLE_KEYS: list[str] = [
-    ROLE_ADMIN, ROLE_SYSADMIN, ROLE_RECEIVER,
+    ROLE_SYSADMIN, ROLE_RECEIVER,
     ROLE_STOCK, ROLE_STOPLIST, ROLE_ACCOUNTANT,
 ]
 
@@ -171,29 +170,14 @@ CALLBACK_PERMISSIONS: dict[str, str] = {
     "iiko_invoice_cancel:": PERM_OCR_SEND,
     "mapping_done":         PERM_OCR_UPLOAD,
     "refresh_mapping_ref":  PERM_OCR_UPLOAD,
-}
 
-# ═══════════════════════════════════════════════════════
-# Callback-prefix'ы → admin-only
-# ═══════════════════════════════════════════════════════
-# Middleware проверяет is_admin для этих callback'ов.
-# (writeoff approve/reject/edit уже защищены inline-проверкой
-#  is_admin в хэндлере, но middleware добавляет 2-й слой.)
+    # Списания: одобрение / отклонение / редактирование
+    "woa_approve:":         PERM_WRITEOFF_APPROVE,
+    "woa_reject:":          PERM_WRITEOFF_APPROVE,
+    "woa_edit:":            PERM_WRITEOFF_APPROVE,
 
-CALLBACK_ADMIN_ONLY: set[str] = {
-    "woa_approve:",
-    "woa_reject:",
-    "woa_edit:",
-}
-
-# ═══════════════════════════════════════════════════════
-# Callback-prefix'ы → receiver OR admin
-# ═══════════════════════════════════════════════════════
-# Middleware проверяет is_receiver() OR is_admin() для этих callback'ов.
-# Заявки: получатели и админы могут одобрять/редактировать/отклонять.
-
-CALLBACK_RECEIVER_OR_ADMIN: set[str] = {
-    "req_approve:",
-    "req_edit:",
-    "req_reject:",
+    # Заявки: одобрение / отклонение / редактирование
+    "req_approve:":         PERM_REQUEST_APPROVE,
+    "req_edit:":            PERM_REQUEST_APPROVE,
+    "req_reject:":          PERM_REQUEST_APPROVE,
 }

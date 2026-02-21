@@ -238,8 +238,10 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
     asyncio.create_task(wo_uc.preload_products(ctx.department_id))
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    # Параллельно: is_admin + prepare_writeoff
-    is_bot_admin = await admin_uc.is_admin(message.from_user.id)
+    # Параллельно: has_permission + prepare_writeoff
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_WRITEOFF_APPROVE
+    is_bot_admin = await perm_uc.has_permission(message.from_user.id, PERM_WRITEOFF_APPROVE)
     wo_start = await wo_uc.prepare_writeoff(
         department_id=ctx.department_id,
         role_name=ctx.role_name,
@@ -624,7 +626,9 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
                                reply_markup=_add_more_kb())
             return
 
-        admin_ids = await admin_uc.get_admin_ids()
+        from use_cases import permissions as perm_uc
+        from bot.permission_map import PERM_WRITEOFF_APPROVE
+        admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
 
         if not admin_ids:
             # Нет админов — отправляем напрямую (fallback)
@@ -726,9 +730,11 @@ async def _remove_admin_keyboards(bot: Bot, doc: pending.PendingWriteoff,
 @router.callback_query(F.data.startswith("woa_approve:"))
 async def admin_approve(callback: CallbackQuery) -> None:
     await callback.answer()
-    if not await admin_uc.is_admin(callback.from_user.id):
-        await callback.answer("⛔ Только для администраторов", show_alert=True)
-        logger.warning("[security] Попытка одобрения без admin-прав tg:%d", callback.from_user.id)
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_WRITEOFF_APPROVE
+    if not await perm_uc.has_permission(callback.from_user.id, PERM_WRITEOFF_APPROVE):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        logger.warning("[security] Попытка одобрения без прав tg:%d", callback.from_user.id)
         return
     doc_id = extract_callback_value(callback.data)
     if not doc_id:
@@ -821,9 +827,11 @@ async def admin_approve(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("woa_reject:"))
 async def admin_reject(callback: CallbackQuery) -> None:
     await callback.answer()
-    if not await admin_uc.is_admin(callback.from_user.id):
-        await callback.answer("⛔ Только для администраторов", show_alert=True)
-        logger.warning("[security] Попытка отклонения без admin-прав tg:%d", callback.from_user.id)
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_WRITEOFF_APPROVE
+    if not await perm_uc.has_permission(callback.from_user.id, PERM_WRITEOFF_APPROVE):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        logger.warning("[security] Попытка отклонения без прав tg:%d", callback.from_user.id)
         return
     doc_id = extract_callback_value(callback.data)
     if not doc_id:
@@ -870,9 +878,11 @@ async def admin_reject(callback: CallbackQuery) -> None:
 async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
     """Админ решил отредактировать документ."""
     await callback.answer()
-    if not await admin_uc.is_admin(callback.from_user.id):
-        await callback.answer("⛔ Только для администраторов", show_alert=True)
-        logger.warning("[security] Попытка редактирования без admin-прав tg:%d", callback.from_user.id)
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_WRITEOFF_APPROVE
+    if not await perm_uc.has_permission(callback.from_user.id, PERM_WRITEOFF_APPROVE):
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        logger.warning("[security] Попытка редактирования без прав tg:%d", callback.from_user.id)
         return
     doc_id = extract_callback_value(callback.data)
     if not doc_id:
@@ -931,7 +941,9 @@ async def admin_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
             # Перерассылаем кнопки заново
             text = pending.build_summary_text(doc)
             kb = pending.admin_keyboard(doc_id)
-            _ids = await admin_uc.get_admin_ids()
+            from use_cases import permissions as perm_uc
+            from bot.permission_map import PERM_WRITEOFF_APPROVE
+            _ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
             for admin_id in _ids:
                 try:
                     msg = await callback.bot.send_message(admin_id, text,
@@ -1328,7 +1340,9 @@ async def _finish_edit(callback: CallbackQuery, state: FSMContext,
     kb = pending.admin_keyboard(doc_id)
 
     # Получаем список всех админов
-    admin_ids = await admin_uc.get_admin_ids()
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_WRITEOFF_APPROVE
+    admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
     existing_msgs = doc.admin_msg_ids.copy()
     new_msg_ids: dict[int, int] = {}
 
@@ -1378,7 +1392,9 @@ async def _finish_edit_msg(message: Message, state: FSMContext,
     kb = pending.admin_keyboard(doc_id)
 
     # Получаем список всех админов
-    admin_ids = await admin_uc.get_admin_ids()
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_WRITEOFF_APPROVE
+    admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
     existing_msgs = doc.admin_msg_ids.copy()
     new_msg_ids: dict[int, int] = {}
 
@@ -1529,7 +1545,9 @@ async def start_history(message: Message, state: FSMContext) -> None:
     logger.info("[wo_history] Открытие истории tg:%d, dept=%s, role=%s",
                 message.from_user.id, ctx.department_id, ctx.role_name)
 
-    is_bot_admin = await admin_uc.is_admin(message.from_user.id)
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_WRITEOFF_APPROVE
+    is_bot_admin = await perm_uc.has_permission(message.from_user.id, PERM_WRITEOFF_APPROVE)
     role_type = "admin" if is_bot_admin else wo_uc.classify_role(ctx.role_name)
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -1704,7 +1722,9 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
 
     _sending_lock.add(user_id)
     try:
-        admin_ids = await admin_uc.get_admin_ids()
+        from use_cases import permissions as perm_uc
+        from bot.permission_map import PERM_WRITEOFF_APPROVE
+        admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
 
         if not admin_ids:
             # Нет админов — отправляем напрямую
@@ -2239,7 +2259,9 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
         account_name = data.get("hist_edit_account_name", "—")
         reason = data.get("hist_edit_reason", "")
 
-        admin_ids = await admin_uc.get_admin_ids()
+        from use_cases import permissions as perm_uc
+        from bot.permission_map import PERM_WRITEOFF_APPROVE
+        admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
 
         if not admin_ids:
             try:

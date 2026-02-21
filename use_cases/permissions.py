@@ -26,7 +26,7 @@ from use_cases.redis_cache import get_cached_or_fetch, invalidate_key
 
 # Единственный источник истины: роли и perm_key
 from bot.permission_map import (
-    ROLE_ADMIN, ROLE_SYSADMIN, ROLE_RECEIVER, ROLE_STOCK,
+    ROLE_SYSADMIN, ROLE_RECEIVER, ROLE_STOCK,
     ROLE_STOPLIST, ROLE_ACCOUNTANT, ROLE_KEYS,
     PERMISSION_KEYS, ALL_COLUMN_KEYS,
     MENU_BUTTON_GROUPS,
@@ -79,29 +79,8 @@ async def _ensure_cache() -> dict[str, dict[str, bool]]:
 
 
 # ═══════════════════════════════════════════════════════
-# Роли: админ / получатель (из GSheet)
+# Роли: получатель (из GSheet)
 # ═══════════════════════════════════════════════════════
-
-async def is_admin(telegram_id: int) -> bool:
-    """Проверить, является ли пользователь админом (по GSheet столбцу «👑 Админ»)."""
-    cache = await _ensure_cache()
-    user_perms = cache.get(str(telegram_id))
-    if user_perms is None:
-        return False
-    return user_perms.get(ROLE_ADMIN, False)
-
-
-async def get_admin_ids() -> list[int]:
-    """Список telegram_id всех админов из GSheet."""
-    cache = await _ensure_cache()
-    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_ADMIN, False)]
-
-
-async def has_any_admin() -> bool:
-    """Есть ли хотя бы один админ в GSheet? Нужно для bootstrap-проверки."""
-    ids = await get_admin_ids()
-    return len(ids) > 0
-
 
 async def is_receiver(telegram_id: int) -> bool:
     """Проверить, является ли пользователь получателем заявок (по GSheet столбцу «📬 Получатель»)."""
@@ -143,15 +122,20 @@ async def get_accountant_ids() -> list[int]:
 async def get_sysadmin_ids() -> list[int]:
     """
     Список telegram_id сисадминов — получателей технических алертов (ERROR/CRITICAL из логов).
-    Если роль «🔧 Сис.Админ» не назначена ни одному пользователю — возвращает get_admin_ids()
-    (fallback: не терять алерты при первоначальной настройке).
     """
     cache = await _ensure_cache()
-    ids = [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_SYSADMIN, False)]
-    if ids:
-        return ids
-    # Fallback: сисадмин не назначен → шлём обычным админам
-    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_ADMIN, False)]
+    return [int(tg_id) for tg_id, perms in cache.items() if perms.get(ROLE_SYSADMIN, False)]
+
+
+async def get_users_with_permission(perm_key: str) -> list[int]:
+    """
+    Получить список telegram_id пользователей, у которых есть конкретное право.
+    """
+    cache = await _ensure_cache()
+    return [
+        int(tg_id) for tg_id, perms in cache.items()
+        if perms.get(perm_key, False)
+    ]
 
 
 # ═══════════════════════════════════════════════════════
@@ -161,24 +145,12 @@ async def get_sysadmin_ids() -> list[int]:
 async def has_permission(telegram_id: int, perm_key: str) -> bool:
     """
     Проверить, есть ли у пользователя право на кнопку.
-
-    Админы (👑 в GSheet) имеют ВСЕ права (bypass).
-    Bootstrap: если нет ни одного админа — все авторизованные получают все права
-    (иначе невозможно назначить первого админа).
     Если пользователя нет в таблице → нет прав.
     """
     cache = await _ensure_cache()
     user_perms = cache.get(str(telegram_id))
     if user_perms is None:
         return False
-
-    # Bootstrap: нет ни одного админа — разрешаем всем
-    if not any(p.get(ROLE_ADMIN, False) for p in cache.values()):
-        return True
-
-    # Админ = всё разрешено
-    if user_perms.get(ROLE_ADMIN, False):
-        return True
 
     return user_perms.get(perm_key, False)
 
@@ -190,23 +162,11 @@ async def get_allowed_keys(telegram_id: int) -> set[str]:
     Возвращает тексты кнопок главного меню (например «📝 Списания»),
     для которых у пользователя есть ХОТЯ БЫ ОДНО гранулярное право
     из MENU_BUTTON_GROUPS.
-
-    Админы → все кнопки.
-    Bootstrap (нет админов) → все кнопки для любого авторизованного.
     """
     cache = await _ensure_cache()
     user_perms = cache.get(str(telegram_id))
     if user_perms is None:
         return set()
-
-    all_menu_buttons = set(MENU_BUTTON_GROUPS.keys())
-
-    # Bootstrap: нет ни одного админа — показываем все кнопки
-    if not any(p.get(ROLE_ADMIN, False) for p in cache.values()):
-        return all_menu_buttons
-
-    if user_perms.get(ROLE_ADMIN, False):
-        return all_menu_buttons
 
     # Для каждой кнопки главного меню проверяем: есть ли хотя бы одно
     # гранулярное право из группы

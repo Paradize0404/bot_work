@@ -809,7 +809,9 @@ async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> No
     text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
 
     # ── Уведомления: админам → с кнопками, получателям → информативное ──
-    admin_ids = await admin_uc.get_admin_ids()
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
+    admin_ids = await perm_uc.get_users_with_permission(PERM_REQUEST_APPROVE)
     receiver_ids = await req_uc.get_receiver_ids()
 
     # Убираем пересечение (админ не дублируется в получателях)
@@ -911,7 +913,9 @@ async def _update_other_admin_msgs(
 
 async def _resend_admin_buttons(bot: Bot, pk: int) -> None:
     """Обновить сообщения с заявкой у всех админов (редактирование или отправка новых)."""
-    admin_ids = await admin_uc.get_admin_ids()
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
+    admin_ids = await perm_uc.get_users_with_permission(PERM_REQUEST_APPROVE)
     req_data = await req_uc.get_request_by_pk(pk)
     if not req_data or req_data["status"] != "pending":
         return
@@ -974,7 +978,9 @@ async def _finish_request_edit(callback: CallbackQuery, state: FSMContext, pk: i
     text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
     text += f"\n\n✏️ <i>Изменено: {change_description}</i>"
     
-    admin_ids = await admin_uc.get_admin_ids()
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
+    admin_ids = await perm_uc.get_users_with_permission(PERM_REQUEST_APPROVE)
     existing_msgs = _request_admin_msgs.get(pk, {})
     new_msgs: dict[int, int] = {}
     
@@ -1023,7 +1029,9 @@ async def _finish_request_edit_msg(message: Message, state: FSMContext, pk: int,
     text = req_uc.format_request_text(req_data, settings_dept_name=settings_dept)
     text += f"\n\n✏️ <i>Изменено: {change_description}</i>"
     
-    admin_ids = await admin_uc.get_admin_ids()
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
+    admin_ids = await perm_uc.get_users_with_permission(PERM_REQUEST_APPROVE)
     existing_msgs = _request_admin_msgs.get(pk, {})
     new_msgs: dict[int, int] = {}
     
@@ -1070,7 +1078,9 @@ async def approve_request(callback: CallbackQuery) -> None:
         return
 
     # Проверка прав доступа
-    if not await req_uc.is_receiver(callback.from_user.id) and not await admin_uc.is_admin(callback.from_user.id):
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
+    if not await perm_uc.has_permission(callback.from_user.id, PERM_REQUEST_APPROVE):
         await callback.answer("⚠️ Нет доступа", show_alert=True)
         logger.warning("[request] Попытка одобрить заявку без прав tg:%d", callback.from_user.id)
         return
@@ -1270,7 +1280,9 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
     await callback.answer()
 
     # Проверка прав доступа
-    if not await req_uc.is_receiver(callback.from_user.id) and not await admin_uc.is_admin(callback.from_user.id):
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
+    if not await perm_uc.has_permission(callback.from_user.id, PERM_REQUEST_APPROVE):
         await callback.answer("⚠️ Нет доступа", show_alert=True)
         logger.warning("[request] Попытка редактировать заявку без прав tg:%d", callback.from_user.id)
         return
@@ -1656,7 +1668,9 @@ async def reject_request(callback: CallbackQuery) -> None:
     await callback.answer()
 
     # Проверка прав доступа
-    if not await req_uc.is_receiver(callback.from_user.id) and not await admin_uc.is_admin(callback.from_user.id):
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
+    if not await perm_uc.has_permission(callback.from_user.id, PERM_REQUEST_APPROVE):
         await callback.answer("⚠️ Нет доступа", show_alert=True)
         logger.warning("[request] Попытка отклонить заявку без прав tg:%d", callback.from_user.id)
         return
@@ -2176,7 +2190,9 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
     text += f"\n\n🔄 <i>На основе заявки #{source_pk}</i>"
 
     # ── Уведомления: админам → с кнопками, получателям → информативное ──
-    admin_ids = await admin_uc.get_admin_ids()
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
+    admin_ids = await perm_uc.get_users_with_permission(PERM_REQUEST_APPROVE)
     receiver_ids = await req_uc.get_receiver_ids()
     receiver_only = [tg for tg in receiver_ids if tg not in set(admin_ids)]
 
@@ -2236,8 +2252,10 @@ async def view_pending_requests(message: Message) -> None:
         await message.delete()
     except Exception:
         pass
+    from use_cases import permissions as perm_uc
+    from bot.permission_map import PERM_REQUEST_APPROVE
     is_rcv = await req_uc.is_receiver(message.from_user.id)
-    is_adm = await admin_uc.is_admin(message.from_user.id)
+    is_adm = await perm_uc.has_permission(message.from_user.id, PERM_REQUEST_APPROVE)
     if not is_rcv and not is_adm:
         await message.answer("⚠️ У вас нет доступа к заявкам.")
         return

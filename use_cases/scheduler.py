@@ -180,7 +180,7 @@ async def _daily_negative_transfer() -> None:
 
 async def _notify_admins_negative_transfer(result: dict) -> None:
     """Отправить краткий итог авто-перемещения админам."""
-    from use_cases.permissions import get_admin_ids
+    from use_cases.permissions import get_sysadmin_ids
 
     bot = _bot_ref
     if not bot:
@@ -213,7 +213,7 @@ async def _notify_admins_negative_transfer(result: dict) -> None:
         text = "\n".join(lines)
 
     try:
-        admin_ids = await get_admin_ids()
+        admin_ids = await get_sysadmin_ids()
         for admin_id in admin_ids:
             try:
                 await bot.send_message(admin_id, text, parse_mode="HTML")
@@ -225,9 +225,9 @@ async def _notify_admins_negative_transfer(result: dict) -> None:
 
 async def _notify_admins_about_sync(report_lines: list[str]) -> None:
     """Отправить результат синхронизации всем админам в Telegram."""
-    from use_cases.permissions import get_admin_ids
+    from use_cases.permissions import get_sysadmin_ids
 
-    admin_ids = await get_admin_ids()
+    admin_ids = await get_sysadmin_ids()
     if not admin_ids:
         logger.warning("[scheduler] Нет админов для уведомления о синхронизации")
         return

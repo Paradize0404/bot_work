@@ -304,13 +304,13 @@ async def _do_process_photos(
             await mapping_uc.write_transfer(unmapped_sup, unmapped_prd)
 
         asyncio.create_task(
-            mapping_uc.notify_accountants(bot, services, unmapped_total),
+            mapping_uc.notify_user_about_mapping(bot, tg_id, services, unmapped_total),
             name=f"ocr_notify_{tg_id}",
         )
     elif services:
         from use_cases import ocr_mapping as mapping_uc
         asyncio.create_task(
-            mapping_uc.notify_accountants(bot, services, 0),
+            mapping_uc.notify_user_about_mapping(bot, tg_id, services, 0),
             name=f"ocr_notify_svc_{tg_id}",
         )
 
@@ -1073,9 +1073,9 @@ async def handle_json_receipt(message: Message, state: FSMContext) -> None:
             _transfer_batch_doc_ids.extend(saved_doc_ids)
             _pending_doc_ids[tg_id] = saved_doc_ids
 
-        # Уведомить бухгалтеров о маппинге
+        # Уведомить пользователя о маппинге
         asyncio.create_task(
-            mapping_uc.notify_accountants(message.bot, [], unmapped_total),
+            mapping_uc.notify_user_about_mapping(message.bot, tg_id, [], unmapped_total),
             name=f"json_notify_{tg_id}",
         )
 
