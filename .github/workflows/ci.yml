@@ -65,10 +65,11 @@ jobs:
       env:
         DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_db
         REDIS_URL: redis://localhost:6379/0
-        BOT_TOKEN: 123456789:TEST_TOKEN
-        IIKO_API_LOGIN: test_login
-        IIKO_CLOUD_API_KEY: test_key
-        FINTABLO_API_KEY: test_key
+        TELEGRAM_BOT_TOKEN: "123456789:AABBCCDDEEFFaabbccddeeff-TEST_TOKEN_X"
+        IIKO_BASE_URL: https://test-iiko.local
+        IIKO_LOGIN: test_login
+        IIKO_SHA1_PASSWORD: test_password
+        FINTABLO_TOKEN: test_key
         GOOGLE_CREDENTIALS_JSON: "{}"
         GOOGLE_SHEET_ID: test_sheet_id
       run: |
