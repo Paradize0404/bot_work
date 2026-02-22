@@ -332,51 +332,159 @@ def test_format_day_report_with_error():
 
 
 # ═══════════════════════════════════════════════════════
-# 5. append_day_report_row — запись в Google Sheets
+# 5. _build_full_headers — динамические заголовки GSheets
 # ═══════════════════════════════════════════════════════
+
+
+def test_build_full_headers_basic():
+    """Базовый случай: нет существующих заголовков."""
+    from adapters.google_sheets import _build_full_headers
+
+    headers = _build_full_headers(
+        existing=[],
+        pay_types=["Наличные", "Карта"],
+        places=["Кухня", "Бар"],
+    )
+
+    assert headers[:5] == ["Дата", "Сотрудник", "Подразделение", "Плюсы", "Минусы"]
+    assert "Карта, ₽" in headers
+    assert "Наличные, ₽" in headers
+    assert "Выручка ИТОГО, ₽" in headers
+    assert "Бар выр, ₽" in headers
+    assert "Кухня себест, %" in headers
+    assert "Себестоимость ИТОГО, ₽" in headers
+    assert "Средняя себестоимость, %" in headers
+    assert headers[-1] == "Средняя себестоимость, %"
+    assert headers[-2] == "Себестоимость ИТОГО, ₽"
+
+
+def test_build_full_headers_preserves_existing_and_adds_new():
+    """Новые pay_type и place добавляются к уже существующим."""
+    from adapters.google_sheets import _build_full_headers
+
+    existing = [
+        "Дата",
+        "Сотрудник",
+        "Подразделение",
+        "Плюсы",
+        "Минусы",
+        "Наличные, ₽",
+        "Выручка ИТОГО, ₽",
+        "Кухня выр, ₽",
+        "Кухня себест, ₽",
+        "Кухня себест, %",
+        "Себестоимость ИТОГО, ₽",
+        "Средняя себестоимость, %",
+    ]
+
+    headers = _build_full_headers(
+        existing=existing,
+        pay_types=["Карта"],  # новый тип оплаты
+        places=["Кухня", "Бар"],  # Бар — новое место
+    )
+
+    assert "Наличные, ₽" in headers
+    assert "Карта, ₽" in headers
+    assert "Кухня выр, ₽" in headers
+    assert "Бар выр, ₽" in headers
+    assert headers[-1] == "Средняя себестоимость, %"
+    assert headers[-2] == "Себестоимость ИТОГО, ₽"
+
+
+def test_build_full_headers_sorted_order():
+    """Типы оплаты и места приготовления отсортированы по алфавиту."""
+    from adapters.google_sheets import _build_full_headers
+
+    headers = _build_full_headers(
+        existing=[],
+        pay_types=["Яндекс", "Карта", "Наличные"],
+        places=["Пицца", "Бар", "Кухня"],
+    )
+
+    pay_cols = [
+        h
+        for h in headers
+        if h.endswith(", ₽")
+        and " выр" not in h
+        and " себест" not in h
+        and h not in ("Выручка ИТОГО, ₽", "Себестоимость ИТОГО, ₽")
+    ]
+    assert pay_cols == sorted(pay_cols)
+
+    bar_idx = headers.index("Бар выр, ₽")
+    kuhnya_idx = headers.index("Кухня выр, ₽")
+    pizza_idx = headers.index("Пицца выр, ₽")
+    assert bar_idx < kuhnya_idx < pizza_idx
+
+
+# ═══════════════════════════════════════════════════════
+# 6. append_day_report_row — запись в Google Sheets
+# ═══════════════════════════════════════════════════════
+
+_GSHEETS_DATA = {
+    "date": "2026-02-22",
+    "employee_name": "Сидоров",
+    "department_name": "Московский",
+    "positives": "Хорошо",
+    "negatives": "Плохо",
+    "sales_lines": [
+        {"pay_type": "Наличные", "amount": 70000.0},
+        {"pay_type": "Карта", "amount": 30000.0},
+    ],
+    "cost_lines": [
+        {"place": "Кухня", "sales": 80000.0, "cost_rub": 24000.0, "cost_pct": 30.0},
+        {"place": "Бар", "sales": 20000.0, "cost_rub": 4000.0, "cost_pct": 20.0},
+    ],
+    "total_sales": 100000.0,
+    "total_cost": 28000.0,
+    "avg_cost_pct": 28.0,
+}
 
 
 def test_append_day_report_row_calls_append_row():
     """
-    append_day_report_row должен вызывать ws.append_row с корректными данными.
-    Лист уже существует (worksheet() не бросает исключений).
+    append_day_report_row должен:
+    - вызвать ws.update() чтобы записать динамические заголовки
+    - вызвать ws.append_row() с корректными значениями в нужных позициях
     """
     mock_ws = MagicMock()
-    mock_ws.get_all_values.return_value = [["Дата", "Сотрудник"]]  # заголовки есть
+    mock_ws.get_all_values.return_value = []  # пустой лист
 
     mock_ss = MagicMock()
     mock_ss.worksheet.return_value = mock_ws
-
     mock_client = MagicMock()
     mock_client.open_by_key.return_value = mock_ss
 
     with patch("adapters.google_sheets._get_client", return_value=mock_client):
-        from adapters.google_sheets import append_day_report_row
+        from adapters.google_sheets import append_day_report_row, _build_full_headers
 
-        append_day_report_row(
-            {
-                "date": "2026-02-22",
-                "employee_name": "Сидоров",
-                "department_name": "Московский",
-                "positives": "Хорошо",
-                "negatives": "Плохо",
-                "total_sales": 100000.0,
-                "total_cost": 30000.0,
-                "avg_cost_pct": 30.0,
-            }
-        )
+        append_day_report_row(_GSHEETS_DATA)
 
     mock_ws.append_row.assert_called_once()
     row = mock_ws.append_row.call_args[0][0]
 
-    assert row[0] == "2026-02-22"
-    assert row[1] == "Сидоров"
-    assert row[2] == "Московский"
-    assert row[3] == "Хорошо"
-    assert row[4] == "Плохо"
-    assert row[5] == pytest.approx(100000.0)
-    assert row[6] == pytest.approx(30000.0)
-    assert row[7] == pytest.approx(30.0)
+    # Вычисляем ожидаемые заголовки чтобы найти позиции
+    expected_headers = _build_full_headers([], ["Наличные", "Карта"], ["Кухня", "Бар"])
+    assert row[expected_headers.index("Дата")] == "2026-02-22"
+    assert row[expected_headers.index("Сотрудник")] == "Сидоров"
+    assert row[expected_headers.index("Подразделение")] == "Московский"
+    assert row[expected_headers.index("Плюсы")] == "Хорошо"
+    assert row[expected_headers.index("Минусы")] == "Плохо"
+    assert row[expected_headers.index("Наличные, ₽")] == pytest.approx(70000.0)
+    assert row[expected_headers.index("Карта, ₽")] == pytest.approx(30000.0)
+    assert row[expected_headers.index("Выручка ИТОГО, ₽")] == pytest.approx(100000.0)
+    assert row[expected_headers.index("Кухня выр, ₽")] == pytest.approx(80000.0)
+    assert row[expected_headers.index("Кухня себест, ₽")] == pytest.approx(24000.0)
+    assert row[expected_headers.index("Кухня себест, %")] == pytest.approx(30.0)
+    assert row[expected_headers.index("Бар выр, ₽")] == pytest.approx(20000.0)
+    assert row[expected_headers.index("Бар себест, ₽")] == pytest.approx(4000.0)
+    assert row[expected_headers.index("Бар себест, %")] == pytest.approx(20.0)
+    assert row[expected_headers.index("Себестоимость ИТОГО, ₽")] == pytest.approx(
+        28000.0
+    )
+    assert row[expected_headers.index("Средняя себестоимость, %")] == pytest.approx(
+        28.0
+    )
 
 
 def test_append_day_report_row_creates_sheet_if_missing():
@@ -396,18 +504,7 @@ def test_append_day_report_row_creates_sheet_if_missing():
     with patch("adapters.google_sheets._get_client", return_value=mock_client):
         from adapters.google_sheets import append_day_report_row
 
-        append_day_report_row(
-            {
-                "date": "2026-02-22",
-                "employee_name": "Test",
-                "department_name": "Dept",
-                "positives": "+",
-                "negatives": "-",
-                "total_sales": 0,
-                "total_cost": 0,
-                "avg_cost_pct": 0,
-            }
-        )
+        append_day_report_row(_GSHEETS_DATA)
 
     mock_ss.add_worksheet.assert_called_once()
     mock_ws.append_row.assert_called_once()

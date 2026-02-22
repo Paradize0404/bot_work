@@ -192,15 +192,30 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
 
     # ── Запись в Google Sheets ──
     try:
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             None,
             gs_adapter.append_day_report_row,
             {
                 "date": data["date"],
                 "employee_name": data["employee_name"],
-                "department_name": data.get("department_name", ""),
+                "department_name": department_name or "",
                 "positives": data["positives"],
                 "negatives": text,
+                # Детальные строки — каждый тип оплаты и каждое место приготовления
+                # станут отдельными колонками в таблице
+                "sales_lines": [
+                    {"pay_type": sl.pay_type, "amount": sl.amount}
+                    for sl in iiko_data.sales_lines
+                ],
+                "cost_lines": [
+                    {
+                        "place": cl.place,
+                        "sales": cl.sales,
+                        "cost_rub": cl.cost_rub,
+                        "cost_pct": cl.cost_pct,
+                    }
+                    for cl in iiko_data.cost_lines
+                ],
                 "total_sales": iiko_data.total_sales,
                 "total_cost": iiko_data.total_cost,
                 "avg_cost_pct": iiko_data.avg_cost_pct,

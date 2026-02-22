@@ -2852,80 +2852,180 @@ def clear_mapping_import_sheet() -> None:
 
 
 # ═══════════════════════════════════════════════════════
-# Отчёт дня — append в Google Sheets
+# ═══════════════════════════════════════════════════════
+# Отчёт дня — append в Google Sheets (динамические колонки)
 # ═══════════════════════════════════════════════════════
 
 _DAY_REPORT_TAB = "Отчёт дня"
-_DAY_REPORT_HEADERS = [
-    "Дата",
-    "Сотрудник",
-    "Подразделение",
-    "Плюсы",
-    "Минусы",
-    "Выручка, ₽",
-    "Себестоимость, ₽",
-    "Себестоимость, %",
-]
+
+# Фиксированные колонки-якоря
+_STATIC_START = ["Дата", "Сотрудник", "Подразделение", "Плюсы", "Минусы"]
+_SALES_TOTAL_COL = "Выручка ИТОГО, ₽"
+_COST_TOTAL_COL = "Себестоимость ИТОГО, ₽"
+_COST_AVG_COL = "Средняя себестоимость, %"
+
+
+def _pay_col(pay_type: str) -> str:
+    """Имя колонки для типа оплаты."""
+    return f"{pay_type}, ₽"
+
+
+def _place_sales_col(place: str) -> str:
+    return f"{place} выр, ₽"
+
+
+def _place_cost_rub_col(place: str) -> str:
+    return f"{place} себест, ₽"
+
+
+def _place_cost_pct_col(place: str) -> str:
+    return f"{place} себест, %"
+
+
+def _is_pay_col(name: str) -> bool:
+    """Является ли заголовок колонкой типа оплаты (не статической и не place-col)."""
+    if name in (*_STATIC_START, _SALES_TOTAL_COL, _COST_TOTAL_COL, _COST_AVG_COL):
+        return False
+    return (
+        name.endswith(", ₽")
+        and not name.endswith(" выр, ₽")
+        and not name.endswith(" себест, ₽")
+    )
+
+
+def _col_letter(n: int) -> str:
+    """Номер колонки (1-based) → буква(ы): 1→A, 26→Z, 27→AA ..."""
+    result = ""
+    while n:
+        n, rem = divmod(n - 1, 26)
+        result = chr(65 + rem) + result
+    return result
+
+
+def _build_full_headers(
+    existing: list[str],
+    pay_types: list[str],
+    places: list[str],
+) -> list[str]:
+    """
+    Собрать полный список заголовков, сохраняя порядок секций:
+      STATIC_START | pay_type cols (sorted) | SALES_TOTAL
+      | per-place cols (sorted) | COST_TOTAL | COST_AVG
+
+    Новые pay_type / place добавляются к уже известным из existing.
+    """
+    # -- Известные типы оплаты (из текущего листа + новые) --
+    known_pay: list[str] = []
+    seen_pay: set[str] = set()
+    for h in existing:
+        if _is_pay_col(h) and h not in seen_pay:
+            known_pay.append(h)
+            seen_pay.add(h)
+    for pt in pay_types:
+        col = _pay_col(pt)
+        if col not in seen_pay:
+            known_pay.append(col)
+            seen_pay.add(col)
+
+    # -- Известные места приготовления (из текущего листа + новые) --
+    known_places: list[str] = []
+    seen_pl: set[str] = set()
+    suffix = " выр, ₽"
+    for h in existing:
+        if h.endswith(suffix):
+            place = h[: -len(suffix)]
+            if place not in seen_pl:
+                known_places.append(place)
+                seen_pl.add(place)
+    for p in places:
+        if p not in seen_pl:
+            known_places.append(p)
+            seen_pl.add(p)
+
+    headers = list(_STATIC_START)
+    headers.extend(sorted(known_pay))
+    headers.append(_SALES_TOTAL_COL)
+    for place in sorted(known_places):
+        headers.append(_place_sales_col(place))
+        headers.append(_place_cost_rub_col(place))
+        headers.append(_place_cost_pct_col(place))
+    headers.append(_COST_TOTAL_COL)
+    headers.append(_COST_AVG_COL)
+    return headers
 
 
 def _get_day_report_worksheet() -> gspread.Worksheet:
-    """Получить (лениво) лист «Отчёт дня». Если нет — создаёт с заголовками."""
+    """Получить (лениво) лист «Отчёт дня». Если нет — создаёт пустой (заголовки пишет append_day_report_row)."""
     client = _get_client()
     spreadsheet = client.open_by_key(DAY_REPORT_SHEET_ID)
     try:
         ws = spreadsheet.worksheet(_DAY_REPORT_TAB)
     except gspread.exceptions.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title=_DAY_REPORT_TAB, rows=1000, cols=10)
-        # Записываем заголовки при создании листа
-        try:
-            ws.update("A1", [_DAY_REPORT_HEADERS], value_input_option="RAW")
-            ws.format(
-                "A1:H1",
-                {"textFormat": {"bold": True}, "horizontalAlignment": "CENTER"},
-            )
-        except Exception:
-            pass
+        ws = spreadsheet.add_worksheet(title=_DAY_REPORT_TAB, rows=1000, cols=50)
         logger.info("[%s] Лист «%s» создан", LABEL, _DAY_REPORT_TAB)
     return ws
 
 
-def append_day_report_row(
-    data: dict,
-) -> None:
+def append_day_report_row(data: dict) -> None:
     """
     Добавить строку отчёта дня в лист «Отчёт дня» в Google Sheets.
+
+    Колонки динамические — автоматически расширяются при появлении
+    новых типов оплаты (sales_lines) или мест приготовления (cost_lines).
 
     data — словарь с ключами:
         date (str), employee_name (str), department_name (str),
         positives (str), negatives (str),
+        sales_lines (list[dict{pay_type, amount}]),
+        cost_lines  (list[dict{place, sales, cost_rub, cost_pct}]),
         total_sales (float), total_cost (float), avg_cost_pct (float)
     """
     ws = _get_day_report_worksheet()
 
-    # Если лист был только что создан, заголовки уже вставлены.
-    # Если лист существовал раньше — проверяем есть ли заголовок.
-    existing = ws.get_all_values()
-    if not existing:
-        # Пустой лист — добавляем заголовки сначала
+    sales_lines: list[dict] = data.get("sales_lines") or []
+    cost_lines: list[dict] = data.get("cost_lines") or []
+    pay_types = [sl["pay_type"] for sl in sales_lines]
+    places = [cl["place"] for cl in cost_lines]
+
+    # Читаем текущие заголовки с листа
+    existing_values = ws.get_all_values()
+    current_headers: list[str] = existing_values[0] if existing_values else []
+
+    # Строим полный список заголовков (с учётом новых pay_type / place)
+    new_headers = _build_full_headers(current_headers, pay_types, places)
+
+    # Если заголовки изменились — обновляем строку 1
+    if new_headers != current_headers:
+        last_col = _col_letter(len(new_headers))
+        ws.update("A1", [new_headers], value_input_option="RAW")
         try:
-            ws.update("A1", [_DAY_REPORT_HEADERS], value_input_option="RAW")
             ws.format(
-                "A1:H1",
+                f"A1:{last_col}1",
                 {"textFormat": {"bold": True}, "horizontalAlignment": "CENTER"},
             )
         except Exception:
             pass
 
-    row = [
-        data.get("date", ""),
-        data.get("employee_name", ""),
-        data.get("department_name", ""),
-        data.get("positives", ""),
-        data.get("negatives", ""),
-        round(data.get("total_sales", 0), 2),
-        round(data.get("total_cost", 0), 2),
-        round(data.get("avg_cost_pct", 0), 2),
-    ]
+    # Строим словарь колонка→значение
+    col_val: dict[str, Any] = {
+        "Дата": data.get("date", ""),
+        "Сотрудник": data.get("employee_name", ""),
+        "Подразделение": data.get("department_name", ""),
+        "Плюсы": data.get("positives", ""),
+        "Минусы": data.get("negatives", ""),
+        _SALES_TOTAL_COL: round(float(data.get("total_sales") or 0), 2),
+        _COST_TOTAL_COL: round(float(data.get("total_cost") or 0), 2),
+        _COST_AVG_COL: round(float(data.get("avg_cost_pct") or 0), 2),
+    }
+    for sl in sales_lines:
+        col_val[_pay_col(sl["pay_type"])] = round(float(sl["amount"]), 2)
+    for cl in cost_lines:
+        col_val[_place_sales_col(cl["place"])] = round(float(cl["sales"]), 2)
+        col_val[_place_cost_rub_col(cl["place"])] = round(float(cl["cost_rub"]), 2)
+        col_val[_place_cost_pct_col(cl["place"])] = round(float(cl["cost_pct"]), 2)
+
+    # Собираем строку по порядку заголовков
+    row: list[Any] = [col_val.get(h, "") for h in new_headers]
 
     try:
         ws.append_row(row, value_input_option="USER_ENTERED")
@@ -2934,8 +3034,9 @@ def append_day_report_row(
         logger.debug("[%s] append_row() вернул пустой body (ОК)", LABEL)
 
     logger.info(
-        "[%s] Добавлена строка отчёта дня: %s / %s",
+        "[%s] Добавлена строка отчёта дня: %s / %s (%d колонок)",
         LABEL,
         data.get("date"),
         data.get("employee_name"),
+        len(new_headers),
     )
