@@ -1,0 +1,5 @@
+# Dev/CI зависимости (не нужны в production)
+pytest
+pytest-asyncio
+flake8
+black==24.3.0
