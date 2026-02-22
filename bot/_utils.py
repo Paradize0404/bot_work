@@ -85,8 +85,8 @@ def reports_keyboard() -> ReplyKeyboardMarkup:
     """Подменю 'Отчёты'."""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="� Отчёт дня")],
-            [KeyboardButton(text="�📊 Мин. остатки по складам")],
+            [KeyboardButton(text="📋 Отчёт дня")],
+            [KeyboardButton(text="📊 Мин. остатки по складам")],
             [KeyboardButton(text="✏️ Изменить мин. остаток")],
             [KeyboardButton(text="◀️ Назад")],
         ],
