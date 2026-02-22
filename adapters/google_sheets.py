@@ -2856,9 +2856,32 @@ def clear_mapping_import_sheet() -> None:
 # Отчёт дня — append в Google Sheets (динамические колонки)
 # ═══════════════════════════════════════════════════════
 
-_DAY_REPORT_TAB = "Отчёт дня"
+_DAY_REPORT_TAB = "Отчёт дня"  # fallback если подразделение неизвестно
 
-# Фиксированные колонки-якоря
+# Короткие названия листов (макс. 100 символов в GSheets)
+_DEPT_TAB_MAP: dict[str, str] = {
+    # ключ: нижний регистр имени подразделения из iiko (strip'ed)
+    "pizzayolo / пицца йоло (московский)": "Московский",
+    "клиническая pizzayolo": "Клиническая",
+    "гайдара pizzayolo": "Гайдара",
+}
+
+
+def _dept_tab_name(department_name: str) -> str:
+    """
+    Преобразовать имя подразделения iiko в короткое название листа.
+      'PizzaYolo / Пицца Йоло (Московский)' → 'Московский'
+      'Клиническая PizzaYolo'              → 'Клиническая'
+      'Гайдара PizzaYolo'                  → 'Гайдара'
+    Если не найдено соответствие — использует первые 20 символов названия.
+    """
+    key = department_name.strip().lower()
+    if key in _DEPT_TAB_MAP:
+        return _DEPT_TAB_MAP[key]
+    # Фоллбэк: первые 20 символов оригинального имени
+    return department_name.strip()[:20]
+
+
 _STATIC_START = ["Дата", "Сотрудник", "Подразделение", "Плюсы", "Минусы"]
 _SALES_TOTAL_COL = "Выручка ИТОГО, ₽"
 _COST_TOTAL_COL = "Себестоимость ИТОГО, ₽"
@@ -2954,15 +2977,15 @@ def _build_full_headers(
     return headers
 
 
-def _get_day_report_worksheet() -> gspread.Worksheet:
-    """Получить (лениво) лист «Отчёт дня». Если нет — создаёт пустой (заголовки пишет append_day_report_row)."""
+def _get_day_report_worksheet(tab_name: str = _DAY_REPORT_TAB) -> gspread.Worksheet:
+    """Получить лист отчёта дня по названию. Если нет — создаёт пустой лист."""
     client = _get_client()
     spreadsheet = client.open_by_key(DAY_REPORT_SHEET_ID)
     try:
-        ws = spreadsheet.worksheet(_DAY_REPORT_TAB)
+        ws = spreadsheet.worksheet(tab_name)
     except gspread.exceptions.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title=_DAY_REPORT_TAB, rows=1000, cols=50)
-        logger.info("[%s] Лист «%s» создан", LABEL, _DAY_REPORT_TAB)
+        ws = spreadsheet.add_worksheet(title=tab_name, rows=1000, cols=50)
+        logger.info("[%s] Лист «%s» создан", LABEL, tab_name)
     return ws
 
 
@@ -3250,7 +3273,9 @@ def append_day_report_row(data: dict) -> None:
         cost_lines  (list[dict{place, sales, cost_rub, cost_pct}]),
         total_sales (float), total_cost (float), avg_cost_pct (float)
     """
-    ws = _get_day_report_worksheet()
+    dept_name: str = data.get("department_name") or ""
+    tab_name: str = _dept_tab_name(dept_name) if dept_name else _DAY_REPORT_TAB
+    ws = _get_day_report_worksheet(tab_name)
 
     sales_lines: list[dict] = data.get("sales_lines") or []
     cost_lines: list[dict] = data.get("cost_lines") or []
