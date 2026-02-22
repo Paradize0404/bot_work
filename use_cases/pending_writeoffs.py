@@ -73,7 +73,8 @@ def _row_to_dto(row: PendingWriteoffDoc) -> PendingWriteoff:
 
 async def _cleanup_expired() -> None:
     """Удалить протухшие документы (>24ч)."""
-    cutoff = datetime.now(KGD_TZ).replace(tzinfo=None) - _TTL
+    from use_cases._helpers import now_kgd
+    cutoff = now_kgd() - _TTL
     async with async_session_factory() as session:
         result = await session.execute(
             delete(PendingWriteoffDoc).where(PendingWriteoffDoc.created_at < cutoff)

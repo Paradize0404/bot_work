@@ -1,4 +1,4 @@
-"""
+﻿"""
 Telegram-хэндлеры: отчёт дня (смены).
 
 FSM-флоу:
@@ -224,6 +224,7 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
 @router.message(DayReportStates.positives)
 async def guard_positives(message: Message, state: FSMContext) -> None:
     """Нетекстовый ввод на шаге плюсов."""
+    logger.info("[day_report] guard_positives tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -240,6 +241,7 @@ async def guard_positives(message: Message, state: FSMContext) -> None:
 @router.message(DayReportStates.negatives)
 async def guard_negatives(message: Message, state: FSMContext) -> None:
     """Нетекстовый ввод на шаге минусов."""
+    logger.info("[day_report] guard_negatives tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:

@@ -52,20 +52,20 @@ class OCRResult:
 
     status: str  # "success", "rejected_qr", "incomplete", "error"
     doc_type: str
-    doc_number: Optional[str]
-    doc_date: Optional[str]
-    supplier: Optional[Dict[str, str]]
-    buyer: Optional[Dict[str, str]]
+    doc_number: str | None
+    doc_date: str | None
+    supplier: Dict[str, str] | None
+    buyer: Dict[str, str] | None
     items: List[Dict[str, Any]]
-    total_amount: Optional[float]
+    total_amount: float | None
     page_count: int
     total_pages: int
     is_merged: bool = False
-    group_key: Optional[str] = None
-    confidence_score: Optional[float] = None
+    group_key: str | None = None
+    confidence_score: float | None = None
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
-    raw_json: Optional[Dict[str, Any]] = None
+    raw_json: Dict[str, Any] | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -671,7 +671,7 @@ _VAT_RATE_MAP: Dict[str, Decimal] = {
 }
 
 
-def _parse_vat(vat_str) -> Optional[Decimal]:
+def _parse_vat(vat_str) -> Decimal | None:
     """Вернуть десятичную ставку НДС или None если неизвестно."""
     if not vat_str:
         return None
@@ -790,14 +790,14 @@ def _validate_invoice_document(
     return doc, warnings, errors, needs_review
 
 
-def _normalize_inn(value: Any) -> Optional[str]:
+def _normalize_inn(value: Any) -> str | None:
     if value is None:
         return None
     digits = "".join(ch for ch in str(value) if ch.isdigit())
     return digits or None
 
 
-def _to_float(value: Any) -> Optional[float]:
+def _to_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
     if isinstance(value, (int, float)):

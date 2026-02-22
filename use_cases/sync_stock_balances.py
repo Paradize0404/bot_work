@@ -6,7 +6,7 @@ Use-case: синхронизация остатков по складам → Po
 
 Параметр timestamp:
   - Формат: yyyy-MM-dd'T'HH:mm:ss (учётная дата-время)
-  - По умолчанию: datetime.now() (текущие остатки, как в UI iiko)
+  - По умолчанию: now_kgd() (текущие остатки, как в UI iiko)
   - ВАЖНО: если передать только дату (yyyy-MM-dd), iiko интерпретирует
     как 00:00:00 = начало дня, и сегодняшние проводки НЕ будут учтены!
 
@@ -105,7 +105,7 @@ async def sync_stock_balances(
     """
     Полная синхронизация остатков:
       1. GET /v2/reports/balance/stores  (iiko API)
-         timestamp по умолчанию = datetime.now() (текущий момент)
+         timestamp по умолчанию = now_kgd() (текущий момент)
       2. SELECT store/product names      (БД, 2 запроса)
       3. Фильтрация (amount ≠ 0)
       4. DELETE all + batch INSERT       (одна транзакция)

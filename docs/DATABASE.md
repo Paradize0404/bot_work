@@ -54,6 +54,7 @@
 | 42 | `iiko_access_tokens` | внешний | org_id (PK), token, expires_at | INSERT/UPDATE |
 | 43 | `pending_writeoff` | списания | id (UUID PK), dept, items, is_locked, TTL 24h | INSERT/UPDATE |
 | 44 | `pastry_nomenclature_group` | кондитерка | id (UUID PK), name | INSERT/DELETE |
+| 45 | `writeoff_request_store_group` | списания | id (UUID PK), name | INSERT/DELETE |
 
 ---
 
@@ -855,6 +856,14 @@ Bootstrap: `/admin_init` — добавляет текущего пользов�
 ---
 
 ### 44. `pastry_nomenclature_group` — Группы кондитерки
+
+| Колонка      | Тип         | Описание                               |
+|--------------|-------------|----------------------------------------|
+| `id`         | UUID PK     | ID группы (из iiko)                    |
+| `name`       | String(500) | Название группы                        |
+| `created_at` | DateTime    | Время добавления                       |
+
+### 45. `writeoff_request_store_group` — Группы складов для заявок на списание
 
 | Колонка      | Тип         | Описание                               |
 |--------------|-------------|----------------------------------------|

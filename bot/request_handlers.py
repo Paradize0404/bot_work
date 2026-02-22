@@ -1,4 +1,4 @@
-"""
+﻿"""
 Telegram-хэндлеры: заявки на товары + управление получателями.
 
 Три FSM-потока:
@@ -352,6 +352,7 @@ def _items_summary(items: list[dict], user_dept: str, settings_dept: str = "") -
 
 @router.message(F.text == "✏️ Создать заявку")
 async def start_create_request(message: Message, state: FSMContext) -> None:
+    logger.info("[request_handlers] start_create_request tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -501,6 +502,7 @@ async def search_request_product(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("req_sup_page:"))
 async def request_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] request_sup_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -515,6 +517,7 @@ async def request_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("reqp_page:"))
 async def request_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] request_prod_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -528,6 +531,7 @@ async def request_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("req_hist_page:"))
 async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] request_hist_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -545,6 +549,7 @@ async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(CreateRequestStates.add_items, F.data.startswith("reqp:"))
 async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] choose_request_product tg:%d", callback.from_user.id)
     await callback.answer()
     prod_id = callback.data.split(":", 1)[1]
 
@@ -782,6 +787,7 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(CreateRequestStates.add_items, F.data == "req_remove_last")
 async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] remove_last_item tg:%d", callback.from_user.id)
     await callback.answer()
     data = await state.get_data()
     items = data.get("items", [])
@@ -824,6 +830,7 @@ async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(CreateRequestStates.add_items, F.data == "req_send")
 async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] preview_request tg:%d", callback.from_user.id)
     await callback.answer()
     data = await state.get_data()
     items = data.get("items", [])
@@ -871,6 +878,7 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(CreateRequestStates.confirm, F.data == "req_confirm_send")
 async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] confirm_send_request tg:%d", callback.from_user.id)
     await callback.answer("⏳ Отправляю заявку...")
 
     # Перепроверка авторизации на финальном шаге
@@ -1207,6 +1215,7 @@ async def _finish_request_edit(
     callback: CallbackQuery, state: FSMContext, pk: int, change_description: str
 ) -> None:
     """Завершить редактирование заявки: обновить сообщения с комментарием."""
+    logger.info("[request_handlers] _finish_request_edit tg:%d", callback.from_user.id)
     _unlock_request(pk)
     await state.clear()
 
@@ -1263,6 +1272,7 @@ async def _finish_request_edit_msg(
     message: Message, state: FSMContext, pk: int, change_description: str
 ) -> None:
     """То же, но из message-хэндлера."""
+    logger.info("[request_handlers] _finish_request_edit_msg tg:%d", message.from_user.id)
     _unlock_request(pk)
     await state.clear()
 
@@ -1320,6 +1330,7 @@ async def _finish_request_edit_msg(
 
 @router.callback_query(F.data.startswith("req_approve:"))
 async def approve_request(callback: CallbackQuery) -> None:
+    logger.info("[request_handlers] approve_request tg:%d", callback.from_user.id)
     await callback.answer("⏳ Создаю накладную...")
     pk_str = callback.data.split(":", 1)[1]
     try:
@@ -1364,6 +1375,7 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
     Одобрение заявки: группировка позиций по складам → N расходных накладных в iiko.
     Внешне — одна заявка, внутри — по накладной на каждый склад.
     """
+    logger.info("[request_handlers] _do_approve_request tg:%d", callback.from_user.id)
     req_data = await req_uc.get_request_by_pk(pk)
     if not req_data:
         await callback.answer("❌ Заявка не найдена", show_alert=True)
@@ -1572,6 +1584,7 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
 
 @router.callback_query(F.data.startswith("req_edit:"))
 async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] start_edit_request tg:%d", callback.from_user.id)
     await callback.answer()
 
     # Проверка прав доступа
@@ -1673,6 +1686,7 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
     EditRequestStates.choose_item, F.data.startswith("req_edit_item:")
 )
 async def choose_item_to_edit(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] choose_item_to_edit tg:%d", callback.from_user.id)
     await callback.answer()
     idx_str = callback.data.split(":", 1)[1]
     try:
@@ -1735,6 +1749,7 @@ async def choose_item_to_edit(callback: CallbackQuery, state: FSMContext) -> Non
     EditRequestStates.choose_action, F.data.startswith("req_edit_action:")
 )
 async def choose_edit_action(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] choose_edit_action tg:%d", callback.from_user.id)
     await callback.answer()
     action = callback.data.split(":", 1)[1]
 
@@ -1887,6 +1902,7 @@ async def edit_search_new_product(message: Message, state: FSMContext) -> None:
     EditRequestStates.new_product_search, F.data.startswith("req_edit_newprod:")
 )
 async def edit_pick_new_product(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] edit_pick_new_product tg:%d", callback.from_user.id)
     await callback.answer()
     prod_id = callback.data.split(":", 1)[1]
 
@@ -2079,6 +2095,7 @@ async def _ignore_text_edit_inline(message: Message) -> None:
 
 @router.callback_query(F.data.startswith("req_reject:"))
 async def reject_request(callback: CallbackQuery) -> None:
+    logger.info("[request_handlers] reject_request tg:%d", callback.from_user.id)
     await callback.answer()
 
     # Проверка прав доступа
@@ -2220,6 +2237,7 @@ async def view_history_item(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "req_hist_back")
 async def back_to_history_list(callback: CallbackQuery, state: FSMContext) -> None:
     """Возврат из карточки заявки к списку истории."""
+    logger.info("[request_handlers] back_to_history_list tg:%d", callback.from_user.id)
     await callback.answer()
     requests = await req_uc.get_user_requests(callback.from_user.id, limit=10)
     if not requests:
@@ -2255,6 +2273,7 @@ async def close_history(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("req_dup:"))
 async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] start_duplicate_request tg:%d", callback.from_user.id)
     await callback.answer()
     pk_str = callback.data.split(":", 1)[1]
     try:
@@ -2521,6 +2540,7 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(DuplicateRequestStates.confirm, F.data == "dup_reenter")
 async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] dup_reenter tg:%d", callback.from_user.id)
     await callback.answer()
     data = await state.get_data()
     items = data.get("_dup_items", [])
@@ -2550,6 +2570,7 @@ async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(DuplicateRequestStates.confirm, F.data == "dup_confirm_send")
 async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] dup_confirm_send tg:%d", callback.from_user.id)
     await callback.answer("⏳ Отправляю заявку...")
 
     # Перепроверка авторизации на финальном шаге
@@ -2752,6 +2773,7 @@ async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(F.text == "📬 Входящие заявки")
 async def view_pending_requests(message: Message) -> None:
+    logger.info("[request_handlers] view_pending_requests tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:

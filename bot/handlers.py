@@ -256,6 +256,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 @router.message(AuthStates.waiting_last_name)
 async def process_last_name(message: Message, state: FSMContext) -> None:
     """Ввод фамилии для поиска."""
+    logger.info("[auth] process_last_name tg:%d", message.from_user.id)
     last_name = truncate_input(message.text.strip(), MAX_TEXT_NAME)
     try:
         await message.delete()
@@ -410,6 +411,7 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
 
 @router.callback_query(F.data == "auth_cancel")
 async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[auth] auth_cancel tg:%d", callback.from_user.id)
     await callback.answer("Отмена")
     await state.clear()
     try:
@@ -422,6 +424,7 @@ async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "change_dept_cancel")
 async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[auth] change_dept_cancel tg:%d", callback.from_user.id)
     await callback.answer("Отмена")
     await state.clear()
     try:
@@ -505,6 +508,7 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
 
 @router.message(AuthStates.choosing_employee)
 async def _guard_auth_employee(message: Message) -> None:
+    logger.info("[auth] _guard_auth_employee tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -513,6 +517,7 @@ async def _guard_auth_employee(message: Message) -> None:
 
 @router.message(AuthStates.choosing_department)
 async def _guard_auth_department(message: Message) -> None:
+    logger.info("[auth] _guard_auth_department tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -521,6 +526,7 @@ async def _guard_auth_department(message: Message) -> None:
 
 @router.message(ChangeDeptStates.choosing_department)
 async def _guard_change_dept(message: Message) -> None:
+    logger.info("[auth] _guard_change_dept tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -738,6 +744,7 @@ async def btn_sync_permissions_gsheet(message: Message) -> None:
     можно использоваться первоначально (чтобы заполнить таблицу статичными ролями).
     Обязательный шаг при онбординге admin-пользователя.
     """
+    logger.info("[sync] btn_sync_permissions_gsheet tg:%d", message.from_user.id)
     tg_id = message.from_user.id
     any_admin = await perm_uc.has_any_admin()
     if any_admin and not await perm_uc.has_permission(tg_id, PERM_SETTINGS):
@@ -936,6 +943,7 @@ async def _ft_sync_one(message: Message, label: str, sync_func) -> None:
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_categories(message: Message) -> None:
+    logger.info("[sync-ft] btn_ft_categories tg:%d", message.from_user.id)
     await _ft_sync_one(message, "Статьи", ft_uc.sync_ft_categories)
 
 
@@ -943,6 +951,7 @@ async def btn_ft_categories(message: Message) -> None:
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_moneybags(message: Message) -> None:
+    logger.info("[sync-ft] btn_ft_moneybags tg:%d", message.from_user.id)
     await _ft_sync_one(message, "Счета", ft_uc.sync_ft_moneybags)
 
 
@@ -950,6 +959,7 @@ async def btn_ft_moneybags(message: Message) -> None:
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_partners(message: Message) -> None:
+    logger.info("[sync-ft] btn_ft_partners tg:%d", message.from_user.id)
     await _ft_sync_one(message, "Контрагенты", ft_uc.sync_ft_partners)
 
 
@@ -957,6 +967,7 @@ async def btn_ft_partners(message: Message) -> None:
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_directions(message: Message) -> None:
+    logger.info("[sync-ft] btn_ft_directions tg:%d", message.from_user.id)
     await _ft_sync_one(message, "Направления", ft_uc.sync_ft_directions)
 
 
@@ -964,6 +975,7 @@ async def btn_ft_directions(message: Message) -> None:
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_goods(message: Message) -> None:
+    logger.info("[sync-ft] btn_ft_goods tg:%d", message.from_user.id)
     await _ft_sync_one(message, "Товары", ft_uc.sync_ft_goods)
 
 
@@ -971,6 +983,7 @@ async def btn_ft_goods(message: Message) -> None:
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_deals(message: Message) -> None:
+    logger.info("[sync-ft] btn_ft_deals tg:%d", message.from_user.id)
     await _ft_sync_one(message, "Сделки", ft_uc.sync_ft_deals)
 
 
@@ -978,6 +991,7 @@ async def btn_ft_deals(message: Message) -> None:
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_obligations(message: Message) -> None:
+    logger.info("[sync-ft] btn_ft_obligations tg:%d", message.from_user.id)
     await _ft_sync_one(message, "Обязательства", ft_uc.sync_ft_obligations)
 
 
@@ -985,6 +999,7 @@ async def btn_ft_obligations(message: Message) -> None:
 @permission_required(PERM_SETTINGS)
 @with_cooldown("sync", 10.0)
 async def btn_ft_employees(message: Message) -> None:
+    logger.info("[sync-ft] btn_ft_employees tg:%d", message.from_user.id)
     await _ft_sync_one(message, "Сотрудники", ft_uc.sync_ft_employees)
 
 

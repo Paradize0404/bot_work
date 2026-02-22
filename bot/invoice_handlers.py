@@ -1,4 +1,4 @@
-"""
+﻿"""
 Telegram-хэндлеры: шаблоны расходных накладных + создание по шаблону.
 
 Два FSM-потока:
@@ -274,6 +274,7 @@ async def _ignore_text_confirm(message: Message) -> None:
 
 @router.message(F.text == "📑 Создать шаблон накладной")
 async def start_template(message: Message, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] start_template tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -514,6 +515,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("inv_store_page:"))
 async def invoice_store_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] invoice_store_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -526,6 +528,7 @@ async def invoice_store_page(callback: CallbackQuery, state: FSMContext) -> None
 
 @router.callback_query(F.data.startswith("inv_sup_page:"))
 async def invoice_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] invoice_sup_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -540,6 +543,7 @@ async def invoice_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("inv_prod_page:"))
 async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] invoice_prod_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -553,6 +557,7 @@ async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("inv_tmpl_page:"))
 async def invoice_tmpl_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] invoice_tmpl_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -752,6 +757,7 @@ async def save_template(message: Message, state: FSMContext) -> None:
 
 @router.message(F.text == "📦 Создать по шаблону")
 async def start_from_template(message: Message, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] start_from_template tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -1029,6 +1035,7 @@ async def enter_quantities(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(InvoiceFromTemplateStates.confirm, F.data == "inv_confirm_send")
 async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] confirm_send tg:%d", callback.from_user.id)
     await callback.answer("⏳ Отправляю...")
     data = await state.get_data()
     template = data.get("_template", {})
@@ -1164,6 +1171,7 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(InvoiceFromTemplateStates.confirm, F.data == "inv_reenter_qty")
 async def reenter_quantities(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] reenter_quantities tg:%d", callback.from_user.id)
     await callback.answer()
     data = await state.get_data()
     items = data.get("_items", [])

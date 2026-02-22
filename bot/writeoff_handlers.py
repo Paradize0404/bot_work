@@ -1,4 +1,4 @@
-"""
+﻿"""
 Telegram-хэндлеры: акт списания (writeoff) + проверка админами.
 
 Флоу:
@@ -272,6 +272,7 @@ async def _ignore_text_account(message: Message) -> None:
 
 @router.message(F.text == "📝 Создать списание")
 async def start_writeoff(message: Message, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] start_writeoff tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -382,6 +383,7 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("wo_store_page:"))
 async def writeoff_store_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] writeoff_store_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -445,6 +447,7 @@ async def choose_store(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(WriteoffStates.account, F.data == "wo_noop")
 async def noop_callback(callback: CallbackQuery) -> None:
+    logger.info("[writeoff_handlers] noop_callback tg:%d", callback.from_user.id)
     await callback.answer()
 
 
@@ -622,6 +625,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("wo_prod_page:"))
 async def writeoff_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] writeoff_prod_page tg:%d", callback.from_user.id)
     await callback.answer()
     page = safe_page(callback.data)
     data = await state.get_data()
@@ -951,6 +955,7 @@ async def _remove_admin_keyboards(
 
 @router.callback_query(F.data.startswith("woa_approve:"))
 async def admin_approve(callback: CallbackQuery) -> None:
+    logger.info("[writeoff_handlers] admin_approve tg:%d", callback.from_user.id)
     await callback.answer()
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_WRITEOFF_APPROVE
@@ -1065,6 +1070,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("woa_reject:"))
 async def admin_reject(callback: CallbackQuery) -> None:
+    logger.info("[writeoff_handlers] admin_reject tg:%d", callback.from_user.id)
     await callback.answer()
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_WRITEOFF_APPROVE
@@ -1124,6 +1130,7 @@ async def admin_reject(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("woa_edit:"))
 async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
     """Админ решил отредактировать документ."""
+    logger.info("[writeoff_handlers] admin_edit_start tg:%d", callback.from_user.id)
     await callback.answer()
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_WRITEOFF_APPROVE
@@ -2026,6 +2033,7 @@ def _hist_item_action_kb(idx: int) -> InlineKeyboardMarkup:
 @router.message(F.text == "🗂 История списаний")
 async def start_history(message: Message, state: FSMContext) -> None:
     """Открыть историю списаний с фильтрацией по роли."""
+    logger.info("[writeoff_handlers] start_history tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -2089,6 +2097,7 @@ async def start_history(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(HistoryStates.browsing, F.data == "woh_noop")
 async def hist_noop(callback: CallbackQuery) -> None:
+    logger.info("[writeoff_handlers] hist_noop tg:%d", callback.from_user.id)
     await callback.answer()
 
 
@@ -2159,6 +2168,7 @@ async def hist_view(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "woh_back")
 async def hist_back_to_list(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_back_to_list tg:%d", callback.from_user.id)
     await callback.answer()
     data = await state.get_data()
     page = data.get("hist_page", 0)
@@ -2193,6 +2203,7 @@ async def hist_back_to_list(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "woh_close")
 async def hist_close(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_close tg:%d", callback.from_user.id)
     await callback.answer()
     await state.clear()
     try:
@@ -2214,6 +2225,7 @@ async def hist_close(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(HistoryStates.viewing, F.data.startswith("woh_reuse:"))
 async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
     """Повторить списание из истории как есть → на проверку админам."""
+    logger.info("[writeoff_handlers] hist_reuse tg:%d", callback.from_user.id)
     user_id = callback.from_user.id
     if user_id in _sending_lock:
         await callback.answer("⏳ Уже отправляется…")
@@ -2387,6 +2399,7 @@ async def hist_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(HistoryStates.viewing, F.data == "wohe_reason")
 async def hist_edit_reason_start(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_edit_reason_start tg:%d", callback.from_user.id)
     await callback.answer()
     try:
         await callback.message.edit_text("📝 Введите новую причину списания:")
@@ -2398,6 +2411,7 @@ async def hist_edit_reason_start(callback: CallbackQuery, state: FSMContext) -> 
 
 @router.message(HistoryStates.editing_reason)
 async def hist_edit_reason_input(message: Message, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_edit_reason_input tg:%d", message.from_user.id)
     reason = (message.text or "").strip()
     try:
         await message.delete()
@@ -2455,6 +2469,7 @@ async def hist_edit_reason_input(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(HistoryStates.viewing, F.data == "wohe_items")
 async def hist_edit_items_list(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_edit_items_list tg:%d", callback.from_user.id)
     await callback.answer()
     data = await state.get_data()
     items = data.get("hist_edit_items", [])
@@ -2536,6 +2551,7 @@ async def hist_edit_qty_start(callback: CallbackQuery, state: FSMContext) -> Non
 
 @router.message(HistoryStates.editing_quantity)
 async def hist_edit_qty_input(message: Message, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_edit_qty_input tg:%d", message.from_user.id)
     raw = (message.text or "").replace(",", ".").strip()
     try:
         await message.delete()
@@ -2674,6 +2690,7 @@ async def hist_edit_item_delete(callback: CallbackQuery, state: FSMContext) -> N
 
 @router.callback_query(HistoryStates.viewing, F.data == "wohe_add_item")
 async def hist_edit_add_item_start(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_edit_add_item_start tg:%d", callback.from_user.id)
     await callback.answer()
     data = await state.get_data()
     items = data.get("hist_edit_items", [])
@@ -2690,6 +2707,7 @@ async def hist_edit_add_item_start(callback: CallbackQuery, state: FSMContext) -
 
 @router.message(HistoryStates.editing_items)
 async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_edit_add_item_search tg:%d", message.from_user.id)
     query = truncate_input((message.text or "").strip(), MAX_TEXT_SEARCH)
     try:
         await message.delete()
@@ -2752,6 +2770,7 @@ async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None
 
 @router.callback_query(HistoryStates.editing_items, F.data.startswith("wohe_pick:"))
 async def hist_edit_add_item_pick(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_edit_add_item_pick tg:%d", callback.from_user.id)
     await callback.answer()
     pid = await validate_callback_uuid(callback, callback.data)
     if not pid:
@@ -2807,6 +2826,7 @@ async def hist_edit_add_item_pick(callback: CallbackQuery, state: FSMContext) ->
 
 @router.callback_query(F.data == "wohe_back")
 async def hist_edit_back(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[writeoff_handlers] hist_edit_back tg:%d", callback.from_user.id)
     await callback.answer()
     data = await state.get_data()
     text = _build_hist_edit_summary(data)
@@ -2826,6 +2846,7 @@ async def hist_edit_back(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(HistoryStates.viewing, F.data == "wohe_send")
 async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
     """Отправить отредактированную копию из истории на проверку."""
+    logger.info("[writeoff_handlers] hist_edit_send tg:%d", callback.from_user.id)
     user_id = callback.from_user.id
     if user_id in _sending_lock:
         await callback.answer("⏳ Уже отправляется…")

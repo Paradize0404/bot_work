@@ -1,4 +1,4 @@
-"""
+﻿"""
 Telegram-хэндлеры: редактирование минимальных остатков.
 
 Флоу:
@@ -181,6 +181,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
 @router.callback_query(EditMinStockStates.choose_product, F.data.startswith(CB_PROD))
 async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
     """Пользователь выбрал товар → запрашиваем новый min."""
+    logger.info("[min_stock_handlers] select_product tg:%d", callback.from_user.id)
     product_id = callback.data[len(CB_PROD) :]
     if parse_uuid(product_id) is None:
         await callback.answer("⚠️ Ошибка данных", show_alert=True)

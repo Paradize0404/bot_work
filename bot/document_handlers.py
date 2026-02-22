@@ -1,4 +1,4 @@
-"""
+﻿"""
 OCR Document handlers — загрузка и распознавание приходных накладных.
 
 Поток A (фото):
@@ -434,6 +434,7 @@ async def btn_ocr_start(message: Message, state: FSMContext) -> None:
 @router.message(OcrStates.waiting_photos, F.photo)
 async def handle_ocr_photo(message: Message, state: FSMContext) -> None:
     """Принять фото и запустить OCR."""
+    logger.info("[ocr] handle_ocr_photo tg:%d", message.from_user.id)
     tg_id = message.from_user.id
     chat_id = message.chat.id
 
@@ -500,6 +501,7 @@ async def handle_ocr_photo(message: Message, state: FSMContext) -> None:
 @router.message(OcrStates.waiting_photos)
 async def handle_ocr_non_photo(message: Message, state: FSMContext) -> None:
     """Пользователь отправил не фото."""
+    logger.info("[ocr] handle_ocr_non_photo tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
@@ -601,7 +603,6 @@ async def cb_mapping_done(callback: CallbackQuery) -> None:
         pass
     tg_id = callback.from_user.id
     logger.info("[ocr] Маппинг готов (inline) tg:%d", tg_id)
-        logger.debug("[ocr] callback.answer() опоздал (query too old) tg:%d", tg_id)
 
     # Убираем инлайн-кнопку с сообщения-уведомления
     try:
@@ -616,6 +617,7 @@ async def cb_mapping_done(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "refresh_mapping_ref")
 async def cb_refresh_mapping_ref(callback: CallbackQuery) -> None:
     """Обновить справочный лист «Маппинг Справочник» актуальными товарами GOODS."""
+    logger.info("[ocr] cb_refresh_mapping_ref tg:%d", callback.from_user.id)
     try:
         await callback.answer("⏳ Обновляю список товаров...")
     except Exception:
@@ -850,6 +852,7 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
 @router.callback_query(F.data.startswith("iiko_invoice_send:"))
 async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
     """Отправить подготовленные накладные в iiko."""
+    logger.info("[ocr] cb_iiko_invoice_send tg:%d", callback.from_user.id)
     try:
         await callback.answer()
     except Exception:
@@ -946,6 +949,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("iiko_invoice_cancel:"))
 async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
     """Отменить загрузку накладных в iiko."""
+    logger.info("[ocr] cb_iiko_invoice_cancel tg:%d", callback.from_user.id)
     try:
         await callback.answer()
     except Exception:
