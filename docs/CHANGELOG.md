@@ -11,12 +11,18 @@
 
 **Фаза 1: Контракты (K1-K5)**
 - **K1 (Тонкие хэндлеры):** Найдены и исправлены SQL-запросы в `bot/document_handlers.py`, `bot/handlers.py`, `bot/pastry_handlers.py`. Логика перенесена в `use_cases/ocr_pipeline.py`, `use_cases/cloud_org_mapping.py`, `use_cases/product_request.py`.
-- **K3 (Наблюдаемость):** Проверено, все хэндлеры содержат `logger.info` или `logger.debug` в первых 5 строках.
+- **K3 (Наблюдаемость):** Написан AST-скрипт `check_loggers.py`. Добавлены пропущенные `logger.info` в первые 5 строк всех хэндлеров (более 50 исправлений в `day_report_handlers.py`, `document_handlers.py`, `handlers.py`, `invoice_handlers.py`, `middleware.py`, `min_stock_handlers.py`, `pastry_handlers.py`, `request_handlers.py`, `writeoff_handlers.py`).
 - **K4 (Валидация):** Добавлены проверки `try UUID() except ValueError` в `bot/pastry_handlers.py` для `pastry_sel:` и `pastry_rm:`.
-- **K5 (UX):** Добавлены вызовы `await callback.answer()` первой строкой в хэндлерах `bot/document_handlers.py`, `bot/invoice_handlers.py`, `bot/pastry_handlers.py`, `bot/request_handlers.py`, `bot/writeoff_handlers.py`.
+- **K5 (UX):** Добавлены вызовы `await callback.answer()` первой строкой в хэндлерах `bot/document_handlers.py`, `bot/invoice_handlers.py`, `bot/pastry_handlers.py`, `bot/request_handlers.py`, `bot/writeoff_handlers.py`. Исправлена синтаксическая ошибка (IndentationError) в `document_handlers.py`, возникшая при автоматическом добавлении.
+
+**Фаза 2: Правила (R1-R2)**
+- **R1 (Время):** Заменены вызовы `datetime.now()` на `now_kgd()` в `use_cases/pending_writeoffs.py` и `use_cases/sync_stock_balances.py`.
+- **R2 (Типизация):** Заменены устаревшие аннотации `Optional[X]` на `X | None` в `use_cases/ocr_pipeline.py`.
 
 **Фаза 3: Документация ↔ Код**
-- **Таблицы БД:** В `docs/DATABASE.md` добавлена таблица `pastry_nomenclature_group` (44-я таблица), которая присутствовала в `db/models.py`, но отсутствовала в документации.
+- **Таблицы БД:** Написан скрипт `check_db.py` для сверки `__tablename__` с `docs/DATABASE.md`.
+- Добавлены пропущенные в документации таблицы: `pastry_nomenclature_group` (44), `writeoff_request_store_group` (45).
+- Выявлены таблицы, описанные в документации, но отсутствующие в коде (legacy/внешние): `bot_admin`, `iiko_access_tokens`, `request_receiver`.
 
 ---
 
