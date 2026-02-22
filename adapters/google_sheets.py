@@ -2966,6 +2966,279 @@ def _get_day_report_worksheet() -> gspread.Worksheet:
     return ws
 
 
+def _apply_day_report_style(ws: gspread.Worksheet, headers: list[str]) -> None:
+    """
+    Применяет полную стилизацию листа «Отчёт дня»:
+    - Цветовые секции заголовков (синий→зелёный→тёмно-зелёный→оранжевый→красный)
+    - Жирный текст заголовков с переносом слов
+    - Высота строки заголовков 55 px
+    - Заморозка строки 1
+    - Ширины колонок по секциям
+    - Формат чисел: #,##0.00 для ₽, 0.00 для %
+    - Вертикальное выравнивание MIDDLE для строк данных
+
+    При исключении — только логирует предупреждение, не прерывает запись.
+    """
+    try:
+        sheet_id = ws.id
+        n = len(headers)
+        if n == 0:
+            return
+
+        sales_total_idx = headers.index(_SALES_TOTAL_COL)
+        cost_total_idx = headers.index(_COST_TOTAL_COL)
+        cost_avg_idx = headers.index(_COST_AVG_COL)
+        static_end = len(_STATIC_START)  # 5
+        pay_start = static_end
+        pay_end = sales_total_idx
+        place_start = sales_total_idx + 1
+        place_end = cost_total_idx
+
+        def _rgb(r: int, g: int, b: int) -> dict:
+            return {"red": r / 255, "green": g / 255, "blue": b / 255}
+
+        WHITE = _rgb(255, 255, 255)
+        BLACK = _rgb(30, 30, 30)
+
+        # Цветовые секции заголовков: (col_start, col_end, bg, fg)
+        # Секция              Цвет фона         Цвет текста
+        sections = [
+            (0, static_end, _rgb(164, 194, 244), BLACK),  # синий — инфо
+            (pay_start, pay_end, _rgb(147, 196, 125), BLACK),  # зелёный — оплаты
+            (
+                sales_total_idx,
+                sales_total_idx + 1,
+                _rgb(56, 118, 29),
+                WHITE,
+            ),  # тёмно-зелёный — итог выручки
+            (place_start, place_end, _rgb(252, 229, 205), BLACK),  # персиковый — места
+            (
+                cost_total_idx,
+                cost_total_idx + 1,
+                _rgb(204, 65, 37),
+                WHITE,
+            ),  # красный — итог себест.
+            (
+                cost_avg_idx,
+                cost_avg_idx + 1,
+                _rgb(153, 0, 0),
+                WHITE,
+            ),  # тёмно-красный — средняя %
+        ]
+
+        requests: list[dict] = []
+
+        # ── 1. Заморозка строки 1 ──
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": sheet_id,
+                        "gridProperties": {"frozenRowCount": 1},
+                    },
+                    "fields": "gridProperties.frozenRowCount",
+                }
+            }
+        )
+
+        # ── 2. Высота строки заголовков ──
+        requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "dimension": "ROWS",
+                        "startIndex": 0,
+                        "endIndex": 1,
+                    },
+                    "properties": {"pixelSize": 55},
+                    "fields": "pixelSize",
+                }
+            }
+        )
+
+        # ── 3. Ширины колонок ──
+        # (startIndex, endIndex, pixelSize) — все 0-based, endIndex exclusive
+        col_widths: list[tuple[int, int, int]] = [
+            (0, 1, 100),  # Дата
+            (1, 2, 160),  # Сотрудник
+            (2, 3, 200),  # Подразделение
+            (3, 4, 230),  # Плюсы
+            (4, 5, 230),  # Минусы
+        ]
+        if pay_end > pay_start:
+            col_widths.append((pay_start, pay_end, 145))
+        col_widths.append((sales_total_idx, sales_total_idx + 1, 155))
+        # Колонки мест: 3 подряд — выр./себест.₽/себест.%
+        for i in range(place_start, place_end, 3):
+            end = min(i + 3, place_end)
+            widths = [125, 125, 100]
+            for j, px in zip(range(i, end), widths):
+                col_widths.append((j, j + 1, px))
+        col_widths.append((cost_total_idx, cost_total_idx + 1, 160))
+        col_widths.append((cost_avg_idx, cost_avg_idx + 1, 180))
+
+        for start, end, px in col_widths:
+            if end <= start:
+                continue
+            requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": start,
+                            "endIndex": end,
+                        },
+                        "properties": {"pixelSize": px},
+                        "fields": "pixelSize",
+                    }
+                }
+            )
+
+        # ── 4. Цвет / шрифт заголовков ──
+        for col_start, col_end, bg, fg in sections:
+            if col_start >= col_end:
+                continue
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 0,
+                            "endRowIndex": 1,
+                            "startColumnIndex": col_start,
+                            "endColumnIndex": col_end,
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": bg,
+                                "textFormat": {
+                                    "bold": True,
+                                    "foregroundColor": fg,
+                                    "fontSize": 9,
+                                },
+                                "horizontalAlignment": "CENTER",
+                                "verticalAlignment": "MIDDLE",
+                                "wrapStrategy": "WRAP",
+                            }
+                        },
+                        "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)",
+                    }
+                }
+            )
+
+        # ── 5. Числовые форматы для строк данных ──
+        RUB_FMT = {"numberFormat": {"type": "NUMBER", "pattern": "#,##0.00"}}
+        PCT_FMT = {"numberFormat": {"type": "NUMBER", "pattern": "0.00"}}
+
+        # pay cols
+        if pay_end > pay_start:
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": pay_start,
+                            "endColumnIndex": pay_end,
+                        },
+                        "cell": {"userEnteredFormat": RUB_FMT},
+                        "fields": "userEnteredFormat.numberFormat",
+                    }
+                }
+            )
+
+        # Sales total
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 1,
+                        "endRowIndex": 1000,
+                        "startColumnIndex": sales_total_idx,
+                        "endColumnIndex": sales_total_idx + 1,
+                    },
+                    "cell": {"userEnteredFormat": RUB_FMT},
+                    "fields": "userEnteredFormat.numberFormat",
+                }
+            }
+        )
+
+        # Place cols (₽ / ₽ / %)
+        for i, h in enumerate(headers[place_start:place_end], start=place_start):
+            fmt = PCT_FMT if h.endswith(" себест, %") else RUB_FMT
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": i,
+                            "endColumnIndex": i + 1,
+                        },
+                        "cell": {"userEnteredFormat": fmt},
+                        "fields": "userEnteredFormat.numberFormat",
+                    }
+                }
+            )
+
+        # Cost total (₽) + Avg (%)
+        for idx, fmt in ((cost_total_idx, RUB_FMT), (cost_avg_idx, PCT_FMT)):
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": idx,
+                            "endColumnIndex": idx + 1,
+                        },
+                        "cell": {"userEnteredFormat": fmt},
+                        "fields": "userEnteredFormat.numberFormat",
+                    }
+                }
+            )
+
+        # ── 6. Выравнивание строк данных — MIDDLE по вертикали ──
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 1,
+                        "endRowIndex": 1000,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": n,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "verticalAlignment": "MIDDLE",
+                        }
+                    },
+                    "fields": "userEnteredFormat.verticalAlignment",
+                }
+            }
+        )
+
+        ws.spreadsheet.batch_update({"requests": requests})
+        logger.info(
+            "[%s] Стилизация листа «%s» применена (%d колонок)",
+            LABEL,
+            _DAY_REPORT_TAB,
+            n,
+        )
+
+    except Exception:
+        logger.warning(
+            "[%s] Ошибка стилизации листа «%s»", LABEL, _DAY_REPORT_TAB, exc_info=True
+        )
+
+
 def append_day_report_row(data: dict) -> None:
     """
     Добавить строку отчёта дня в лист «Отчёт дня» в Google Sheets.
@@ -2994,17 +3267,10 @@ def append_day_report_row(data: dict) -> None:
     # Строим полный список заголовков (с учётом новых pay_type / place)
     new_headers = _build_full_headers(current_headers, pay_types, places)
 
-    # Если заголовки изменились — обновляем строку 1
+    # Если заголовки изменились — обновляем строку 1 и применяем стиль
     if new_headers != current_headers:
-        last_col = _col_letter(len(new_headers))
         ws.update("A1", [new_headers], value_input_option="RAW")
-        try:
-            ws.format(
-                f"A1:{last_col}1",
-                {"textFormat": {"bold": True}, "horizontalAlignment": "CENTER"},
-            )
-        except Exception:
-            pass
+        _apply_day_report_style(ws, new_headers)
 
     # Строим словарь колонка→значение
     col_val: dict[str, Any] = {
