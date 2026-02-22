@@ -21,7 +21,9 @@ def fetch():
 
 
 def print_runs(runs):
-    print(f"\n{'SHA':>7}  {'Status':>12}  {'Conclusion':>12}  {'Triggered at':>22}  Message")
+    print(
+        f"\n{'SHA':>7}  {'Status':>12}  {'Conclusion':>12}  {'Triggered at':>22}  Message"
+    )
     print("-" * 90)
     for run in runs:
         sha = run["head_sha"][:7]
