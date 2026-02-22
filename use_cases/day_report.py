@@ -76,15 +76,23 @@ class DayReportData:
 # ═══════════════════════════════════════════════════════
 
 
-async def fetch_day_report_data(department_id: str | None = None) -> DayReportData:
+async def fetch_day_report_data(
+    department_id: str | None = None,
+    department_name: str | None = None,
+) -> DayReportData:
     """
     Получить данные продаж и себестоимости за сегодня из iiko OLAP.
 
     Использует один preset «Выручка себестоимость бот» (96df1c31-...),
     который содержит группировки PayTypes и CookingPlaceType.
 
+    Фильтрация данных по подразделению — двухуровневая:
+      1. API-уровень: departmentIds в параметрах запроса (если поддерживается сервером iiko)
+      2. Клиентский уровень: фильтрация строк по полю Department (подстрока department_name)
+
     Args:
-        department_id: UUID подразделения для фильтрации данных iiko (если None — все подразделения).
+        department_id:   UUID подразделения для API-фильтра.
+        department_name: Имя подразделения для клиентской фильтрации по полю Department.
     """
     t0 = time.monotonic()
     logger.info(
@@ -116,6 +124,21 @@ async def fetch_day_report_data(department_id: str | None = None) -> DayReportDa
             total_cost=0,
             avg_cost_pct=0,
             error=f"Ошибка iiko: {exc}",
+        )
+
+    # ── Клиентская фильтрация по полю Department (подстрока department_name) ──
+    # iiko в поле Department возвращает полный путь, например:
+    # 'PizzaYolo / Пицца Йоло (Московский)' или 'Клиническая PizzaYolo'
+    # department_name из бота — подстрока, по которой фильтруем.
+    if department_name:
+        dept_needle = department_name.lower()
+        original_count = len(rows)
+        rows = [r for r in rows if dept_needle in r.get("Department", "").lower()]
+        logger.info(
+            "[day_report] Фильтр по Department='%s': %d → %d строк",
+            department_name,
+            original_count,
+            len(rows),
         )
 
     # ── Разбираем строки: продажи (по PayTypes) и себестоимость (по CookingPlaceType) ──

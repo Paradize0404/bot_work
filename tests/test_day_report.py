@@ -26,28 +26,34 @@ from use_cases.day_report import (
 
 DEPT_ID = "aaaaaaaa-0000-0000-0000-000000000001"
 
-# Реальная структура ответа iiko: каждая строка содержит ОБА поля
-# (CookingPlaceType + PayTypes + ProductCostBase.ProductCost)
+# Реальная структура ответа iiko: каждая строка содержит ОБА поля +
+# поле Department с полным путём подразделения
 SAMPLE_ROWS = [
+    # Московский филиал
     {
+        "Department": "PizzaYolo / Пицца Йоло (Московский)",
         "CookingPlaceType": "Кухня",
         "PayTypes": "Наличные",
         "DishDiscountSumInt": 10000.0,
         "ProductCostBase.ProductCost": 3000.0,
     },
     {
+        "Department": "PizzaYolo / Пицца Йоло (Московский)",
         "CookingPlaceType": "Бар",
         "PayTypes": "Наличные",
         "DishDiscountSumInt": 2000.0,
         "ProductCostBase.ProductCost": 400.0,
     },
+    # Клинический филиал (другое подразделение)
     {
+        "Department": "Клиническая PizzaYolo",
         "CookingPlaceType": "Кухня",
-        "PayTypes": "Карта",
+        "PayTypes": "Наличные",
         "DishDiscountSumInt": 5000.0,
         "ProductCostBase.ProductCost": 1500.0,
     },
     {
+        "Department": "Клиническая PizzaYolo",
         "CookingPlaceType": "Бар",
         "PayTypes": "Карта",
         "DishDiscountSumInt": 3000.0,
@@ -88,6 +94,52 @@ async def test_fetch_day_report_no_department_id():
 
 
 # ═══════════════════════════════════════════════════════
+# 1b. Клиентская фильтрация по полю Department
+# ═══════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_report_filters_by_department_name():
+    """
+    При передаче department_name — строки фильтруются по полю Department (подстрока).
+    Из SAMPLE_ROWS (два филиала) должны остаться только строки Московского.
+    """
+    mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
+
+    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+        result = await fetch_day_report_data(department_name="Московский")
+
+    assert result.error is None
+    # Только Московский: 10000 + 2000 = 12000 выручка
+    assert result.total_sales == pytest.approx(12000.0)
+    assert result.total_cost == pytest.approx(3400.0)  # 3000 + 400
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_report_no_department_name_shows_all():
+    """Без department_name — возвращаются данные всех подразделений."""
+    mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
+
+    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+        result = await fetch_day_report_data(department_name=None)
+
+    assert result.total_sales == pytest.approx(20000.0)  # все 4 строки
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_report_filters_case_insensitive():
+    """Фильтрация по Department не чувствительна к регистру."""
+    mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
+
+    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+        result_lower = await fetch_day_report_data(department_name="московский")
+        result_upper = await fetch_day_report_data(department_name="МОСКОВСКИЙ")
+
+    assert result_lower.total_sales == result_upper.total_sales
+    assert result_lower.total_sales == pytest.approx(12000.0)
+
+
+# ═══════════════════════════════════════════════════════
 # 2. fetch_day_report_data — правильный расчёт себестоимости
 # ═══════════════════════════════════════════════════════
 
@@ -112,7 +164,7 @@ async def test_fetch_day_report_cost_calculation():
     assert "Наличные" in pay_names
     assert "Карта" in pay_names
     nalichnie = next(sl for sl in result.sales_lines if sl.pay_type == "Наличные")
-    assert nalichnie.amount == pytest.approx(12000.0)
+    assert nalichnie.amount == pytest.approx(17000.0)  # 10000+2000+5000
 
     # себестоимость: суммируем по CookingPlaceType
     assert len(result.cost_lines) == 2

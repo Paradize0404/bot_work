@@ -161,7 +161,8 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
     # ── Запрос данных из iiko (фильтруем по подразделению сотрудника) ──
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     iiko_data = await day_report_uc.fetch_day_report_data(
-        department_id=data.get("department_id")
+        department_id=data.get("department_id"),
+        department_name=data.get("department_name"),
     )
 
     # ── Формируем итоговый текст ──
