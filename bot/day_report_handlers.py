@@ -228,9 +228,18 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
                 "avg_cost_pct": iiko_data.avg_cost_pct,
             },
         )
-        logger.info("[day_report] GSheets запись успешна: dept=%r, tg:%d", department_name, tg_id)
+        logger.info(
+            "[day_report] GSheets запись успешна: dept=%r, tg:%d",
+            department_name,
+            tg_id,
+        )
     except Exception as exc:
-        logger.error("[day_report] Ошибка записи в GSheets: %s (dept=%r, tg:%d)", exc, department_name, tg_id)
+        logger.error(
+            "[day_report] Ошибка записи в GSheets: %s (dept=%r, tg:%d)",
+            exc,
+            department_name,
+            tg_id,
+        )
         try:
             await message.bot.send_message(
                 tg_id,

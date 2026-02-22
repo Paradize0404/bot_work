@@ -581,6 +581,7 @@ async def fetch_olap_sales_v1(
     Параметры date_from / date_to принимаются в формате ISO
     (YYYY-MM-DD или YYYY-MM-DDTHH:MM:SS) и конвертируются в DD.MM.YYYY.
     """
+
     # Конвертация ISO → DD.MM.YYYY (v1 API принимает только этот формат)
     def _to_ddmmyyyy(iso: str) -> str:
         date_part = iso[:10]  # берём YYYY-MM-DD
