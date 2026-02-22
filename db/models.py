@@ -683,7 +683,7 @@ class InvoiceTemplate(Base):
     items = Column(
         JSONB,
         nullable=False,
-        default=[],
+        default=list,
         comment="Позиции: [{product_id, name, unit_name}, ...]",
     )
     created_at = Column(

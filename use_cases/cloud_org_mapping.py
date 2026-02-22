@@ -99,6 +99,19 @@ async def get_all_cloud_org_ids() -> list[str]:
     return list(set(mapping.values()))
 
 
+async def get_departments_for_mapping():
+    from sqlalchemy import select
+    from db.engine import async_session_factory
+    from db.models import Department
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Department).where(
+                Department.deleted.is_(False),
+                Department.department_type.in_(["DEPARTMENT", "STORE"]),
+            )
+        )
+        return result.scalars().all()
+
 async def invalidate_cache() -> None:
     """Сбросить кеш (вызывается после обновления маппинга в GSheet)."""
     await invalidate_key(_CACHE_KEY)

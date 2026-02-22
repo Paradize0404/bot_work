@@ -20,6 +20,18 @@ from aiogram.types import (
 logger = logging.getLogger(__name__)
 
 
+def safe_page(callback_data: str, default: int = 0) -> int:
+    """
+    Безопасно извлечь номер страницы из callback_data формата 'prefix_page:N'.
+    Возвращает default если данные невалидны или отрицательные.
+    """
+    try:
+        val = int(callback_data.rsplit(":", 1)[1])
+        return val if val >= 0 else default
+    except (ValueError, IndexError):
+        return default
+
+
 def escape_md(s: str) -> str:
     """Экранировать спецсимволы Markdown v1 (*, _, `, [)."""
     for ch in ("*", "_", "`", "["):

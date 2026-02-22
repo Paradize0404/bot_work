@@ -30,7 +30,7 @@ from uuid import UUID
 from aiogram import Bot, Router, F
 from aiogram.enums import ChatAction
 from bot.middleware import set_cancel_kb, restore_menu_kb
-from bot._utils import requests_keyboard, items_inline_kb, send_prompt_msg
+from bot._utils import requests_keyboard, items_inline_kb, send_prompt_msg, safe_page
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import (
@@ -501,7 +501,8 @@ async def search_request_product(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("req_sup_page:"))
 async def request_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     suppliers = data.get("_suppliers_cache", [])
     if not suppliers:
@@ -510,12 +511,12 @@ async def request_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(
         reply_markup=_suppliers_kb(suppliers, page=page)
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("reqp_page:"))
 async def request_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     products = data.get("_products_cache", [])
     if not products:
@@ -524,12 +525,11 @@ async def request_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(
         reply_markup=_req_products_kb(products, page=page)
     )
-    await callback.answer()
-
 
 @router.callback_query(F.data.startswith("req_hist_page:"))
 async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     requests = data.get("_history_cache", [])
     if not requests:
@@ -538,7 +538,6 @@ async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(
         reply_markup=_history_kb(requests, page=page)
     )
-    await callback.answer()
 
 
 # ── 4. Выбор товара → запрос количества ──

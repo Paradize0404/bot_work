@@ -23,7 +23,11 @@ logger = logging.getLogger(__name__)
 
 LABEL = "iikoWebhook"
 
+# Защита от конкурентного доступа к снэпшоту остатков
+_snapshot_lock = asyncio.Lock()
+
 # Последний снэпшот остатков (для дельта-сравнения)
+# Доступ ONLY под _snapshot_lock
 _last_snapshot_hash: str | None = None
 _last_snapshot_items: dict[tuple[str, str], float] = (
     {}
@@ -432,33 +436,34 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         new_hash = _compute_snapshot_hash(items)
         new_items_dict = _compute_items_dict(items)
 
-        # 3. Покомпонентное сравнение (каждая позиция отдельно)
-        should = _should_update(new_hash, new_items_dict)
+        # 3. Покомпонентное сравнение (под локом для защиты от конкурентных вебхуков)
+        async with _snapshot_lock:
+            should = _should_update(new_hash, new_items_dict)
 
-        if should:
-            # 4. Обновляем закреплённые сообщения (per-department для каждого юзера)
-            from use_cases.pinned_stock_message import update_all_stock_alerts
+            if should:
+                # 4. Обновляем закреплённые сообщения (per-department для каждого юзера)
+                from use_cases.pinned_stock_message import update_all_stock_alerts
 
-            await update_all_stock_alerts(bot)
+                await update_all_stock_alerts(bot)
 
-            _last_snapshot_hash = new_hash
-            _last_snapshot_items = new_items_dict
-            _last_update_time = time.monotonic()  # запоминаем время отправки
-            logger.info(
-                "[%s] Остатки обновлены и разосланы за %.1f сек (items=%d)",
-                LABEL,
-                time.monotonic() - t0,
-                len(items),
-            )
-            result["triggered_check"] = True
-            result["updated_messages"] = True
-        else:
-            logger.info(
-                "[%s] Остатки без значимых изменений, пропускаем обновление (%.1f сек)",
-                LABEL,
-                time.monotonic() - t0,
-            )
-            result["triggered_check"] = True
+                _last_snapshot_hash = new_hash
+                _last_snapshot_items = new_items_dict
+                _last_update_time = time.monotonic()  # запоминаем время отправки
+                logger.info(
+                    "[%s] Остатки обновлены и разосланы за %.1f сек (items=%d)",
+                    LABEL,
+                    time.monotonic() - t0,
+                    len(items),
+                )
+                result["triggered_check"] = True
+                result["updated_messages"] = True
+            else:
+                logger.info(
+                    "[%s] Остатки без значимых изменений, пропускаем обновление (%.1f сек)",
+                    LABEL,
+                    time.monotonic() - t0,
+                )
+                result["triggered_check"] = True
 
     except Exception:
         logger.exception("[%s] Ошибка при проверке остатков после вебхука", LABEL)
@@ -498,9 +503,10 @@ async def force_stock_check(bot: Any) -> dict[str, Any]:
 
     await update_all_stock_alerts(bot)
 
-    _last_snapshot_hash = new_hash
-    _last_snapshot_items = new_items_dict
-    _last_update_time = time.monotonic()  # запоминаем время отправки
+    async with _snapshot_lock:
+        _last_snapshot_hash = new_hash
+        _last_snapshot_items = new_items_dict
+        _last_update_time = time.monotonic()  # запоминаем время отправки
 
     elapsed = time.monotonic() - t0
     logger.info(

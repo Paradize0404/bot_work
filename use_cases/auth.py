@@ -73,7 +73,7 @@ async def find_employees_by_last_name(last_name: str) -> list[dict]:
         stmt = (
             select(Employee)
             .where(func.lower(Employee.last_name) == last_name.strip().lower())
-            .where(Employee.deleted == False)
+            .where(Employee.deleted.is_(False))
         )
         result = await session.execute(stmt)
         employees = result.scalars().all()
@@ -169,7 +169,7 @@ async def get_restaurants() -> list[dict]:
         stmt = (
             select(Department)
             .where(func.upper(Department.department_type) == "DEPARTMENT")
-            .where(Department.deleted == False)
+            .where(Department.deleted.is_(False))
             .order_by(Department.name)
         )
         result = await session.execute(stmt)

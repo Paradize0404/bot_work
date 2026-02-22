@@ -81,14 +81,8 @@ async def pastry_search_group(message: Message, state: FSMContext) -> None:
     if not query:
         return
 
-    async with async_session_factory() as session:
-        stmt = (
-            select(ProductGroup)
-            .where(ProductGroup.deleted.is_(False))
-            .where(func.lower(ProductGroup.name).contains(query))
-            .limit(15)
-        )
-        rows = (await session.execute(stmt)).scalars().all()
+    from use_cases.product_request import search_product_groups
+    rows = await search_product_groups(query)
 
     if not rows:
         await message.answer(
@@ -123,11 +117,17 @@ async def pastry_search_group(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data.startswith("pastry_sel:"))
 @permission_required(PERM_SETTINGS)
 async def pastry_select_group(callback: CallbackQuery, state: FSMContext) -> None:
-    group_id = callback.data.split(":")[1]
+    await callback.answer()
+    try:
+        group_id = callback.data.split(":")[1]
+        from uuid import UUID
+        UUID(group_id)
+    except (IndexError, ValueError):
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        return
 
-    async with async_session_factory() as session:
-        stmt = select(ProductGroup).where(ProductGroup.id == UUID(group_id))
-        group = (await session.execute(stmt)).scalar_one_or_none()
+    from use_cases.product_request import get_product_group_by_id
+    group = await get_product_group_by_id(group_id)
 
     if not group:
         await callback.answer("Группа не найдена", show_alert=True)
@@ -174,7 +174,15 @@ async def pastry_remove_list(callback: CallbackQuery, state: FSMContext) -> None
 @router.callback_query(F.data.startswith("pastry_rm:"))
 @permission_required(PERM_SETTINGS)
 async def pastry_remove_group(callback: CallbackQuery, state: FSMContext) -> None:
-    pk = callback.data.split(":")[1]
+    await callback.answer()
+    try:
+        pk = callback.data.split(":")[1]
+        from uuid import UUID
+        UUID(pk)
+    except (IndexError, ValueError):
+        await callback.answer("⚠️ Ошибка данных", show_alert=True)
+        return
+
     await req_uc.remove_pastry_group(pk)
     await callback.answer("✅ Группа удалена", show_alert=True)
     await callback.message.delete()
@@ -184,6 +192,7 @@ async def pastry_remove_group(callback: CallbackQuery, state: FSMContext) -> Non
 @router.callback_query(F.data == "pastry_cancel")
 @permission_required(PERM_SETTINGS)
 async def pastry_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
     await state.clear()
     await callback.message.delete()
     await pastry_groups_menu(callback.message, state)

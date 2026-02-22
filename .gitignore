@@ -17,6 +17,10 @@ authorized_key.json
 raw_stock_*.json
 stock_named_*.json
 
+# Sandbox: изолированные эксперименты (не в git)
+sandbox/
+!sandbox/README.md
+
 # OCR temp: test photos и артефакты прогонов
 new_photo/
 photo_test/

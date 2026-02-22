@@ -14,7 +14,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from use_cases._helpers import now_kgd
+from use_cases._helpers import now_kgd, bfs_allowed_groups, load_stores_for_department
 from uuid import UUID
 
 from sqlalchemy import select, func, or_
@@ -108,41 +108,16 @@ async def get_stores_for_department(department_id: str) -> list[dict]:
     """
     Получить склады, привязанные к подразделению пользователя,
     у которых в названии есть 'бар' или 'кухня'.
+    Кеширует через writeoff_cache.
     Возвращает [{id, name}, ...].
     """
-    # --- кеш ---
     cached = _cache.get_stores(department_id)
     if cached is not None:
         logger.debug("[writeoff] Склады из кеша (%d шт)", len(cached))
         return cached
 
-    t0 = time.monotonic()
-    logger.info("[writeoff] Загрузка складов для подразделения %s...", department_id)
-
-    async with async_session_factory() as session:
-        stmt = (
-            select(Store)
-            .where(Store.parent_id == UUID(department_id))
-            .where(Store.deleted == False)
-            .where(
-                or_(
-                    func.lower(Store.name).contains("бар"),
-                    func.lower(Store.name).contains("кухня"),
-                )
-            )
-            .order_by(Store.name)
-        )
-        result = await session.execute(stmt)
-        stores = result.scalars().all()
-
-    items = [{"id": str(s.id), "name": s.name} for s in stores]
+    items = await load_stores_for_department(department_id)
     _cache.set_stores(department_id, items)
-    logger.info(
-        "[writeoff] Склады для %s: %d шт за %.2f сек",
-        department_id,
-        len(items),
-        time.monotonic() - t0,
-    )
     return items
 
 
@@ -192,7 +167,7 @@ async def get_writeoff_accounts(store_name: str = "") -> list[dict]:
         stmt = (
             select(Entity)
             .where(Entity.root_type == "Account")
-            .where(Entity.deleted == False)
+            .where(Entity.deleted.is_(False))
             .where(func.lower(Entity.name).contains("списание"))
         )
         if segment:
@@ -225,46 +200,6 @@ async def _is_request_department(department_id: str) -> bool:
     return any(s["id"] == department_id for s in stores)
 
 
-async def _bfs_allowed_groups(session, group_model_class) -> set[str]:
-    """
-    BFS по iiko_product_group: вернуть множество UUID всех групп-потомков
-    корневых записей из таблицы group_model_class (gsheet_export_group
-    или writeoff_request_store_group).
-
-    Возвращает пустое множество, если таблица пуста.
-    """
-    root_rows = (await session.execute(select(group_model_class.group_id))).all()
-    root_ids = [str(r.group_id) for r in root_rows]
-
-    if not root_ids:
-        return set()
-
-    group_rows = (
-        await session.execute(
-            select(ProductGroup.id, ProductGroup.parent_id).where(
-                ProductGroup.deleted.is_(False)
-            )
-        )
-    ).all()
-
-    children_map: dict[str, list[str]] = {}
-    for g in group_rows:
-        pid = str(g.parent_id) if g.parent_id else None
-        if pid:
-            children_map.setdefault(pid, []).append(str(g.id))
-
-    allowed: set[str] = set()
-    queue = list(root_ids)
-    while queue:
-        gid = queue.pop()
-        if gid in allowed:
-            continue
-        allowed.add(gid)
-        queue.extend(children_map.get(gid, []))
-
-    return allowed
-
-
 # ─────────────────────────────────────────────────────
 # Кеш и поиск номенклатуры
 # ─────────────────────────────────────────────────────
@@ -295,7 +230,7 @@ async def preload_products(department_id: str | None = None) -> None:
         if department_id is not None:
             is_req = await _is_request_department(department_id)
             group_model = WriteoffRequestStoreGroup if is_req else GSheetExportGroup
-            allowed_groups = await _bfs_allowed_groups(session, group_model)
+            allowed_groups = await bfs_allowed_groups(session, group_model)
             logger.info(
                 "[writeoff] Прогрев кеша для dept=%s (%s): %d разрешённых групп",
                 department_id,

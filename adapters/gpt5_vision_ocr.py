@@ -253,7 +253,16 @@ async def recognize_document(image_bytes: bytes) -> Dict[str, Any]:
     )
 
     # Парсим ответ
-    content = response.choices[0].message.content.strip()
+    if not response.choices:
+        logger.error("[gpt5_ocr] GPT вернул пустой choices (модель %s)", OCR_MODEL)
+        return {"error": "GPT вернул пустой ответ (нет choices)", "_model": OCR_MODEL}
+
+    raw_content = response.choices[0].message.content
+    if not raw_content:
+        logger.error("[gpt5_ocr] GPT вернул пустой content (модель %s)", OCR_MODEL)
+        return {"error": "GPT вернул пустой контент", "_model": OCR_MODEL}
+
+    content = raw_content.strip()
 
     # Извлекаем JSON (если есть markdown-обёртка)
     json_match = re.search(r"\{.*\}", content, re.DOTALL)

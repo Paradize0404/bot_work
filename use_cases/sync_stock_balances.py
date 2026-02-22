@@ -50,7 +50,7 @@ async def _load_name_maps() -> tuple[dict, dict]:
     async def _stores():
         async with async_session_factory() as s:
             rows = await s.execute(
-                select(Store.id, Store.name).where(Store.deleted == False)  # noqa: E712
+                select(Store.id, Store.name).where(Store.deleted.is_(False))
             )
             return {r.id: r.name for r in rows.all()}
 
@@ -58,8 +58,8 @@ async def _load_name_maps() -> tuple[dict, dict]:
         async with async_session_factory() as s:
             rows = await s.execute(
                 select(Product.id, Product.name).where(
-                    Product.deleted == False
-                )  # noqa: E712
+                    Product.deleted.is_(False)
+                )
             )
             return {r.id: r.name for r in rows.all()}
 

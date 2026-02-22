@@ -115,8 +115,8 @@ async def check_min_stock_levels(
         store_rows = (
             await session.execute(
                 select(Store.id, Store.parent_id).where(
-                    Store.deleted == False
-                )  # noqa: E712
+                    Store.deleted.is_(False)
+                )
             )
         ).all()
 

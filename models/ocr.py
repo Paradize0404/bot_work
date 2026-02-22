@@ -3,12 +3,12 @@ OCR модели для хранения распознанных докумен
 """
 
 from datetime import datetime
-from sqlalchemy import String, Text, REAL, Boolean, ForeignKey, Index, JSON
+from sqlalchemy import String, Text, REAL, Numeric, Boolean, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from uuid import uuid4
 
-from db.models import Base
-from use_cases._helpers import now_kgd
+from db.models import Base, _utcnow
 
 
 class OcrDocument(Base):
@@ -54,8 +54,8 @@ class OcrDocument(Base):
     buyer_inn: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Суммы
-    total_amount: Mapped[float | None] = mapped_column(REAL, nullable=True)
-    total_vat: Mapped[float | None] = mapped_column(REAL, nullable=True)
+    total_amount: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+    total_vat: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="RUB")
 
     # Статус обработки
@@ -71,7 +71,7 @@ class OcrDocument(Base):
     )  # Путь к оригиналу в S3
     s3_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # S3 URL
     tg_file_ids: Mapped[list | None] = mapped_column(
-        JSON, nullable=True
+        JSONB, nullable=True
     )  # Telegram file_id[] для показа превью
 
     # Качество распознавания
@@ -83,17 +83,17 @@ class OcrDocument(Base):
 
     # JSON данные
     raw_json: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True
+        JSONB, nullable=True
     )  # Сырой ответ GPT
     validated_json: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True
+        JSONB, nullable=True
     )  # После валидации
     mapped_json: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True
+        JSONB, nullable=True
     )  # После маппинга
 
     # Временные метки
-    created_at: Mapped[datetime] = mapped_column(default=now_kgd)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     sent_to_iiko_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
@@ -153,9 +153,9 @@ class OcrItem(Base):
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)  # кг, шт, л
 
     # Количество и цены
-    qty: Mapped[float | None] = mapped_column(REAL, nullable=True)
-    price: Mapped[float | None] = mapped_column(REAL, nullable=True)
-    sum: Mapped[float | None] = mapped_column(REAL, nullable=True)
+    qty: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+    price: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+    sum: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
 
     # НДС
     vat_rate: Mapped[str | None] = mapped_column(

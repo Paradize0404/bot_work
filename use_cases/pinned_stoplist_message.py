@@ -8,7 +8,6 @@ Use-case: управление закреплёнными сообщениями
   4. Формат: «Новые блюда в стоп-листе 🚫 / Удалены ✅ / Остались» + #стоплист.
 """
 
-import hashlib
 import logging
 import time
 from typing import Any
@@ -17,18 +16,13 @@ from sqlalchemy import select, delete as sa_delete
 
 from db.engine import async_session_factory
 from db.models import StoplistMessage
-from use_cases._helpers import now_kgd
+from use_cases._helpers import now_kgd, compute_hash
 from use_cases import permissions as perm_uc
 from use_cases import user_context as uctx
 
 logger = logging.getLogger(__name__)
 
 LABEL = "StoplistAlert"
-
-
-def _compute_hash(text: str) -> str:
-    """SHA-256 хеш текста."""
-    return hashlib.sha256(text.encode()).hexdigest()
 
 
 # ═══════════════════════════════════════════════════════
@@ -155,7 +149,7 @@ async def send_stoplist_for_user(bot: Any, telegram_id: int) -> bool:
 
         items = await fetch_stoplist_items(org_id=user_org_id)
         text = format_full_stoplist(items)
-        text_hash = _compute_hash(text)
+        text_hash = compute_hash(text)
 
         ok = await _update_single(bot, telegram_id, text, text_hash, force=True)
         logger.info(
@@ -188,7 +182,7 @@ async def update_all_stoplist_messages(bot: Any, text: str) -> int:
         Количество обновлённых/созданных сообщений.
     """
     t0 = time.monotonic()
-    text_hash = _compute_hash(text)
+    text_hash = compute_hash(text)
 
     from use_cases.permissions import get_stoplist_subscriber_ids
 

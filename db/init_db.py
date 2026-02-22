@@ -90,6 +90,17 @@ async def create_tables() -> None:
         # pending_writeoff — акты списания, ожидающие проверки (переезд из RAM в PostgreSQL)
         "CREATE INDEX IF NOT EXISTS ix_pending_writeoff_author ON pending_writeoff (author_chat_id)",
         "CREATE INDEX IF NOT EXISTS ix_pending_writeoff_created ON pending_writeoff (created_at)",
+        # ── OCR миграция: REAL → NUMERIC(12,4) для денежных полей (K4) ──
+        "ALTER TABLE ocr_document ALTER COLUMN total_amount TYPE NUMERIC(12,4)",
+        "ALTER TABLE ocr_document ALTER COLUMN total_vat TYPE NUMERIC(12,4)",
+        "ALTER TABLE ocr_item ALTER COLUMN qty TYPE NUMERIC(12,4)",
+        "ALTER TABLE ocr_item ALTER COLUMN price TYPE NUMERIC(12,4)",
+        "ALTER TABLE ocr_item ALTER COLUMN sum TYPE NUMERIC(12,4)",
+        # ── OCR миграция: JSON → JSONB для GIN-индексов и скорости (B3) ──
+        "ALTER TABLE ocr_document ALTER COLUMN raw_json TYPE JSONB USING raw_json::jsonb",
+        "ALTER TABLE ocr_document ALTER COLUMN validated_json TYPE JSONB USING validated_json::jsonb",
+        "ALTER TABLE ocr_document ALTER COLUMN mapped_json TYPE JSONB USING mapped_json::jsonb",
+        "ALTER TABLE ocr_document ALTER COLUMN tg_file_ids TYPE JSONB USING tg_file_ids::jsonb",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:

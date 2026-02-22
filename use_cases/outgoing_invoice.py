@@ -32,6 +32,7 @@ from db.models import (
     PriceSupplierPrice,
 )
 from use_cases import invoice_cache as _cache
+from use_cases._helpers import bfs_allowed_groups, load_stores_for_department
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ async def load_all_suppliers() -> list[dict]:
     async with async_session_factory() as session:
         stmt = (
             select(Supplier.id, Supplier.name)
-            .where(Supplier.deleted == False)  # noqa: E712
+            .where(Supplier.deleted.is_(False))
             .order_by(Supplier.name)
         )
         result = await session.execute(stmt)
@@ -103,7 +104,7 @@ async def search_suppliers(query: str, limit: int = 15) -> list[dict]:
     async with async_session_factory() as session:
         stmt = (
             select(Supplier.id, Supplier.name)
-            .where(Supplier.deleted == False)  # noqa: E712
+            .where(Supplier.deleted.is_(False))
             .where(func.lower(Supplier.name).contains(pattern))
             .order_by(Supplier.name)
             .limit(limit)
@@ -142,7 +143,7 @@ async def get_revenue_account() -> dict | None:
         stmt = (
             select(Entity.id, Entity.name)
             .where(Entity.root_type == "Account")
-            .where(Entity.deleted == False)  # noqa: E712
+            .where(Entity.deleted.is_(False))
             .where(func.lower(Entity.name).contains("реализация на точки"))
             .limit(1)
         )
@@ -173,6 +174,7 @@ async def get_stores_for_department(department_id: str) -> list[dict]:
     """
     Получить склады, привязанные к подразделению,
     у которых в названии есть 'бар' или 'кухня'.
+    Кеширует через invoice_cache.
     Возвращает [{id, name}, ...].
     """
     cached = _cache.get_stores(department_id)
@@ -180,33 +182,8 @@ async def get_stores_for_department(department_id: str) -> list[dict]:
         logger.debug("[invoice] Склады из кеша (%d шт)", len(cached))
         return cached
 
-    t0 = time.monotonic()
-    logger.info("[invoice] Загрузка складов для подразделения %s...", department_id)
-
-    async with async_session_factory() as session:
-        stmt = (
-            select(Store)
-            .where(Store.parent_id == UUID(department_id))
-            .where(Store.deleted == False)  # noqa: E712
-            .where(
-                or_(
-                    func.lower(Store.name).contains("бар"),
-                    func.lower(Store.name).contains("кухня"),
-                )
-            )
-            .order_by(Store.name)
-        )
-        result = await session.execute(stmt)
-        stores = result.scalars().all()
-
-    items = [{"id": str(s.id), "name": s.name} for s in stores]
+    items = await load_stores_for_department(department_id)
     _cache.set_stores(department_id, items)
-    logger.info(
-        "[invoice] Склады для %s: %d шт за %.2f сек",
-        department_id,
-        len(items),
-        time.monotonic() - t0,
-    )
     return items
 
 
@@ -226,38 +203,12 @@ async def preload_products_tree() -> None:
 
     t0 = time.monotonic()
     async with async_session_factory() as session:
-        # 1. Корневые группы
-        root_rows = (await session.execute(select(GSheetExportGroup.group_id))).all()
-        root_ids = [str(r.group_id) for r in root_rows]
-
-        if not root_ids:
+        # 1-2. BFS по дереву номенклатурных групп (shared helper)
+        allowed_groups = await bfs_allowed_groups(session, GSheetExportGroup)
+        if not allowed_groups:
             logger.warning("[invoice] Нет корневых групп в gsheet_export_group")
             _cache.set_products([])
             return
-
-        # 2. BFS по дереву номенклатурных групп
-        group_rows = (
-            await session.execute(
-                select(ProductGroup.id, ProductGroup.parent_id).where(
-                    ProductGroup.deleted == False
-                )  # noqa: E712
-            )
-        ).all()
-
-        children_map: dict[str, list[str]] = {}
-        for g in group_rows:
-            pid = str(g.parent_id) if g.parent_id else None
-            if pid:
-                children_map.setdefault(pid, []).append(str(g.id))
-
-        allowed_groups: set[str] = set()
-        queue = list(root_ids)
-        while queue:
-            gid = queue.pop()
-            if gid in allowed_groups:
-                continue
-            allowed_groups.add(gid)
-            queue.extend(children_map.get(gid, []))
 
         # 3. Товары GOODS + DISH из разрешённых групп + единицы измерения
         products_rows = (
@@ -270,7 +221,7 @@ async def preload_products_tree() -> None:
                     Product.main_unit,
                 )
                 .where(Product.product_type.in_(["GOODS", "DISH"]))
-                .where(Product.deleted == False)  # noqa: E712
+                .where(Product.deleted.is_(False))
                 .order_by(Product.name)
             )
         ).all()

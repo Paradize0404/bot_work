@@ -13,7 +13,6 @@ Use-case: управление закреплёнными сообщениями
   ...
 """
 
-import hashlib
 import logging
 import time
 from typing import Any
@@ -22,7 +21,7 @@ from sqlalchemy import select, delete as sa_delete
 
 from db.engine import async_session_factory
 from db.models import StockAlertMessage
-from use_cases._helpers import now_kgd
+from use_cases._helpers import now_kgd, compute_hash
 from use_cases import permissions as perm_uc
 from use_cases import user_context as uctx
 
@@ -85,11 +84,6 @@ def format_stock_alert(data: dict[str, Any], department_name: str | None = None)
         result = result[:3950] + "\n\n...обрезано (слишком много позиций)"
 
     return result
-
-
-def _compute_hash(text: str) -> str:
-    """SHA-256 хеш текста сообщения."""
-    return hashlib.sha256(text.encode()).hexdigest()
 
 
 # ═══════════════════════════════════════════════════════
@@ -282,7 +276,7 @@ async def send_stock_alert_for_user(
             department_id,
         )
         text = format_stock_alert(result, department_name=dept_name)
-        text_hash = _compute_hash(text)
+        text_hash = compute_hash(text)
 
         ok = await _update_single_alert(bot, telegram_id, text, text_hash, force=True)
         logger.info(
@@ -358,7 +352,7 @@ async def update_all_stock_alerts(
         result = dept_cache[dept_id]
         dept_name = result.get("department_name") or ctx.department_name or ""
         text = format_stock_alert(result, department_name=dept_name)
-        text_hash = _compute_hash(text)
+        text_hash = compute_hash(text)
 
         if await _update_single_alert(bot, uid, text, text_hash):
             updated += 1

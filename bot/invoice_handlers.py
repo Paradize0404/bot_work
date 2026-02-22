@@ -34,6 +34,7 @@ from bot._utils import (
     items_inline_kb,
     send_prompt_msg,
     update_summary_msg,
+    safe_page,
 )
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -513,19 +514,20 @@ async def search_product(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("inv_store_page:"))
 async def invoice_store_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     stores = data.get("_stores_cache", [])
     if not stores:
         await callback.answer("Склады не найдены", show_alert=True)
         return
     await callback.message.edit_reply_markup(reply_markup=_stores_kb(stores, page=page))
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("inv_sup_page:"))
 async def invoice_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     suppliers = data.get("_suppliers_cache", [])
     if not suppliers:
@@ -534,12 +536,12 @@ async def invoice_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(
         reply_markup=_suppliers_kb(suppliers, page=page)
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("inv_prod_page:"))
 async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     products = data.get("_products_cache", [])
     if not products:
@@ -548,12 +550,11 @@ async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(
         reply_markup=_products_kb(products, page=page)
     )
-    await callback.answer()
-
 
 @router.callback_query(F.data.startswith("inv_tmpl_page:"))
 async def invoice_tmpl_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     templates = data.get("_templates_cache", [])
     if not templates:
@@ -562,7 +563,6 @@ async def invoice_tmpl_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(
         reply_markup=_templates_kb(templates, page=page)
     )
-    await callback.answer()
 
 
 # ── 5. Выбор товара → добавление ──

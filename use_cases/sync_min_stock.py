@@ -29,6 +29,7 @@ from db.models import (
 )
 
 from adapters import google_sheets as gsheet
+from use_cases._helpers import bfs_allowed_groups
 
 logger = logging.getLogger(__name__)
 
@@ -53,49 +54,20 @@ async def sync_nomenclature_to_gsheet(triggered_by: str | None = None) -> int:
     logger.info("[%s] Номенклатура → GSheet (by=%s)...", LABEL, triggered_by)
 
     async with async_session_factory() as session:
-        # ── 1. Корневые группы из БД (gsheet_export_group) ──
-        root_rows = (await session.execute(select(GSheetExportGroup.group_id))).all()
-        root_ids = [str(r.group_id) for r in root_rows]
+        # ── 1-2. BFS по дереву номенклатурных групп (shared helper) ──
+        allowed_groups = await bfs_allowed_groups(session, GSheetExportGroup)
 
-        if not root_ids:
+        if not allowed_groups:
             logger.warning(
                 "[%s] Нет корневых групп в gsheet_export_group — таблица будет пустой",
                 LABEL,
             )
             return 0
 
-        # ── 2. Построим дерево номенклатурных групп ──
-        group_rows = (
-            await session.execute(
-                select(ProductGroup.id, ProductGroup.parent_id).where(
-                    ProductGroup.deleted == False
-                )  # noqa: E712
-            )
-        ).all()
-
-        # parent_id → list[child_id]
-        children_map: dict[str, list[str]] = {}
-        for g in group_rows:
-            pid = str(g.parent_id) if g.parent_id else None
-            if pid:
-                children_map.setdefault(pid, []).append(str(g.id))
-
-        # BFS: все группы-потомки всех корневых (включая сами корневые)
-        allowed_groups: set[str] = set()
-        queue = list(root_ids)
-        while queue:
-            gid = queue.pop()
-            if gid in allowed_groups:
-                continue
-            allowed_groups.add(gid)
-            queue.extend(children_map.get(gid, []))
-
         logger.info(
-            "[%s] Корневых групп: %d, всего в дереве: %d (из %d общих)",
+            "[%s] Разрешённых групп в дереве: %d",
             LABEL,
-            len(root_ids),
             len(allowed_groups),
-            len(group_rows),
         )
 
         # ── 3. Товары GOODS + DISH из разрешённых групп ──
@@ -103,7 +75,7 @@ async def sync_nomenclature_to_gsheet(triggered_by: str | None = None) -> int:
             await session.execute(
                 select(Product.id, Product.name, Product.parent_id)
                 .where(Product.product_type.in_(["GOODS", "DISH"]))
-                .where(Product.deleted == False)  # noqa: E712
+                .where(Product.deleted.is_(False))
                 .order_by(Product.name)
             )
         ).all()
@@ -119,7 +91,7 @@ async def sync_nomenclature_to_gsheet(triggered_by: str | None = None) -> int:
             await session.execute(
                 select(Department.id, Department.name)
                 .where(Department.department_type == "DEPARTMENT")
-                .where(Department.deleted == False)  # noqa: E712
+                .where(Department.deleted.is_(False))
                 .order_by(Department.name)
             )
         ).all()

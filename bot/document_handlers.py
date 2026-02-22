@@ -158,20 +158,8 @@ async def _disable_all_invoice_buttons(
 
 async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
     """Установить status='pending_mapping' для документов, ожидающих маппинг."""
-    if not doc_ids:
-        return
-    from db.engine import async_session_factory
-    from models.ocr import OcrDocument
-    from sqlalchemy import update
-
-    async with async_session_factory() as session:
-        await session.execute(
-            update(OcrDocument)
-            .where(OcrDocument.id.in_(doc_ids))
-            .values(status="pending_mapping")
-        )
-        await session.commit()
-    logger.info("[ocr] Статус pending_mapping: %d документов", len(doc_ids))
+    from use_cases.ocr_pipeline import mark_docs_pending_mapping
+    await mark_docs_pending_mapping(doc_ids)
 
 
 # ════════════════════════════════════════════════════════
@@ -375,129 +363,8 @@ async def _save_ocr_document(
     tg_id: int, result_data: dict, file_ids: list[str] | None = None
 ) -> str | None:
     """Сохранить распознанный документ в БД."""
-    try:
-        import datetime
-        from models.ocr import OcrDocument, OcrItem
-        from db.engine import async_session_factory
-
-        doc_date: datetime.datetime | None = None
-        raw_date = result_data.get("doc_date") or result_data.get("date") or ""
-        for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
-            try:
-                doc_date = datetime.datetime.strptime(raw_date, fmt)
-                break
-            except ValueError:
-                continue
-
-        ctx = await uctx.get_user_context(tg_id)
-        supplier = result_data.get("supplier") or {}
-        buyer = result_data.get("buyer") or {}
-
-        async with async_session_factory() as session:
-            # Удаляем дубликаты с тем же номером/типом, которые ещё не финализированы
-            _doc_number = result_data.get("doc_number")
-            _doc_type = result_data.get("doc_type") or "unknown"
-            if _doc_number:
-                from sqlalchemy import (
-                    select as _sa_select,
-                    delete as _sa_delete,
-                    and_ as _sa_and,
-                )
-                from models.ocr import OcrItem as _OcrItem
-
-                dup_ids = (
-                    (
-                        await session.execute(
-                            _sa_select(OcrDocument.id).where(
-                                _sa_and(
-                                    OcrDocument.doc_number == _doc_number,
-                                    OcrDocument.doc_type == _doc_type,
-                                    OcrDocument.status.in_(
-                                        ["recognized", "pending_mapping"]
-                                    ),
-                                )
-                            )
-                        )
-                    )
-                    .scalars()
-                    .all()
-                )
-                if dup_ids:
-                    # Сначала удаляем дочерние items, затем сам документ
-                    await session.execute(
-                        _sa_delete(_OcrItem).where(_OcrItem.document_id.in_(dup_ids))
-                    )
-                    await session.execute(
-                        _sa_delete(OcrDocument).where(OcrDocument.id.in_(dup_ids))
-                    )
-                    logger.info(
-                        "[ocr] Удалены дубликаты документа %s (%d шт.)",
-                        _doc_number,
-                        len(dup_ids),
-                    )
-            doc = OcrDocument(
-                telegram_id=str(tg_id),
-                user_id=str(ctx.employee_id) if ctx and ctx.employee_id else None,
-                department_id=(
-                    str(ctx.department_id) if ctx and ctx.department_id else None
-                ),
-                doc_type=_doc_type,
-                doc_number=_doc_number,
-                doc_date=doc_date,
-                supplier_name=supplier.get("name"),
-                supplier_inn=supplier.get("inn"),
-                supplier_id=supplier.get(
-                    "iiko_id"
-                ),  # сохраняем iiko UUID если уже замаплен
-                buyer_name=buyer.get("name"),
-                buyer_inn=buyer.get("inn"),
-                total_amount=result_data.get("total_amount"),
-                status="recognized",
-                confidence_score=result_data.get("confidence_score"),
-                page_count=result_data.get("page_count") or 1,
-                is_multistage=result_data.get("is_merged", False),
-                validated_json=result_data,
-                tg_file_ids=file_ids or None,
-            )
-            session.add(doc)
-            await session.flush()
-
-            for i, item in enumerate(result_data.get("items") or [], start=1):
-                session.add(
-                    OcrItem(
-                        document_id=doc.id,
-                        num=i,
-                        raw_name=item.get("name") or "",
-                        unit=item.get("unit"),
-                        qty=item.get("qty"),
-                        price=item.get("price"),
-                        sum=item.get("sum"),
-                        vat_rate=(
-                            str(item.get("vat_rate"))
-                            if item.get("vat_rate") is not None
-                            else None
-                        ),
-                        iiko_name=item.get("iiko_name"),
-                        iiko_id=item.get("iiko_id"),
-                        store_type=item.get("store_type"),
-                    )
-                )
-
-            await session.commit()
-            doc_id = str(doc.id)
-
-        logger.info(
-            "[ocr] Сохранён id=%s tg:%d тип=%s №=%s",
-            doc_id,
-            tg_id,
-            result_data.get("doc_type"),
-            result_data.get("doc_number"),
-        )
-        return doc_id
-
-    except Exception:
-        logger.exception("[ocr] Ошибка сохранения tg:%d", tg_id)
-        return None
+    from use_cases.ocr_pipeline import save_ocr_document
+    return await save_ocr_document(tg_id, result_data, file_ids)
 
 
 # ════════════════════════════════════════════════════════
@@ -728,15 +595,12 @@ async def btn_mapping_done(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "mapping_done")
 async def cb_mapping_done(callback: CallbackQuery) -> None:
     """Бухгалтер нажал инлайн-кнопку «✅ Маппинг готов»."""
-    tg_id = callback.from_user.id
-    logger.info("[ocr] Маппинг готов (inline) tg:%d", tg_id)
-
-    # Telegram требует ответить на callback в течение 30 сек.
-    # Если апдейт пролежал в очереди дольше (напр. за OCR-задачей) —
-    # отвечаем молча, не роняя хендлер.
     try:
         await callback.answer()
     except Exception:
+        pass
+    tg_id = callback.from_user.id
+    logger.info("[ocr] Маппинг готов (inline) tg:%d", tg_id)
         logger.debug("[ocr] callback.answer() опоздал (query too old) tg:%d", tg_id)
 
     # Убираем инлайн-кнопку с сообщения-уведомления

@@ -17,12 +17,11 @@ from sqlalchemy import select, func
 
 from db.engine import async_session_factory
 from db.models import StoplistHistory
-from use_cases._helpers import now_kgd
+from use_cases._helpers import now_kgd, KGD_TZ
 
 logger = logging.getLogger(__name__)
 
 LABEL = "StoplistReport"
-_KGD_TZ = ZoneInfo("Europe/Kaliningrad")
 
 
 # ═══════════════════════════════════════════════════════

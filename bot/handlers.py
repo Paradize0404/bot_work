@@ -1100,18 +1100,10 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
         from db.models import Department
         from adapters.iiko_cloud_api import get_organizations
         from adapters.google_sheets import sync_cloud_org_mapping_to_sheet
-        from use_cases.cloud_org_mapping import invalidate_cache
+        from use_cases.cloud_org_mapping import invalidate_cache, get_departments_for_mapping
 
         # 1. Подразделения из БД (тип DEPARTMENT / STORE)
-        async with async_session_factory() as session:
-            result = await session.execute(
-                select(Department).where(
-                    Department.deleted.is_(False),
-                    Department.department_type.in_(["DEPARTMENT", "STORE"]),
-                )
-            )
-            depts = result.scalars().all()
-
+        depts = await get_departments_for_mapping()
         dept_list = [{"id": str(d.id), "name": d.name or "—"} for d in depts]
 
         # 2. Организации из iikoCloud

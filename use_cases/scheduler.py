@@ -23,14 +23,11 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from use_cases._helpers import now_kgd
+from use_cases._helpers import now_kgd, KGD_TZ
 
 logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
-
-# Калининградская TZ для CronTrigger
-_KGD_TZ = ZoneInfo("Europe/Kaliningrad")
 
 TRIGGERED_BY = "scheduler"
 
@@ -295,7 +292,7 @@ def start_scheduler(bot) -> None:
     # ── 07:00 — полная синхронизация ──
     _scheduler.add_job(
         _daily_full_sync,
-        trigger=CronTrigger(hour=7, minute=0, timezone=_KGD_TZ),
+        trigger=CronTrigger(hour=7, minute=0, timezone=KGD_TZ),
         id="daily_full_sync",
         name="Ежедневная синхронизация iiko+FinTablo (07:00 Калининград)",
         replace_existing=True,
@@ -305,7 +302,7 @@ def start_scheduler(bot) -> None:
     # ── 22:00 — отчёт по стоп-листу ──
     _scheduler.add_job(
         _daily_stoplist_report,
-        trigger=CronTrigger(hour=22, minute=0, timezone=_KGD_TZ),
+        trigger=CronTrigger(hour=22, minute=0, timezone=KGD_TZ),
         id="daily_stoplist_report",
         name="Ежедневный отчёт по стоп-листу (22:00 Калининград)",
         replace_existing=True,
@@ -315,7 +312,7 @@ def start_scheduler(bot) -> None:
     # ── 23:00 — авто-перемещение расходных материалов ──
     _scheduler.add_job(
         _daily_negative_transfer,
-        trigger=CronTrigger(hour=23, minute=0, timezone=_KGD_TZ),
+        trigger=CronTrigger(hour=23, minute=0, timezone=KGD_TZ),
         id="daily_negative_transfer",
         name="Авто-перемещение расх.мат. (23:00 Калининград)",
         replace_existing=True,

@@ -48,6 +48,7 @@ from bot._utils import (
     items_inline_kb,
     send_prompt_msg,
     update_summary_msg,
+    safe_page,
 )
 
 logger = logging.getLogger(__name__)
@@ -381,14 +382,14 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("wo_store_page:"))
 async def writeoff_store_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     stores = data.get("_stores_cache", [])
     if not stores:
         await callback.answer("Склады не найдены", show_alert=True)
         return
     await callback.message.edit_reply_markup(reply_markup=_stores_kb(stores, page=page))
-    await callback.answer()
     await state.set_state(WriteoffStates.store)
 
 
@@ -621,7 +622,8 @@ async def search_product(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("wo_prod_page:"))
 async def writeoff_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
-    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    page = safe_page(callback.data)
     data = await state.get_data()
     products = data.get("_products_list", [])
     if not products:
@@ -630,7 +632,6 @@ async def writeoff_prod_page(callback: CallbackQuery, state: FSMContext) -> None
     await callback.message.edit_reply_markup(
         reply_markup=_products_kb(products, page=page)
     )
-    await callback.answer()
 
 
 @router.callback_query(WriteoffStates.add_items, F.data.startswith("wo_prod:"))
@@ -785,13 +786,12 @@ async def save_quantity(message: Message, state: FSMContext) -> None:
 @router.callback_query(WriteoffStates.add_items, F.data == "wo_send")
 async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
     """Вместо прямой отправки — отправляем документ на проверку админам."""
+    await callback.answer()
     user_id = callback.from_user.id
     logger.info("[writeoff] Отправка на проверку tg:%d", user_id)
     if user_id in _sending_lock:
-        await callback.answer("⏳ Уже отправляется…")
         return
 
-    await callback.answer()
     _sending_lock.add(user_id)
     try:
         data = await state.get_data()
@@ -2095,11 +2095,7 @@ async def hist_noop(callback: CallbackQuery) -> None:
 @router.callback_query(HistoryStates.browsing, F.data.startswith("woh_page:"))
 async def hist_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    try:
-        page = int(callback.data.split(":", 1)[1])
-    except (ValueError, IndexError):
-        await callback.answer("Ошибка данных", show_alert=True)
-        return
+    page = safe_page(callback.data)
     logger.debug("[wo_history] Пагинация tg:%d, page=%d", callback.from_user.id, page)
     data = await state.get_data()
     role_type = data.get("hist_role_type", "unknown")

@@ -7,6 +7,56 @@
 
 ---
 
+## 📇 Компактный индекс (все таблицы)
+
+> Найди нужную таблицу → перейди к детальному описанию ниже.
+
+| # | Таблица | Категория | Ключевые колонки | Sync |
+|---|---------|-----------|-----------------|------|
+| 1 | `iiko_entity` | iiko справочники | id (UUID), root_type (16 типов), name | UPSERT+mirror |
+| 2 | `iiko_supplier` | iiko справочники | id (UUID PK), name, ИНН | UPSERT+mirror |
+| 3 | `iiko_department` | iiko структура | id (UUID PK), parent_id, type | UPSERT+mirror |
+| 4 | `iiko_store` | iiko структура | id (UUID PK), parent_id, name | UPSERT+mirror |
+| 5 | `iiko_group` | iiko структура | id (UUID PK), name, parent_id | UPSERT+mirror |
+| 6 | `iiko_product_group` | iiko номенклатура | id (UUID PK), name, parent_id, num_chd | UPSERT+mirror |
+| 7 | `iiko_product` | iiko номенклатура | id (UUID PK), parent_id, type, num, unit | UPSERT+mirror |
+| 8 | `iiko_employee` | iiko кадры | id (UUID PK), name, role_id | UPSERT+mirror |
+| 9 | `iiko_employee_role` | iiko кадры | id (UUID PK), name, code | UPSERT+mirror |
+| 10 | `iiko_sync_log` | аудит | entity, status, started_at, count | INSERT only |
+| 11 | `bot_admin` | бот (legacy) | telegram_id (PK), name | ручной (deprecated→GSheet) |
+| 12 | `iiko_stock_balance` | остатки | product_id, store_id, amount | full-replace |
+| 13 | `min_stock_level` | остатки | product_id, department_id, min/max_qty | GSheet sync |
+| 14 | `gsheet_export_group` | настройки | group_id (UUID PK), group_name | GSheet sync |
+| 15 | `ft_category` | FinTablo | ext_id (PK), name, parent_id | UPSERT+mirror |
+| 16 | `ft_moneybag` | FinTablo | ext_id (PK), name, currency | UPSERT+mirror |
+| 17 | `ft_partner` | FinTablo | ext_id (PK), name | UPSERT+mirror |
+| 18 | `ft_direction` | FinTablo | ext_id (PK), name | UPSERT+mirror |
+| 19 | `ft_moneybag_group` | FinTablo | ext_id (PK), name | UPSERT+mirror |
+| 20 | `ft_goods` | FinTablo | ext_id (PK), name, unit | UPSERT+mirror |
+| 21 | `ft_obtaining` | FinTablo | ext_id (PK), partner, amount, date | UPSERT+mirror |
+| 22 | `ft_job` | FinTablo | ext_id (PK), name | UPSERT+mirror |
+| 23 | `ft_deal` | FinTablo | ext_id (PK), partner, amount, date | UPSERT+mirror |
+| 24 | `ft_obligation_status` | FinTablo | ext_id (PK), name | UPSERT+mirror |
+| 25 | `ft_obligation` | FinTablo | ext_id (PK), partner, amount | UPSERT+mirror |
+| 26 | `ft_pnl_category` | FinTablo | ext_id (PK), name, parent_id | UPSERT+mirror |
+| 27 | `ft_employee` | FinTablo | ext_id (PK), name | UPSERT+mirror |
+| 28 | `writeoff_history` | списания | doc_id (UUID PK), dept, items (JSONB) | INSERT |
+| 29 | `invoice_template` | накладные | id (PK), name, dept_id, items (JSONB) | INSERT |
+| 30 | `request_receiver` | заявки (legacy) | telegram_id (PK), name | ручной (deprecated→GSheet) |
+| 31 | `product_request` | заявки | id (PK), dept_id, status, items (JSONB) | INSERT |
+| 32 | `active_stoplist` | стоп-лист | product_id+dept_id (PK), name | full-replace |
+| 33 | `stoplist_message` | стоп-лист | chat_id+dept_id (PK), message_id | UPDATE |
+| 34 | `stoplist_history` | стоп-лист | id (PK), product_id, entered_at, exited_at | INSERT/UPDATE |
+| 35 | `price_product` | прайс-лист | id (PK), product_id, store_id, name | GSheet sync |
+| 36 | `price_supplier_column` | прайс-лист | id (PK), supplier_name, col_index | GSheet sync |
+| 37 | `price_supplier_price` | прайс-лист | product_id+supplier_id (PK), price | GSheet sync |
+| 38 | `stock_alert_message` | остатки | chat_id+dept_id (PK), message_id | UPDATE |
+| 42 | `iiko_access_tokens` | внешний | org_id (PK), token, expires_at | INSERT/UPDATE |
+| 43 | `pending_writeoff` | списания | id (UUID PK), dept, items, is_locked, TTL 24h | INSERT/UPDATE |
+| 44 | `pastry_nomenclature_group` | кондитерка | id (UUID PK), name | INSERT/DELETE |
+
+---
+
 ## Таблицы iiko / бота (25)
 
 ### 1. `iiko_entity` — Справочники (все 16 типов в одной таблице)
@@ -801,3 +851,13 @@ Bootstrap: `/admin_init` — добавляет текущего пользов�
 
 **Запрос:** `SELECT token FROM iiko_access_tokens ORDER BY created_at DESC LIMIT 1`
 **Важно:** если таблица пуста — `RuntimeError` при любом обращении к iikoCloud API.
+
+---
+
+### 44. `pastry_nomenclature_group` — Группы кондитерки
+
+| Колонка      | Тип         | Описание                               |
+|--------------|-------------|----------------------------------------|
+| `id`         | UUID PK     | ID группы (из iiko)                    |
+| `name`       | String(500) | Название группы                        |
+| `created_at` | DateTime    | Время добавления                       |

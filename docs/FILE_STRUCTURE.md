@@ -4,7 +4,90 @@
 
 ---
 
-## 🗂 Дерево проекта
+## � Компактный индекс модулей
+
+> Найди нужный модуль → перейди к детальному описанию ниже.
+
+| Модуль | Слой | Назначение (1 строка) |
+|--------|------|-----------------------|
+| `config.py` | core | ENV → переменные, fail-fast `_require()` |
+| `iiko_auth.py` | core | Токен iiko (кеш 10 мин, retry×4) |
+| `logging_config.py` | core | stdout + файл (ротация 5МБ×3) |
+| `main.py` | core | Точка входа: webhook / polling, startup/shutdown |
+| **adapters/** | | |
+| `iiko_api.py` | adapter | HTTP iiko REST (persistent httpx, 11 fetch + send) |
+| `iiko_cloud_api.py` | adapter | HTTP iikoCloud (стоп-лист, подписки, org) |
+| `google_sheets.py` | adapter | GSheet: мин/макс, прайс, маппинг OCR, права |
+| `fintablo_api.py` | adapter | HTTP FinTablo (persistent httpx, Bearer) |
+| `gpt5_vision_ocr.py` | adapter | GPT-5.2 Vision OCR (batch фото → JSON) |
+| **bot/** | | |
+| `handlers.py` | handler | Главные кнопки, sync, меню, /start |
+| `writeoff_handlers.py` | handler | FSM списания: создание → проверка → история |
+| `invoice_handlers.py` | handler | Расходные накладные: шаблоны |
+| `request_handlers.py` | handler | Заявки: создание → одобрение → история |
+| `document_handlers.py` | handler | OCR фото → маппинг → iiko XML |
+| `min_stock_handlers.py` | handler | Редактирование мин. остатков |
+| `day_report_handlers.py` | handler | Отчёт дня: плюсы/минусы → iiko OLAP |
+| `pastry_handlers.py` | handler | Кондитерские операции |
+| `global_commands.py` | handler | /cancel, NavResetMiddleware, PermissionMiddleware |
+| `middleware.py` | handler | Авторизация, cancel-kb, menu helpers |
+| `permission_map.py` | handler | Единый реестр прав (roles, perm_key, groups) |
+| `_utils.py` | handler | Общие утилиты бота |
+| `retry_session.py` | handler | aiohttp retry session |
+| **use_cases/** | | |
+| `_helpers.py` | use_case | now_kgd, compute_hash, bfs_groups, safe_uuid |
+| `_ttl_cache.py` | use_case | Generic TTL-кеш (in-memory) |
+| `auth.py` | use_case | Авторизация через Telegram |
+| `user_context.py` | use_case | In-memory кеш контекста (TTL 30 мин) |
+| `sync.py` | use_case | Generic sync iiko: _run_sync + _batch_upsert |
+| `sync_fintablo.py` | use_case | Sync FinTablo (13 таблиц ft_*) |
+| `sync_stock_balances.py` | use_case | Full-replace остатков |
+| `sync_min_stock.py` | use_case | GSheet ↔ БД мин. остатков |
+| `sync_lock.py` | use_case | asyncio.Lock per entity |
+| `scheduler.py` | use_case | APScheduler: 07:00, 22:00, 23:00 |
+| `writeoff.py` | use_case | Логика списаний (создание, проверка) |
+| `writeoff_cache.py` | use_case | TTL-кеш writeoff-данных |
+| `writeoff_history.py` | use_case | История списаний (JSONB, роли) |
+| `pending_writeoffs.py` | use_case | PostgreSQL pending (TTL 24h, lock) |
+| `outgoing_invoice.py` | use_case | Расходные накладные + прайс |
+| `invoice_cache.py` | use_case | TTL-кеш накладных |
+| `pdf_invoice.py` | use_case | PDF генерация (ReportLab, кириллица) |
+| `product_request.py` | use_case | Заявки CRUD + авто-склады + авто-контрагент |
+| `incoming_invoice.py` | use_case | OCR → iiko XML (build + send + mark) |
+| `ocr_pipeline.py` | use_case | OCR batch: фото → GPT-5.2 → JSON |
+| `ocr_mapping.py` | use_case | Маппинг OCR↔iiko (GSheet двухтабличный) |
+| `check_min_stock.py` | use_case | Проверка мин. остатков по подразделениям |
+| `edit_min_stock.py` | use_case | Редактирование мин. остатков через бот |
+| `permissions.py` | use_case | Права из GSheet (TTL 5 мин) |
+| `stoplist.py` | use_case | Стоп-лист iikoCloud |
+| `stoplist_report.py` | use_case | Ежевечерний отчёт стоп-листа |
+| `pinned_stoplist_message.py` | use_case | Закреплённые сообщения стоп-листа |
+| `pinned_stock_message.py` | use_case | Закреплённые сообщения остатков |
+| `cloud_org_mapping.py` | use_case | department_id → cloud_org_id (GSheet) |
+| `iiko_webhook_handler.py` | use_case | Обработка iikoCloud webhooks |
+| `reports.py` | use_case | Отчёты мин. остатков |
+| `day_report.py` | use_case | Отчёт дня: продажи + себестоимость OLAP |
+| `price_list.py` | use_case | Прайс-лист блюд |
+| `cooldown.py` | use_case | Rate limiting |
+| `negative_transfer.py` | use_case | Авто-перемещение расходников (23:00) |
+| `redis_cache.py` | use_case | Redis distributed cache |
+| `json_receipt.py` | use_case | JSON-чеки |
+| `errors.py` | use_case | Кастомные исключения |
+| `admin.py` | use_case | Управление админами (legacy) |
+| **db/** | | |
+| `engine.py` | db | Async engine + session factory (singleton) |
+| `models.py` | db | 18 моделей iiko/bot (SyncMixin) |
+| `ft_models.py` | db | 13 моделей FinTablo (ft_*) |
+| `init_db.py` | db | create_all + _MIGRATIONS (IF NOT EXISTS) |
+| **models/** | | |
+| `ocr.py` | model | OcrDocument + OcrItem (OCR pipeline) |
+| **utils/** | | |
+| `photo_validator.py` | util | Валидация фото перед OCR |
+| `qr_detector.py` | util | Детекция QR-кодов на фото |
+
+---
+
+## �🗂 Дерево проекта
 
 ```
 test/

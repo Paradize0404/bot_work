@@ -14,7 +14,6 @@ import logging
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, delete, update
 
@@ -22,10 +21,9 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from db.engine import async_session_factory
 from db.models import PendingWriteoffDoc
+from use_cases._helpers import KGD_TZ
 
 logger = logging.getLogger(__name__)
-
-_KGD_TZ = ZoneInfo("Europe/Kaliningrad")
 
 # TTL: удаляем документы старше 24 часов (на случай если все забили)
 _TTL = timedelta(hours=24)
@@ -75,7 +73,7 @@ def _row_to_dto(row: PendingWriteoffDoc) -> PendingWriteoff:
 
 async def _cleanup_expired() -> None:
     """Удалить протухшие документы (>24ч)."""
-    cutoff = datetime.now(_KGD_TZ).replace(tzinfo=None) - _TTL
+    cutoff = datetime.now(KGD_TZ).replace(tzinfo=None) - _TTL
     async with async_session_factory() as session:
         result = await session.execute(
             delete(PendingWriteoffDoc).where(PendingWriteoffDoc.created_at < cutoff)
@@ -163,7 +161,7 @@ async def try_lock(doc_id: str) -> bool:
             update(PendingWriteoffDoc)
             .where(
                 PendingWriteoffDoc.doc_id == doc_id,
-                PendingWriteoffDoc.is_locked == False,  # noqa: E712
+                PendingWriteoffDoc.is_locked.is_(False),
             )
             .values(is_locked=True)
         )

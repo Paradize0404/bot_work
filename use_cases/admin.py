@@ -48,7 +48,7 @@ async def get_employees_with_telegram() -> list[dict]:
         stmt = (
             select(Employee)
             .where(Employee.telegram_id.isnot(None))
-            .where(Employee.deleted == False)
+            .where(Employee.deleted.is_(False))
             .order_by(Employee.last_name, Employee.first_name)
         )
         result = await session.execute(stmt)

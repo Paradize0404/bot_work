@@ -68,7 +68,7 @@ async def search_products_for_edit(query: str, limit: int = 15) -> list[dict]:
             select(Product.id, Product.name, Product.product_type)
             .where(func.lower(Product.name).contains(pattern))
             .where(Product.product_type == "GOODS")
-            .where(Product.deleted == False)  # noqa: E712
+            .where(Product.deleted.is_(False))
             .order_by(Product.name)
             .limit(limit)
         )

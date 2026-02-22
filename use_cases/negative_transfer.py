@@ -157,7 +157,7 @@ async def _load_stores() -> list[tuple[str, str]]:
     """Загрузить все активные склады из БД. Возвращает [(id_str, name), ...]."""
     async with async_session_factory() as session:
         rows = await session.execute(
-            select(Store.id, Store.name).where(Store.deleted == False)  # noqa: E712
+            select(Store.id, Store.name).where(Store.deleted.is_(False))
         )
         return [(str(r.id), r.name or "") for r in rows.all()]
 
@@ -173,7 +173,7 @@ async def _load_products_by_name(names: set[str]) -> dict[str, dict]:
         rows = await session.execute(
             select(Product.id, Product.name, Product.main_unit).where(
                 Product.name.in_(list(names)),
-                Product.deleted == False,  # noqa: E712
+                Product.deleted.is_(False),
             )
         )
         result: dict[str, dict] = {}
@@ -193,7 +193,7 @@ async def _load_products_by_name(names: set[str]) -> dict[str, dict]:
 
 async def _fetch_balances_today() -> list[dict[str, Any]]:
     """Получить остатки по всем складам на сегодня через OLAP v1 GET."""
-    today = datetime.now().strftime("%d.%m.%Y")
+    today = now_kgd().strftime("%d.%m.%Y")
     return await iiko_api.fetch_olap_transactions_v1(today, today)
 
 
