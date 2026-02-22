@@ -97,6 +97,7 @@ def _main_keyboard(
         "📋 Заявки",
         "📊 Отчёты",
         "📑 Документы",
+        "🍰 Группы кондитеров",
     ]
 
     # Фильтрация по роли
@@ -142,7 +143,6 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="🔄 Синхронизация")],
         [KeyboardButton(text="📤 Google Таблицы")],
         [KeyboardButton(text="🔑 Права доступа → GSheet")],
-        [KeyboardButton(text="🍰 Группы кондитеров")],
         [KeyboardButton(text="☁️ iikoCloud вебхук")],
         [KeyboardButton(text="◀️ Назад")],
     ]

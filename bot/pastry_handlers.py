@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 from bot.middleware import permission_required
-from bot.permission_map import PERM_SETTINGS
+from bot.permission_map import PERM_PASTRY_MANAGE
 from use_cases import product_request as req_uc
 from db.engine import async_session_factory
 from db.models import ProductGroup
@@ -27,7 +27,7 @@ class PastryGroupStates(StatesGroup):
 
 
 @router.message(F.text == "🍰 Группы кондитеров")
-@permission_required(PERM_SETTINGS)
+@permission_required(PERM_PASTRY_MANAGE)
 async def pastry_groups_menu(message: Message, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_groups_menu tg:%d", message.from_user.id)
     await state.clear()
@@ -61,7 +61,7 @@ async def pastry_groups_menu(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data == "pastry_add")
-@permission_required(PERM_SETTINGS)
+@permission_required(PERM_PASTRY_MANAGE)
 async def pastry_add_start(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_add_start tg:%d", callback.from_user.id)
     await callback.answer()
@@ -77,7 +77,7 @@ async def pastry_add_start(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(PastryGroupStates.search)
-@permission_required(PERM_SETTINGS)
+@permission_required(PERM_PASTRY_MANAGE)
 async def pastry_search_group(message: Message, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_search_group tg:%d", message.from_user.id)
     query = (message.text or "").strip().lower()
@@ -119,7 +119,7 @@ async def pastry_search_group(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data.startswith("pastry_sel:"))
-@permission_required(PERM_SETTINGS)
+@permission_required(PERM_PASTRY_MANAGE)
 async def pastry_select_group(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_select_group tg:%d", callback.from_user.id)
     await callback.answer()
@@ -152,7 +152,7 @@ async def pastry_select_group(callback: CallbackQuery, state: FSMContext) -> Non
 
 
 @router.callback_query(F.data == "pastry_remove_list")
-@permission_required(PERM_SETTINGS)
+@permission_required(PERM_PASTRY_MANAGE)
 async def pastry_remove_list(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_remove_list tg:%d", callback.from_user.id)
     groups = await req_uc.get_pastry_groups()
@@ -180,7 +180,7 @@ async def pastry_remove_list(callback: CallbackQuery, state: FSMContext) -> None
 
 
 @router.callback_query(F.data.startswith("pastry_rm:"))
-@permission_required(PERM_SETTINGS)
+@permission_required(PERM_PASTRY_MANAGE)
 async def pastry_remove_group(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_remove_group tg:%d", callback.from_user.id)
     await callback.answer()
@@ -200,7 +200,7 @@ async def pastry_remove_group(callback: CallbackQuery, state: FSMContext) -> Non
 
 
 @router.callback_query(F.data == "pastry_cancel")
-@permission_required(PERM_SETTINGS)
+@permission_required(PERM_PASTRY_MANAGE)
 async def pastry_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_cancel tg:%d", callback.from_user.id)
     await callback.answer()

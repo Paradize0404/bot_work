@@ -72,6 +72,9 @@ PERM_OCR_SEND = "📑 Отправка в iiko"
 # ── Раздел «Настройки» (admin-only по умолчанию) ──
 PERM_SETTINGS = "⚙️ Настройки"
 
+# ── Раздел «Кондитерка» ──
+PERM_PASTRY_MANAGE = "🍰 Группы кондитеров"
+
 # Полный список всех perm_key (порядок = порядок столбцов в GSheet)
 PERMISSION_KEYS: list[str] = [
     # Списания
@@ -94,6 +97,8 @@ PERMISSION_KEYS: list[str] = [
     PERM_OCR_SEND,
     # Настройки
     PERM_SETTINGS,
+    # Кондитерка
+    PERM_PASTRY_MANAGE,
 ]
 
 # Все столбцы для GSheet (роли + права)
@@ -114,6 +119,7 @@ MENU_BUTTON_GROUPS: dict[str, list[str]] = {
     "📊 Отчёты": [PERM_REPORT_VIEW, PERM_REPORT_EDIT_MIN, PERM_DAY_REPORT],
     "📑 Документы": [PERM_OCR_UPLOAD, PERM_OCR_SEND],
     "⚙️ Настройки": [PERM_SETTINGS],
+    "🍰 Группы кондитеров": [PERM_PASTRY_MANAGE],
 }
 
 # ═══════════════════════════════════════════════════════
@@ -144,7 +150,7 @@ TEXT_PERMISSIONS: dict[str, str] = {
     "🔄 Синхронизация": PERM_SETTINGS,
     "📤 Google Таблицы": PERM_SETTINGS,
     "☁️ iikoCloud вебхук": PERM_SETTINGS,
-    "🍰 Группы кондитеров": PERM_SETTINGS,
+    "🍰 Группы кондитеров": PERM_PASTRY_MANAGE,
     # ── GSheet / Sync (admin-only через PERM_SETTINGS + admin_required) ──
     "📤 Номенклатура → GSheet": PERM_SETTINGS,
     "📥 Мин. остатки GSheet → БД": PERM_SETTINGS,
@@ -182,6 +188,6 @@ CALLBACK_PERMISSIONS: dict[str, str] = {
     "req_approve:": PERM_REQUEST_APPROVE,
     "req_edit:": PERM_REQUEST_APPROVE,
     "req_reject:": PERM_REQUEST_APPROVE,
-    # Настройки: группы кондитеров
-    "pastry_": PERM_SETTINGS,
+    # Кондитерка: управление группами
+    "pastry_": PERM_PASTRY_MANAGE,
 }
