@@ -126,8 +126,8 @@ async def fetch_day_report_data(department_id: str | None = None) -> DayReportDa
         pay_type = row.get("PayTypes")
         place = row.get("CookingPlaceType")
         amount = row.get("DishDiscountSumInt", 0) or 0
-        # ProductCostBase.Cost — себестоимость в рублях (прямое значение из iiko)
-        cost_rub_raw = row.get("ProductCostBase.Cost", 0) or 0
+        # ProductCostBase.ProductCost — себестоимость в рублях (прямое значение из iiko)
+        cost_rub_raw = row.get("ProductCostBase.ProductCost", 0) or 0
 
         # Строки с PayTypes → продажи
         if pay_type:

@@ -26,22 +26,32 @@ from use_cases.day_report import (
 
 DEPT_ID = "aaaaaaaa-0000-0000-0000-000000000001"
 
-# Пример OLAP-строк от iiko:
-# PayTypes-строки → продажи, CookingPlaceType-строки → себестоимость
+# Реальная структура ответа iiko: каждая строка содержит ОБА поля
+# (CookingPlaceType + PayTypes + ProductCostBase.ProductCost)
 SAMPLE_ROWS = [
-    # продажи по типам оплаты
-    {"PayTypes": "Наличные", "DishDiscountSumInt": 10000.0, "ProductCostBase.Cost": 0},
-    {"PayTypes": "Карта", "DishDiscountSumInt": 5000.0, "ProductCostBase.Cost": 0},
-    # себестоимость по местам приготовления
     {
         "CookingPlaceType": "Кухня",
-        "DishDiscountSumInt": 12000.0,
-        "ProductCostBase.Cost": 3600.0,
+        "PayTypes": "Наличные",
+        "DishDiscountSumInt": 10000.0,
+        "ProductCostBase.ProductCost": 3000.0,
     },
     {
         "CookingPlaceType": "Бар",
+        "PayTypes": "Наличные",
+        "DishDiscountSumInt": 2000.0,
+        "ProductCostBase.ProductCost": 400.0,
+    },
+    {
+        "CookingPlaceType": "Кухня",
+        "PayTypes": "Карта",
+        "DishDiscountSumInt": 5000.0,
+        "ProductCostBase.ProductCost": 1500.0,
+    },
+    {
+        "CookingPlaceType": "Бар",
+        "PayTypes": "Карта",
         "DishDiscountSumInt": 3000.0,
-        "ProductCostBase.Cost": 600.0,
+        "ProductCostBase.ProductCost": 600.0,
     },
 ]
 
@@ -85,9 +95,9 @@ async def test_fetch_day_report_no_department_id():
 @pytest.mark.asyncio
 async def test_fetch_day_report_cost_calculation():
     """
-    Себестоимость должна браться из ProductCostBase.Cost напрямую (рубли).
-    Кухня: cost_rub=3600, sales=12000 → 30%.
-    Бар: cost_rub=600, sales=3000 → 20%.
+    Себестоимость берётся из ProductCostBase.ProductCost напрямую (рубли).
+    Кухня: cost_rub=4500, sales=15000 → 30%.
+    Бар: cost_rub=1000, sales=5000 → 20%.
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
@@ -96,35 +106,40 @@ async def test_fetch_day_report_cost_calculation():
 
     assert result.error is None
 
-    # продажи
-    assert result.total_sales == pytest.approx(15000.0)
+    # продажи: суммируем по PayTypes (4 строки, 2 типа оплаты)
+    assert result.total_sales == pytest.approx(20000.0)
     pay_names = {sl.pay_type for sl in result.sales_lines}
     assert "Наличные" in pay_names
     assert "Карта" in pay_names
+    nalichnie = next(sl for sl in result.sales_lines if sl.pay_type == "Наличные")
+    assert nalichnie.amount == pytest.approx(12000.0)
 
-    # себестоимость
+    # себестоимость: суммируем по CookingPlaceType
     assert len(result.cost_lines) == 2
 
     kitchen = next(cl for cl in result.cost_lines if cl.place == "Кухня")
-    assert kitchen.cost_rub == pytest.approx(3600.0)
+    assert kitchen.cost_rub == pytest.approx(4500.0)  # 3000 + 1500
+    assert kitchen.sales == pytest.approx(15000.0)  # 10000 + 5000
     assert kitchen.cost_pct == pytest.approx(30.0)
 
     bar = next(cl for cl in result.cost_lines if cl.place == "Бар")
-    assert bar.cost_rub == pytest.approx(600.0)
+    assert bar.cost_rub == pytest.approx(1000.0)  # 400 + 600
+    assert bar.sales == pytest.approx(5000.0)  # 2000 + 3000
     assert bar.cost_pct == pytest.approx(20.0)
 
     # общая себестоимость
-    assert result.total_cost == pytest.approx(4200.0)
+    assert result.total_cost == pytest.approx(5500.0)
 
 
 @pytest.mark.asyncio
 async def test_fetch_day_report_cost_not_zero_when_cost_present():
-    """Себестоимость не должна быть нулём, если ProductCostBase.Cost > 0."""
+    """Себестоимость не должна быть нулём, если ProductCostBase.ProductCost > 0."""
     rows = [
         {
             "CookingPlaceType": "Кухня",
+            "PayTypes": "Карта",
             "DishDiscountSumInt": 50000.0,
-            "ProductCostBase.Cost": 15000.0,
+            "ProductCostBase.ProductCost": 15000.0,
         },
     ]
     mock_fetch = AsyncMock(return_value=rows)
@@ -138,9 +153,13 @@ async def test_fetch_day_report_cost_not_zero_when_cost_present():
 
 @pytest.mark.asyncio
 async def test_fetch_day_report_cost_zero_when_no_cost_field():
-    """Если ProductCostBase.Cost отсутствует или 0 — себестоимость 0, без ошибок."""
+    """Если ProductCostBase.ProductCost отсутствует — себестоимость 0, без ошибок."""
     rows = [
-        {"CookingPlaceType": "Кухня", "DishDiscountSumInt": 10000.0},
+        {
+            "CookingPlaceType": "Кухня",
+            "PayTypes": "Карта",
+            "DishDiscountSumInt": 10000.0,
+        },
     ]
     mock_fetch = AsyncMock(return_value=rows)
 
