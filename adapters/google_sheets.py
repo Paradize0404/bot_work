@@ -3058,6 +3058,8 @@ def _apply_day_report_style(ws: gspread.Worksheet, headers: list[str]) -> None:
         )
 
         # ── 3. Ширины колонок ──
+        # Статичные колонки — фиксированные (содержат произвольный текст пользователя).
+        # Динамические — рассчитываются по длине заголовка: ~8 px/символ + 20 px отступ.
         # (startIndex, endIndex, pixelSize) — все 0-based, endIndex exclusive
         col_widths: list[tuple[int, int, int]] = [
             (0, 1, 100),  # Дата
@@ -3066,17 +3068,12 @@ def _apply_day_report_style(ws: gspread.Worksheet, headers: list[str]) -> None:
             (3, 4, 230),  # Плюсы
             (4, 5, 230),  # Минусы
         ]
-        if pay_end > pay_start:
-            col_widths.append((pay_start, pay_end, 145))
-        col_widths.append((sales_total_idx, sales_total_idx + 1, 155))
-        # Колонки мест: 3 подряд — выр./себест.₽/себест.%
-        for i in range(place_start, place_end, 3):
-            end = min(i + 3, place_end)
-            widths = [125, 125, 100]
-            for j, px in zip(range(i, end), widths):
-                col_widths.append((j, j + 1, px))
-        col_widths.append((cost_total_idx, cost_total_idx + 1, 160))
-        col_widths.append((cost_avg_idx, cost_avg_idx + 1, 180))
+        # Динамические колонки: ширина подстраивается под длину заголовка
+        for i, h in enumerate(headers):
+            if i < static_end:
+                continue
+            px = max(80, len(h) * 8 + 20)
+            col_widths.append((i, i + 1, px))
 
         for start, end, px in col_widths:
             if end <= start:
