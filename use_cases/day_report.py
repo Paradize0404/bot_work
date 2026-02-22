@@ -93,6 +93,7 @@ async def fetch_day_report_data(
     Args:
         department_id:   UUID подразделения для API-фильтра.
         department_name: Имя подразделения для клиентской фильтрации по полю Department.
+                         Должно совпадать с iiko Department ТОЧНО (как в iiko_department.name).
     """
     t0 = time.monotonic()
     logger.info(
@@ -126,16 +127,20 @@ async def fetch_day_report_data(
             error=f"Ошибка iiko: {exc}",
         )
 
-    # ── Клиентская фильтрация по полю Department (подстрока department_name) ──
+    # ── Клиентская фильтрация по полю Department (точное совпадение) ──
     # iiko в поле Department возвращает полный путь, например:
     # 'PizzaYolo / Пицца Йоло (Московский)' или 'Клиническая PizzaYolo'
-    # department_name из бота — подстрока, по которой фильтруем.
+    # department_name из БД совпадает с этим значением дословно (case-insensitive).
     if department_name:
-        dept_needle = department_name.lower()
+        dept_name_clean = department_name.strip().lower()
         original_count = len(rows)
-        rows = [r for r in rows if dept_needle in r.get("Department", "").lower()]
+        rows = [
+            r
+            for r in rows
+            if r.get("Department", "").strip().lower() == dept_name_clean
+        ]
         logger.info(
-            "[day_report] Фильтр по Department='%s': %d → %d строк",
+            "[day_report] Фильтр по Department (exact) '%s': %d → %d строк",
             department_name,
             original_count,
             len(rows),

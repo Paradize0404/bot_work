@@ -159,10 +159,17 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
     )
 
     # ── Запрос данных из iiko (фильтруем по подразделению сотрудника) ──
+    # Перечитываем user context здесь — берём самое актуальное значение department_name
+    # из кеша/БД, а не из FSM (который мог устареть или не содержать имя).
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+    fresh_ctx = await uctx.get_user_context(tg_id)
+    department_id = fresh_ctx.department_id if fresh_ctx else data.get("department_id")
+    department_name = (
+        fresh_ctx.department_name if fresh_ctx else data.get("department_name")
+    )
     iiko_data = await day_report_uc.fetch_day_report_data(
-        department_id=data.get("department_id"),
-        department_name=data.get("department_name"),
+        department_id=department_id,
+        department_name=department_name,
     )
 
     # ── Формируем итоговый текст ──

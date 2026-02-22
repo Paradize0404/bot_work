@@ -101,13 +101,16 @@ async def test_fetch_day_report_no_department_id():
 @pytest.mark.asyncio
 async def test_fetch_day_report_filters_by_department_name():
     """
-    При передаче department_name — строки фильтруются по полю Department (подстрока).
+    При передаче department_name — строки фильтруются по ТОЧНОМУ совпадению
+    с полем Department (как в iiko_department.name).
     Из SAMPLE_ROWS (два филиала) должны остаться только строки Московского.
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
     with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
-        result = await fetch_day_report_data(department_name="Московский")
+        result = await fetch_day_report_data(
+            department_name="PizzaYolo / Пицца Йоло (Московский)"
+        )
 
     assert result.error is None
     # Только Московский: 10000 + 2000 = 12000 выручка
@@ -127,13 +130,42 @@ async def test_fetch_day_report_no_department_name_shows_all():
 
 
 @pytest.mark.asyncio
-async def test_fetch_day_report_filters_case_insensitive():
-    """Фильтрация по Department не чувствительна к регистру."""
+async def test_fetch_day_report_filters_klinicheskaya():
+    """Клиническая PizzaYolo — фильтр по точному имени."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
     with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
-        result_lower = await fetch_day_report_data(department_name="московский")
-        result_upper = await fetch_day_report_data(department_name="МОСКОВСКИЙ")
+        result = await fetch_day_report_data(department_name="Клиническая PizzaYolo")
+
+    assert result.error is None
+    # Только Клиническая: 5000 + 3000 = 8000
+    assert result.total_sales == pytest.approx(8000.0)
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_report_substring_no_longer_matches():
+    """Подстрока (не полное имя) НЕ совпадает — данных нет (exact match)."""
+    mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
+
+    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+        result = await fetch_day_report_data(department_name="Московский")
+
+    # Подстрока != точное имя → 0 строк
+    assert result.total_sales == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_report_filters_case_insensitive():
+    """Фильтрация по Department не чувствительна к регистру (сравнение через .lower())."""
+    mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
+
+    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+        result_lower = await fetch_day_report_data(
+            department_name="pizzayolo / пицца йоло (московский)"
+        )
+        result_upper = await fetch_day_report_data(
+            department_name="PIZZAYOLO / ПИЦЦА ЙОЛО (МОСКОВСКИЙ)"
+        )
 
     assert result_lower.total_sales == result_upper.total_sales
     assert result_lower.total_sales == pytest.approx(12000.0)
