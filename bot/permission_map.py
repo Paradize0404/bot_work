@@ -63,7 +63,8 @@ PERM_REQUEST_APPROVE = "📋 Одобрение заявок"
 # ── Раздел «Отчёты» ──
 PERM_REPORT_VIEW = "📊 Просмотр отчётов"
 PERM_REPORT_EDIT_MIN = "📊 Изменение мин.остатков"
-PERM_DAY_REPORT = "📋 Отчёт дня"
+PERM_DAY_REPORT = "📋 Отчёт дня"  # право ОТПРАВИТЬ отчёт дня
+PERM_DAY_REPORT_RECEIVE = "📋 Получатель отчёта дня"  # право ПОЛУЧАТЬ отчёт дня
 
 # ── Раздел «Документы (OCR)» ──
 PERM_OCR_UPLOAD = "📑 Загрузка OCR"
@@ -92,6 +93,7 @@ PERMISSION_KEYS: list[str] = [
     PERM_REPORT_VIEW,
     PERM_REPORT_EDIT_MIN,
     PERM_DAY_REPORT,
+    PERM_DAY_REPORT_RECEIVE,
     # Документы (OCR)
     PERM_OCR_UPLOAD,
     PERM_OCR_SEND,
@@ -116,7 +118,12 @@ MENU_BUTTON_GROUPS: dict[str, list[str]] = {
     "📝 Списания": [PERM_WRITEOFF_CREATE, PERM_WRITEOFF_HISTORY, PERM_WRITEOFF_APPROVE],
     "📦 Накладные": [PERM_INVOICE_TEMPLATE, PERM_INVOICE_CREATE],
     "📋 Заявки": [PERM_REQUEST_CREATE, PERM_REQUEST_HISTORY, PERM_REQUEST_APPROVE],
-    "📊 Отчёты": [PERM_REPORT_VIEW, PERM_REPORT_EDIT_MIN, PERM_DAY_REPORT],
+    "📊 Отчёты": [
+        PERM_REPORT_VIEW,
+        PERM_REPORT_EDIT_MIN,
+        PERM_DAY_REPORT,
+        PERM_DAY_REPORT_RECEIVE,
+    ],
     "📑 Документы": [PERM_OCR_UPLOAD, PERM_OCR_SEND],
     "⚙️ Настройки": [PERM_SETTINGS],
     "🍰 Группы кондитеров": [PERM_PASTRY_MANAGE],

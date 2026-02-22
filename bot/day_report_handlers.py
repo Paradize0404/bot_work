@@ -37,7 +37,7 @@ from bot.middleware import (
     MAX_TEXT_GENERAL,
 )
 from bot._utils import send_prompt_msg, reports_keyboard
-from bot.permission_map import PERM_DAY_REPORT
+from bot.permission_map import PERM_DAY_REPORT, PERM_DAY_REPORT_RECEIVE
 
 logger = logging.getLogger(__name__)
 
@@ -249,9 +249,11 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
         except Exception:
             pass
 
-    # ── Отправляем отчёт всем у кого стоит галочка «📋 Отчёт дня» в таблице прав ──
-    day_report_ids = await perm_uc.get_users_with_permission(PERM_DAY_REPORT)
+    # ── Отправляем отчёт всем у кого стоит «📋 Получатель отчёта дня» в таблице прав ──
+    # PERM_DAY_REPORT  = право ОТПРАВИТЬ отчёт (кнопка в меню)
+    # PERM_DAY_REPORT_RECEIVE = право ПОЛУЧАТЬ отчёт (рассылка)
     # Автор уже видит свой отчёт через send_prompt_msg выше — исключаем дублирование
+    day_report_ids = await perm_uc.get_users_with_permission(PERM_DAY_REPORT_RECEIVE)
     recipients = [uid for uid in day_report_ids if uid != tg_id]
 
     sent_count = 0
