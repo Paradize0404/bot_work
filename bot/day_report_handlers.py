@@ -28,6 +28,7 @@ from use_cases import user_context as uctx
 from use_cases import permissions as perm_uc
 from use_cases import day_report as day_report_uc
 from use_cases._helpers import now_kgd
+from adapters import google_sheets as gs_adapter
 from bot.middleware import (
     auth_required,
     set_cancel_kb,
@@ -157,9 +158,11 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
         log_tag="day_report",
     )
 
-    # ── Запрос данных из iiko ──
+    # ── Запрос данных из iiko (фильтруем по подразделению сотрудника) ──
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-    iiko_data = await day_report_uc.fetch_day_report_data()
+    iiko_data = await day_report_uc.fetch_day_report_data(
+        department_id=data.get("department_id")
+    )
 
     # ── Формируем итоговый текст ──
     report_text = day_report_uc.format_day_report(
@@ -178,6 +181,25 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
         f"✅ Отчёт дня отправлен!\n\n{report_text}",
         log_tag="day_report",
     )
+
+    # ── Запись в Google Sheets ──
+    try:
+        await asyncio.get_event_loop().run_in_executor(
+            None,
+            gs_adapter.append_day_report_row,
+            {
+                "date": data["date"],
+                "employee_name": data["employee_name"],
+                "department_name": data.get("department_name", ""),
+                "positives": data["positives"],
+                "negatives": text,
+                "total_sales": iiko_data.total_sales,
+                "total_cost": iiko_data.total_cost,
+                "avg_cost_pct": iiko_data.avg_cost_pct,
+            },
+        )
+    except Exception as exc:
+        logger.warning("[day_report] Ошибка записи в GSheets: %s", exc)
 
     # ── Отправляем отчёт всем админам ──
     admin_ids = await perm_uc.get_users_with_permission("👑 Админ")

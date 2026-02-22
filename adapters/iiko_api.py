@@ -566,6 +566,8 @@ async def fetch_olap_by_preset(
     preset_id: str,
     date_from: str,
     date_to: str,
+    *,
+    department_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Получить данные OLAP-отчёта по preset ID через iiko REST API v2.
@@ -574,16 +576,19 @@ async def fetch_olap_by_preset(
     Параметры:
         date_from / date_to — формат ISO: YYYY-MM-DDTHH:MM:SS
         summary=true — включить суммарные строки
+        department_ids — список UUID подразделений для фильтрации (опционально)
     Возвращает список строк (dict) из поля «data» ответа.
     """
     key = await _get_key()
     url = f"{_base()}/resto/api/v2/reports/olap/byPresetId/{preset_id}"
-    params = {
+    params: dict[str, Any] = {
         "key": key,
         "dateFrom": date_from,
         "dateTo": date_to,
         "summary": "true",
     }
+    if department_ids:
+        params["departmentIds"] = ",".join(department_ids)
 
     label = f"olap_preset {preset_id[:8]}… {date_from[:10]}"
     logger.info("[API] GET %s — запрашиваю...", label)

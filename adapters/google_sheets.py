@@ -25,7 +25,7 @@ from typing import Any
 import gspread
 from google.oauth2.service_account import Credentials
 
-from config import GOOGLE_SHEETS_CREDENTIALS, MIN_STOCK_SHEET_ID, INVOICE_PRICE_SHEET_ID
+from config import GOOGLE_SHEETS_CREDENTIALS, MIN_STOCK_SHEET_ID, INVOICE_PRICE_SHEET_ID, DAY_REPORT_SHEET_ID
 
 logger = logging.getLogger(__name__)
 
@@ -2844,3 +2844,93 @@ def clear_mapping_import_sheet() -> None:
     ws.clear()
     ws.update(range_name="A1", values=[all_rows[0]], value_input_option="RAW")
     logger.info("[%s] «%s» очищен (заголовок сохранён)", LABEL, _MAPPING_IMPORT_TAB)
+
+
+# ═══════════════════════════════════════════════════════
+# Отчёт дня — append в Google Sheets
+# ═══════════════════════════════════════════════════════
+
+_DAY_REPORT_TAB = "Отчёт дня"
+_DAY_REPORT_HEADERS = [
+    "Дата",
+    "Сотрудник",
+    "Подразделение",
+    "Плюсы",
+    "Минусы",
+    "Выручка, ₽",
+    "Себестоимость, ₽",
+    "Себестоимость, %",
+]
+
+
+def _get_day_report_worksheet() -> gspread.Worksheet:
+    """Получить (лениво) лист «Отчёт дня». Если нет — создаёт с заголовками."""
+    client = _get_client()
+    spreadsheet = client.open_by_key(DAY_REPORT_SHEET_ID)
+    try:
+        ws = spreadsheet.worksheet(_DAY_REPORT_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=_DAY_REPORT_TAB, rows=1000, cols=10)
+        # Записываем заголовки при создании листа
+        try:
+            ws.update("A1", [_DAY_REPORT_HEADERS], value_input_option="RAW")
+            ws.format(
+                "A1:H1",
+                {"textFormat": {"bold": True}, "horizontalAlignment": "CENTER"},
+            )
+        except Exception:
+            pass
+        logger.info("[%s] Лист «%s» создан", LABEL, _DAY_REPORT_TAB)
+    return ws
+
+
+def append_day_report_row(
+    data: dict,
+) -> None:
+    """
+    Добавить строку отчёта дня в лист «Отчёт дня» в Google Sheets.
+
+    data — словарь с ключами:
+        date (str), employee_name (str), department_name (str),
+        positives (str), negatives (str),
+        total_sales (float), total_cost (float), avg_cost_pct (float)
+    """
+    ws = _get_day_report_worksheet()
+
+    # Если лист был только что создан, заголовки уже вставлены.
+    # Если лист существовал раньше — проверяем есть ли заголовок.
+    existing = ws.get_all_values()
+    if not existing:
+        # Пустой лист — добавляем заголовки сначала
+        try:
+            ws.update("A1", [_DAY_REPORT_HEADERS], value_input_option="RAW")
+            ws.format(
+                "A1:H1",
+                {"textFormat": {"bold": True}, "horizontalAlignment": "CENTER"},
+            )
+        except Exception:
+            pass
+
+    row = [
+        data.get("date", ""),
+        data.get("employee_name", ""),
+        data.get("department_name", ""),
+        data.get("positives", ""),
+        data.get("negatives", ""),
+        round(data.get("total_sales", 0), 2),
+        round(data.get("total_cost", 0), 2),
+        round(data.get("avg_cost_pct", 0), 2),
+    ]
+
+    try:
+        ws.append_row(row, value_input_option="USER_ENTERED")
+    except json.JSONDecodeError:
+        # gspread 6.x может вернуть пустой body (норма)
+        logger.debug("[%s] append_row() вернул пустой body (ОК)", LABEL)
+
+    logger.info(
+        "[%s] Добавлена строка отчёта дня: %s / %s",
+        LABEL,
+        data.get("date"),
+        data.get("employee_name"),
+    )

@@ -76,15 +76,21 @@ class DayReportData:
 # ═══════════════════════════════════════════════════════
 
 
-async def fetch_day_report_data() -> DayReportData:
+async def fetch_day_report_data(department_id: str | None = None) -> DayReportData:
     """
     Получить данные продаж и себестоимости за сегодня из iiko OLAP.
 
     Использует один preset «Выручка себестоимость бот» (96df1c31-...),
     который содержит группировки PayTypes и CookingPlaceType.
+
+    Args:
+        department_id: UUID подразделения для фильтрации данных iiko (если None — все подразделения).
     """
     t0 = time.monotonic()
-    logger.info("[day_report] Запрашиваю данные из iiko...")
+    logger.info(
+        "[day_report] Запрашиваю данные из iiko, dept=%s...",
+        department_id or "все",
+    )
 
     now = now_kgd()
     date_from = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -93,8 +99,14 @@ async def fetch_day_report_data() -> DayReportData:
     date_from_str = date_from.strftime("%Y-%m-%dT%H:%M:%S")
     date_to_str = date_to.strftime("%Y-%m-%dT%H:%M:%S")
 
+    dept_ids = [department_id] if department_id else None
     try:
-        rows = await fetch_olap_by_preset(SALES_PRESET, date_from_str, date_to_str)
+        rows = await fetch_olap_by_preset(
+            SALES_PRESET,
+            date_from_str,
+            date_to_str,
+            department_ids=dept_ids,
+        )
     except Exception as exc:
         logger.exception("[day_report] Ошибка получения данных из iiko")
         return DayReportData(
@@ -114,7 +126,8 @@ async def fetch_day_report_data() -> DayReportData:
         pay_type = row.get("PayTypes")
         place = row.get("CookingPlaceType")
         amount = row.get("DishDiscountSumInt", 0) or 0
-        cost_pct_raw = row.get("ProductCostBase.Percent", 0) or 0
+        # ProductCostBase.Cost — себестоимость в рублях (прямое значение из iiko)
+        cost_rub_raw = row.get("ProductCostBase.Cost", 0) or 0
 
         # Строки с PayTypes → продажи
         if pay_type:
@@ -123,11 +136,9 @@ async def fetch_day_report_data() -> DayReportData:
         # Строки с CookingPlaceType → себестоимость
         if place:
             if place not in cost_by_place:
-                cost_by_place[place] = {"sales": 0, "cost_pct_raw": 0, "count": 0}
+                cost_by_place[place] = {"sales": 0, "cost_rub": 0}
             cost_by_place[place]["sales"] += amount
-            # Взвешенная средняя: суммируем sales * pct для каждой строки
-            cost_by_place[place]["cost_pct_raw"] += amount * cost_pct_raw
-            cost_by_place[place]["count"] += 1
+            cost_by_place[place]["cost_rub"] += cost_rub_raw
 
     # ── Формируем результаты продаж ──
     sales_lines = [
@@ -143,10 +154,9 @@ async def fetch_day_report_data() -> DayReportData:
 
     for place, data in sorted(cost_by_place.items()):
         place_sales = data["sales"]
-        # Средневзвешенный % себестоимости
-        weighted_pct = (data["cost_pct_raw"] / place_sales) if place_sales else 0
-        cost_rub = place_sales * weighted_pct
-        cost_pct = weighted_pct * 100
+        # Себестоимость в рублях напрямую из iiko (ProductCostBase.Cost)
+        cost_rub = data["cost_rub"]
+        cost_pct = (cost_rub / place_sales * 100) if place_sales else 0
 
         cost_lines.append(
             CostLine(
