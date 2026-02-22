@@ -107,7 +107,11 @@ def _products_kb(products: list[dict], page: int = 0) -> InlineKeyboardMarkup:
 def _add_more_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Сохранить шаблон", callback_data="inv_save")],
+            [
+                InlineKeyboardButton(
+                    text="✅ Сохранить шаблон", callback_data="inv_save"
+                )
+            ],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
         ]
     )

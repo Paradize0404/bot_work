@@ -95,9 +95,9 @@ async def get_pending_ocr_documents(
     _seen: dict = {}
     for d in doc_objs:
         key = (d.doc_number or d.id, d.doc_type)
-        _seen[
-            key
-        ] = d  # поздний перезаписывает раннее (doc_objs сортирован по created_at)
+        _seen[key] = (
+            d  # поздний перезаписывает раннее (doc_objs сортирован по created_at)
+        )
     doc_objs = list(_seen.values())
 
     docs: list[dict] = []

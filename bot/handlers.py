@@ -202,7 +202,9 @@ def _employees_inline_kb(employees: list[dict]) -> InlineKeyboardMarkup:
         ]
         for emp in employees
     ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")])
+    buttons.append(
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -782,7 +784,9 @@ async def btn_sync_entities(message: Message) -> None:
     logger.info("[sync] справочники tg:%d", message.from_user.id)
     lock = get_sync_lock("sync_entities")
     if lock.locked():
-        await message.answer("⏳ Синхронизация справочников уже выполняется. Подождите.")
+        await message.answer(
+            "⏳ Синхронизация справочников уже выполняется. Подождите."
+        )
         return
     placeholder = await message.answer("⏳ Синхронизация справочников (16 типов)...")
 

@@ -236,11 +236,7 @@ def _dup_confirm_kb() -> InlineKeyboardMarkup:
                     text="✅ Отправить заявку", callback_data="dup_confirm_send"
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    text="✏️ Ввести заново", callback_data="dup_reenter"
-                )
-            ],
+            [InlineKeyboardButton(text="✏️ Ввести заново", callback_data="dup_reenter")],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")],
         ]
     )
@@ -1564,9 +1560,7 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
     combined_result = (
         "\n".join(all_results)
         if len(store_groups) > 1
-        else all_results[0]
-        if all_results
-        else "?"
+        else all_results[0] if all_results else "?"
     )
     updated_req = await req_uc.get_request_by_pk(pk)
     text = req_uc.format_request_text(updated_req or req_data)
@@ -1789,9 +1783,7 @@ async def choose_edit_action(callback: CallbackQuery, state: FSMContext) -> None
         )
 
         if not items:
-            await callback.answer(
-                "⚠️ Нельзя удалить последнюю позицию", show_alert=True
-            )
+            await callback.answer("⚠️ Нельзя удалить последнюю позицию", show_alert=True)
             items.insert(idx, removed)  # вернуть обратно
             return
 

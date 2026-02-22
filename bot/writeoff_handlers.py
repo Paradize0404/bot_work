@@ -733,9 +733,7 @@ async def save_quantity(message: Message, state: FSMContext) -> None:
         )
         return
     if qty < QTY_MIN:
-        await _send_prompt(
-            message.bot, message.chat.id, state, f"⚠️ Минимум {QTY_MIN}."
-        )
+        await _send_prompt(message.bot, message.chat.id, state, f"⚠️ Минимум {QTY_MIN}.")
         return
     if qty > QTY_MAX:
         await _send_prompt(message.bot, message.chat.id, state, f"⚠️ Макс. {QTY_MAX}.")
