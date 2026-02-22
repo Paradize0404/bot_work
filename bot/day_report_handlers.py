@@ -192,6 +192,12 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
     )
 
     # ── Запись в Google Sheets ──
+    logger.info(
+        "[day_report] Запись в GSheets: dept=%r, date=%s, tg:%d",
+        department_name,
+        data["date"],
+        tg_id,
+    )
     try:
         await asyncio.get_running_loop().run_in_executor(
             None,
@@ -222,8 +228,17 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
                 "avg_cost_pct": iiko_data.avg_cost_pct,
             },
         )
+        logger.info("[day_report] GSheets запись успешна: dept=%r, tg:%d", department_name, tg_id)
     except Exception as exc:
-        logger.warning("[day_report] Ошибка записи в GSheets: %s", exc)
+        logger.error("[day_report] Ошибка записи в GSheets: %s (dept=%r, tg:%d)", exc, department_name, tg_id)
+        try:
+            await message.bot.send_message(
+                tg_id,
+                f"⚠️ Отчёт отправлен, но <b>не записался в таблицу</b>.\nОшибка: <code>{exc}</code>",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
 
     # ── Отправляем отчёт всем у кого стоит галочка «📋 Отчёт дня» в таблице прав ──
     day_report_ids = await perm_uc.get_users_with_permission(PERM_DAY_REPORT)

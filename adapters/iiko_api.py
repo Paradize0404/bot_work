@@ -558,6 +558,83 @@ async def fetch_olap_transactions_v1(
 
 
 # ─────────────────────────────────────────────────────
+# 9b1b. OLAP v1 продажи (исторические данные)
+# ─────────────────────────────────────────────────────
+
+# Измерения, совпадающие с полями пресета «Выручка себестоимость бот»
+_OLAP_SALES_DIMENSIONS = ["Department", "PayTypes", "CookingPlaceType"]
+_OLAP_SALES_METRICS = ["DishDiscountSumInt", "ProductCostBase.ProductCost"]
+
+
+async def fetch_olap_sales_v1(
+    date_from: str,
+    date_to: str,
+) -> list[dict[str, Any]]:
+    """
+    Получить данные о продажах через OLAP v1 GET endpoint (report=SALES).
+
+    Поддерживает произвольные исторические диапазоны дат.
+    Возвращает строки с теми же полями, что и fetch_olap_by_preset:
+        Department, PayTypes, CookingPlaceType,
+        DishDiscountSumInt, ProductCostBase.ProductCost
+
+    Параметры date_from / date_to принимаются в формате ISO
+    (YYYY-MM-DD или YYYY-MM-DDTHH:MM:SS) и конвертируются в DD.MM.YYYY.
+    """
+    # Конвертация ISO → DD.MM.YYYY (v1 API принимает только этот формат)
+    def _to_ddmmyyyy(iso: str) -> str:
+        date_part = iso[:10]  # берём YYYY-MM-DD
+        y, m, d = date_part.split("-")
+        return f"{d}.{m}.{y}"
+
+    from_ddmm = _to_ddmmyyyy(date_from)
+    to_ddmm = _to_ddmmyyyy(date_to)
+
+    key = await _get_key()
+    url = f"{_base()}/resto/api/reports/olap"
+    params: list[tuple[str, str]] = [
+        ("key", key),
+        ("report", "SALES"),
+        ("from", from_ddmm),
+        ("to", to_ddmm),
+    ]
+    for dim in _OLAP_SALES_DIMENSIONS:
+        params.append(("groupRow", dim))
+    for metric in _OLAP_SALES_METRICS:
+        params.append(("agr", metric))
+
+    label = f"olap_sales_v1 {from_ddmm}"
+    logger.info("[API] GET %s — запрашиваю...", label)
+    t0 = time.monotonic()
+    client = await _get_client()
+    resp = await client.get(url, params=params)
+    elapsed = time.monotonic() - t0
+
+    if resp.status_code >= 400:
+        body = resp.text[:500] if resp.text else ""
+        logger.error(
+            "[API] GET %s FAIL — HTTP %d, %.1fs, body=%s",
+            label,
+            resp.status_code,
+            elapsed,
+            body,
+        )
+        resp.raise_for_status()
+
+    rows = _parse_olap_xml(resp.text)
+
+    logger.info(
+        "[API] GET %s — %d строк, HTTP %d, %.1f сек, %d байт",
+        label,
+        len(rows),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
+    )
+    return rows
+
+
+# ─────────────────────────────────────────────────────
 # 9b2. OLAP v2 по preset ID (продажи / себестоимость)
 # ─────────────────────────────────────────────────────
 
