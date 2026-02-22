@@ -738,25 +738,30 @@ async def btn_sync_price_sheet(message: Message) -> None:
 
 @router.message(F.text == "🔑 Права доступа → GSheet")
 async def btn_sync_permissions_gsheet(message: Message) -> None:
-    """Синхронизировать пользовательские разрешения + записать роли в Google Таблицы.
+    """Синхронизировать права доступа сотрудников в Google Таблицы.
 
-    Bootstrap: если в GSheet ещё нет ни одной строки с ролью роли
-    можно использоваться первоначально (чтобы заполнить таблицу статичными ролями).
-    Обязательный шаг при онбординге admin-пользователя.
+    Bootstrap: если PERM_SETTINGS ещё никому не выдано (первоначальная настройка),
+    разрешаем выполнение любому авторизованному пользователю чтобы заполнить таблицу.
+    После этого доступ закрывается — только сотрудник с правом «⚙️ Настройки».
     """
     logger.info("[sync] btn_sync_permissions_gsheet tg:%d", message.from_user.id)
     tg_id = message.from_user.id
-    any_admin = await perm_uc.has_any_admin()
-    if any_admin and not await perm_uc.has_permission(tg_id, PERM_SETTINGS):
-        await message.answer("❌ У вас нет прав администратора")
+
+    # Bootstrap: проверяем, есть ли хоть один пользователь с PERM_SETTINGS.
+    # Если нет — таблица ещё пустая, разрешаем первоначальную синхронизацию.
+    settings_users = await perm_uc.get_users_with_permission(PERM_SETTINGS)
+    if settings_users and not await perm_uc.has_permission(tg_id, PERM_SETTINGS):
+        await message.answer("⛔ У вас нет доступа к этому разделу")
         logger.warning(
-            "[auth] попытка admin-действия без роли tg:%d > btn_sync_permissions_gsheet",
+            "[perm] btn_sync_permissions_gsheet заблокирован tg:%d (требуется '%s')",
             tg_id,
+            PERM_SETTINGS,
         )
         return
-    if not any_admin:
+    if not settings_users:
         logger.warning(
-            "[auth] BOOTSTRAP: нет ни одного админа > разрешаем sync всем для tg:%d",
+            "[auth] BOOTSTRAP: нет пользователей с '%s' > разрешаем tg:%d",
+            PERM_SETTINGS,
             tg_id,
         )
     triggered = f"tg:{tg_id}"
