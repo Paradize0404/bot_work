@@ -37,6 +37,7 @@ from bot.middleware import (
     MAX_TEXT_GENERAL,
 )
 from bot._utils import send_prompt_msg, reports_keyboard
+from bot.permission_map import PERM_DAY_REPORT
 
 logger = logging.getLogger(__name__)
 
@@ -224,10 +225,10 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
     except Exception as exc:
         logger.warning("[day_report] Ошибка записи в GSheets: %s", exc)
 
-    # ── Отправляем отчёт всем админам ──
-    admin_ids = await perm_uc.get_users_with_permission("👑 Админ")
-    # Исключаем автора чтобы не дублировать
-    recipients = [uid for uid in admin_ids if uid != tg_id]
+    # ── Отправляем отчёт всем у кого стоит галочка «📋 Отчёт дня» в таблице прав ──
+    day_report_ids = await perm_uc.get_users_with_permission(PERM_DAY_REPORT)
+    # Автор уже видит свой отчёт через send_prompt_msg выше — исключаем дублирование
+    recipients = [uid for uid in day_report_ids if uid != tg_id]
 
     sent_count = 0
     for uid in recipients:
