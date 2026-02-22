@@ -14,7 +14,8 @@ PermissionMiddleware — outer-middleware, автоматическая пров
 import logging
 from typing import Any, Awaitable, Callable
 
-from aiogram import BaseMiddleware, Router
+from aiogram import BaseMiddleware, F, Router
+from aiogram.enums import ContentType
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject
@@ -235,6 +236,24 @@ class PermissionMiddleware(BaseMiddleware):
 # ═══════════════════════════════════════════════════════════════
 # /cancel — ручной сброс из любой точки
 # ═══════════════════════════════════════════════════════════════
+
+
+# ═══════════════════════════════════════════════════════════════
+# Подавление системных уведомлений о закреплении сообщений
+# ═══════════════════════════════════════════════════════════════
+
+
+@router.message(F.content_type == ContentType.PINNED_MESSAGE)
+async def suppress_pin_notification(message: Message) -> None:
+    """
+    Telegram автоматически присылает сервисное сообщение «закреплено сообщение»
+    при каждом вызове pin_chat_message. Этот хэндлер перехватывает и удаляет
+    такие сообщения, чтобы они не засоряли чаты пользователей.
+    """
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
 
 @router.message(Command("cancel"))
