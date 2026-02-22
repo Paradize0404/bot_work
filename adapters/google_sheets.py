@@ -25,7 +25,12 @@ from typing import Any
 import gspread
 from google.oauth2.service_account import Credentials
 
-from config import GOOGLE_SHEETS_CREDENTIALS, MIN_STOCK_SHEET_ID, INVOICE_PRICE_SHEET_ID, DAY_REPORT_SHEET_ID
+from config import (
+    GOOGLE_SHEETS_CREDENTIALS,
+    MIN_STOCK_SHEET_ID,
+    INVOICE_PRICE_SHEET_ID,
+    DAY_REPORT_SHEET_ID,
+)
 
 logger = logging.getLogger(__name__)
 

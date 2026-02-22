@@ -33,14 +33,23 @@ SAMPLE_ROWS = [
     {"PayTypes": "Наличные", "DishDiscountSumInt": 10000.0, "ProductCostBase.Cost": 0},
     {"PayTypes": "Карта", "DishDiscountSumInt": 5000.0, "ProductCostBase.Cost": 0},
     # себестоимость по местам приготовления
-    {"CookingPlaceType": "Кухня", "DishDiscountSumInt": 12000.0, "ProductCostBase.Cost": 3600.0},
-    {"CookingPlaceType": "Бар", "DishDiscountSumInt": 3000.0, "ProductCostBase.Cost": 600.0},
+    {
+        "CookingPlaceType": "Кухня",
+        "DishDiscountSumInt": 12000.0,
+        "ProductCostBase.Cost": 3600.0,
+    },
+    {
+        "CookingPlaceType": "Бар",
+        "DishDiscountSumInt": 3000.0,
+        "ProductCostBase.Cost": 600.0,
+    },
 ]
 
 
 # ═══════════════════════════════════════════════════════
 # 1. fetch_day_report_data — передача department_id в iiko
 # ═══════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_fetch_day_report_passes_department_id():
@@ -71,6 +80,7 @@ async def test_fetch_day_report_no_department_id():
 # ═══════════════════════════════════════════════════════
 # 2. fetch_day_report_data — правильный расчёт себестоимости
 # ═══════════════════════════════════════════════════════
+
 
 @pytest.mark.asyncio
 async def test_fetch_day_report_cost_calculation():
@@ -111,7 +121,11 @@ async def test_fetch_day_report_cost_calculation():
 async def test_fetch_day_report_cost_not_zero_when_cost_present():
     """Себестоимость не должна быть нулём, если ProductCostBase.Cost > 0."""
     rows = [
-        {"CookingPlaceType": "Кухня", "DishDiscountSumInt": 50000.0, "ProductCostBase.Cost": 15000.0},
+        {
+            "CookingPlaceType": "Кухня",
+            "DishDiscountSumInt": 50000.0,
+            "ProductCostBase.Cost": 15000.0,
+        },
     ]
     mock_fetch = AsyncMock(return_value=rows)
 
@@ -142,6 +156,7 @@ async def test_fetch_day_report_cost_zero_when_no_cost_field():
 # 3. fetch_day_report_data — ошибка iiko
 # ═══════════════════════════════════════════════════════
 
+
 @pytest.mark.asyncio
 async def test_fetch_day_report_iiko_error():
     """При исключении от iiko возвращается DayReportData с полем error."""
@@ -160,12 +175,15 @@ async def test_fetch_day_report_iiko_error():
 # 4. format_day_report — корректное форматирование
 # ═══════════════════════════════════════════════════════
 
+
 def test_format_day_report_with_data():
     """format_day_report должен содержать имя сотрудника, продажи, себестоимость."""
     iiko_data = DayReportData(
         sales_lines=[SalesLine(pay_type="Карта", amount=20000.0)],
         total_sales=20000.0,
-        cost_lines=[CostLine(place="Кухня", sales=20000.0, cost_rub=6000.0, cost_pct=30.0)],
+        cost_lines=[
+            CostLine(place="Кухня", sales=20000.0, cost_rub=6000.0, cost_pct=30.0)
+        ],
         total_cost=6000.0,
         avg_cost_pct=30.0,
     )
@@ -180,11 +198,11 @@ def test_format_day_report_with_data():
 
     assert "Иванов Иван" in text
     assert "2026-02-22" in text
-    assert "20" in text          # сумма продаж
+    assert "20" in text  # сумма продаж
     assert "Карта" in text
     assert "Кухня" in text
-    assert "30.0" in text        # себестоимость %
-    assert "6" in text           # себестоимость руб
+    assert "30.0" in text  # себестоимость %
+    assert "6" in text  # себестоимость руб
 
 
 def test_format_day_report_with_error():
@@ -214,6 +232,7 @@ def test_format_day_report_with_error():
 # 5. append_day_report_row — запись в Google Sheets
 # ═══════════════════════════════════════════════════════
 
+
 def test_append_day_report_row_calls_append_row():
     """
     append_day_report_row должен вызывать ws.append_row с корректными данными.
@@ -231,16 +250,18 @@ def test_append_day_report_row_calls_append_row():
     with patch("adapters.google_sheets._get_client", return_value=mock_client):
         from adapters.google_sheets import append_day_report_row
 
-        append_day_report_row({
-            "date": "2026-02-22",
-            "employee_name": "Сидоров",
-            "department_name": "Московский",
-            "positives": "Хорошо",
-            "negatives": "Плохо",
-            "total_sales": 100000.0,
-            "total_cost": 30000.0,
-            "avg_cost_pct": 30.0,
-        })
+        append_day_report_row(
+            {
+                "date": "2026-02-22",
+                "employee_name": "Сидоров",
+                "department_name": "Московский",
+                "positives": "Хорошо",
+                "negatives": "Плохо",
+                "total_sales": 100000.0,
+                "total_cost": 30000.0,
+                "avg_cost_pct": 30.0,
+            }
+        )
 
     mock_ws.append_row.assert_called_once()
     row = mock_ws.append_row.call_args[0][0]
@@ -272,16 +293,18 @@ def test_append_day_report_row_creates_sheet_if_missing():
     with patch("adapters.google_sheets._get_client", return_value=mock_client):
         from adapters.google_sheets import append_day_report_row
 
-        append_day_report_row({
-            "date": "2026-02-22",
-            "employee_name": "Test",
-            "department_name": "Dept",
-            "positives": "+",
-            "negatives": "-",
-            "total_sales": 0,
-            "total_cost": 0,
-            "avg_cost_pct": 0,
-        })
+        append_day_report_row(
+            {
+                "date": "2026-02-22",
+                "employee_name": "Test",
+                "department_name": "Dept",
+                "positives": "+",
+                "negatives": "-",
+                "total_sales": 0,
+                "total_cost": 0,
+                "avg_cost_pct": 0,
+            }
+        )
 
     mock_ss.add_worksheet.assert_called_once()
     mock_ws.append_row.assert_called_once()
