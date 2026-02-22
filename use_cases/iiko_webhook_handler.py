@@ -29,9 +29,9 @@ _snapshot_lock = asyncio.Lock()
 # Последний снэпшот остатков (для дельта-сравнения)
 # Доступ ONLY под _snapshot_lock
 _last_snapshot_hash: str | None = None
-_last_snapshot_items: dict[tuple[str, str], float] = (
-    {}
-)  # {(product_id, dept_id): amount}
+_last_snapshot_items: dict[
+    tuple[str, str], float
+] = {}  # {(product_id, dept_id): amount}
 _last_update_time: float | None = None  # timestamp последней отправки (monotonic)
 
 # ═══════════════════════════════════════════════════════

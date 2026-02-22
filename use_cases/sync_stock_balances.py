@@ -57,9 +57,7 @@ async def _load_name_maps() -> tuple[dict, dict]:
     async def _products():
         async with async_session_factory() as s:
             rows = await s.execute(
-                select(Product.id, Product.name).where(
-                    Product.deleted.is_(False)
-                )
+                select(Product.id, Product.name).where(Product.deleted.is_(False))
             )
             return {r.id: r.name for r in rows.all()}
 
@@ -135,7 +133,6 @@ async def sync_stock_balances(
         # 2–4. В одной сессии: map + delete + insert
         t1 = time.monotonic()
         async with async_session_factory() as session:
-
             now = now_kgd()
             rows: list[dict] = []
             skipped = 0

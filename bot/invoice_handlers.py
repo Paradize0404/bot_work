@@ -107,11 +107,7 @@ def _products_kb(products: list[dict], page: int = 0) -> InlineKeyboardMarkup:
 def _add_more_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="✅ Сохранить шаблон", callback_data="inv_save"
-                )
-            ],
+            [InlineKeyboardButton(text="✅ Сохранить шаблон", callback_data="inv_save")],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_cancel")],
         ]
     )
@@ -554,6 +550,7 @@ async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_reply_markup(
         reply_markup=_products_kb(products, page=page)
     )
+
 
 @router.callback_query(F.data.startswith("inv_tmpl_page:"))
 async def invoice_tmpl_page(callback: CallbackQuery, state: FSMContext) -> None:

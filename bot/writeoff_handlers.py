@@ -733,7 +733,9 @@ async def save_quantity(message: Message, state: FSMContext) -> None:
         )
         return
     if qty < QTY_MIN:
-        await _send_prompt(message.bot, message.chat.id, state, f"⚠️ Минимум {QTY_MIN}.")
+        await _send_prompt(
+            message.bot, message.chat.id, state, f"⚠️ Минимум {QTY_MIN}."
+        )
         return
     if qty > QTY_MAX:
         await _send_prompt(message.bot, message.chat.id, state, f"⚠️ Макс. {QTY_MAX}.")
@@ -2399,7 +2401,9 @@ async def hist_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(HistoryStates.viewing, F.data == "wohe_reason")
 async def hist_edit_reason_start(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[writeoff_handlers] hist_edit_reason_start tg:%d", callback.from_user.id)
+    logger.info(
+        "[writeoff_handlers] hist_edit_reason_start tg:%d", callback.from_user.id
+    )
     await callback.answer()
     try:
         await callback.message.edit_text("📝 Введите новую причину списания:")
@@ -2411,7 +2415,9 @@ async def hist_edit_reason_start(callback: CallbackQuery, state: FSMContext) -> 
 
 @router.message(HistoryStates.editing_reason)
 async def hist_edit_reason_input(message: Message, state: FSMContext) -> None:
-    logger.info("[writeoff_handlers] hist_edit_reason_input tg:%d", message.from_user.id)
+    logger.info(
+        "[writeoff_handlers] hist_edit_reason_input tg:%d", message.from_user.id
+    )
     reason = (message.text or "").strip()
     try:
         await message.delete()
@@ -2690,7 +2696,9 @@ async def hist_edit_item_delete(callback: CallbackQuery, state: FSMContext) -> N
 
 @router.callback_query(HistoryStates.viewing, F.data == "wohe_add_item")
 async def hist_edit_add_item_start(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[writeoff_handlers] hist_edit_add_item_start tg:%d", callback.from_user.id)
+    logger.info(
+        "[writeoff_handlers] hist_edit_add_item_start tg:%d", callback.from_user.id
+    )
     await callback.answer()
     data = await state.get_data()
     items = data.get("hist_edit_items", [])
@@ -2707,7 +2715,9 @@ async def hist_edit_add_item_start(callback: CallbackQuery, state: FSMContext) -
 
 @router.message(HistoryStates.editing_items)
 async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None:
-    logger.info("[writeoff_handlers] hist_edit_add_item_search tg:%d", message.from_user.id)
+    logger.info(
+        "[writeoff_handlers] hist_edit_add_item_search tg:%d", message.from_user.id
+    )
     query = truncate_input((message.text or "").strip(), MAX_TEXT_SEARCH)
     try:
         await message.delete()
@@ -2770,7 +2780,9 @@ async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None
 
 @router.callback_query(HistoryStates.editing_items, F.data.startswith("wohe_pick:"))
 async def hist_edit_add_item_pick(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[writeoff_handlers] hist_edit_add_item_pick tg:%d", callback.from_user.id)
+    logger.info(
+        "[writeoff_handlers] hist_edit_add_item_pick tg:%d", callback.from_user.id
+    )
     await callback.answer()
     pid = await validate_callback_uuid(callback, callback.data)
     if not pid:

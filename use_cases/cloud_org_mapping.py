@@ -103,6 +103,7 @@ async def get_departments_for_mapping():
     from sqlalchemy import select
     from db.engine import async_session_factory
     from db.models import Department
+
     async with async_session_factory() as session:
         result = await session.execute(
             select(Department).where(
@@ -111,6 +112,7 @@ async def get_departments_for_mapping():
             )
         )
         return result.scalars().all()
+
 
 async def invalidate_cache() -> None:
     """Сбросить кеш (вызывается после обновления маппинга в GSheet)."""

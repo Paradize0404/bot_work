@@ -85,6 +85,7 @@ async def pastry_search_group(message: Message, state: FSMContext) -> None:
         return
 
     from use_cases.product_request import search_product_groups
+
     rows = await search_product_groups(query)
 
     if not rows:
@@ -125,12 +126,14 @@ async def pastry_select_group(callback: CallbackQuery, state: FSMContext) -> Non
     try:
         group_id = callback.data.split(":")[1]
         from uuid import UUID
+
         UUID(group_id)
     except (IndexError, ValueError):
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
         return
 
     from use_cases.product_request import get_product_group_by_id
+
     group = await get_product_group_by_id(group_id)
 
     if not group:
@@ -184,6 +187,7 @@ async def pastry_remove_group(callback: CallbackQuery, state: FSMContext) -> Non
     try:
         pk = callback.data.split(":")[1]
         from uuid import UUID
+
         UUID(pk)
     except (IndexError, ValueError):
         await callback.answer("⚠️ Ошибка данных", show_alert=True)

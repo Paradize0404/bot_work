@@ -25,6 +25,7 @@ from sqlalchemy import select, func
 from db.engine import async_session_factory
 from db.models import ProductRequest, Store, Supplier, ProductGroup
 
+
 async def search_product_groups(query: str):
     async with async_session_factory() as session:
         stmt = (
@@ -35,10 +36,12 @@ async def search_product_groups(query: str):
         )
         return (await session.execute(stmt)).scalars().all()
 
+
 async def get_product_group_by_id(group_id: str):
     async with async_session_factory() as session:
         stmt = select(ProductGroup).where(ProductGroup.id == UUID(group_id))
         return (await session.execute(stmt)).scalar_one_or_none()
+
 
 logger = logging.getLogger(__name__)
 

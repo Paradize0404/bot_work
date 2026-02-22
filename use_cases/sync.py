@@ -695,9 +695,7 @@ async def sync_everything_with_report(
             iiko_lines.append(f"  {lb}: ❌")
     else:
         for lb, r in zip(iiko_labels, iiko_rest_r):
-            iiko_lines.append(
-                f"  {lb}: {'✅ ' + str(r) if isinstance(r, int) else '❌'}"
-            )
+            iiko_lines.append(f"  {lb}: {'✅ ' + str(r) if isinstance(r, int) else '❌'}")
 
     # ── FinTablo lines ──
     ft_lines: list[str] = []

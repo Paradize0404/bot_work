@@ -202,9 +202,7 @@ def _employees_inline_kb(employees: list[dict]) -> InlineKeyboardMarkup:
         ]
         for emp in employees
     ]
-    buttons.append(
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")]
-    )
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -784,9 +782,7 @@ async def btn_sync_entities(message: Message) -> None:
     logger.info("[sync] справочники tg:%d", message.from_user.id)
     lock = get_sync_lock("sync_entities")
     if lock.locked():
-        await message.answer(
-            "⏳ Синхронизация справочников уже выполняется. Подождите."
-        )
+        await message.answer("⏳ Синхронизация справочников уже выполняется. Подождите.")
         return
     placeholder = await message.answer("⏳ Синхронизация справочников (16 типов)...")
 
@@ -1115,7 +1111,10 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
         from db.models import Department
         from adapters.iiko_cloud_api import get_organizations
         from adapters.google_sheets import sync_cloud_org_mapping_to_sheet
-        from use_cases.cloud_org_mapping import invalidate_cache, get_departments_for_mapping
+        from use_cases.cloud_org_mapping import (
+            invalidate_cache,
+            get_departments_for_mapping,
+        )
 
         # 1. Подразделения из БД (тип DEPARTMENT / STORE)
         depts = await get_departments_for_mapping()

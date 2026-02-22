@@ -71,7 +71,6 @@ async def check_min_stock_levels(
     logger.info("[%s] Начинаю проверку (department_id=%s)...", LABEL, department_id)
 
     async with async_session_factory() as session:
-
         # ── 1. Мин/макс уровни из min_stock_level ──
         levels_stmt = select(
             MinStockLevel.product_id,
@@ -114,9 +113,7 @@ async def check_min_stock_levels(
         # ── 2. Справочники: store → department mapping ──
         store_rows = (
             await session.execute(
-                select(Store.id, Store.parent_id).where(
-                    Store.deleted.is_(False)
-                )
+                select(Store.id, Store.parent_id).where(Store.deleted.is_(False))
             )
         ).all()
 

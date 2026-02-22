@@ -104,6 +104,7 @@ async def mark_docs_pending_mapping(doc_ids: list[str]) -> None:
         await session.commit()
     logger.info("[ocr] Статус pending_mapping: %d документов", len(doc_ids))
 
+
 async def save_ocr_document(
     tg_id: int, result_data: dict, file_ids: list[str] | None = None
 ) -> str | None:
@@ -232,6 +233,7 @@ async def save_ocr_document(
     except Exception:
         logger.exception("[ocr] Ошибка сохранения tg:%d", tg_id)
         return None
+
 
 async def process_photo_batch(
     photos: List[bytes],
@@ -522,9 +524,12 @@ async def process_document_group(
     merged = merge_pages(group.pages)
 
     # Пост-валидация и автопоправки для стабильного импорта накладных.
-    merged, validation_warnings, validation_errors, needs_review = (
-        _validate_invoice_document(merged, min_confidence=min_confidence)
-    )
+    (
+        merged,
+        validation_warnings,
+        validation_errors,
+        needs_review,
+    ) = _validate_invoice_document(merged, min_confidence=min_confidence)
     warnings.extend(validation_warnings)
     errors.extend(validation_errors)
 

@@ -236,7 +236,11 @@ def _dup_confirm_kb() -> InlineKeyboardMarkup:
                     text="✅ Отправить заявку", callback_data="dup_confirm_send"
                 )
             ],
-            [InlineKeyboardButton(text="✏️ Ввести заново", callback_data="dup_reenter")],
+            [
+                InlineKeyboardButton(
+                    text="✏️ Ввести заново", callback_data="dup_reenter"
+                )
+            ],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")],
         ]
     )
@@ -452,7 +456,10 @@ async def search_request_product(message: Message, state: FSMContext) -> None:
 
     if not query:
         await _send_prompt(
-            message.bot, message.chat.id, state, "⚠️ Введите название товара для поиска."
+            message.bot,
+            message.chat.id,
+            state,
+            "⚠️ Введите название товара для поиска.",
         )
         return
 
@@ -529,6 +536,7 @@ async def request_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
         reply_markup=_req_products_kb(products, page=page)
     )
 
+
 @router.callback_query(F.data.startswith("req_hist_page:"))
 async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[request_handlers] request_hist_page tg:%d", callback.from_user.id)
@@ -549,7 +557,9 @@ async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(CreateRequestStates.add_items, F.data.startswith("reqp:"))
 async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] choose_request_product tg:%d", callback.from_user.id)
+    logger.info(
+        "[request_handlers] choose_request_product tg:%d", callback.from_user.id
+    )
     await callback.answer()
     prod_id = callback.data.split(":", 1)[1]
 
@@ -1272,7 +1282,9 @@ async def _finish_request_edit_msg(
     message: Message, state: FSMContext, pk: int, change_description: str
 ) -> None:
     """То же, но из message-хэндлера."""
-    logger.info("[request_handlers] _finish_request_edit_msg tg:%d", message.from_user.id)
+    logger.info(
+        "[request_handlers] _finish_request_edit_msg tg:%d", message.from_user.id
+    )
     _unlock_request(pk)
     await state.clear()
 
@@ -1552,7 +1564,9 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
     combined_result = (
         "\n".join(all_results)
         if len(store_groups) > 1
-        else all_results[0] if all_results else "?"
+        else all_results[0]
+        if all_results
+        else "?"
     )
     updated_req = await req_uc.get_request_by_pk(pk)
     text = req_uc.format_request_text(updated_req or req_data)
@@ -1775,7 +1789,9 @@ async def choose_edit_action(callback: CallbackQuery, state: FSMContext) -> None
         )
 
         if not items:
-            await callback.answer("⚠️ Нельзя удалить последнюю позицию", show_alert=True)
+            await callback.answer(
+                "⚠️ Нельзя удалить последнюю позицию", show_alert=True
+            )
             items.insert(idx, removed)  # вернуть обратно
             return
 
@@ -2273,7 +2289,9 @@ async def close_history(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("req_dup:"))
 async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] start_duplicate_request tg:%d", callback.from_user.id)
+    logger.info(
+        "[request_handlers] start_duplicate_request tg:%d", callback.from_user.id
+    )
     await callback.answer()
     pk_str = callback.data.split(":", 1)[1]
     try:

@@ -159,6 +159,7 @@ async def _disable_all_invoice_buttons(
 async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
     """Установить status='pending_mapping' для документов, ожидающих маппинг."""
     from use_cases.ocr_pipeline import mark_docs_pending_mapping
+
     await mark_docs_pending_mapping(doc_ids)
 
 
@@ -364,6 +365,7 @@ async def _save_ocr_document(
 ) -> str | None:
     """Сохранить распознанный документ в БД."""
     from use_cases.ocr_pipeline import save_ocr_document
+
     return await save_ocr_document(tg_id, result_data, file_ids)
 
 
