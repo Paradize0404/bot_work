@@ -429,7 +429,7 @@ async def get_template_by_pk(pk: int) -> dict | None:
         "store_id": str(t.store_id),
         "store_name": t.store_name,
         "items": t.items or [],
-        "created_at": t.created_at,
+        "created_at": t.created_at.isoformat() if t.created_at else None,
     }
 
 
