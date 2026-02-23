@@ -1214,7 +1214,76 @@ class PendingWriteoffDoc(Base):
 
 
 # ─────────────────────────────────────────────────────
-# Итого 27 таблиц:
+# 28. pending_incoming_invoice — приходные накладные, ожидающие отправки в iiko
+# ─────────────────────────────────────────────────────
+
+
+class PendingIncomingInvoice(Base):
+    """
+    Приходные накладные (OCR-фото / JSON-чеки), ожидающие подтверждения
+    отправки в iiko. Заменяет in-memory _pending_invoices dict.
+
+    Одна запись на tg_id — при повторной загрузке старая перезаписывается.
+    Удаляется при «📤 Отправить в iiko» (успех или ошибка) или «❌ Отменить».
+    """
+
+    __tablename__ = "pending_incoming_invoice"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    tg_id = Column(
+        BigInteger,
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="Telegram ID отправителя (создателя накладной)",
+    )
+    source_type = Column(
+        String(20),
+        nullable=False,
+        comment="'ocr' или 'json_receipt'",
+    )
+    department_id = Column(
+        String(36),
+        nullable=True,
+        comment="UUID подразделения (денормализовано)",
+    )
+    department_name = Column(
+        String(200),
+        nullable=True,
+        comment="Название подразделения (денормализовано)",
+    )
+    author_name = Column(
+        String(500),
+        nullable=True,
+        comment="ФИО отправителя (денормализовано)",
+    )
+    invoices_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Количество накладных в пачке",
+    )
+    items_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Суммарное количество позиций",
+    )
+    invoices_json = Column(
+        JSONB,
+        nullable=False,
+        comment="Список invoice dict (полный, для отправки в iiko)",
+    )
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=_utcnow,
+        comment="Время создания (Калининград)",
+    )
+
+
+# ─────────────────────────────────────────────────────
+# Итого 28 таблиц:
 #   iiko_entity        — все справочники (1 кнопка)
 #   iiko_department    — подразделения
 #   iiko_store         — склады
@@ -1242,6 +1311,7 @@ class PendingWriteoffDoc(Base):
 #   stoplist_message   — стоп-лист: закреплённые сообщения
 #   stoplist_history   — стоп-лист: история (вход/выход)
 #   pending_writeoff   — акты списания, ожидающие проверки
+#   pending_incoming_invoice — приходные накладные, ожидающие отправки в iiko
 #   pastry_nomenclature_group — группы кондитеров
 # ─────────────────────────────────────────────────────
 

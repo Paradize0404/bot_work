@@ -46,6 +46,7 @@ from bot.middleware import (
     track_task,
 )
 from use_cases import user_context as uctx
+from use_cases import pending_incoming_invoice as pending_inv_uc
 from use_cases.ocr_pipeline import process_photo_batch, OCRResult
 
 logger = logging.getLogger(__name__)
@@ -59,11 +60,10 @@ _ALBUM_DEBOUNCE_SEC = 1.5
 _album_buffer: dict[str, dict[str, Any]] = {}
 _album_tasks: dict[str, asyncio.Task] = {}
 
-# ── Pending invoices: накладные ожидающие отправки в iiko ──
-# tg_id → list[invoice_dict] (in-memory, теряется при рестарте)
-_pending_invoices: dict[int, list[dict]] = {}
+# ── Pending invoice messages: сообщения с кнопками подтверждения ──
 # tg_id → list[(chat_id, message_id)] — все сообщения с кнопками подтверждения
-# чтобы при нажатии одного убрать кнопки у всех получателей
+# (in-memory; только для управления кнопками внутри одной сессии;
+#  накладные теперь хранятся в PostgreSQL через pending_incoming_invoice)
 _pending_invoice_messages: dict[int, list[tuple[int, int]]] = {}
 # tg_id → list[doc_id]  — IDs документов из ТЕКУЩЕЙ сессии загрузки
 _pending_doc_ids: dict[int, list[str]] = {}
@@ -754,7 +754,15 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
             parse_mode="HTML",
         )
 
-        _pending_invoices[tg_id] = invoices
+        # Сохраняем в PostgreSQL вместо RAM
+        await pending_inv_uc.save(
+            tg_id=tg_id,
+            source_type="ocr",
+            invoices=invoices,
+            department_id=dept_id,
+            department_name=(ctx.department_name if ctx else None),
+            author_name=(ctx.employee_name if ctx else None),
+        )
         bot_ = placeholder.bot
         chat_id_ = placeholder.chat.id
 
@@ -883,7 +891,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
 
     logger.info("[ocr] Отправка накладных в iiko tg:%d sender:%d", tg_id, sender_tg_id)
 
-    invoices = _pending_invoices.pop(sender_tg_id, None)
+    invoices = await pending_inv_uc.pop(sender_tg_id)
     if not invoices:
         await _disable_all_invoice_buttons(
             callback.bot,
@@ -974,7 +982,7 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
 
     logger.info("[ocr] Отмена отправки накладных tg:%d sender:%d", tg_id, sender_tg_id)
 
-    invoices = _pending_invoices.pop(sender_tg_id, None)
+    invoices = await pending_inv_uc.pop(sender_tg_id)
     doc_ids = list({inv["ocr_doc_id"] for inv in invoices}) if invoices else []
 
     cancel_text = (
@@ -1192,8 +1200,15 @@ async def _build_and_send_json_invoices(
         )
         return
 
-    # Сохраняем pending invoices
-    _pending_invoices[tg_id] = invoices
+    # Сохраняем в PostgreSQL
+    await pending_inv_uc.save(
+        tg_id=tg_id,
+        source_type="json_receipt",
+        invoices=invoices,
+        department_id=dept_id,
+        department_name=(ctx.department_name if ctx else None),
+        author_name=(ctx.employee_name if ctx else None),
+    )
 
     # ── Превью каждого чека ──
     placeholder = await _repush(

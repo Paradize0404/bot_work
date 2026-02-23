@@ -76,6 +76,9 @@ PERM_SETTINGS = "⚙️ Настройки"
 # ── Раздел «Кондитерка» ──
 PERM_PASTRY_MANAGE = "🍰 Группы кондитеров"
 
+# ── Раздел «Ожидают отправки» ──
+PERM_PENDING_VIEW = "📋 Ожидают отправки"
+
 # Полный список всех perm_key (порядок = порядок столбцов в GSheet)
 PERMISSION_KEYS: list[str] = [
     # Списания
@@ -101,6 +104,8 @@ PERMISSION_KEYS: list[str] = [
     PERM_SETTINGS,
     # Кондитерка
     PERM_PASTRY_MANAGE,
+    # Ожидают отправки
+    PERM_PENDING_VIEW,
 ]
 
 # Все столбцы для GSheet (роли + права)
@@ -127,6 +132,11 @@ MENU_BUTTON_GROUPS: dict[str, list[str]] = {
     "📑 Документы": [PERM_OCR_UPLOAD, PERM_OCR_SEND],
     "⚙️ Настройки": [PERM_SETTINGS],
     "🍰 Группы кондитеров": [PERM_PASTRY_MANAGE],
+    "📋 Ожидают отправки": [
+        PERM_WRITEOFF_APPROVE,
+        PERM_REQUEST_APPROVE,
+        PERM_OCR_SEND,
+    ],
 }
 
 # ═══════════════════════════════════════════════════════
@@ -174,6 +184,9 @@ TEXT_PERMISSIONS: dict[str, str] = {
     "📋 Заявки": PERM_REQUEST_CREATE,
     "📊 Отчёты": PERM_REPORT_VIEW,
     "📑 Документы": PERM_OCR_UPLOAD,
+    # Примечание: «📋 Ожидают отправки» НЕ в TEXT_PERMISSIONS:
+    # кнопка видна только пользователям с PERM_WRITEOFF_APPROVE/PERM_REQUEST_APPROVE/PERM_OCR_SEND
+    # (через MENU_BUTTON_GROUPS), а handler делает проверку прав самостоятельно.
 }
 
 # ═══════════════════════════════════════════════════════

@@ -42,6 +42,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.document_handlers import router as document_router
     from bot.pastry_handlers import router as pastry_router
     from bot.day_report_handlers import router as day_report_router
+    from bot.pending_docs_handlers import router as pending_docs_router
     from bot.retry_session import RetryAiohttpSession
 
     from aiogram.fsm.storage.redis import RedisStorage
@@ -64,6 +65,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp.include_router(document_router)  # OCR распознавание накладных
     dp.include_router(pastry_router)
     dp.include_router(day_report_router)
+    dp.include_router(pending_docs_router)  # Ожидают отправки — сводный список
     dp.include_router(router)
 
     # Error handler: ловим оставшиеся сетевые ошибки (после retry)
