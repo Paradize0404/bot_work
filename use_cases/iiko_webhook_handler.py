@@ -142,6 +142,7 @@ async def _flush_stoplist() -> None:
     """
     Вызывается через 60 сек тишины.
     Забираем накопленные org_ids, запускаем цикл стоп-листа, рассылаем.
+    Каждая org отправляется только подписчикам этой организации (per-org роутинг).
     """
     global _stoplist_timer
 
@@ -151,6 +152,11 @@ async def _flush_stoplist() -> None:
     # Забираем и очищаем буфер
     org_ids = _pending_stoplist_org_ids.copy()
     _pending_stoplist_org_ids.clear()
+
+    # BUG4 FIX: fallback ДО early-return (раньше был мёртвый код после return)
+    if not org_ids:
+        from use_cases.cloud_org_mapping import get_all_cloud_org_ids
+        org_ids = set(await get_all_cloud_org_ids())
 
     if not org_ids:
         return
@@ -169,48 +175,50 @@ async def _flush_stoplist() -> None:
             sync_and_diff,
             format_stoplist_message,
         )
-        from use_cases.pinned_stoplist_message import update_all_stoplist_messages
-        from use_cases.cloud_org_mapping import get_all_cloud_org_ids
+        from use_cases.pinned_stoplist_message import update_stoplist_messages_for_org
 
-        if not org_ids:
-            org_ids = set(await get_all_cloud_org_ids())
+        any_changes = False
 
-        # Накапливаем изменения по всем организациям
-        all_added: list[dict] = []
-        all_removed: list[dict] = []
-        all_existing: list[dict] = []
-
+        # BUG1 FIX: каждая org → своё сообщение → своим подписчикам
         for oid in org_ids:
             items = await fetch_stoplist_items(org_id=oid)
-            added, removed, existing = await sync_and_diff(items, org_id=oid)
-            all_added.extend(added)
-            all_removed.extend(removed)
-            all_existing.extend(existing)
+            added, removed, changed, existing = await sync_and_diff(items, org_id=oid)
+            has_changes = bool(added or removed or changed)
 
-        has_changes = bool(all_added or all_removed)
+            if not has_changes:
+                logger.info(
+                    "[%s] Стоп-лист без изменений (org=%s), пропускаем",
+                    LABEL,
+                    oid,
+                )
+                continue
 
-        if not has_changes:
+            any_changes = True
+            text = format_stoplist_message(added, removed, changed, existing)
+            sent = await update_stoplist_messages_for_org(bot, text, oid)
             logger.info(
-                "[%s] Стоп-лист без изменений (orgs: %s), пропускаем обновление (%.1f сек)",
+                "[%s] org=%s: +%d -%d ~%d =%d, отправлено %d пользователям",
                 LABEL,
-                org_ids,
+                oid,
+                len(added),
+                len(removed),
+                len(changed),
+                len(existing),
+                sent,
+            )
+
+        if not any_changes:
+            logger.info(
+                "[%s] Стоп-лист без изменений по всем org(s) за %.1f сек",
+                LABEL,
                 time.monotonic() - t0,
             )
-            return
-
-        # Формируем единое сообщение с объединённым дифом
-        combined_text = format_stoplist_message(all_added, all_removed, all_existing)
-
-        await update_all_stoplist_messages(bot, combined_text)
-        logger.info(
-            "[%s] Стоп-лист обновлён и разослан (orgs: %s, +%d -%d =%d) за %.1f сек",
-            LABEL,
-            org_ids,
-            len(all_added),
-            len(all_removed),
-            len(all_existing),
-            time.monotonic() - t0,
-        )
+        else:
+            logger.info(
+                "[%s] Flush завершён за %.1f сек",
+                LABEL,
+                time.monotonic() - t0,
+            )
     except Exception:
         logger.exception("[%s] Ошибка при flush стоп-листа", LABEL)
 

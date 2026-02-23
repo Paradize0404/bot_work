@@ -179,6 +179,7 @@ async def sync_and_diff(
 
     added: list[dict] = []
     removed: list[dict] = []
+    changed: list[dict] = []  # в стопе, но изменился баланс
     existing: list[dict] = []
 
     for key, item in new_map.items():
@@ -188,7 +189,8 @@ async def sync_and_diff(
             old_balance = old_map[key]["balance"]
             new_balance = item["balance"]
             if old_balance != new_balance:
-                added.append(item)  # изменённый баланс = «добавленное изменение»
+                # Баланс изменился — отдельный bucket, не «новое»
+                changed.append({**item, "old_balance": old_balance})
             else:
                 existing.append(item)
 
@@ -218,14 +220,15 @@ async def sync_and_diff(
         await session.commit()
 
     logger.info(
-        "[%s] Diff: +%d -%d =%d (%.1f сек)",
+        "[%s] Diff: +%d -%d ~%d =%d (%.1f сек)",
         LABEL,
         len(added),
         len(removed),
+        len(changed),
         len(existing),
         time.monotonic() - t0,
     )
-    return added, removed, existing
+    return added, removed, changed, existing
 
 
 # ═══════════════════════════════════════════════════════
@@ -245,11 +248,12 @@ async def _update_history(
     now = now_kgd().replace(tzinfo=None)
     today = now.date()
 
-    old_zero = {k for k, v in old_map.items() if v["balance"] == 0}
-    new_zero = {k for k, v in new_map.items() if v["balance"] == 0}
+    # Отслеживаем ВСЕ позиции в стопе (balance==0 и balance>0)
+    old_keys = set(old_map.keys())
+    new_keys = set(new_map.keys())
 
-    entered_stop = new_zero - old_zero  # вошли в стоп
-    left_stop = old_zero - new_zero  # вышли из стопа
+    entered_stop = new_keys - old_keys  # вошли в стоп
+    left_stop = old_keys - new_keys  # вышли из стопа
 
     if not entered_stop and not left_stop:
         return
@@ -302,6 +306,7 @@ async def _update_history(
 def format_stoplist_message(
     added: list[dict],
     removed: list[dict],
+    changed: list[dict],
     existing: list[dict],
 ) -> str:
     """
@@ -310,6 +315,9 @@ def format_stoplist_message(
     Формат:
       Новые блюда в стоп-листе 🚫
       ▫️ Блюдо — стоп
+
+      Изменился баланс ⚠️
+      ▫️ Блюдо (5 → 2)
 
       Удалены из стоп-листа ✅
       ▫️ —
@@ -334,6 +342,20 @@ def format_stoplist_message(
             lines.append(f"▫️ {_fmt(it)}")
         if len(added) > 50:
             lines.append(f"...и ещё {len(added) - 50}")
+    else:
+        lines.append("▫️ —")
+
+    lines.append("")
+
+    # ── Изменился баланс ──
+    lines.append("Изменился баланс ⚠️")
+    if changed:
+        for it in sorted(changed, key=lambda x: x.get("name", ""))[:50]:
+            old_b = int(it.get("old_balance", 0))
+            new_b = int(it["balance"])
+            lines.append(f"▫️ {it['name']} ({old_b} → {new_b})")
+        if len(changed) > 50:
+            lines.append(f"...и ещё {len(changed) - 50}")
     else:
         lines.append("▫️ —")
 
@@ -432,10 +454,10 @@ async def run_stoplist_cycle(
     """
     try:
         items = await fetch_stoplist_items(org_id=org_id)
-        added, removed, existing = await sync_and_diff(items, org_id=org_id)
-        has_changes = bool(added or removed)
+        added, removed, changed, existing = await sync_and_diff(items, org_id=org_id)
+        has_changes = bool(added or removed or changed)
 
-        text = format_stoplist_message(added, removed, existing)
+        text = format_stoplist_message(added, removed, changed, existing)
         return text, has_changes
     except Exception:
         logger.exception("[%s] Ошибка в run_stoplist_cycle", LABEL)

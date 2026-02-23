@@ -208,3 +208,48 @@ async def update_all_stoplist_messages(bot: Any, text: str) -> int:
         "[%s] Обновлено %d/%d за %.1f сек", LABEL, updated, len(user_ids), elapsed
     )
     return updated
+
+
+async def update_stoplist_messages_for_org(bot: Any, text: str, org_id: str) -> int:
+    """
+    Обновить закреплённые сообщения со стоп-листом только для пользователей,
+    чьё подразделение привязано к указанной cloud org_id.
+
+    BUG1 FIX: каждый пользователь получает стоп-лист только СВОЕГО заведения.
+
+    Returns:
+        Количество обновлённых/созданных сообщений.
+    """
+    t0 = time.monotonic()
+    text_hash = compute_hash(text)
+
+    from use_cases.permissions import get_stoplist_subscriber_ids
+    from use_cases.cloud_org_mapping import resolve_cloud_org_id_for_user
+
+    user_ids = await get_stoplist_subscriber_ids()
+    if not user_ids:
+        # Bootstrap: никто не отмечен — шлём всем авторизованным
+        cache = await perm_uc._ensure_cache()
+        user_ids = list(cache.keys())
+
+    if not user_ids:
+        return 0
+
+    updated = 0
+    for uid in user_ids:
+        # Фильтруем по org — пользователь видит только своё заведение
+        user_org = await resolve_cloud_org_id_for_user(uid)
+        if user_org != org_id:
+            continue
+        if await _update_single(bot, uid, text, text_hash, force=True):
+            updated += 1
+
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "[%s] org=%s: обновлено %d пользователей за %.1f сек",
+        LABEL,
+        org_id,
+        updated,
+        elapsed,
+    )
+    return updated
