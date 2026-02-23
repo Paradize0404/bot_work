@@ -1,7 +1,7 @@
 ﻿import logging
 from uuid import UUID
 
-from aiogram import Router, F, Bot
+from aiogram import Router, F
 from aiogram.types import (
     Message,
     CallbackQuery,
@@ -11,12 +11,9 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
-from bot.middleware import permission_required
+from bot.middleware import permission_required, MAX_TEXT_SEARCH
 from bot.permission_map import PERM_PASTRY_MANAGE
 from use_cases import product_request as req_uc
-from db.engine import async_session_factory
-from db.models import ProductGroup
-from sqlalchemy import select, func
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -26,10 +23,8 @@ class PastryGroupStates(StatesGroup):
     search = State()
 
 
-@router.message(F.text == "🍰 Группы кондитеров")
-@permission_required(PERM_PASTRY_MANAGE)
-async def pastry_groups_menu(message: Message, state: FSMContext) -> None:
-    logger.info("[pastry_handlers] pastry_groups_menu tg:%d", message.from_user.id)
+async def _show_pastry_groups_menu(message: Message, state: FSMContext) -> None:
+    """Внутренний хелпер: показывает меню групп кондитеров без проверки прав."""
     await state.clear()
     groups = await req_uc.get_pastry_groups()
 
@@ -60,6 +55,13 @@ async def pastry_groups_menu(message: Message, state: FSMContext) -> None:
     await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
+@router.message(F.text == "🍰 Группы кондитеров")
+@permission_required(PERM_PASTRY_MANAGE)
+async def pastry_groups_menu(message: Message, state: FSMContext) -> None:
+    logger.info("[pastry_handlers] pastry_groups_menu tg:%d", message.from_user.id)
+    await _show_pastry_groups_menu(message, state)
+
+
 @router.callback_query(F.data == "pastry_add")
 @permission_required(PERM_PASTRY_MANAGE)
 async def pastry_add_start(callback: CallbackQuery, state: FSMContext) -> None:
@@ -80,8 +82,12 @@ async def pastry_add_start(callback: CallbackQuery, state: FSMContext) -> None:
 @permission_required(PERM_PASTRY_MANAGE)
 async def pastry_search_group(message: Message, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_search_group tg:%d", message.from_user.id)
+    await message.delete()
     query = (message.text or "").strip().lower()
     if not query:
+        return
+    if len(query) > MAX_TEXT_SEARCH:
+        await message.answer("⚠️ Запрос слишком длинный (макс. 200 символов)")
         return
 
     from use_cases.product_request import search_product_groups
@@ -124,15 +130,13 @@ async def pastry_select_group(callback: CallbackQuery, state: FSMContext) -> Non
     logger.info("[pastry_handlers] pastry_select_group tg:%d", callback.from_user.id)
     await callback.answer()
     try:
-        group_id = callback.data.split(":")[1]
-        from uuid import UUID
-
+        group_id = callback.data.split(":", 1)[1]
         UUID(group_id)
     except (IndexError, ValueError):
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
         return
 
-    from use_cases.product_request import get_product_group_by_id
+    from use_cases.product_request import get_product_group_by_id  # noqa: PLC0415
 
     group = await get_product_group_by_id(group_id)
 
@@ -148,13 +152,14 @@ async def pastry_select_group(callback: CallbackQuery, state: FSMContext) -> Non
 
     await state.clear()
     await callback.message.delete()
-    await pastry_groups_menu(callback.message, state)
+    await _show_pastry_groups_menu(callback.message, state)
 
 
 @router.callback_query(F.data == "pastry_remove_list")
 @permission_required(PERM_PASTRY_MANAGE)
 async def pastry_remove_list(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[pastry_handlers] pastry_remove_list tg:%d", callback.from_user.id)
+    await callback.answer()
     groups = await req_uc.get_pastry_groups()
     if not groups:
         await callback.answer("Список пуст", show_alert=True)
@@ -185,9 +190,7 @@ async def pastry_remove_group(callback: CallbackQuery, state: FSMContext) -> Non
     logger.info("[pastry_handlers] pastry_remove_group tg:%d", callback.from_user.id)
     await callback.answer()
     try:
-        pk = callback.data.split(":")[1]
-        from uuid import UUID
-
+        pk = callback.data.split(":", 1)[1]
         UUID(pk)
     except (IndexError, ValueError):
         await callback.answer("⚠️ Ошибка данных", show_alert=True)
@@ -196,7 +199,7 @@ async def pastry_remove_group(callback: CallbackQuery, state: FSMContext) -> Non
     await req_uc.remove_pastry_group(pk)
     await callback.answer("✅ Группа удалена", show_alert=True)
     await callback.message.delete()
-    await pastry_groups_menu(callback.message, state)
+    await _show_pastry_groups_menu(callback.message, state)
 
 
 @router.callback_query(F.data == "pastry_cancel")
@@ -206,4 +209,4 @@ async def pastry_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await state.clear()
     await callback.message.delete()
-    await pastry_groups_menu(callback.message, state)
+    await _show_pastry_groups_menu(callback.message, state)

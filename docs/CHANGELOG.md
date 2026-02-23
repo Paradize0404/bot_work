@@ -5,6 +5,27 @@
 
 ---
 
+### 2026-02-23 — [FIX] + [AUDIT] bot/pastry_handlers.py — соответствие контрактам K1/K4/K5
+
+**Файл:** `bot/pastry_handlers.py`
+
+**Проблема 1 (исходная, предыдущий сеанс):** Внутренние переходы после действий (`pastry_select_group`, `pastry_remove_group`, `pastry_cancel`) вызывали `pastry_groups_menu(callback.message, state)` напрямую. `callback.message.from_user` — это бот, а не пользователь, поэтому `@permission_required` проверял права бота → получал отказ. Пользователь видел "⛔ У вас нет доступа" после успешного добавления/удаления группы.
+
+**Решение (предыдущий сеанс):** Извлечена внутренняя функция `_show_pastry_groups_menu()` без декоратора; все внутренние редиректы используют её.
+
+**Аудит [AUDIT] — найдено и исправлено:**
+
+| # | Контракт | Нарушение | Исправление |
+|---|----------|-----------|-------------|
+| 1 | K1 | `async_session_factory`, `ProductGroup`, `select`, `func`, `Bot` импортированы в `bot/` файл, но не используются | Удалены |
+| 2 | K5 | `pastry_remove_list`: `callback.answer()` не первая строка — при непустом списке спиннер на кнопке не снимался | `await callback.answer()` перенесён в начало |
+| 3 | K5 | `pastry_search_group`: `message.delete()` не вызывался — текст поиска оставался в чате | Добавлен `await message.delete()` первой строкой |
+| 4 | K4 | `pastry_search_group`: длина текста не валидировалась | Добавлена проверка `len(query) > MAX_TEXT_SEARCH` |
+| 5 | K4 | `split(":")[1]` вместо `split(":", 1)[1]` в `pastry_sel` и `pastry_rm` | Исправлено на `split(":", 1)[1]` |
+| 6 | LOW | Дублирование `from uuid import UUID` (топ-уровень + внутри функций) | Удалены локальные повторные импорты |
+
+---
+
 ### 2026-02-23 — [FIX] Аудит защиты от двойного нажатия: invoice + request handlers
 
 **Файлы:** `bot/invoice_handlers.py`, `bot/request_handlers.py`
