@@ -852,7 +852,20 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
                     items=items,
                     author_name=_data_snapshot.get("user_fullname", ""),
                 )
-                await bot.send_message(chat_id, result)
+                if result.startswith("✅"):
+                    await bot.send_message(chat_id, result)
+                else:
+                    await bot.send_message(
+                        chat_id,
+                        "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены.",
+                    )
+                    from use_cases.admin import alert_admins
+                    await alert_admins(
+                        bot,
+                        f"Ошибка отправки списания (без-админ режим)\n"
+                        f"chat_id={chat_id}\n"
+                        f"Ошибка: {result}",
+                    )
                 # Сохраняем в историю при успехе
                 if result.startswith("✅"):
                     try:
@@ -1010,6 +1023,13 @@ async def admin_approve(callback: CallbackQuery) -> None:
         approval = await wo_uc.approve_writeoff(doc)
     except Exception as exc:
         logger.exception("[writeoff] Ошибка одобрения doc=%s", doc_id)
+        from use_cases.admin import alert_admins
+        await alert_admins(
+            bot,
+            f"Критическая ошибка одобрения списания #{doc_id}\n"
+            f"Одобрил: {admin_name}\n"
+            f"Ошибка: {exc}",
+        )
         try:
             await callback.message.edit_text(
                 pending.build_summary_text(doc)
@@ -1055,9 +1075,24 @@ async def admin_approve(callback: CallbackQuery) -> None:
 
     # Уведомляем автора
     try:
-        await bot.send_message(
-            doc.author_chat_id, f"{approval.result_text}\n(проверил: {admin_name})"
-        )
+        if approval.success:
+            await bot.send_message(
+                doc.author_chat_id,
+                f"{approval.result_text}\n(проверил: {admin_name})",
+            )
+        else:
+            await bot.send_message(
+                doc.author_chat_id,
+                "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены.",
+            )
+            from use_cases.admin import alert_admins
+            await alert_admins(
+                bot,
+                f"Ошибка одобрения списания #{doc_id}\n"
+                f"Автор: {doc.author_name}\n"
+                f"Одобрил: {admin_name}\n"
+                f"Ошибка: {approval.result_text}",
+            )
     except Exception:
         pass
 
@@ -2408,6 +2443,14 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
                     )
                 except Exception:
                     logger.warning("[wo_history] Ошибка сохранения повтора в историю")
+            if not result.startswith("✅"):
+                from use_cases.admin import alert_admins
+                await alert_admins(
+                    callback.bot,
+                    f"Ошибка отправки списания из истории (без-админ)\n"
+                    f"user={user_id}\nОшибка: {result}",
+                )
+                result = "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены."
             try:
                 await callback.message.edit_text(result)
             except Exception:
@@ -3045,6 +3088,14 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
                     logger.warning(
                         "[wo_history] Ошибка сохранения в историю (edit no-admin)"
                     )
+            if not result.startswith("✅"):
+                from use_cases.admin import alert_admins
+                await alert_admins(
+                    callback.bot,
+                    f"Ошибка отправки списания (редактирование без-админ)\n"
+                    f"user={user_id}\nОшибка: {result}",
+                )
+                result = "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены."
             try:
                 await callback.message.edit_text(result)
             except Exception:

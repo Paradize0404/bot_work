@@ -938,8 +938,19 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
         # Если нажал бухгалтер — уведомить отправителя тоже
         if tg_id != sender_tg_id:
             try:
+                if "❌" in result_text:
+                    sender_msg = "⚠️ Часть накладных не загрузилась. Обратитесь к администратору."
+                    from use_cases.admin import alert_admins
+                    await alert_admins(
+                        callback.bot,
+                        f"Ошибка загрузки накладных в iiko\n"
+                        f"Отправитель tg:{sender_tg_id}, обработал tg:{tg_id}\n"
+                        f"Детали:\n{result_text}",
+                    )
+                else:
+                    sender_msg = result_text
                 await callback.bot.send_message(
-                    sender_tg_id, result_text, parse_mode="HTML"
+                    sender_tg_id, sender_msg, parse_mode="HTML"
                 )
             except Exception:
                 pass
