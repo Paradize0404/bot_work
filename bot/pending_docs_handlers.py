@@ -145,9 +145,8 @@ async def _show_writeoffs(
     )
 
     if not docs:
-        await callback.message.edit_text(
-            "📝 Ожидающих списаний нет.", reply_markup=None
-        )
+        await callback.message.delete()
+        await callback.message.answer("📝 Ожидающих списаний нет.")
         return
 
     lines: list[str] = [f"<b>📝 Списания ({len(docs)})</b>\n"]
@@ -162,7 +161,8 @@ async def _show_writeoffs(
             [InlineKeyboardButton(text="◀️ Назад", callback_data="pend_back")]
         ]
     )
-    await callback.message.edit_text(
+    await callback.message.delete()
+    await callback.message.answer(
         "\n".join(lines), parse_mode="HTML", reply_markup=back_kb
     )
 
@@ -180,7 +180,8 @@ async def _show_requests(
 
     pending = [r for r in reqs if r.get("status") == "pending"]
     if not pending:
-        await callback.message.edit_text("📦 Ожидающих заявок нет.", reply_markup=None)
+        await callback.message.delete()
+        await callback.message.answer("📦 Ожидающих заявок нет.")
         return
 
     lines: list[str] = [f"<b>📦 Заявки ({len(pending)})</b>\n"]
@@ -208,7 +209,8 @@ async def _show_requests(
             [InlineKeyboardButton(text="◀️ Назад", callback_data="pend_back")]
         ]
     )
-    await callback.message.edit_text(
+    await callback.message.delete()
+    await callback.message.answer(
         "\n".join(lines), parse_mode="HTML", reply_markup=back_kb
     )
 
@@ -229,9 +231,8 @@ async def _show_invoices(
         infos = [info] if info else []
 
     if not infos:
-        await callback.message.edit_text(
-            "🧾 Приходных накладных, ожидающих отправки, нет.", reply_markup=None
-        )
+        await callback.message.delete()
+        await callback.message.answer("🧾 Приходных накладных, ожидающих отправки, нет.")
         return
 
     lines: list[str] = [f"<b>🧾 Приходные накладные ({len(infos)})</b>\n"]
@@ -244,7 +245,8 @@ async def _show_invoices(
             [InlineKeyboardButton(text="◀️ Назад", callback_data="pend_back")]
         ]
     )
-    await callback.message.edit_text(
+    await callback.message.delete()
+    await callback.message.answer(
         "\n".join(lines).strip(), parse_mode="HTML", reply_markup=back_kb
     )
 
@@ -304,4 +306,5 @@ async def pend_back(callback: CallbackQuery) -> None:
         )
 
     kb = InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    await callback.message.delete()
+    await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
