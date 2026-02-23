@@ -82,13 +82,15 @@ class WriteoffStates(StatesGroup):
 
 
 class AdminEditStates(StatesGroup):
-    choose_field = State()  # склад / счёт / позиции
+    choose_field = State()  # склад / счёт / позиции / дата / причина
     choose_store = State()  # выбор нового склада
     choose_account = State()  # выбор нового счёта
     choose_item_idx = State()  # какой номер позиции
     choose_item_action = State()  # наименование или количество
     new_product_search = State()  # поиск нового товара
     new_quantity = State()  # ввод нового количества
+    edit_date = State()  # ввод новой даты
+    edit_reason = State()  # ввод новой причины
 
 
 # ══════════════════════════════════════════════════════
@@ -1175,6 +1177,8 @@ async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
         inline_keyboard=[
             [InlineKeyboardButton(text="🏬 Склад", callback_data="woe_field:store")],
             [InlineKeyboardButton(text="📂 Счёт", callback_data="woe_field:account")],
+            [InlineKeyboardButton(text="📅 Дата", callback_data="woe_field:date")],
+            [InlineKeyboardButton(text="📝 Причина", callback_data="woe_field:reason")],
             [InlineKeyboardButton(text="📦 Позиции", callback_data="woe_field:items")],
             [
                 InlineKeyboardButton(
@@ -1356,6 +1360,36 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
             "📦 Какую позицию редактировать?", reply_markup=kb
         )
 
+    elif field == "date":
+        cur_date = ""
+        if doc.date_incoming:
+            try:
+                from datetime import datetime as _dt
+                dt = _dt.fromisoformat(doc.date_incoming)
+                cur_date = f" (сейчас: {dt.strftime('%d.%m.%Y %H:%M')})"
+            except Exception:
+                cur_date = f" (сейчас: {doc.date_incoming})"
+        await state.set_state(AdminEditStates.edit_date)
+        try:
+            await callback.message.edit_text(
+                f"📅 Введите новую дату документа{cur_date}:\n"
+                "<i>Формат: ДД.ММ.ГГГГ или ДД.ММ.ГГГГ ЧЧ:ММ</i>",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    elif field == "reason":
+        await state.set_state(AdminEditStates.edit_reason)
+        try:
+            await callback.message.edit_text(
+                f"📝 Введите новую причину списания\n"
+                f"(сейчас: <i>{doc.reason or '—'}</i>):",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
 
 # ── Новый склад ──
 
@@ -1527,7 +1561,7 @@ async def admin_edit_item_action(callback: CallbackQuery, state: FSMContext) -> 
 # ── Поиск нового товара (замена наименования) ──
 
 
-# Защита: текст в inline-состояниях редактирования
+# ── Защита: текст в inline-состояниях редактирования
 @router.message(AdminEditStates.choose_field)
 @router.message(AdminEditStates.choose_store)
 @router.message(AdminEditStates.choose_account)
@@ -1712,14 +1746,17 @@ async def admin_set_new_quantity(message: Message, state: FSMContext) -> None:
     await pending.update_items(doc.doc_id, doc.items)
     logger.info("[writeoff-edit] Позиция #%d кол-во: %s → %s", idx + 1, qty, converted)
 
-    await _finish_edit_msg(message, state, doc)
+    await _finish_edit_msg(message, state, doc, editor_name=message.from_user.full_name)
 
 
 # ── Завершение редактирования → назад к кнопкам ──
 
 
 async def _finish_edit(
-    callback: CallbackQuery, state: FSMContext, doc: pending.PendingWriteoff
+    callback: CallbackQuery,
+    state: FSMContext,
+    doc: pending.PendingWriteoff,
+    editor_name: str = "",
 ) -> None:
     """Завершить редактирование: разблокировать, обновить сообщения у всех админов."""
     doc_id = doc.doc_id
@@ -1728,8 +1765,13 @@ async def _finish_edit(
         callback.from_user.id,
         doc_id,
     )
+    if not editor_name:
+        editor_name = callback.from_user.full_name
     await state.clear()
     await pending.unlock(doc_id)
+    if editor_name:
+        doc.edited_by = editor_name
+        await pending.update_edited_by(doc_id, editor_name)
 
     text = pending.build_summary_text(doc)
     kb = pending.admin_keyboard(doc_id)
@@ -1795,7 +1837,10 @@ async def _finish_edit(
 
 
 async def _finish_edit_msg(
-    message: Message, state: FSMContext, doc: pending.PendingWriteoff
+    message: Message,
+    state: FSMContext,
+    doc: pending.PendingWriteoff,
+    editor_name: str = "",
 ) -> None:
     """То же, но из message-хэндлера (не callback)."""
     doc_id = doc.doc_id
@@ -1804,8 +1849,13 @@ async def _finish_edit_msg(
         message.from_user.id,
         doc_id,
     )
+    if not editor_name:
+        editor_name = message.from_user.full_name
     await state.clear()
     await pending.unlock(doc_id)
+    if editor_name:
+        doc.edited_by = editor_name
+        await pending.update_edited_by(doc_id, editor_name)
 
     text = pending.build_summary_text(doc)
     kb = pending.admin_keyboard(doc_id)
@@ -1870,9 +1920,82 @@ async def _finish_edit_msg(
     await pending.save_admin_msg_ids(doc_id, new_msg_ids)
 
 
-# ══════════════════════════════════════════════════════
-#  ИСТОРИЯ СПИСАНИЙ
-# ══════════════════════════════════════════════════════
+# ── Ввод новой даты документа ──
+
+
+@router.message(AdminEditStates.edit_date)
+async def admin_set_date(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    logger.info(
+        "[writeoff-edit] Новая дата tg:%d, raw='%s'", message.from_user.id, raw
+    )
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    from datetime import datetime as _dt
+
+    date_incoming: str | None = None
+    for fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y"):
+        try:
+            dt = _dt.strptime(raw, fmt)
+            date_incoming = dt.strftime("%Y-%m-%dT%H:%M:%S")
+            break
+        except ValueError:
+            continue
+
+    if not date_incoming:
+        await message.answer(
+            "⚠️ Неверный формат даты. Введите ДД.ММ.ГГГГ или ДД.ММ.ГГГГ ЧЧ:ММ:"
+        )
+        return
+
+    data = await state.get_data()
+    doc = await pending.get(data.get("edit_doc_id", ""))
+    if not doc:
+        await state.clear()
+        return
+
+    doc.date_incoming = date_incoming
+    await pending.update_date_incoming(doc.doc_id, date_incoming)
+    logger.info("[writeoff-edit] Дата изменена на %s", date_incoming)
+
+    await _finish_edit_msg(message, state, doc, editor_name=message.from_user.full_name)
+
+
+# ── Ввод новой причины списания ──
+
+
+@router.message(AdminEditStates.edit_reason)
+async def admin_set_reason(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    logger.info(
+        "[writeoff-edit] Новая причина tg:%d, raw='%s'", message.from_user.id, raw
+    )
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    if not raw:
+        await message.answer("⚠️ Причина не может быть пустой. Введите причину:")
+        return
+
+    data = await state.get_data()
+    doc = await pending.get(data.get("edit_doc_id", ""))
+    if not doc:
+        await state.clear()
+        return
+
+    doc.reason = raw
+    await pending.update_reason(doc.doc_id, raw)
+    logger.info("[writeoff-edit] Причина изменена")
+
+    await _finish_edit_msg(message, state, doc, editor_name=message.from_user.full_name)
+
+
+# ── Завершение редактирования → назад к кнопкам ──
 
 
 # Защита: текст в inline-состояниях истории

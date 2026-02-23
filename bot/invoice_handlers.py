@@ -82,6 +82,13 @@ class InvoiceFromTemplateStates(StatesGroup):
     choose_template = State()  # выбор шаблона
     enter_quantities = State()  # ввод количества для позиций
     confirm = State()  # подтверждение и отправка
+    # ── Редактирование ──
+    edit_choose_field = State()  # выбор поля: дата / позиции
+    edit_item_idx = State()  # какую позицию редактировать
+    edit_item_action = State()  # действие: наименование / количество / удалить
+    edit_item_search = State()  # поиск нового товара
+    edit_item_qty = State()  # ввод нового количества
+    edit_date = State()  # ввод новой даты
 
 
 # ══════════════════════════════════════════════════════
@@ -172,6 +179,11 @@ def _confirm_kb() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text="✅ Отправить накладную", callback_data="inv_confirm_send"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✏️ Редактировать", callback_data="inv_edit_start"
                 )
             ],
             [
@@ -1106,6 +1118,7 @@ async def _do_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
         items=items_with_qty,
         containers=containers,
         comment=comment,
+        date_incoming=data.get("_date_incoming"),
     )
     logger.info(
         "[invoice][from_tpl] Документ построен: dateIncoming=%s, status=%s, "
@@ -1216,6 +1229,384 @@ async def reenter_quantities(callback: CallbackQuery, state: FSMContext) -> None
         state,
         text,
     )
+
+
+# ══════════════════════════════════════════════════════
+#  Редактирование накладной (до отправки)
+# ══════════════════════════════════════════════════════
+
+
+@router.callback_query(InvoiceFromTemplateStates.confirm, F.data == "inv_edit_start")
+async def invoice_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[invoice_handlers] invoice_edit_start tg:%d", callback.from_user.id)
+    await callback.answer()
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📅 Дата", callback_data="inv_edit_field:date")],
+            [InlineKeyboardButton(text="📦 Позиции", callback_data="inv_edit_field:items")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_edit_cancel")],
+        ]
+    )
+    await state.set_state(InvoiceFromTemplateStates.edit_choose_field)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=kb)
+    except Exception:
+        pass
+
+
+@router.callback_query(
+    InvoiceFromTemplateStates.edit_choose_field, F.data.startswith("inv_edit_field:")
+)
+async def invoice_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    field = callback.data.split(":", 1)[1]
+    logger.info(
+        "[invoice_handlers] invoice_edit_field tg:%d, field=%s",
+        callback.from_user.id,
+        field,
+    )
+
+    if field == "date":
+        data = await state.get_data()
+        cur_date = data.get("_date_incoming", "")
+        hint = ""
+        if cur_date:
+            try:
+                from datetime import datetime as _dt
+                dt = _dt.fromisoformat(cur_date)
+                hint = f" (сейчас: {dt.strftime('%d.%m.%Y %H:%M')})"
+            except Exception:
+                hint = f" (сейчас: {cur_date})"
+        await state.set_state(InvoiceFromTemplateStates.edit_date)
+        try:
+            await callback.message.edit_text(
+                f"📅 Введите дату накладной{hint}:\n"
+                "<i>Формат: ДД.ММ.ГГГГ или ДД.ММ.ГГГГ ЧЧ:ММ</i>",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    elif field == "items":
+        data = await state.get_data()
+        items = data.get("_items_with_qty", [])
+        if not items:
+            await callback.answer("❌ Нет позиций", show_alert=True)
+            return
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text=f"{i}. {it.get('name', '?')} — {it.get('amount', 0):.4g} {it.get('unit_name', 'шт')}",
+                    callback_data=f"inv_edit_item:{i-1}",
+                )
+            ]
+            for i, it in enumerate(items, 1)
+        ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="inv_edit_cancel")]]
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+        await state.set_state(InvoiceFromTemplateStates.edit_item_idx)
+        try:
+            await callback.message.edit_text(
+                "📦 Какую позицию редактировать?", reply_markup=kb
+            )
+        except Exception:
+            pass
+
+
+@router.callback_query(
+    InvoiceFromTemplateStates.edit_item_idx, F.data.startswith("inv_edit_item:")
+)
+async def invoice_edit_item_idx(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    idx_str = callback.data.split(":", 1)[1]
+    try:
+        idx = int(idx_str)
+    except ValueError:
+        await callback.answer("❌ Ошибка", show_alert=True)
+        return
+
+    data = await state.get_data()
+    items = data.get("_items_with_qty", [])
+    if idx < 0 or idx >= len(items):
+        await callback.answer("❌ Позиция не найдена", show_alert=True)
+        return
+
+    item = items[idx]
+    await state.update_data(_inv_edit_idx=idx)
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📦 Сменить наименование", callback_data="inv_edit_action:name")],
+            [InlineKeyboardButton(text="🔢 Изменить количество", callback_data="inv_edit_action:qty")],
+            [InlineKeyboardButton(text="🗑 Удалить позицию", callback_data="inv_edit_action:delete")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="inv_edit_cancel")],
+        ]
+    )
+    await state.set_state(InvoiceFromTemplateStates.edit_item_action)
+    try:
+        await callback.message.edit_text(
+            f"📦 #{idx+1}: <b>{item.get('name', '?')}</b> — {item.get('amount', 0):.4g} {item.get('unit_name', 'шт')}\n\nЧто меняем?",
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(
+    InvoiceFromTemplateStates.edit_item_action, F.data.startswith("inv_edit_action:")
+)
+async def invoice_edit_item_action(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    action = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    items = list(data.get("_items_with_qty", []))
+    idx = data.get("_inv_edit_idx", -1)
+
+    if idx < 0 or idx >= len(items):
+        await state.set_state(InvoiceFromTemplateStates.confirm)
+        return
+
+    if action == "delete":
+        removed = items.pop(idx)
+        await state.update_data(_items_with_qty=items)
+        logger.info("[invoice-edit] Удалена позиция #%d: %s", idx + 1, removed.get("name"))
+        await _finish_invoice_edit(callback, state, "Позиция удалена")
+        return
+
+    if action == "name":
+        await state.set_state(InvoiceFromTemplateStates.edit_item_search)
+        try:
+            await callback.message.edit_text(
+                "🔍 Введите часть названия нового товара:"
+            )
+        except Exception:
+            pass
+        return
+
+    if action == "qty":
+        item = items[idx]
+        unit = item.get("unit_name", "шт")
+        await state.set_state(InvoiceFromTemplateStates.edit_item_qty)
+        try:
+            await callback.message.edit_text(
+                f"🔢 Введите новое количество ({unit}) для «{item.get('name', '?')}»:"
+            )
+        except Exception:
+            pass
+        return
+
+
+@router.message(InvoiceFromTemplateStates.edit_item_search)
+async def invoice_edit_search_product(message: Message, state: FSMContext) -> None:
+    query = (message.text or "").strip()
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    if len(query) < 2:
+        await message.answer("⚠️ Минимум 2 символа.")
+        return
+
+    products = await inv_uc.search_products_tree(query)
+    if not products:
+        await message.answer("🔎 Ничего не найдено. Попробуйте иначе:")
+        return
+
+    await state.update_data(_inv_edit_prod_cache={p["id"]: p for p in products})
+    buttons = [
+        [InlineKeyboardButton(text=p["name"], callback_data=f"inv_edit_newprod:{p['id']}")]
+        for p in products[:15]
+    ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="inv_edit_cancel")]]
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await message.answer("Выберите новый товар:", reply_markup=kb)
+
+
+@router.callback_query(
+    InvoiceFromTemplateStates.edit_item_search, F.data.startswith("inv_edit_newprod:")
+)
+async def invoice_edit_pick_product(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    prod_id = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    items = list(data.get("_items_with_qty", []))
+    idx = data.get("_inv_edit_idx", -1)
+    cache = data.get("_inv_edit_prod_cache", {})
+    product = cache.get(prod_id)
+
+    if not product or idx < 0 or idx >= len(items):
+        await state.set_state(InvoiceFromTemplateStates.confirm)
+        return
+
+    old_name = items[idx].get("name", "?")
+    items[idx] = {
+        **items[idx],
+        "product_id": product.get("id", prod_id),
+        "name": product["name"],
+        "main_unit": product.get("main_unit", items[idx].get("main_unit")),
+        "unit_name": product.get("unit_name", items[idx].get("unit_name", "шт")),
+    }
+    await state.update_data(_items_with_qty=items)
+    logger.info("[invoice-edit] Замена #%d: %s → %s", idx + 1, old_name, product["name"])
+    await _finish_invoice_edit(callback, state, f"Замена: {old_name} → {product['name']}")
+
+
+@router.message(InvoiceFromTemplateStates.edit_item_qty)
+async def invoice_edit_enter_qty(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").replace(",", ".").strip()
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    try:
+        qty = float(raw)
+    except ValueError:
+        await message.answer("⚠️ Введите число:")
+        return
+
+    if qty <= 0:
+        await message.answer("⚠️ Количество должно быть > 0:")
+        return
+
+    data = await state.get_data()
+    items = list(data.get("_items_with_qty", []))
+    idx = data.get("_inv_edit_idx", -1)
+
+    if idx < 0 or idx >= len(items):
+        await state.set_state(InvoiceFromTemplateStates.confirm)
+        return
+
+    item = items[idx]
+    unit = item.get("unit_name", "шт")
+    norm = normalize_unit(unit)
+    converted = qty / 1000 if norm in ("kg", "l") else qty
+    items[idx] = {**item, "amount": converted}
+    await state.update_data(_items_with_qty=items)
+    logger.info("[invoice-edit] Позиция #%d qty=%s -> %s", idx + 1, raw, converted)
+
+    await _finish_invoice_edit_msg(message, state, f"Количество изменено")
+
+
+@router.message(InvoiceFromTemplateStates.edit_date)
+async def invoice_edit_enter_date(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    from datetime import datetime as _dt
+
+    date_incoming: str | None = None
+    for fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y"):
+        try:
+            dt = _dt.strptime(raw, fmt)
+            date_incoming = dt.strftime("%Y-%m-%dT%H:%M:%S")
+            break
+        except ValueError:
+            continue
+
+    if not date_incoming:
+        await message.answer(
+            "⚠️ Неверный формат. Введите ДД.ММ.ГГГГ или ДД.ММ.ГГГГ ЧЧ:ММ:"
+        )
+        return
+
+    await state.update_data(_date_incoming=date_incoming)
+    logger.info("[invoice-edit] Дата изменена на %s", date_incoming)
+    await _finish_invoice_edit_msg(message, state, "Дата изменена")
+
+
+# ── Инлайн-защита: игнорировать текст в состояниях кнопок ──
+@router.message(InvoiceFromTemplateStates.edit_choose_field)
+@router.message(InvoiceFromTemplateStates.edit_item_idx)
+@router.message(InvoiceFromTemplateStates.edit_item_action)
+async def _ignore_text_invoice_edit(message: Message) -> None:
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "inv_edit_cancel")
+async def invoice_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    await state.set_state(InvoiceFromTemplateStates.confirm)
+    data = await state.get_data()
+    # Восстановить confirm-сообщение
+    try:
+        await callback.message.edit_reply_markup(reply_markup=_confirm_kb())
+    except Exception:
+        pass
+
+
+async def _invoice_confirm_text(data: dict, editor_name: str = "") -> str:
+    """Сформировать текст confirm-сообщения (с пометкой редактора)."""
+    items = data.get("_items_with_qty", [])
+    template = data.get("_template", {})
+
+    text = (
+        f"📋 <b>Накладная к отправке</b>\n"
+        f"🏬 <b>Склад:</b> {template.get('store_name', '—')}\n"
+        f"🏢 <b>Контрагент:</b> {template.get('counteragent_name', '—')}\n"
+        f"📂 <b>Счёт:</b> {template.get('account_name', '—')}\n"
+    )
+    date_inc = data.get("_date_incoming")
+    if date_inc:
+        try:
+            from datetime import datetime as _dt
+            dt = _dt.fromisoformat(date_inc)
+            text += f"📅 <b>Дата:</b> {dt.strftime('%d.%m.%Y %H:%M')}\n"
+        except Exception:
+            text += f"📅 <b>Дата:</b> {date_inc}\n"
+    if items:
+        total = sum(it.get("amount", 0) * it.get("price", 0) for it in items)
+        text += f"\n<b>Позиции ({len(items)}):</b>\n"
+        for i, it in enumerate(items, 1):
+            amt = it.get("amount", 0)
+            unit = it.get("unit_name", "шт")
+            price = it.get("price", 0)
+            text += f"  {i}. {it.get('name', '?')} — {amt:.4g} {unit}"
+            if price:
+                text += f" × {price:.2f}₽"
+            text += "\n"
+        text += f"\n<b>Итого: {total:.2f}₽</b>"
+    if editor_name:
+        text += f"\n\n✏️ <i>Изменено: {editor_name}</i>"
+    return text
+
+
+async def _finish_invoice_edit(
+    callback: CallbackQuery, state: FSMContext, description: str
+) -> None:
+    """Завершить редактирование накладной: вернуть на confirm."""
+    editor_name = callback.from_user.full_name
+    data = await state.get_data()
+    await state.update_data(_inv_edited_by=editor_name)
+    await state.set_state(InvoiceFromTemplateStates.confirm)
+    text = await _invoice_confirm_text(await state.get_data(), editor_name)
+    try:
+        await callback.message.edit_text(
+            text, parse_mode="HTML", reply_markup=_confirm_kb()
+        )
+    except Exception:
+        pass
+
+
+async def _finish_invoice_edit_msg(
+    message: Message, state: FSMContext, description: str
+) -> None:
+    """То же, из message-хэндлера."""
+    editor_name = message.from_user.full_name
+    await state.update_data(_inv_edited_by=editor_name)
+    await state.set_state(InvoiceFromTemplateStates.confirm)
+    data = await state.get_data()
+    text = await _invoice_confirm_text(data, editor_name)
+    try:
+        await message.answer(text, parse_mode="HTML", reply_markup=_confirm_kb())
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════

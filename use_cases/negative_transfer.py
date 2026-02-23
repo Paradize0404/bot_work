@@ -35,7 +35,7 @@ from sqlalchemy import select
 
 from adapters import iiko_api
 from db.engine import async_session_factory
-from db.models import Product, Store, SyncLog
+from db.models import Entity, Product, Store, SyncLog
 from use_cases._helpers import now_kgd, safe_float
 
 logger = logging.getLogger(__name__)
@@ -166,10 +166,18 @@ async def _load_products_by_name(names: set[str]) -> dict[str, dict]:
     """
     Загрузить продукты по именам из БД.
     Возвращает: {product_name: {"id": str, "main_unit": str | None}}
+
+    Двухпроходный поиск:
+    1. Точное совпадение (index-scan).
+    2. Для ненайденных — func.trim() на обеих сторонах (trailing spaces из iiko REST API).
     """
     if not names:
         return {}
+
+    from sqlalchemy import func
+
     async with async_session_factory() as session:
+        # Проход 1: точный поиск
         rows = await session.execute(
             select(Product.id, Product.name, Product.main_unit).where(
                 Product.name.in_(list(names)),
@@ -183,6 +191,58 @@ async def _load_products_by_name(names: set[str]) -> dict[str, dict]:
                     "id": str(row.id),
                     "main_unit": str(row.main_unit) if row.main_unit else None,
                 }
+
+        # Проход 2: fuzzy (trim) для не найденных — iiko REST может добавлять пробелы
+        missed = names - set(result.keys())
+        if missed:
+            trimmed_missed = [n.strip() for n in missed]
+            rows2 = await session.execute(
+                select(Product.id, Product.name, Product.main_unit).where(
+                    func.trim(Product.name).in_(trimmed_missed),
+                    Product.deleted.is_(False),
+                )
+            )
+            for row in rows2.all():
+                if row.name:
+                    key = row.name.strip()
+                    if key not in result:
+                        result[key] = {
+                            "id": str(row.id),
+                            "main_unit": str(row.main_unit) if row.main_unit else None,
+                        }
+            if len(result) > len(names) - len(missed):
+                logger.info(
+                    "[%s] Fuzzy-поиск нашёл %d товаров с trailing spaces в БД",
+                    LABEL,
+                    len(result) - (len(names) - len(missed)),
+                )
+
+        return result
+
+
+async def _load_unit_id_by_name(names: set[str]) -> dict[str, str]:
+    """
+    Загрузить UUID единиц измерения из iiko_entity по имени (MeasureUnit).
+    Возвращает: {unit_name: unit_uuid_str}
+
+    Используется как fallback когда main_unit = NULL в iiko_product:
+    OLAP-строка содержит Product.MeasureUnit (имя единицы), по нему
+    ищем UUID в iiko_entity и используем в документе perемещения.
+    """
+    if not names:
+        return {}
+    async with async_session_factory() as session:
+        rows = await session.execute(
+            select(Entity.id, Entity.name).where(
+                Entity.root_type == "MeasureUnit",
+                Entity.name.in_(list(names)),
+                Entity.deleted.is_(False),
+            )
+        )
+        result: dict[str, str] = {}
+        for row in rows.all():
+            if row.name:
+                result[row.name.strip()] = str(row.id)
         return result
 
 
@@ -233,6 +293,9 @@ def _collect_negative_items(
             {
                 "product_name": product_name,
                 "amount": abs(amount),
+                # Имя единицы измерения из OLAP — используется как fallback
+                # когда main_unit отсутствует в iiko_product (см. _load_unit_id_by_name)
+                "measure_unit_name": (row.get("Product.MeasureUnit") or "").strip(),
             }
         )
     return dict(result)
@@ -360,6 +423,35 @@ async def run_negative_transfer_all_restaurants(
                 ", ".join(sorted(missing_in_db)),
             )
 
+        # ── 5b. Fallback: единицы измерения для товаров без main_unit ──
+        # Если iiko_product.main_unit = NULL, пробуем найти UUID единицы
+        # по имени (Product.MeasureUnit из OLAP) в iiko_entity.
+        null_unit_product_names: set[str] = {
+            item["product_name"]
+            for items in negative_by_store.values()
+            for item in items
+            if products_db.get(item["product_name"]) is not None
+            and not products_db[item["product_name"]].get("main_unit")
+        }
+        null_unit_olap_names: set[str] = {
+            item["measure_unit_name"]
+            for items in negative_by_store.values()
+            for item in items
+            if item["product_name"] in null_unit_product_names
+            and item.get("measure_unit_name")
+        }
+        units_db: dict[str, str] = {}
+        if null_unit_olap_names:
+            units_db = await _load_unit_id_by_name(null_unit_olap_names)
+            logger.info(
+                "[%s] Fallback единицы: %d товаров без main_unit, "
+                "ищем %d единиц в iiko_entity, найдено %d",
+                LABEL,
+                len(null_unit_product_names),
+                len(null_unit_olap_names),
+                len(units_db),
+            )
+
         # ── 6. Для каждого ресторана: отправить перемещения ──
         total_transfers = 0
         for restaurant, rest_data in sorted(restaurant_map.items()):
@@ -384,21 +476,41 @@ async def run_negative_transfer_all_restaurants(
                     pname = item["product_name"]
                     pdata = products_db.get(pname)
                     if not pdata:
-                        rest_result["skipped_products"].append(pname)
+                        if pname not in rest_result["skipped_products"]:
+                            rest_result["skipped_products"].append(pname)
                         continue
-                    if not pdata.get("main_unit"):
-                        logger.warning(
-                            "[%s] '%s' — нет main_unit в БД, пропускаем",
-                            LABEL,
-                            pname,
-                        )
-                        rest_result["skipped_products"].append(pname)
-                        continue
+
+                    # Resolve unit: сначала main_unit из БД, затем fallback из OLAP
+                    unit_id: str | None = pdata.get("main_unit")
+                    if not unit_id:
+                        uname = item.get("measure_unit_name", "").strip()
+                        unit_id = units_db.get(uname) if uname else None
+                        if unit_id:
+                            logger.info(
+                                "[%s] '%s' — main_unit отсутствует в БД, "
+                                "использую fallback единицу '%s' (%s)",
+                                LABEL,
+                                pname,
+                                uname,
+                                unit_id,
+                            )
+                        else:
+                            logger.warning(
+                                "[%s] '%s' — нет main_unit в БД и не найдена "
+                                "единица '%s' в iiko_entity, пропускаем",
+                                LABEL,
+                                pname,
+                                uname or "(пусто)",
+                            )
+                            if pname not in rest_result["skipped_products"]:
+                                rest_result["skipped_products"].append(pname)
+                            continue
+
                     transfer_items.append(
                         {
                             "productId": pdata["id"],
                             "amount": round(item["amount"], 6),
-                            "measureUnitId": pdata["main_unit"],
+                            "measureUnitId": unit_id,
                         }
                     )
 

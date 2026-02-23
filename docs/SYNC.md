@@ -44,6 +44,42 @@ OLAP v1 остатки → фильтр (TopParent = «Расходные мат
 
 Авто-масштабирование: новый ресторан → новые склады «Хоз. товары (НОВЫЙ)» + «Бар (НОВЫЙ)» → перемещения автоматически.
 
+### Пайплайн (7 шагов)
+
+| Шаг | Что делается |
+|-----|-------------|
+| 1 | `_load_stores()` → `_build_restaurant_map()` — паттерн `TYPE (РЕСТОРАН)`, строится карта source→targets |
+| 2 | `fetch_olap_transactions_v1(today, today)` — один OLAP-запрос для всех ресторанов |
+| 3 | `_collect_negative_items()` — фильтр по целевым складам + TopParent + amount < 0. Сохраняет `measure_unit_name` из OLAP |
+| 4 | `_load_products_by_name()` — **двухпроходный поиск**: проход 1 = точный `name.in_()`, проход 2 = `func.trim(name).in_()` для ненайденных (trailing spaces из REST API) |
+| 5 | `_load_unit_id_by_name()` — **fallback единиц измерения**: для товаров с `main_unit=NULL` ищет UUID в `iiko_entity (MeasureUnit)` по имени из OLAP |
+| 6 | POST `/v2/documents/internalTransfer` per restaurant×target_store |
+| 7 | SyncLog запись |
+
+### Ключевые функции
+
+| Функция | Файл | Назначение |
+|---------|------|------------|
+| `run_negative_transfer_once()` | `negative_transfer.py` | Публичный API с Lock (вызывается scheduler и ручным триггером) |
+| `_build_restaurant_map()` | `negative_transfer.py` | Паттерн `TYPE (РЕСТОРАН)` → карта source+targets |
+| `_collect_negative_items()` | `negative_transfer.py` | Фильтрация OLAP-строк, сохраняет `measure_unit_name` |
+| `_load_products_by_name()` | `negative_transfer.py` | Двухпроходный поиск по имени (exact + trim) |
+| `_load_unit_id_by_name()` | `negative_transfer.py` | Fallback UUID единицы по имени из `iiko_entity` |
+| `send_internal_transfer()` | `iiko_api.py` | POST перемещения в iiko |
+
+### Конфигурация (env)
+
+| Переменная | Дефолт | Назначение |
+|-----------|--------|------------|
+| `NEGATIVE_TRANSFER_SOURCE_PREFIX` | `Хоз. товары` | Имя склада-источника |
+| `NEGATIVE_TRANSFER_TARGET_PREFIXES` | `Бар,Кухня` | CSV целевых складов |
+| `NEGATIVE_TRANSFER_PRODUCT_GROUP` | `Расходные материалы` | TopParent фильтр |
+
+### Когда нечего перемещать
+
+- `nothing_to_transfer` — OLAP не нашёл отрицательных остатков на целевых складах в текущий день. Это нормально если перемещение уже было сделано ранее или расходников достаточно.
+- Если **сам Хоз.товары в минусе** — авто-перемещение не поможет. Нужна накладная прихода в iiko на склад-источник.
+
 ---
 
 ## Generic sync-паттерн
@@ -93,3 +129,7 @@ async def _run_sync(entity_name, fetch_fn, Model, mapping_fn, session):
 2. **Mirror-delete всех записей:** sanity check — не более 50% (S3)
 3. **Параллельный sync:** sync-lock на `acquire_nowait()`, не `locked()` + `async with` (TOCTOU гонка, K2)
 4. **datetime.now() в sync:** ВСЕГДА `now_kgd()` — серверное UTC ≠ Калининградское
+5. **Авто-перемещение: «пропущено N товаров»** — две причины:
+   - iiko REST API добавляет **trailing spaces** в `iiko_product.name`, OLAP возвращает имена без пробелов → `name.in_()` не находит. Решение: двухпроходный поиск с `func.trim()`.
+   - `iiko_product.main_unit = NULL` — iiko не вернул `mainUnit` в REST ответе. Решение: fallback UUID через `_load_unit_id_by_name()` по имени из OLAP.
+6. **Авто-перемещение: `nothing_to_transfer` после 07:00-синка** — OLAP `report=TRANSACTIONS from=today` не видит вчерашних транзакций как «сегодняшних». Это нормально — минусы на целевых складах исчезают после перемещений. Если остатки вновь уходят в минус днём, перемещение сработает в 23:00.

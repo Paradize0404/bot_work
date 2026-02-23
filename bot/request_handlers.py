@@ -91,10 +91,13 @@ class CreateRequestStates(StatesGroup):
 
 
 class EditRequestStates(StatesGroup):
+    choose_field = State()  # выбор поля: дата / счёт / позиции
     choose_item = State()  # выбор позиции для редактирования
     choose_action = State()  # выбор действия (наименование/количество/удалить)
     new_product_search = State()  # поиск нового товара
     new_quantity = State()  # ввод нового количества
+    edit_date = State()  # ввод новой даты накладной
+    edit_account = State()  # выбор нового счёта реализации
 
 
 class DuplicateRequestStates(StatesGroup):
@@ -1239,6 +1242,10 @@ async def _finish_request_edit(
     _unlock_request(pk)
     await state.clear()
 
+    # Сохранить редактора в БД
+    editor_name = callback.from_user.full_name
+    await req_uc.update_request_edited_by(pk, editor_name)
+
     # Получаем обновлённую заявку
     req_data = await req_uc.get_request_by_pk(pk)
     if not req_data:
@@ -1297,6 +1304,10 @@ async def _finish_request_edit_msg(
     )
     _unlock_request(pk)
     await state.clear()
+
+    # Сохранить редактора в БД
+    editor_name = message.from_user.full_name
+    await req_uc.update_request_edited_by(pk, editor_name)
 
     # Получаем обновлённую заявку
     req_data = await req_uc.get_request_by_pk(pk)
@@ -1493,6 +1504,7 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
             items=group_items,
             containers=containers,
             comment=comment,
+            date_incoming=req_data.get("date_incoming"),
         )
 
         try:
@@ -1672,33 +1684,141 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
         _unlock_request(pk)
         return
 
-    # Показываем список позиций для выбора
-    buttons = [
-        [
-            InlineKeyboardButton(
-                text=f"{i}. {it['name']} — {it.get('qty_display', str(it.get('amount', 0)))} {it.get('unit_name', 'шт')}",
-                callback_data=f"req_edit_item:{i-1}",
-            )
+    # Показываем меню выбора поля
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📅 Дата", callback_data="req_edit_field:date")],
+            [InlineKeyboardButton(text="📂 Счёт", callback_data="req_edit_field:account")],
+            [InlineKeyboardButton(text="📦 Позиции", callback_data="req_edit_field:items")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")],
         ]
-        for i, it in enumerate(items, 1)
-    ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")]]
-
-    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
 
     await state.clear()
     await state.update_data(
         _edit_pk=pk, _edit_items=items, _bot_msg_id=callback.message.message_id
     )
-    await state.set_state(EditRequestStates.choose_item)
+    await state.set_state(EditRequestStates.choose_field)
 
     try:
         await callback.message.edit_text(
-            f"✏️ <b>Редактирование заявки #{pk}</b>\n\n📦 Какую позицию редактировать?",
+            f"✏️ <b>Редактирование заявки #{pk}</b>\n\nЧто редактируем?",
             parse_mode="HTML",
             reply_markup=kb,
         )
     except Exception:
         pass
+
+
+# ── Выбор поля для редактирования ──
+
+
+@router.callback_query(
+    EditRequestStates.choose_field, F.data.startswith("req_edit_field:")
+)
+async def req_choose_field(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] req_choose_field tg:%d", callback.from_user.id)
+    await callback.answer()
+    field = callback.data.split(":", 1)[1]
+
+    data = await state.get_data()
+    pk = data.get("_edit_pk")
+    items = data.get("_edit_items", [])
+
+    if field == "items":
+        if not items:
+            await callback.answer("❌ В заявке нет позиций", show_alert=True)
+            return
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text=f"{i}. {it['name']} — {it.get('qty_display', str(it.get('amount', 0)))} {it.get('unit_name', 'шт')}",
+                    callback_data=f"req_edit_item:{i-1}",
+                )
+            ]
+            for i, it in enumerate(items, 1)
+        ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")]]
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+        await state.set_state(EditRequestStates.choose_item)
+        try:
+            await callback.message.edit_text(
+                f"📦 Какую позицию редактировать?",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+        except Exception:
+            pass
+
+    elif field == "date":
+        req_data = await req_uc.get_request_by_pk(pk) if pk else None
+        cur_date = ""
+        if req_data and req_data.get("date_incoming"):
+            try:
+                from datetime import datetime as _dt
+                dt = _dt.fromisoformat(req_data["date_incoming"])
+                cur_date = f" (сейчас: {dt.strftime('%d.%m.%Y %H:%M')})"
+            except Exception:
+                cur_date = f" (сейчас: {req_data['date_incoming']})"
+        await state.set_state(EditRequestStates.edit_date)
+        try:
+            await callback.message.edit_text(
+                f"📅 Введите новую дату накладной{cur_date}:\n"
+                "<i>Формат: ДД.ММ.ГГГГ или ДД.ММ.ГГГГ ЧЧ:ММ</i>",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    elif field == "account":
+        from use_cases import outgoing_invoice as inv_uc_local
+
+        accounts = await inv_uc_local.get_sale_accounts()
+        if not accounts:
+            await callback.answer("❌ Счета не найдены", show_alert=True)
+            return
+        buttons = [
+            [InlineKeyboardButton(text=a["name"], callback_data=f"req_edit_acc:{a['id']}")]
+            for a in accounts[:20]
+        ] + [[InlineKeyboardButton(text="❌ Отмена", callback_data="req_cancel")]]
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+        await state.update_data(_edit_accounts=accounts)
+        await state.set_state(EditRequestStates.edit_account)
+        try:
+            await callback.message.edit_text(
+                "📂 Выберите новый счёт реализации:", reply_markup=kb
+            )
+        except Exception:
+            pass
+
+
+# ── Выбор нового счёта ──
+
+
+@router.callback_query(
+    EditRequestStates.edit_account, F.data.startswith("req_edit_acc:")
+)
+async def req_edit_account(callback: CallbackQuery, state: FSMContext) -> None:
+    logger.info("[request_handlers] req_edit_account tg:%d", callback.from_user.id)
+    await callback.answer()
+    acc_id = callback.data.split(":", 1)[1]
+
+    data = await state.get_data()
+    pk = data.get("_edit_pk")
+    accounts = data.get("_edit_accounts", [])
+
+    acc = next((a for a in accounts if a["id"] == acc_id), None)
+    if not acc or not pk:
+        await callback.answer("❌ Счёт не найден", show_alert=True)
+        return
+
+    await req_uc.update_request_account(pk, acc_id, acc["name"])
+    editor_name = callback.from_user.full_name
+    await req_uc.update_request_edited_by(pk, editor_name)
+    logger.info("[request] Счёт заявки #%d изменён на %s", pk, acc["name"])
+
+    await _finish_request_edit(
+        callback, state, pk, f"Счёт изменён: {acc['name']}"
+    )
 
 
 # ── Выбор позиции ──
@@ -2096,11 +2216,60 @@ async def edit_enter_new_quantity(message: Message, state: FSMContext) -> None:
     )
 
 
+# ── Ввод новой даты накладной ──
+
+
+@router.message(EditRequestStates.edit_date)
+async def req_edit_enter_date(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    logger.info(
+        "[request] Новая дата tg:%d, raw='%s'", message.from_user.id, raw
+    )
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    from datetime import datetime as _dt
+
+    date_incoming: str | None = None
+    for fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y"):
+        try:
+            dt = _dt.strptime(raw, fmt)
+            date_incoming = dt.strftime("%Y-%m-%dT%H:%M:%S")
+            break
+        except ValueError:
+            continue
+
+    if not date_incoming:
+        await message.answer(
+            "⚠️ Неверный формат. Введите дату в формате ДД.ММ.ГГГГ или ДД.ММ.ГГГГ ЧЧ:ММ:"
+        )
+        return
+
+    data = await state.get_data()
+    pk = data.get("_edit_pk")
+    if not pk:
+        await state.clear()
+        return
+
+    await req_uc.update_request_date(pk, date_incoming)
+    editor_name = message.from_user.full_name
+    await req_uc.update_request_edited_by(pk, editor_name)
+    logger.info("[request] Дата заявки #%d изменена на %s", pk, date_incoming)
+
+    await _finish_request_edit_msg(
+        message, state, pk, f"Дата накладной изменена"
+    )
+
+
 # ── Защита: текст в inline-состояниях ──
 
 
+@router.message(EditRequestStates.choose_field)
 @router.message(EditRequestStates.choose_item)
 @router.message(EditRequestStates.choose_action)
+@router.message(EditRequestStates.edit_account)
 async def _ignore_text_edit_inline(message: Message) -> None:
     logger.debug(
         "[request] Игнор текста в inline-состоянии редактирования tg:%d",

@@ -101,6 +101,11 @@ async def create_tables() -> None:
         "ALTER TABLE ocr_document ALTER COLUMN validated_json TYPE JSONB USING validated_json::jsonb",
         "ALTER TABLE ocr_document ALTER COLUMN mapped_json TYPE JSONB USING mapped_json::jsonb",
         "ALTER TABLE ocr_document ALTER COLUMN tg_file_ids TYPE JSONB USING tg_file_ids::jsonb",
+        # ── Унифицированное редактирование документов: дата и «изменено» ──
+        "ALTER TABLE pending_writeoff ADD COLUMN IF NOT EXISTS date_incoming VARCHAR(20)",
+        "ALTER TABLE pending_writeoff ADD COLUMN IF NOT EXISTS edited_by VARCHAR(500)",
+        "ALTER TABLE product_request ADD COLUMN IF NOT EXISTS date_incoming VARCHAR(20)",
+        "ALTER TABLE product_request ADD COLUMN IF NOT EXISTS edited_by_name VARCHAR(500)",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:

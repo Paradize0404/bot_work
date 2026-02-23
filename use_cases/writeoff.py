@@ -504,12 +504,14 @@ def build_writeoff_document(
     reason: str,
     items: list[dict],
     author_name: str = "",
+    date_incoming: str | None = None,
 ) -> dict:
     """
     Построить JSON-документ для отправки в iiko API.
     items — [{id, quantity, main_unit}, ...]
     Отфильтровывает позиции с quantity == 0.
     comment = "причина (Автор: ФИО)" — для трекинга в iiko.
+    date_incoming — переопределённая дата (YYYY-MM-DDTHH:MM:SS); если None — текущая.
     """
     import uuid
 
@@ -520,7 +522,7 @@ def build_writeoff_document(
     comment = " ".join(comment_parts)
     return {
         "id": str(uuid.uuid4()),
-        "dateIncoming": now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
+        "dateIncoming": date_incoming or now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
         "status": "PROCESSED",
         "comment": comment,
         "storeId": store_id,
@@ -671,6 +673,7 @@ async def approve_writeoff(doc) -> ApprovalResult:
         reason=doc.reason,
         items=doc.items,
         author_name=doc.author_name,
+        date_incoming=getattr(doc, "date_incoming", None),
     )
     result_text = await send_writeoff_document(document)
     success = result_text.startswith("✅")

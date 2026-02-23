@@ -165,6 +165,23 @@ async def get_revenue_account() -> dict | None:
     return account
 
 
+async def get_sale_accounts() -> list[dict]:
+    """
+    Получить все активные счета реализации из iiko_entity (Account).
+    Возвращает [{id, name}, ...].
+    """
+    async with async_session_factory() as session:
+        stmt = (
+            select(Entity.id, Entity.name)
+            .where(Entity.root_type == "Account")
+            .where(Entity.deleted.is_(False))
+            .order_by(Entity.name)
+        )
+        result = await session.execute(stmt)
+        rows = result.all()
+    return [{"id": str(r.id), "name": r.name} for r in rows]
+
+
 # ═══════════════════════════════════════════════════════
 # Склады подразделения (бар / кухня)
 # ═══════════════════════════════════════════════════════
@@ -1353,6 +1370,7 @@ def build_outgoing_invoice_document(
     items: list[dict],
     containers: dict[str, str] | None = None,
     comment: str = "",
+    date_incoming: str | None = None,
 ) -> dict:
     """
     Построить JSON-документ расходной накладной для iiko API.
@@ -1360,6 +1378,7 @@ def build_outgoing_invoice_document(
     items: [{product_id, amount, price, main_unit}, ...]
     containers: {product_id: container_id} — тара из iiko_product.raw_json
     Фильтрует позиции с amount == 0.
+    date_incoming — переопределённая дата (YYYY-MM-DDTHH:MM:SS); если None — текущая.
     """
     from use_cases._helpers import now_kgd
 
@@ -1370,7 +1389,7 @@ def build_outgoing_invoice_document(
         logger.info("[invoice][build] Пропущено позиций с amount=0: %d", skipped)
 
     doc = {
-        "dateIncoming": now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
+        "dateIncoming": date_incoming or now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
         "status": "PROCESSED",
         "comment": comment,
         "storeId": store_id,

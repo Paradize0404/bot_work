@@ -358,6 +358,8 @@ async def get_request_by_pk(pk: int) -> dict | None:
         "approved_by": r.approved_by,
         "created_at": r.created_at,
         "approved_at": r.approved_at,
+        "date_incoming": getattr(r, "date_incoming", None),
+        "edited_by_name": getattr(r, "edited_by_name", None),
     }
 
 
@@ -419,6 +421,8 @@ async def get_pending_requests_full() -> list[dict]:
             "approved_by": r.approved_by,
             "created_at": r.created_at,
             "approved_at": r.approved_at,
+            "date_incoming": getattr(r, "date_incoming", None),
+            "edited_by_name": getattr(r, "edited_by_name", None),
         }
         for r in rows
     ]
@@ -512,6 +516,51 @@ async def update_request_items(pk: int, items: list[dict], total_sum: float) -> 
     return True
 
 
+async def update_request_date(pk: int, date_incoming: str | None) -> bool:
+    """Обновить дату накладной (переопределённая дата для iiko)."""
+    from sqlalchemy import update as sa_update
+
+    async with async_session_factory() as session:
+        result = await session.execute(
+            sa_update(ProductRequest)
+            .where(ProductRequest.pk == pk)
+            .values(date_incoming=date_incoming)
+        )
+        await session.commit()
+    return True
+
+
+async def update_request_account(
+    pk: int, account_id: str, account_name: str
+) -> bool:
+    """Обновить счёт заявки."""
+    from sqlalchemy import update as sa_update
+    from uuid import UUID
+
+    async with async_session_factory() as session:
+        await session.execute(
+            sa_update(ProductRequest)
+            .where(ProductRequest.pk == pk)
+            .values(account_id=UUID(account_id), account_name=account_name)
+        )
+        await session.commit()
+    logger.info("[request] Счёт pk=%d изменён на %s", pk, account_name)
+    return True
+
+
+async def update_request_edited_by(pk: int, editor_name: str) -> None:
+    """Сохранить ФИО последнего редактора заявки."""
+    from sqlalchemy import update as sa_update
+
+    async with async_session_factory() as session:
+        await session.execute(
+            sa_update(ProductRequest)
+            .where(ProductRequest.pk == pk)
+            .values(edited_by_name=editor_name)
+        )
+        await session.commit()
+
+
 def format_request_text(
     req: dict, settings_dept_name: str = "", items_filter: list[dict] = None
 ) -> str:
@@ -563,6 +612,21 @@ def format_request_text(
 
     if req.get("comment"):
         text += f"\n💬 {req['comment']}"
+
+    # Переопределённая дата накладной
+    date_inc = req.get("date_incoming")
+    if date_inc:
+        try:
+            from datetime import datetime as _dt
+            dt = _dt.fromisoformat(date_inc)
+            text += f"\n📅 <b>Дата накладной:</b> {dt.strftime('%d.%m.%Y %H:%M')}"
+        except Exception:
+            text += f"\n📅 <b>Дата накладной:</b> {date_inc}"
+
+    # Кто редактировал
+    edited_by = req.get("edited_by_name")
+    if edited_by:
+        text += f"\n\n✏️ <i>Изменено: {edited_by}</i>"
 
     status_map = {
         "pending": "⏳ Ожидает",

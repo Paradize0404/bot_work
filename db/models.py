@@ -922,6 +922,16 @@ class ProductRequest(Base):
         nullable=True,
         comment="Telegram ID того, кто подтвердил/отправил",
     )
+    date_incoming = Column(
+        String(20),
+        nullable=True,
+        comment="Переопределённая дата для iiko (YYYY-MM-DDTHH:MM:SS)",
+    )
+    edited_by_name = Column(
+        String(500),
+        nullable=True,
+        comment="ФИО сотрудника, последнего редактировавшего заявку",
+    )
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     approved_at = Column(DateTime, nullable=True)
 
@@ -1190,6 +1200,16 @@ class PendingWriteoffDoc(Base):
         nullable=False,
         default=False,
         comment="True если документ сейчас обрабатывается админом",
+    )
+    date_incoming = Column(
+        String(20),
+        nullable=True,
+        comment="Переопределённая дата для iiko (YYYY-MM-DDTHH:MM:SS)",
+    )
+    edited_by = Column(
+        String(500),
+        nullable=True,
+        comment="ФИО администратора, последний редактировавшего документ",
     )
 
 

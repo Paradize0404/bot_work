@@ -48,6 +48,8 @@ class PendingWriteoff:
     ]  # [{id, name, quantity, user_quantity, unit_label, main_unit}, ...]
     admin_msg_ids: dict[int, int] = field(default_factory=dict)
     # {admin_chat_id: message_id} — для удаления/обновления кнопок у всех
+    date_incoming: str | None = None  # переопределённая дата (YYYY-MM-DDTHH:MM:SS)
+    edited_by: str | None = None  # ФИО последнего редактора
 
 
 def _row_to_dto(row: PendingWriteoffDoc) -> PendingWriteoff:
@@ -68,6 +70,8 @@ def _row_to_dto(row: PendingWriteoffDoc) -> PendingWriteoff:
         department_id=row.department_id,
         items=list(row.items),
         admin_msg_ids=admin_ids,
+        date_incoming=getattr(row, "date_incoming", None),
+        edited_by=getattr(row, "edited_by", None),
     )
 
 
@@ -242,6 +246,39 @@ async def update_account(doc_id: str, account_id: str, account_name: str) -> Non
         await session.commit()
 
 
+async def update_reason(doc_id: str, reason: str) -> None:
+    """Обновить причину списания."""
+    async with async_session_factory() as session:
+        await session.execute(
+            update(PendingWriteoffDoc)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+            .values(reason=reason)
+        )
+        await session.commit()
+
+
+async def update_date_incoming(doc_id: str, date_incoming: str | None) -> None:
+    """Обновить дату документа (переопределённая дата для iiko)."""
+    async with async_session_factory() as session:
+        await session.execute(
+            update(PendingWriteoffDoc)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+            .values(date_incoming=date_incoming)
+        )
+        await session.commit()
+
+
+async def update_edited_by(doc_id: str, editor_name: str) -> None:
+    """Сохранить ФИО последнего редактора документа."""
+    async with async_session_factory() as session:
+        await session.execute(
+            update(PendingWriteoffDoc)
+            .where(PendingWriteoffDoc.doc_id == doc_id)
+            .values(edited_by=editor_name)
+        )
+        await session.commit()
+
+
 async def all_pending() -> list[PendingWriteoff]:
     """Все ожидающие документы."""
     await _cleanup_expired()
@@ -255,13 +292,22 @@ async def all_pending() -> list[PendingWriteoff]:
 
 def build_summary_text(doc: PendingWriteoff) -> str:
     """Текст summary для админского сообщения."""
+    date_str = ""
+    if doc.date_incoming:
+        # Перевести «YYYY-MM-DDTHH:MM:SS» -> «ДД.ММ.ГГГГ ЧЧ:ММ» для отображения
+        try:
+            from datetime import datetime as _dt
+            dt = _dt.fromisoformat(doc.date_incoming)
+            date_str = f"\n📅 <b>Дата:</b> {dt.strftime('%d.%m.%Y %H:%M')}"
+        except Exception:
+            date_str = f"\n📅 <b>Дата:</b> {doc.date_incoming}"
     text = (
         f"📄 <b>Акт списания на проверку</b>\n"
         f"🆔 <code>{doc.doc_id}</code>\n"
         f"👤 <b>Автор:</b> {doc.author_name}\n"
         f"🏬 <b>Склад:</b> {doc.store_name}\n"
         f"📂 <b>Счёт:</b> {doc.account_name}\n"
-        f"📝 <b>Причина:</b> {doc.reason or '—'}\n"
+        f"📝 <b>Причина:</b> {doc.reason or '—'}{date_str}\n"
     )
     if doc.items:
         text += "\n<b>Позиции:</b>"
@@ -269,6 +315,8 @@ def build_summary_text(doc: PendingWriteoff) -> str:
             uq = item.get("user_quantity", item.get("quantity", 0))
             unit_label = item.get("unit_label", "шт")
             text += f"\n  {i}. {item['name']} — {uq} {unit_label}"
+    if doc.edited_by:
+        text += f"\n\n✏️ <i>Изменено: {doc.edited_by}</i>"
     return text
 
 
