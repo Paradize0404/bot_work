@@ -36,6 +36,7 @@ from bot.permission_map import (
     PERM_WRITEOFF_APPROVE,
     PERM_REQUEST_APPROVE,
 )
+import bot.request_handlers as _rh  # для _request_admin_msgs и _approve_kb
 
 logger = logging.getLogger(__name__)
 
@@ -149,22 +150,25 @@ async def _show_writeoffs(
         await callback.message.answer("📝 Ожидающих списаний нет.")
         return
 
-    lines: list[str] = [f"<b>📝 Списания ({len(docs)})</b>\n"]
-    for doc in docs:
-        lines.append(
-            f"🆔 <code>{doc.doc_id}</code>  👤 {doc.author_name}\n"
-            f"   🏬 {doc.store_name}  📦 {len(doc.items)} поз."
-        )
-
-    back_kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="pend_back")]
-        ]
-    )
+    # Удаляем навигационное сообщение
     await callback.message.delete()
-    await callback.message.answer(
-        "\n".join(lines), parse_mode="HTML", reply_markup=back_kb
-    )
+
+    # Для каждого документа: удаляем старое сообщение → пересылаем новое в конец чата
+    for doc in docs:
+        old_msg_id = doc.admin_msg_ids.get(tg_id)
+        if old_msg_id:
+            try:
+                await callback.bot.delete_message(tg_id, old_msg_id)
+            except Exception:
+                pass  # сообщение уже удалено или недоступно
+
+        text = wo_uc.build_summary_text(doc)
+        kb = wo_uc.admin_keyboard(doc.doc_id)
+        new_msg = await callback.bot.send_message(
+            tg_id, text, parse_mode="HTML", reply_markup=kb
+        )
+        doc.admin_msg_ids[tg_id] = new_msg.message_id
+        await wo_uc.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
 
 
 # ─── Заявки ──────────────────────────────────────────
@@ -184,35 +188,27 @@ async def _show_requests(
         await callback.message.answer("📦 Ожидающих заявок нет.")
         return
 
-    lines: list[str] = [f"<b>📦 Заявки ({len(pending)})</b>\n"]
-    for req in pending:
-        from datetime import datetime as _dt
-
-        created = req.get("created_at")
-        if isinstance(created, str):
-            try:
-                date_str = _dt.fromisoformat(created).strftime("%d.%m %H:%M")
-            except ValueError:
-                date_str = created
-        elif created:
-            date_str = created.strftime("%d.%m %H:%M")
-        else:
-            date_str = "?"
-        items = req.get("items", [])
-        lines.append(
-            f"📋 <b>#{req['pk']}</b>  {date_str}  👤 {req.get('requester_name','?')}\n"
-            f"   📦 {len(items)} поз."
-        )
-
-    back_kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="pend_back")]
-        ]
-    )
+    # Удаляем навигационное сообщение
     await callback.message.delete()
-    await callback.message.answer(
-        "\n".join(lines), parse_mode="HTML", reply_markup=back_kb
-    )
+
+    # Для каждой заявки: удаляем старое сообщение у этого админа → пересылаем новое
+    for req in pending:
+        pk = req["pk"]
+        old_msg_id = _rh._request_admin_msgs.get(pk, {}).get(tg_id)
+        if old_msg_id:
+            try:
+                await callback.bot.delete_message(tg_id, old_msg_id)
+            except Exception:
+                pass
+
+        text = req_uc.format_request_text(req)
+        kb = _rh._approve_kb(pk)
+        new_msg = await callback.bot.send_message(
+            tg_id, text, parse_mode="HTML", reply_markup=kb
+        )
+        if pk not in _rh._request_admin_msgs:
+            _rh._request_admin_msgs[pk] = {}
+        _rh._request_admin_msgs[pk][tg_id] = new_msg.message_id
 
 
 # ─── Приходные накладные ─────────────────────────────
@@ -232,7 +228,9 @@ async def _show_invoices(
 
     if not infos:
         await callback.message.delete()
-        await callback.message.answer("🧾 Приходных накладных, ожидающих отправки, нет.")
+        await callback.message.answer(
+            "🧾 Приходных накладных, ожидающих отправки, нет."
+        )
         return
 
     lines: list[str] = [f"<b>🧾 Приходные накладные ({len(infos)})</b>\n"]
