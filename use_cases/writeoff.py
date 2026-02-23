@@ -523,7 +523,7 @@ def build_writeoff_document(
     return {
         "id": str(uuid.uuid4()),
         "dateIncoming": date_incoming or now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
-        "status": "PROCESSED",
+        "status": "NEW",
         "comment": comment,
         "storeId": store_id,
         "accountId": account_id,

@@ -776,21 +776,15 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
             if resp.status_code >= 400:
                 body = resp.text[:500] if resp.text else ""
 
-                # 409: iiko не принимает этот UUID — сбрасываем токен, генерируем новый UUID, повторяем
+                # 409: iiko отклонил документ — сбрасываем токен и повторяем
                 if resp.status_code == 409 and attempt < max_retries:
-                    import uuid as _uuid
-
-                    new_id = str(_uuid.uuid4())
                     invalidate_token_cache()
                     logger.warning(
-                        "[API] POST writeoff 409 for doc %s — new UUID → %s, refreshing token (attempt %d/%d)",
+                        "[API] POST writeoff 409 for doc %s — refreshing token (attempt %d/%d)",
                         doc_id,
-                        new_id,
                         attempt + 1,
                         max_retries,
                     )
-                    document = {**document, "id": new_id}
-                    doc_id = new_id
                     delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
                     await asyncio.sleep(delay)
                     continue
