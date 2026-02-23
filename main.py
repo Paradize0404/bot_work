@@ -257,6 +257,21 @@ async def _cleanup() -> None:
     logger.info("Shutdown complete")
 
 
+# ─── Регистрация команд бота (меню-кнопка слева от поля ввода) ────
+async def _set_bot_commands(bot: Bot) -> None:
+    """Регистрирует /start, /menu, /cancel в меню-кнопке Telegram."""
+    from aiogram.types import BotCommand, BotCommandScopeDefault, MenuButtonCommands
+
+    commands = [
+        BotCommand(command="start",  description="Старт / авторизация"),
+        BotCommand(command="menu",   description="Главное меню"),
+        BotCommand(command="cancel", description="Сброс"),
+    ]
+    await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
+    await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    logger.info("[startup] Bot menu commands registered (%d)", len(commands))
+
+
 # ─── Webhook mode (Railway) ────────────────────────────────────────
 async def on_startup(bot: Bot) -> None:
     # Привязываем бот к Telegram-оповещениям об ошибках
@@ -278,6 +293,9 @@ async def on_startup(bot: Bot) -> None:
 
     # Прогрев кешей (permissions + user_context)
     await _warmup_caches()
+
+    # Регистрируем команды в меню-кнопке Telegram
+    await _set_bot_commands(bot)
 
     from config import WEBHOOK_URL, WEBHOOK_PATH, WEBHOOK_SECRET
 
@@ -458,6 +476,9 @@ async def run_polling() -> None:
     # Снимаем вебхук, если остался с Railway
     await bot.delete_webhook(drop_pending_updates=True)
     logger.info("Webhook removed, starting polling...")
+
+    # Регистрируем команды в меню-кнопке Telegram
+    await _set_bot_commands(bot)
 
     # Запускаем планировщик ежедневной синхронизации (07:00 Калининград)
     from use_cases.scheduler import start_scheduler

@@ -248,6 +248,25 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     )
 
 
+# /menu — быстрый переход в главное меню (только для авторизованных)
+# -----------------------------------------------------
+
+
+@router.message(Command("menu"))
+async def cmd_menu(message: Message, state: FSMContext) -> None:
+    """Показать главное меню без повторной авторизации."""
+    logger.info("[auth] /menu tg:%d", message.from_user.id)
+    result = await auth_uc.check_auth_status(message.from_user.id)
+    if result.status == AuthStatus.AUTHORIZED:
+        await state.clear()
+        kb = await _get_main_kb(message.from_user.id)
+        await message.answer("🏠 Главное меню:", reply_markup=kb)
+    else:
+        await message.answer(
+            "⚠️ Вы не авторизованы.\nНажмите /start для авторизации."
+        )
+
+
 # -----------------------------------------------------
 # Шаг 2: фамилия введена > ищем сотрудника
 # -----------------------------------------------------
