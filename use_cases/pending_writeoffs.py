@@ -297,6 +297,7 @@ def build_summary_text(doc: PendingWriteoff) -> str:
         # Перевести «YYYY-MM-DDTHH:MM:SS» -> «ДД.ММ.ГГГГ ЧЧ:ММ» для отображения
         try:
             from datetime import datetime as _dt
+
             dt = _dt.fromisoformat(doc.date_incoming)
             date_str = f"\n📅 <b>Дата:</b> {dt.strftime('%d.%m.%Y %H:%M')}"
         except Exception:

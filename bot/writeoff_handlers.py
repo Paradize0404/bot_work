@@ -1365,6 +1365,7 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
         if doc.date_incoming:
             try:
                 from datetime import datetime as _dt
+
                 dt = _dt.fromisoformat(doc.date_incoming)
                 cur_date = f" (сейчас: {dt.strftime('%d.%m.%Y %H:%M')})"
             except Exception:
@@ -1926,9 +1927,7 @@ async def _finish_edit_msg(
 @router.message(AdminEditStates.edit_date)
 async def admin_set_date(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").strip()
-    logger.info(
-        "[writeoff-edit] Новая дата tg:%d, raw='%s'", message.from_user.id, raw
-    )
+    logger.info("[writeoff-edit] Новая дата tg:%d, raw='%s'", message.from_user.id, raw)
     try:
         await message.delete()
     except Exception:

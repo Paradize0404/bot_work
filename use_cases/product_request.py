@@ -530,9 +530,7 @@ async def update_request_date(pk: int, date_incoming: str | None) -> bool:
     return True
 
 
-async def update_request_account(
-    pk: int, account_id: str, account_name: str
-) -> bool:
+async def update_request_account(pk: int, account_id: str, account_name: str) -> bool:
     """Обновить счёт заявки."""
     from sqlalchemy import update as sa_update
     from uuid import UUID
@@ -618,6 +616,7 @@ def format_request_text(
     if date_inc:
         try:
             from datetime import datetime as _dt
+
             dt = _dt.fromisoformat(date_inc)
             text += f"\n📅 <b>Дата накладной:</b> {dt.strftime('%d.%m.%Y %H:%M')}"
         except Exception:
