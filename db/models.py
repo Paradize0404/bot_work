@@ -1275,7 +1275,7 @@ class PendingIncomingInvoice(Base):
         comment="Список invoice dict (полный, для отправки в iiko)",
     )
     summary_msg_ids = Column(
-        JSON,
+        JSONB,
         nullable=True,
         default=dict,
         comment="{tg_id_as_str: message_id} — где было последнее сообщение с кнопками",
