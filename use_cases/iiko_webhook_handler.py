@@ -156,6 +156,7 @@ async def _flush_stoplist() -> None:
     # BUG4 FIX: fallback ДО early-return (раньше был мёртвый код после return)
     if not org_ids:
         from use_cases.cloud_org_mapping import get_all_cloud_org_ids
+
         org_ids = set(await get_all_cloud_org_ids())
 
     if not org_ids:
