@@ -21,6 +21,12 @@ _token_cache: dict[str, str | float | None] = {
 }
 
 
+def invalidate_token_cache() -> None:
+    """Принудительно инвалидировать кеш токена (например, при 409/401)."""
+    _token_cache["token"] = None
+    _token_cache["expires_mono"] = None
+
+
 ## ────────────── Получение токена авторизации ──────────────
 async def get_auth_token() -> str:
     """Получить токен авторизации от iiko (async) с кешированием."""

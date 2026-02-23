@@ -18,7 +18,7 @@ from typing import Any
 
 import httpx
 
-from iiko_auth import get_auth_token, get_base_url
+from iiko_auth import get_auth_token, get_base_url, invalidate_token_cache
 
 logger = logging.getLogger(__name__)
 
@@ -749,9 +749,7 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
     """
     from use_cases.errors import is_transient
 
-    key = await _get_key()
     url = f"{_base()}/resto/api/v2/documents/writeoff"
-    params = {"key": key}
 
     doc_id = document.get("id", "unknown")
     logger.info(
@@ -763,10 +761,13 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
     )
 
     client = await _get_client()
-    max_retries = 2
-    backoff = (2, 5)
+    max_retries = 3
+    backoff = (1, 3, 5)
 
     for attempt in range(max_retries + 1):
+        # Получаем ключ заново на каждой попытке (после 409 кеш инвалидирован)
+        key = await _get_key()
+        params = {"key": key}
         t0 = time.monotonic()
         try:
             resp = await client.post(url, params=params, json=document)
@@ -775,16 +776,18 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
             if resp.status_code >= 400:
                 body = resp.text[:500] if resp.text else ""
 
-                # 409: iiko не знает этот UUID — генерируем новый и повторяем
+                # 409: iiko не принимает этот UUID — сбрасываем токен, генерируем новый UUID, повторяем
                 if resp.status_code == 409 and attempt < max_retries:
                     import uuid as _uuid
 
                     new_id = str(_uuid.uuid4())
+                    invalidate_token_cache()
                     logger.warning(
-                        "[API] POST writeoff 409 for doc %s — regenerating UUID → %s (attempt %d)",
+                        "[API] POST writeoff 409 for doc %s — new UUID → %s, refreshing token (attempt %d/%d)",
                         doc_id,
                         new_id,
                         attempt + 1,
+                        max_retries,
                     )
                     document = {**document, "id": new_id}
                     doc_id = new_id
