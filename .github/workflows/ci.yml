@@ -92,7 +92,12 @@ jobs:
         GOOGLE_CREDENTIALS_JSON: "{}"
         GOOGLE_SHEET_ID: test_sheet_id
       run: |
-        pytest tests/ -v --tb=long --junit-xml=test-results.xml
+        pytest tests/ -v --tb=long --junit-xml=test-results.xml 2>&1 | tee /tmp/pytest_out.txt; PYTEST_EXIT=${PIPESTATUS[0]}
+        echo "## Pytest output" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat /tmp/pytest_out.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        exit $PYTEST_EXIT
 
     - name: Upload test results
       if: always()
