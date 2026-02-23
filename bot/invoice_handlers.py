@@ -57,6 +57,9 @@ router = Router(name="invoice_handlers")
 
 MAX_ITEMS = 50
 
+# Защита от двойного нажатия «✅ Отправить накладную»
+_sending_lock: set[int] = set()
+
 
 # ══════════════════════════════════════════════════════
 #  FSM States — создание шаблона
@@ -1037,7 +1040,20 @@ async def enter_quantities(message: Message, state: FSMContext) -> None:
 @router.callback_query(InvoiceFromTemplateStates.confirm, F.data == "inv_confirm_send")
 async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[invoice_handlers] confirm_send tg:%d", callback.from_user.id)
+    user_id = callback.from_user.id
+    if user_id in _sending_lock:
+        await callback.answer("⏳ Уже отправляю...", show_alert=False)
+        return
+    _sending_lock.add(user_id)
     await callback.answer("⏳ Отправляю...")
+    try:
+        await _do_confirm_send(callback, state)
+    finally:
+        _sending_lock.discard(user_id)
+
+
+async def _do_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
+    """Основная логика отправки накладной по шаблону (вызывается из confirm_send)."""
     data = await state.get_data()
     template = data.get("_template", {})
     items_with_qty = data.get("_items_with_qty", [])

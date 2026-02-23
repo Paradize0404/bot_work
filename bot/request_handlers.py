@@ -59,6 +59,8 @@ MAX_ITEMS = 50
 _request_locks: dict[int, tuple[int, str]] = {}
 # pk → {admin_tg_id: message_id} — сообщения с кнопками у админов
 _request_admin_msgs: dict[int, dict[int, int]] = {}
+# Защита от двойного нажатия «✅ Отправить заявку» (per-user)
+_sending_lock: set[int] = set()
 
 
 def _try_lock_request(pk: int, admin_tg: int, admin_name: str) -> bool:
@@ -885,8 +887,20 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(CreateRequestStates.confirm, F.data == "req_confirm_send")
 async def confirm_send_request(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[request_handlers] confirm_send_request tg:%d", callback.from_user.id)
+    user_id = callback.from_user.id
+    if user_id in _sending_lock:
+        await callback.answer("⏳ Уже отправляю...", show_alert=False)
+        return
+    _sending_lock.add(user_id)
     await callback.answer("⏳ Отправляю заявку...")
+    try:
+        await _do_confirm_send_request(callback, state)
+    finally:
+        _sending_lock.discard(user_id)
 
+
+async def _do_confirm_send_request(callback: CallbackQuery, state: FSMContext) -> None:
+    """Основная логика создания заявки (вызывается из confirm_send_request)."""
     # Перепроверка авторизации на финальном шаге
     ctx = await uctx.get_user_context(callback.from_user.id)
     if not ctx or not ctx.department_id:
@@ -2133,7 +2147,7 @@ async def reject_request(callback: CallbackQuery) -> None:
         await callback.answer(f"⚠️ Заявка уже {req_data['status']}", show_alert=True)
         return
 
-    # Блокировка
+    # Блокировка: защита от двойного нажатия и от одновременного нажатия двумя админами
     ctx = await uctx.get_user_context(callback.from_user.id)
     admin_name = ctx.employee_name if ctx else callback.from_user.full_name
     lock_owner = _get_lock_owner(pk)
@@ -2144,8 +2158,14 @@ async def reject_request(callback: CallbackQuery) -> None:
                 f"⏳ Заявку обрабатывает {owner_name}", show_alert=True
             )
             return
+    if not _try_lock_request(pk, callback.from_user.id, admin_name):
+        await callback.answer("⏳ Заявка уже обрабатывается", show_alert=True)
+        return
 
-    await req_uc.cancel_request(pk, callback.from_user.id)
+    try:
+        await req_uc.cancel_request(pk, callback.from_user.id)
+    finally:
+        _unlock_request(pk)
     logger.info(
         "[request] Заявка #%d отклонена tg:%d (%s)",
         pk,
@@ -2581,8 +2601,20 @@ async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(DuplicateRequestStates.confirm, F.data == "dup_confirm_send")
 async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[request_handlers] dup_confirm_send tg:%d", callback.from_user.id)
+    user_id = callback.from_user.id
+    if user_id in _sending_lock:
+        await callback.answer("⏳ Уже отправляю...", show_alert=False)
+        return
+    _sending_lock.add(user_id)
     await callback.answer("⏳ Отправляю заявку...")
+    try:
+        await _do_dup_confirm_send(callback, state)
+    finally:
+        _sending_lock.discard(user_id)
 
+
+async def _do_dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
+    """Основная логика дублирования заявки (вызывается из dup_confirm_send)."""
     # Перепроверка авторизации на финальном шаге
     ctx = await uctx.get_user_context(callback.from_user.id)
     if not ctx or not ctx.department_id:

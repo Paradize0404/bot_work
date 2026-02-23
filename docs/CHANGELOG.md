@@ -5,6 +5,32 @@
 
 ---
 
+### 2026-02-23 — [FIX] Аудит защиты от двойного нажатия: invoice + request handlers
+
+**Файлы:** `bot/invoice_handlers.py`, `bot/request_handlers.py`
+
+**Проблема:** `writeoff_handlers.py` имел `_sending_lock` для всех 3 send-handler'ов, но аналогичные handlers в других модулях были не защищены:
+- `invoice_handlers.py::confirm_send` — двойной клик создавал 2 расходных накладных в iiko
+- `request_handlers.py::confirm_send_request` — двойной клик создавал 2 заявки в БД + 2 набора уведомлений
+- `request_handlers.py::dup_confirm_send` — то же для дублирования заявки
+- `request_handlers.py::reject_request` — два администратора одновременно могли оба отклонить → 2 уведомления создателю
+
+**Решение:**
+- `invoice_handlers.py` — добавлен `_sending_lock: set[int]`, `confirm_send` делегирует в `_do_confirm_send`
+- `request_handlers.py` — добавлен `_sending_lock: set[int]`, `confirm_send_request` → `_do_confirm_send_request`, `dup_confirm_send` → `_do_dup_confirm_send`
+- `reject_request` — добавлен `_try_lock_request` + `finally: _unlock_request`
+
+| Модуль | Handler | Защита |
+|--------|---------|--------|
+| `writeoff_handlers` | 3× send | `_sending_lock` ✅ |
+| `writeoff_handlers` | approve/reject/edit pending | DB `is_locked` ✅ |
+| `invoice_handlers` | `confirm_send` | `_sending_lock` ✅ |
+| `request_handlers` | `confirm_send_request`, `dup_confirm_send` | `_sending_lock` ✅ |
+| `request_handlers` | `approve_request`, `reject_request` | `_try_lock_request` ✅ |
+| `document_handlers` | `cb_iiko_invoice_send` | атомарный `.pop()` ✅ |
+
+---
+
 ### 2026-02-23 — [FIX] 409 при отправке списания + datetime в Redis FSM
 
 **Файлы:** `adapters/iiko_api.py`, `use_cases/product_request.py`

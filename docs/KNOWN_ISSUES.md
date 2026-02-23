@@ -199,6 +199,22 @@
 
 ---
 
+### Аудит двойного нажатия: invoice + request handlers не были защищены (2026-02-23)
+- **Симптом:** Быстрое двойное нажатие «✅ Отправить накладную» (invoice) или «✅ Отправить заявку» (request / dup) создавало две одинаковых операции. Отклонение заявки двумя администраторами одновременно → два уведомления создателю.
+- **Причина:** `_sending_lock` был добавлен только в `writeoff_handlers.py`. `invoice_handlers.py::confirm_send`, `request_handlers.py::confirm_send_request` и `dup_confirm_send` добавляли `await callback.answer()` без блокировки — FSM-состояние сбрасывается ПОСЛЕ отправки, поэтому второй клик до завершения первого проходил фильтр и повторял операцию.
+- **Решение:**
+  - `invoice_handlers.py` — добавлен `_sending_lock: set[int]` + защита в `confirm_send` → делегирование в `_do_confirm_send`.
+  - `request_handlers.py` — добавлен `_sending_lock: set[int]` + защита в `confirm_send_request` и `dup_confirm_send` → делегирование в `_do_confirm_send_request` / `_do_dup_confirm_send`.
+  - `reject_request` — добавлен `_try_lock_request` + `finally: _unlock_request` (раньше было только chekc lock owner, но не захват лока).
+- **Как избежать:** Каждый handler, который выполняет `create` / `send` операцию → обязательно `_sending_lock` (3 строки: check → add → finally discard). Паттерн из `writeoff_handlers.py` — эталон.
+- **Итоговая карта защиты:**
+  - `writeoff_handlers.py` — 3 send-handler → `_sending_lock` ✅; pending approve/reject/edit → DB `is_locked` ✅
+  - `invoice_handlers.py` — `confirm_send` → `_sending_lock` ✅
+  - `request_handlers.py` — `confirm_send_request`, `dup_confirm_send` → `_sending_lock` ✅; `approve_request` → `_try_lock_request` ✅; `reject_request` → `_try_lock_request` ✅
+  - `document_handlers.py` — `cb_iiko_invoice_send` → атомарный `.pop()` из `_pending_invoices` ✅
+
+---
+
 ### writeoff_handlers: double-click не блокировался
 - **Симптом:** При быстром двойном нажатии «Отправить» документ создавался дважды
 - **Причина:** `_sending_lock` проверялся (`if user_id in _sending_lock`), но никогда не устанавливался (`_sending_lock.add(user_id)` отсутствовал)
