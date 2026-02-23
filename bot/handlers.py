@@ -262,9 +262,7 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
         kb = await _get_main_kb(message.from_user.id)
         await message.answer("🏠 Главное меню:", reply_markup=kb)
     else:
-        await message.answer(
-            "⚠️ Вы не авторизованы.\nНажмите /start для авторизации."
-        )
+        await message.answer("⚠️ Вы не авторизованы.\nНажмите /start для авторизации.")
 
 
 # -----------------------------------------------------

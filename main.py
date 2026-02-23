@@ -263,8 +263,8 @@ async def _set_bot_commands(bot: Bot) -> None:
     from aiogram.types import BotCommand, BotCommandScopeDefault, MenuButtonCommands
 
     commands = [
-        BotCommand(command="start",  description="Старт / авторизация"),
-        BotCommand(command="menu",   description="Главное меню"),
+        BotCommand(command="start", description="Старт / авторизация"),
+        BotCommand(command="menu", description="Главное меню"),
         BotCommand(command="cancel", description="Сброс"),
     ]
     await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
