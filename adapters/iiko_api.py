@@ -774,6 +774,24 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
 
             if resp.status_code >= 400:
                 body = resp.text[:500] if resp.text else ""
+
+                # 409: iiko не знает этот UUID — генерируем новый и повторяем
+                if resp.status_code == 409 and attempt < max_retries:
+                    import uuid as _uuid
+
+                    new_id = str(_uuid.uuid4())
+                    logger.warning(
+                        "[API] POST writeoff 409 for doc %s — regenerating UUID → %s (attempt %d)",
+                        doc_id,
+                        new_id,
+                        attempt + 1,
+                    )
+                    document = {**document, "id": new_id}
+                    doc_id = new_id
+                    delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
+                    await asyncio.sleep(delay)
+                    continue
+
                 logger.error(
                     "[API] POST writeoff FAIL — HTTP %d, %.1f сек, body=%s",
                     resp.status_code,
@@ -790,26 +808,6 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
             return {"ok": True}
 
         except Exception as e:
-            # 409: iiko stuck document with this UUID — regenerate and retry once
-            if (
-                isinstance(e, httpx.HTTPStatusError)
-                and e.response.status_code == 409
-                and attempt < max_retries
-            ):
-                import uuid as _uuid
-
-                new_id = str(_uuid.uuid4())
-                logger.warning(
-                    "[API] POST writeoff 409 for doc %s — regenerating UUID → %s",
-                    doc_id,
-                    new_id,
-                )
-                document = {**document, "id": new_id}
-                doc_id = new_id
-                delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
-                await asyncio.sleep(delay)
-                continue
-
             if attempt == max_retries or not is_transient(e):
                 logger.error(
                     "[API] POST writeoff failed permanently after %d attempts: %s",
