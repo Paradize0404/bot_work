@@ -5,6 +5,38 @@
 
 ---
 
+### 2026-02-23 — [FIX] 409 при отправке списания + datetime в Redis FSM
+
+**Файлы:** `adapters/iiko_api.py`, `use_cases/product_request.py`
+
+**Проблема 1:** `409 Conflict` от iiko при POST списания — body `Cannot find WriteoffDocument document by id <UUID>`. Документ не отправлялся, пользователь получал ошибку.
+
+**Решение 1:** В `send_writeoff()` при 409 генерируем новый UUID (`uuid4()`), подставляем в `document["id"]`, ждём backoff, продолжаем retry-цикл. До 2 попыток с новым UUID.
+
+**Проблема 2:** `Object of type datetime is not JSON serializable` в `view_request_history` при `state.update_data(_history_cache=requests)` — Redis FSM не может сериализовать `datetime`.
+
+**Решение 2:** `get_user_requests()` теперь возвращает `created_at` как ISO-строку (`.isoformat()`). `format_request_text()` обрабатывает оба типа: `str` → `fromisoformat()`, `datetime` → `.strftime()` (обратная совместимость).
+
+---
+
+### 2026-02-23 — [FIX] Авто-перемещение: товары с `main_unit = NULL` теперь обрабатываются
+
+**Файл:** `use_cases/negative_transfer.py`
+
+**Проблема:** Ежедневное авто-перемещение расх.мат. (23:00) пропускало ряд товаров
+с сообщением `пропущено N товаров` в Telegram-уведомлении. Причина — `iiko_product.main_unit = NULL`
+для части товаров (iiko API не возвращает `mainUnit` для некоторых позиций).
+
+**Изменения:**
+1. `_collect_negative_items` — добавлено поле `measure_unit_name` из OLAP `Product.MeasureUnit` в каждый item.
+2. Новая функция `_load_unit_id_by_name(names)` — ищет UUID единиц в `iiko_entity (root_type=MeasureUnit)` по имени.
+3. `run_negative_transfer_all_restaurants` — шаг 5b: для товаров с `main_unit = NULL` собираем имена единиц из OLAP и резолвим их UUID через `_load_unit_id_by_name`.
+4. В transfer-loop: `unit_id = main_unit OR fallback_from_olap`; пропуск только если оба отсутствуют.
+5. `_load_products_by_name` — **двухпроходный поиск**: проход 1 = точное `name.in_()`, проход 2 = `func.trim(name).in_()` для ненайденных — iiko REST добавляет trailing spaces, OLAP нет. Это была **главная причина** пропуска.
+6. `skipped_products` дедуплицируется per-restaurant (один товар на Бар + Кухня = 1 запись).
+
+---
+
 ### 2026-02-22 — [AUDIT] Аудит проекта по PROJECT_MAP.md
 
 **Цель:** Приведение кода в соответствие с контрактами K1-K5 и документацией.

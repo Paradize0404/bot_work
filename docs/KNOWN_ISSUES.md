@@ -183,6 +183,22 @@
 
 ---
 
+### iiko API: 409 Conflict при отправке списания — "Cannot find WriteoffDocument by id" (2026-02-23)
+- **Симптом:** `httpx.HTTPStatusError: Client error '409 Conflict'` + body `Cannot find WriteoffDocument document by id <UUID>`. Документ не отправлен.
+- **Причина:** iiko возвращает 409 когда документ с данным UUID был ранее частично зарегистрирован (например, таймаут при прошлой попытке) и завис в нерабочем состоянии. Повторная отправка с тем же UUID всегда даст 409.
+- **Решение:** В `adapters/iiko_api.py → send_writeoff()` при 409 генерируем новый UUID (`uuid4()`), обновляем `document["id"]` и `doc_id`, делаем retry. Одна повторная попытка с новым UUID позволяет пробиться через застрявшее состояние.
+- **Как избежать:** При POST в iiko — если 409 + "Cannot find by id" = не логическая ошибка, а физическая проблема UUID. Решение всегда — новый UUID.
+
+---
+
+### get_user_requests: datetime не сериализуется в Redis FSM (2026-02-23)
+- **Симптом:** `Object of type datetime is not JSON serializable` в `view_request_history` при `state.update_data(_history_cache=requests)`.
+- **Причина:** `get_user_requests()` возвращала `created_at` как сырой Python `datetime`. Redis FSM (aiogram) сериализует состояние через `json.dumps()` — `datetime` не поддерживается.
+- **Решение:** В `get_user_requests()` конвертировать `r.created_at.isoformat() if r.created_at else None`. В `format_request_text()` добавить ветку `isinstance(created, str)` → `datetime.fromisoformat(created).strftime(...)` для обратной совместимости с другими путями, где `created_at` остаётся `datetime`.
+- **Как избежать:** Любой dict, который кладётся в `state.update_data()` — должен содержать только JSON-сериализуемые типы: `str`, `int`, `float`, `bool`, `list`, `dict`, `None`. `datetime`, `UUID`, `Decimal` — **запрещены** без конвертации.
+
+---
+
 ### writeoff_handlers: double-click не блокировался
 - **Симптом:** При быстром двойном нажатии «Отправить» документ создавался дважды
 - **Причина:** `_sending_lock` проверялся (`if user_id in _sending_lock`), но никогда не устанавливался (`_sending_lock.add(user_id)` отсутствовал)

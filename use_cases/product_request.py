@@ -451,7 +451,7 @@ async def get_user_requests(telegram_id: int, limit: int = 10) -> list[dict]:
             "account_name": r.account_name,
             "items": r.items or [],
             "total_sum": float(r.total_sum) if r.total_sum else 0.0,
-            "created_at": r.created_at,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows
     ]
@@ -518,7 +518,17 @@ def format_request_text(
     """HTML-текст заявки для отображения (плоский список, без деления по складам)."""
     items = items_filter if items_filter is not None else req.get("items", [])
     created = req.get("created_at")
-    date_str = created.strftime("%d.%m.%Y %H:%M") if created else "?"
+    if created is None:
+        date_str = "?"
+    elif isinstance(created, str):
+        from datetime import datetime as _dt
+
+        try:
+            date_str = _dt.fromisoformat(created).strftime("%d.%m.%Y %H:%M")
+        except ValueError:
+            date_str = created
+    else:
+        date_str = created.strftime("%d.%m.%Y %H:%M")
 
     dept_name = req.get("department_name", "?")
     header = f"📤 {dept_name}"
