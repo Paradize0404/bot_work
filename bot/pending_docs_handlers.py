@@ -220,6 +220,8 @@ async def _show_invoices(
     *,
     can_see_all: bool,
 ) -> None:
+    from use_cases.incoming_invoice import format_invoice_preview
+
     if can_see_all:
         infos = await inv_uc.get_all()
     else:
@@ -233,20 +235,54 @@ async def _show_invoices(
         )
         return
 
-    lines: list[str] = [f"<b>🧾 Приходные накладные ({len(infos)})</b>\n"]
-    for info in infos:
-        lines.append(inv_uc.format_invoice_info(info))
-        lines.append("")  # разделитель
-
-    back_kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="pend_back")]
-        ]
-    )
+    # Удаляем навигационное сообщение
     await callback.message.delete()
-    await callback.message.answer(
-        "\n".join(lines).strip(), parse_mode="HTML", reply_markup=back_kb
-    )
+
+    # Для каждой pending-накладной: удаляем старое → пересылаем новое с кнопками
+    for info in infos:
+        invoices = await inv_uc.get(info.tg_id)
+        if not invoices:
+            continue
+
+        # Удаляем старое сообщение с кнопками для этого зрителя
+        msg_ids = await inv_uc.get_summary_msg_ids(info.tg_id)
+        old_msg_id = msg_ids.get(tg_id)
+        if old_msg_id:
+            try:
+                await callback.bot.delete_message(tg_id, old_msg_id)
+            except Exception:
+                pass
+
+        author_line = f"👤 {info.author_name or '?'}  🏬 {info.department_name or '?'}"
+        preview = format_invoice_preview(invoices)
+        text = f"{author_line}\n\n{preview}"
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📤 Отправить в iiko",
+                        callback_data=f"iiko_invoice_send:{info.tg_id}",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="✏️ Редактировать",
+                        callback_data=f"inv_edit:{info.tg_id}",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="❌ Отменить",
+                        callback_data=f"iiko_invoice_cancel:{info.tg_id}",
+                    )
+                ],
+            ]
+        )
+        new_msg = await callback.bot.send_message(
+            tg_id, text, parse_mode="HTML", reply_markup=kb
+        )
+        await inv_uc.update_summary_msg_ids(info.tg_id, tg_id, new_msg.message_id)
 
 
 # ─── Назад ───────────────────────────────────────────

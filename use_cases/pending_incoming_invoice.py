@@ -122,6 +122,67 @@ async def delete_by_tg(tg_id: int) -> None:
         await session.commit()
 
 
+async def update_invoices(tg_id: int, invoices: list[dict]) -> None:
+    """Обновить invoices_json и счётчики для записи пользователя."""
+    from sqlalchemy import update as sa_update
+
+    total_items = sum(len(inv.get("items", [])) for inv in invoices)
+    async with async_session_factory() as session:
+        await session.execute(
+            sa_update(PendingIncomingInvoice)
+            .where(PendingIncomingInvoice.tg_id == tg_id)
+            .values(
+                invoices_json=invoices,
+                invoices_count=len(invoices),
+                items_count=total_items,
+            )
+        )
+        await session.commit()
+    logger.info(
+        "[pending_invoice] invoices_json обновлён tg:%d invoices=%d items=%d",
+        tg_id,
+        len(invoices),
+        total_items,
+    )
+
+
+async def update_summary_msg_ids(
+    owner_tg_id: int, viewer_tg_id: int, msg_id: int
+) -> None:
+    """Сохранить ID сообщения с кнопками для конкретного зрителя."""
+    from sqlalchemy import update as sa_update
+
+    async with async_session_factory() as session:
+        row = await session.scalar(
+            select(PendingIncomingInvoice).where(
+                PendingIncomingInvoice.tg_id == owner_tg_id
+            )
+        )
+        if row is None:
+            return
+        current = dict(row.summary_msg_ids or {})
+        current[str(viewer_tg_id)] = msg_id
+        await session.execute(
+            sa_update(PendingIncomingInvoice)
+            .where(PendingIncomingInvoice.tg_id == owner_tg_id)
+            .values(summary_msg_ids=current)
+        )
+        await session.commit()
+
+
+async def get_summary_msg_ids(owner_tg_id: int) -> dict[int, int]:
+    """Вернуть {viewer_tg_id: message_id} для pending накладной."""
+    async with async_session_factory() as session:
+        row = await session.scalar(
+            select(PendingIncomingInvoice).where(
+                PendingIncomingInvoice.tg_id == owner_tg_id
+            )
+        )
+        if row is None or not row.summary_msg_ids:
+            return {}
+        return {int(k): v for k, v in row.summary_msg_ids.items()}
+
+
 async def get_all() -> list[PendingInvoiceInfo]:
     """Все pending накладные (для просмотра администратором / бухгалтером)."""
     async with async_session_factory() as session:

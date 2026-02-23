@@ -818,6 +818,7 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
             chat_id_, summary_text, parse_mode="HTML", reply_markup=kb
         )
         _pending_invoice_messages[tg_id].append((sent.chat.id, sent.message_id))
+        await pending_inv_uc.update_summary_msg_ids(tg_id, tg_id, sent.message_id)
 
         # Отправляем бухгалтерам
         accountant_ids = await get_accountant_ids()
@@ -839,6 +840,9 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
                 )
                 _pending_invoice_messages[tg_id].append(
                     (acc_msg.chat.id, acc_msg.message_id)
+                )
+                await pending_inv_uc.update_summary_msg_ids(
+                    tg_id, acc_id, acc_msg.message_id
                 )
             except Exception:
                 logger.warning("[ocr] Не удалось уведомить бухгалтера %d", acc_id)

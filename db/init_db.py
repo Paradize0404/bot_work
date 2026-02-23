@@ -106,6 +106,7 @@ async def create_tables() -> None:
         "ALTER TABLE pending_writeoff ADD COLUMN IF NOT EXISTS edited_by VARCHAR(500)",
         "ALTER TABLE product_request ADD COLUMN IF NOT EXISTS date_incoming VARCHAR(20)",
         "ALTER TABLE product_request ADD COLUMN IF NOT EXISTS edited_by_name VARCHAR(500)",
+        "ALTER TABLE pending_incoming_invoice ADD COLUMN IF NOT EXISTS summary_msg_ids JSONB DEFAULT '{}'",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:

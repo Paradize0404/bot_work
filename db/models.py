@@ -1274,6 +1274,12 @@ class PendingIncomingInvoice(Base):
         nullable=False,
         comment="Список invoice dict (полный, для отправки в iiko)",
     )
+    summary_msg_ids = Column(
+        JSON,
+        nullable=True,
+        default=dict,
+        comment="{tg_id_as_str: message_id} — где было последнее сообщение с кнопками",
+    )
     created_at = Column(
         DateTime,
         nullable=False,
