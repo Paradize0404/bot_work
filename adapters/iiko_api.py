@@ -18,7 +18,7 @@ from typing import Any
 
 import httpx
 
-from iiko_auth import get_auth_token, get_base_url, invalidate_token_cache
+from iiko_auth import get_auth_token, get_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -745,27 +745,25 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
     Отправить акт списания в iiko.
 
     POST /resto/api/v2/documents/writeoff?key={token}
+    Документ НЕ содержит поле "id" — iiko назначает его сам (аналогично internalTransfer).
     Возвращает {"ok": True} при успехе, иначе выбрасывает исключение.
     """
     from use_cases.errors import is_transient
 
     url = f"{_base()}/resto/api/v2/documents/writeoff"
 
-    doc_id = document.get("id", "unknown")
     logger.info(
-        "[API] POST writeoff — id=%s, store=%s, account=%s, items=%d",
-        doc_id,
+        "[API] POST writeoff — store=%s, account=%s, items=%d",
         document.get("storeId"),
         document.get("accountId"),
         len(document.get("items", [])),
     )
 
     client = await _get_client()
-    max_retries = 3
-    backoff = (1, 3, 5)
+    max_retries = 2
+    backoff = (2, 5)
 
     for attempt in range(max_retries + 1):
-        # Получаем ключ заново на каждой попытке (после 409 кеш инвалидирован)
         key = await _get_key()
         params = {"key": key}
         t0 = time.monotonic()
@@ -775,20 +773,6 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
 
             if resp.status_code >= 400:
                 body = resp.text[:500] if resp.text else ""
-
-                # 409: iiko отклонил документ — сбрасываем токен и повторяем
-                if resp.status_code == 409 and attempt < max_retries:
-                    invalidate_token_cache()
-                    logger.warning(
-                        "[API] POST writeoff 409 for doc %s — refreshing token (attempt %d/%d)",
-                        doc_id,
-                        attempt + 1,
-                        max_retries,
-                    )
-                    delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
-                    await asyncio.sleep(delay)
-                    continue
-
                 logger.error(
                     "[API] POST writeoff FAIL — HTTP %d, %.1f сек, body=%s",
                     resp.status_code,
@@ -806,19 +790,13 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
 
         except Exception as e:
             if attempt == max_retries or not is_transient(e):
-                logger.error(
-                    "[API] POST writeoff failed permanently after %d attempts: %s",
-                    attempt + 1,
-                    e,
-                )
                 raise
 
             delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
             logger.warning(
-                "[API] POST writeoff retry %d/%d for doc %s: %s. Waiting %ds...",
+                "[API] POST writeoff retry %d/%d: %s. Waiting %ds...",
                 attempt + 1,
                 max_retries,
-                doc_id,
                 e,
                 delay,
             )

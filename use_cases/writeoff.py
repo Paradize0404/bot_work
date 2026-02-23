@@ -513,17 +513,14 @@ def build_writeoff_document(
     comment = "причина (Автор: ФИО)" — для трекинга в iiko.
     date_incoming — переопределённая дата (YYYY-MM-DDTHH:MM:SS); если None — текущая.
     """
-    import uuid
-
     non_zero = [i for i in items if i.get("quantity", 0) > 0]
     comment_parts = [reason] if reason else []
     if author_name:
         comment_parts.append(f"(Автор: {author_name})")
     comment = " ".join(comment_parts)
     return {
-        "id": str(uuid.uuid4()),
         "dateIncoming": date_incoming or now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
-        "status": "NEW",
+        "status": "PROCESSED",
         "comment": comment,
         "storeId": store_id,
         "accountId": account_id,
