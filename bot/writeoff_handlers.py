@@ -860,6 +860,7 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
                         "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены.",
                     )
                     from use_cases.admin import alert_admins
+
                     await alert_admins(
                         bot,
                         f"Ошибка отправки списания (без-админ режим)\n"
@@ -1024,6 +1025,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
     except Exception as exc:
         logger.exception("[writeoff] Ошибка одобрения doc=%s", doc_id)
         from use_cases.admin import alert_admins
+
         await alert_admins(
             bot,
             f"Критическая ошибка одобрения списания #{doc_id}\n"
@@ -1086,6 +1088,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
                 "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены.",
             )
             from use_cases.admin import alert_admins
+
             await alert_admins(
                 bot,
                 f"Ошибка одобрения списания #{doc_id}\n"
@@ -2445,6 +2448,7 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
                     logger.warning("[wo_history] Ошибка сохранения повтора в историю")
             if not result.startswith("✅"):
                 from use_cases.admin import alert_admins
+
                 await alert_admins(
                     callback.bot,
                     f"Ошибка отправки списания из истории (без-админ)\n"
@@ -3090,6 +3094,7 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
                     )
             if not result.startswith("✅"):
                 from use_cases.admin import alert_admins
+
                 await alert_admins(
                     callback.bot,
                     f"Ошибка отправки списания (редактирование без-админ)\n"

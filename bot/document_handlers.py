@@ -939,8 +939,11 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
         if tg_id != sender_tg_id:
             try:
                 if "❌" in result_text:
-                    sender_msg = "⚠️ Часть накладных не загрузилась. Обратитесь к администратору."
+                    sender_msg = (
+                        "⚠️ Часть накладных не загрузилась. Обратитесь к администратору."
+                    )
                     from use_cases.admin import alert_admins
+
                     await alert_admins(
                         callback.bot,
                         f"Ошибка загрузки накладных в iiko\n"

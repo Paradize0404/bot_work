@@ -30,6 +30,7 @@ from config import (
     MIN_STOCK_SHEET_ID,
     INVOICE_PRICE_SHEET_ID,
     DAY_REPORT_SHEET_ID,
+    SALARY_SHEET_ID,
 )
 
 logger = logging.getLogger(__name__)
@@ -3328,3 +3329,284 @@ def append_day_report_row(data: dict) -> None:
         data.get("employee_name"),
         len(new_headers),
     )
+
+
+# ═══════════════════════════════════════════════════════
+# Зарплатная ведомость (лист «Зарплаты»)
+# ═══════════════════════════════════════════════════════
+
+_SALARY_TAB = "Зарплаты"
+
+_SALARY_HEADERS = [
+    "Сотрудник",
+    "Тип расчёта",
+    "Мотивация, %",
+    "База мотивации",
+]
+
+_SALARY_TYPE_OPTIONS = ["почасовая", "посменная", "ежемесячная"]
+_SALARY_BASE_OPTIONS = [
+    "от выручки",
+    "от расходных накладных",
+    "от операционной прибыли",
+]
+
+
+def _get_salary_worksheet() -> gspread.Worksheet:
+    """Получить лист «Зарплаты» из таблицы (создать если отсутствует)."""
+    client = _get_client()
+    spreadsheet = client.open_by_key(SALARY_SHEET_ID)
+    try:
+        ws = spreadsheet.worksheet(_SALARY_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=_SALARY_TAB, rows=500, cols=10)
+        logger.info("[%s] Лист «%s» создан", LABEL, _SALARY_TAB)
+    return ws
+
+
+async def sync_salary_sheet(employees: list[dict]) -> int:
+    """
+    Выгрузить список сотрудников в лист «Зарплаты» Google Sheets.
+
+    employees — список словарей с ключами: name (ФИО)
+    Сотрудники уже отфильтрованы (без удалённых, без системных, без фрилансеров).
+
+    Столбцы листа:
+      A: Сотрудник        — ФИО (только чтение)
+      B: Тип расчёта      — выпадающий список: почасовая / посменная / ежемесячная
+      C: Мотивация, %     — числовое поле
+      D: База мотивации   — выпадающий список: от выручки / от расходных накладных / от операционной прибыли
+
+    Сохраняет ранее введённые значения B, C, D по совпадению имени (A).
+    Возвращает количество сотрудников в листе.
+    """
+    t0 = time.monotonic()
+    logger.info(
+        "[%s] Синхронизация → «%s»: %d сотрудников", LABEL, _SALARY_TAB, len(employees)
+    )
+
+    def _sync_write() -> int:
+        ws = _get_salary_worksheet()
+        sheet_id = ws.id
+
+        # ── 1. Читаем существующие данные (сохраняем B/C/D по имени) ──
+        existing = ws.get_all_values()
+        # {name: (salary_type, motivation_pct, motivation_base)}
+        saved: dict[str, tuple[str, str, str]] = {}
+        if len(existing) >= 2:
+            for row in existing[1:]:  # пропускаем заголовок
+                if not row or not row[0].strip():
+                    continue
+                name = row[0].strip()
+                sal_type = row[1].strip() if len(row) > 1 else ""
+                mot_pct = row[2].strip() if len(row) > 2 else ""
+                mot_base = row[3].strip() if len(row) > 3 else ""
+                saved[name] = (sal_type, mot_pct, mot_base)
+
+        logger.info("[%s] Из таблицы сохранено %d записей B/C/D", LABEL, len(saved))
+
+        # ── 2. Строим новые строки ──
+        data_rows: list[list[str]] = []
+        for emp in employees:
+            name = (emp.get("name") or "").strip()
+            if not name:
+                continue
+            sal_type, mot_pct, mot_base = saved.get(name, ("", "", ""))
+            data_rows.append([name, sal_type, mot_pct, mot_base])
+
+        all_rows = [_SALARY_HEADERS] + data_rows
+        n_rows = len(all_rows)
+        n_cols = len(_SALARY_HEADERS)
+
+        # ── 3. Resize при необходимости ──
+        needed_rows = n_rows + 10
+        if ws.row_count < needed_rows or ws.col_count < n_cols:
+            ws.resize(
+                rows=max(needed_rows, ws.row_count),
+                cols=max(n_cols, ws.col_count),
+            )
+
+        # ── 4. Очищаем и записываем ──
+        try:
+            ws.clear()
+        except json.JSONDecodeError:
+            logger.debug("[%s] clear() пустой body (ОК)", LABEL)
+
+        end_cell = gspread.utils.rowcol_to_a1(n_rows, n_cols)
+        try:
+            ws.update(f"A1:{end_cell}", all_rows, value_input_option="USER_ENTERED")
+        except json.JSONDecodeError:
+            logger.debug("[%s] update() пустой body (ОК)", LABEL)
+
+        # ── 5. Форматирование ──
+        try:
+            # Заголовок — жирный и по центру
+            ws.format(
+                "A1:D1",
+                {
+                    "textFormat": {"bold": True},
+                    "horizontalAlignment": "CENTER",
+                    "backgroundColor": {"red": 0.85, "green": 0.91, "blue": 0.98},
+                },
+            )
+            # Колонки B и D — по центру
+            ws.format("B2:B1000", {"horizontalAlignment": "CENTER"})
+            ws.format("D2:D1000", {"horizontalAlignment": "CENTER"})
+            # Колонка C (%) — по центру
+            ws.format("C2:C1000", {"horizontalAlignment": "CENTER"})
+            # Заморозить заголовок
+            ws.freeze(rows=1)
+        except Exception:
+            logger.warning(
+                "[%s] Ошибка форматирования «%s»", LABEL, _SALARY_TAB, exc_info=True
+            )
+
+        # ── 6. batch_update: выпадающие списки + ширина колонок ──
+        try:
+            spreadsheet = ws.spreadsheet
+
+            def _one_of_list(values: list[str]) -> dict:
+                """Правило валидации «список значений»."""
+                return {
+                    "condition": {
+                        "type": "ONE_OF_LIST",
+                        "values": [{"userEnteredValue": v} for v in values],
+                    },
+                    "showCustomUi": True,
+                    "strict": False,
+                }
+
+            requests: list[dict] = [
+                # Dropdown: Тип расчёта (колонка B = index 1)
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": n_rows,
+                            "startColumnIndex": 1,
+                            "endColumnIndex": 2,
+                        },
+                        "rule": _one_of_list(_SALARY_TYPE_OPTIONS),
+                    }
+                },
+                # Dropdown: База мотивации (колонка D = index 3)
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": n_rows,
+                            "startColumnIndex": 3,
+                            "endColumnIndex": 4,
+                        },
+                        "rule": _one_of_list(_SALARY_BASE_OPTIONS),
+                    }
+                },
+                # Авто-ширина колонки A (Сотрудник)
+                {
+                    "autoResizeDimensions": {
+                        "dimensions": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 0,
+                            "endIndex": 1,
+                        }
+                    }
+                },
+                # Фиксированная ширина B (тип расчёта)
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 1,
+                            "endIndex": 2,
+                        },
+                        "properties": {"pixelSize": 140},
+                        "fields": "pixelSize",
+                    }
+                },
+                # Фиксированная ширина C (мотивация %)
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 2,
+                            "endIndex": 3,
+                        },
+                        "properties": {"pixelSize": 110},
+                        "fields": "pixelSize",
+                    }
+                },
+                # Фиксированная ширина D (база мотивации)
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": 3,
+                            "endIndex": 4,
+                        },
+                        "properties": {"pixelSize": 220},
+                        "fields": "pixelSize",
+                    }
+                },
+                # Высота строк данных
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "ROWS",
+                            "startIndex": 1,
+                            "endIndex": n_rows,
+                        },
+                        "properties": {"pixelSize": 22},
+                        "fields": "pixelSize",
+                    }
+                },
+                # Вертикальное выравнивание данных — MIDDLE
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": n_rows,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": n_cols,
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "verticalAlignment": "MIDDLE",
+                            }
+                        },
+                        "fields": "userEnteredFormat.verticalAlignment",
+                    }
+                },
+            ]
+
+            spreadsheet.batch_update({"requests": requests})
+            logger.info(
+                "[%s] batch_update «%s»: dropdowns + ширины применены (%d строк)",
+                LABEL,
+                _SALARY_TAB,
+                len(data_rows),
+            )
+        except Exception:
+            logger.warning(
+                "[%s] Ошибка batch_update «%s»", LABEL, _SALARY_TAB, exc_info=True
+            )
+
+        return len(data_rows)
+
+    count = await asyncio.to_thread(_sync_write)
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "[%s] «%s» готов: %d сотрудников за %.1f сек",
+        LABEL,
+        _SALARY_TAB,
+        count,
+        elapsed,
+    )
+    return count
