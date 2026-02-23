@@ -106,6 +106,13 @@ DAY_REPORT_SHEET_ID: str = os.getenv(
     "DAY_REPORT_SHEET_ID", "1cKQAPXDap6sSAmGROYE-kqyNrVzJnf0bPpTjPyRKa_8"
 )
 
+# ── Google Sheets (зарплатная ведомость) ──
+# Таб «Зарплаты» — список сотрудников с типом расчёта и мотивацией.
+# По умолчанию — та же таблица что и MIN_STOCK_SHEET_ID.
+SALARY_SHEET_ID: str = os.getenv(
+    "SALARY_SHEET_ID", "1cKQAPXDap6sSAmGROYE-kqyNrVzJnf0bPpTjPyRKa_8"
+)
+
 # ── iikoCloud Webhooks ──
 # Organization ID в iikoCloud — если не задан, нужно получить через API
 # Поддерживаем оба имени: IIKO_CLOUD_ORG_ID (основное) и ORG_ID (совместимость со старым скриптом)
