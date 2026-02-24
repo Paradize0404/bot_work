@@ -11,6 +11,7 @@
   - Пагинация по 12 сотрудников на странице
 """
 
+import asyncio
 import logging
 
 from aiogram import Router, F
@@ -168,8 +169,23 @@ async def salary_excl_toggle(call: CallbackQuery, state: FSMContext) -> None:
     text, kb = _build_keyboard(employees, exclusions, page=page)
     await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
 
-    status = "исключён" if now_excluded else "возвращён в список"
-    await call.answer(f"Сотрудник {status}")
+    if now_excluded:
+        # Фоновая синхронизация — убираем сотрудника из листа «Зарплаты»
+        triggered = f"excl:{call.from_user.id}" if call.from_user else "excl"
+
+        async def _bg_sync() -> None:
+            try:
+                from use_cases.salary import export_salary_sheet
+
+                await export_salary_sheet(triggered_by=triggered)
+                logger.info("[salary] fon-sync Зарплаты завершён (excl=%s)", emp_id)
+            except Exception:
+                logger.exception("[salary] Ошибка fon-sync Зарплаты (excl=%s)", emp_id)
+
+        asyncio.create_task(_bg_sync())
+        await call.answer("Сотрудник исключён, обновляю лист «Зарплаты»...")
+    else:
+        await call.answer("Сотрудник возвращён в список")
 
 
 # ─────────────────────────────────────────────
