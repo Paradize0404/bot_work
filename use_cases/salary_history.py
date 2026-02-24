@@ -333,11 +333,31 @@ async def delete_history_for_employee(employee_id: str) -> int:
             emp_name,
         )
 
-    # Удаляем строки из GSheet — сопоставляем строго по iiko_id (колонка H).
-    # Имя НЕ используем как ключ: у разных сотрудников могут совпадать ФИО.
+    # Удаляем строки из GSheet.
+    # Стратегия:
+    #   1) Ищем по iiko_id (колонка H) — точно, без путаницы с однофамильцами.
+    #   2) Если по iiko_id ничего не нашли (колонка H пустая / gspread обрезал
+    #      строку справа) — ищем по имени как запасной вариант.
+    #      Это покрывает системных пользователей и старые строки без iiko_id.
     try:
         raw_rows = await read_salary_history_sheet()
+        all_names = {emp_name}
+        if emp_name_alt and emp_name_alt != emp_name:
+            all_names.add(emp_name_alt)
+
+        # Шаг 1: по iiko_id
         row_nums = [r["row"] for r in raw_rows if r.get("iiko_id") == employee_id]
+
+        # Шаг 2: по имени — только если по iiko_id ничего не нашли
+        if not row_nums:
+            logger.warning(
+                "[salary_history] iiko_id=%s не найден в колонке H "
+                "— ищем по имени %s (запасной вариант)",
+                employee_id,
+                all_names,
+            )
+            row_nums = [r["row"] for r in raw_rows if r["name"] in all_names]
+
         if row_nums:
             await delete_salary_history_rows(row_nums)
             logger.info(
@@ -348,10 +368,9 @@ async def delete_history_for_employee(employee_id: str) -> int:
             )
         else:
             logger.warning(
-                "[salary_history] GSheet «История ставок»: строк с iiko_id=%s не найдено"
-                " (имя=%s) — возможно, колонка H пустая или запись ещё не синхронизировалась",
-                employee_id,
+                "[salary_history] GSheet «История ставок»: строк для %s (id=%s) не найдено",
                 emp_name,
+                employee_id,
             )
     except Exception:
         logger.exception(

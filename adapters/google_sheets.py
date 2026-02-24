@@ -4426,7 +4426,7 @@ async def read_salary_history_sheet() -> list[dict]:
             valid_from = row[5].strip() if len(row) > 5 else ""
             iiko_id = row[7].strip() if len(row) > 7 else ""
 
-            if not name or not valid_from:
+            if not name:
                 continue
             try:
                 rate = float(rate_str.replace(",", ".")) if rate_str else 0.0
@@ -4445,7 +4445,7 @@ async def read_salary_history_sheet() -> list[dict]:
                     "rate": rate,
                     "mot_pct": mot_pct,
                     "mot_base": mot_base or None,
-                    "valid_from": valid_from,  # строка DD.MM.YYYY
+                    "valid_from": valid_from,  # строка DD.MM.YYYY (может быть пустой)
                     "iiko_id": iiko_id,
                 }
             )
