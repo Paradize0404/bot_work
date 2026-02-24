@@ -5,6 +5,44 @@
 
 ---
 
+### 2026-02-24 — [FEAT] Мотивация «от выручки»: OLAP-отчёт + колонка в ФОТ
+
+**Файлы:** `adapters/iiko_api.py`, `use_cases/revenue_motivation.py` (NEW), `use_cases/payroll.py`, `adapters/google_sheets.py`
+
+#### Новый OLAP-отчёт «Отчет по мотивации БОТ»
+
+- Пресет iiko: `df94cd59-2cd8-4608-86bd-6267e1ea8cc6`
+- Метрика: `DishDiscountSumInt` (сумма со скидкой, MONEY)
+- Строки: `CloseTime` (DATETIME) — день закрытия заказа
+- Столбцы: `Department` (STRING) — торговое предприятие
+- Новая константа `MOTIVATION_REVENUE_PRESET_ID` + функция `fetch_motivation_revenue_olap(date_from, date_to)` в `adapters/iiko_api.py`
+
+#### Новый use-case `use_cases/revenue_motivation.py`
+
+- `calculate_revenue_motivation(attendance_records, emp_full_names, date_from, date_to, history_index)`:
+  - Загружает OLAP-данные за период
+  - Строит индекс `(дата_YYYY-MM-DD, dept_name) → выручка` (нечёткий поиск подразделений)
+  - Для каждого сотрудника с `mot_base = "от выручки"` и `mot_pct > 0` в активной записи истории:
+    - Суммирует выручку по уникальным парам (дата смены, подразделение) из явок
+    - Мотивация = Σ(выручка) × mot_pct / 100
+  - Возвращает `{full_name: motivation_rubles}`
+- `get_revenue_motivation_map(...)` — безопасная обёртка (при ошибке API → `{}`, не ломает ФОТ)
+
+#### Изменения в `use_cases/payroll.py`
+
+- Добавлен шаг **3b** после агрегации явок: расчёт `motivation_map`
+- Поле `"motivation"` добавлено в emp_row для dept_sections и monthly_section
+- Импорт `get_revenue_motivation_map` из нового модуля
+
+#### Изменения в `adapters/google_sheets.py`
+
+- `_FOT_HEADERS` расширен с 6 до 7 колонок: добавлена **«Мотивация»** (G)
+- Данные строк ФОТ теперь включают поле `motivation` (пустая ячейка если 0)
+- Числовые колонки права выравнивания: `[3, 4, 5, 6]` (было `[3, 4, 5]`)
+- Ширины колонок: `[180, 130, 100, 80, 60, 90, 90]` (добавлена G=90px)
+
+---
+
 ### 2026-02-24 — [FEAT] Система ФОТ: исключения, мотивация, удаление истории, защита листа
 
 **Файлы:** `db/models.py`, `db/init_db.py`, `adapters/google_sheets.py`, `use_cases/salary.py`, `use_cases/salary_history.py`, `bot/salary_handlers.py` (NEW), `main.py`, `bot/global_commands.py`, `bot/permission_map.py`, `bot/handlers.py`

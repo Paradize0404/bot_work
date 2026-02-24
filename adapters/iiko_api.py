@@ -689,6 +689,43 @@ async def fetch_olap_by_preset(
 
 
 # ─────────────────────────────────────────────────────
+# 9b3. OLAP-отчёт мотивации по выручке
+# Пресет: «Отчет по мотивации БОТ» (CloseTime × Department → DishDiscountSumInt)
+# ─────────────────────────────────────────────────────
+
+# UUID предустановленного отчёта в iiko
+MOTIVATION_REVENUE_PRESET_ID = "df94cd59-2cd8-4608-86bd-6267e1ea8cc6"
+
+
+async def fetch_motivation_revenue_olap(
+    date_from: str,
+    date_to: str,
+) -> list[dict[str, Any]]:
+    """
+    Получить выручку по дням и подразделениям для расчёта мотивации.
+
+    Endpoint: GET /resto/api/v2/reports/olap/byPresetId/{preset_id}
+    Пресет: «Отчет по мотивации БОТ» (id = df94cd59-…)
+      - Метрика: DishDiscountSumInt (сумма со скидкой)
+      - Строки: CloseTime (DATETIME) — день закрытия заказа
+      - Столбцы: Department (STRING) — торговое предприятие
+
+    Параметры:
+      date_from / date_to — YYYY-MM-DD (конвертируются в ISO 8601 для API)
+
+    Возвращает список dict:
+      {"CloseTime": "YYYY-MM-DDTHH:MM:SS", "Department": "Название", "DishDiscountSumInt": <float>}
+    """
+    iso_from = f"{date_from[:10]}T00:00:00"
+    iso_to = f"{date_to[:10]}T23:59:59"
+    return await fetch_olap_by_preset(
+        MOTIVATION_REVENUE_PRESET_ID,
+        iso_from,
+        iso_to,
+    )
+
+
+# ─────────────────────────────────────────────────────
 # 9c. Внутреннее перемещение (POST)
 # ─────────────────────────────────────────────────────
 

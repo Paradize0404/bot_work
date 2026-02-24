@@ -77,6 +77,8 @@
 | `admin.py` | use_case | Управление админами (legacy) |
 | `salary.py` | use_case | Экспорт листа "Зарплаты", управление исключениями ФОТ |
 | `salary_history.py` | use_case | История ставок: sync, bootstrap, delete, close |
+| `payroll.py` | use_case | Расчёт ФОТ месяца → GSheets (явки + история ставок + мотивация) |
+| `revenue_motivation.py` | use_case | Мотивация «от выручки»: OLAP-отчёт → мотивация по явкам |
 | **db/** | | |
 | `engine.py` | db | Async engine + session factory (singleton) |
 | `models.py` | db | 18 моделей iiko/bot (SyncMixin) |

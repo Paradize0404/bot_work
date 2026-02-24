@@ -27,6 +27,7 @@ from sqlalchemy import select
 
 from adapters.google_sheets import read_salary_settings, sync_fot_sheet
 from adapters.iiko_api import fetch_attendance
+from use_cases.revenue_motivation import get_revenue_motivation_map
 from use_cases.salary_history import (
     load_salary_history_index,
     get_rate_for_date,
@@ -216,6 +217,22 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
 
     logger.info("[payroll] Уникальных сотрудников с явками: %d", len(emp_dept_stats))
 
+    # ── 3b. Расчёт мотивации «от выручки» ──
+    emp_iiko_to_fullname: dict[str, str] = {
+        iiko_id: _full_name(emp) for iiko_id, emp in emp_by_iiko_id.items()
+    }
+    motivation_map: dict[str, float] = await get_revenue_motivation_map(
+        attendance_records=attendance_records,
+        emp_iiko_to_fullname=emp_iiko_to_fullname,
+        date_from=month_start,
+        date_to=today,
+        history_index=history_index,
+    )
+    logger.info(
+        "[payroll] Мотивация «от выручки»: %d сотрудников с ненулёвой суммой",
+        len(motivation_map),
+    )
+
     # ── 4. Расчёт начислений ──
     # dept_id → {"dept_name": str, "employees": [emp_row]}
     dept_sections_map: dict[str, dict] = {}
@@ -285,6 +302,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
                 "rate": rate,
                 "units": units,
                 "total": total,
+                "motivation": motivation_map.get(fn, 0.0),
             }
         )
 
@@ -338,6 +356,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
                 "rate": rate,
                 "units": units,
                 "total": total,
+                "motivation": motivation_map.get(fn, 0.0),
             }
         )
 

@@ -3736,7 +3736,15 @@ async def read_salary_settings() -> dict[str, dict]:
 # ФОТ — лист с расчётом зарплат за месяц
 # ─────────────────────────────────────────────────────
 
-_FOT_HEADERS = ["Сотрудник", "Должность", "Тип расчёта", "Ставка", "Ед.", "Начислено"]
+_FOT_HEADERS = [
+    "Сотрудник",
+    "Должность",
+    "Тип расчёта",
+    "Ставка",
+    "Ед.",
+    "Начислено",
+    "Мотивация",
+]
 _FOT_NCOLS = len(_FOT_HEADERS)
 
 
@@ -3819,6 +3827,7 @@ async def sync_fot_sheet(
             # Данные
             data_start = len(all_values)
             for emp in employees:
+                mot = emp.get("motivation", 0.0)
                 all_values.append(
                     [
                         emp.get("name", ""),
@@ -3827,6 +3836,7 @@ async def sync_fot_sheet(
                         _fmt_num(emp.get("rate", 0)),
                         _fmt_num(emp.get("units", 0)),
                         _fmt_num(emp.get("total", 0)),
+                        _fmt_num(mot) if mot else "",
                     ]
                 )
                 total_emp_count += 1
@@ -3845,6 +3855,7 @@ async def sync_fot_sheet(
 
             data_start = len(all_values)
             for emp in monthly_section:
+                mot = emp.get("motivation", 0.0)
                 all_values.append(
                     [
                         emp.get("name", ""),
@@ -3853,6 +3864,7 @@ async def sync_fot_sheet(
                         _fmt_num(emp.get("rate", 0)),
                         _fmt_num(emp.get("units", 0)),
                         _fmt_num(emp.get("total", 0)),
+                        _fmt_num(mot) if mot else "",
                     ]
                 )
                 total_emp_count += 1
@@ -3983,8 +3995,8 @@ async def sync_fot_sheet(
                         }
                     }
                 )
-            # Выровнять числовые колонки (D, E, F) вправо
-            for col_i in [3, 4, 5]:
+            # Выровнять числовые колонки (D, E, F, G) вправо
+            for col_i in [3, 4, 5, 6]:
                 requests.append(
                     {
                         "repeatCell": {
@@ -4005,8 +4017,8 @@ async def sync_fot_sheet(
                     }
                 )
 
-        # Ширины колонок: A=180, B=130, C=100, D=80, E=60, F=90
-        col_widths = [180, 130, 100, 80, 60, 90]
+        # Ширины колонок: A=180, B=130, C=100, D=80, E=60, F=90, G=90
+        col_widths = [180, 130, 100, 80, 60, 90, 90]
         for i, px in enumerate(col_widths):
             requests.append(
                 {
