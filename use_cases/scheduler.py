@@ -132,7 +132,6 @@ async def _daily_full_sync() -> None:
         logger.exception("[scheduler] Ошибка обновления ФОТ")
         report_lines.append("💰 ФОТ: ❌ ошибка")
 
-
     elapsed = time.monotonic() - t0
     report_lines.append(f"\n⏱ Время: {elapsed:.1f} сек")
     logger.info(
