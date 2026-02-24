@@ -98,6 +98,7 @@ NAV_BUTTONS: frozenset[str] = frozenset(
         "📤 Номенклатура → GSheet",
         "📥 Мин. остатки GSheet → БД",
         "💰 Прайс-лист → GSheet",
+        "📊 Зарплаты → GSheet",
         # ── iikoCloud вебхук ──
         "📋 Получить организации",
         "🔗 Привязать организации",

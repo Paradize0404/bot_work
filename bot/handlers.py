@@ -183,6 +183,7 @@ def _gsheet_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="📤 Номенклатура → GSheet")],
         [KeyboardButton(text="📥 Мин. остатки GSheet → БД")],
         [KeyboardButton(text="💰 Прайс-лист → GSheet")],
+        [KeyboardButton(text="📊 Зарплаты → GSheet")],
         [KeyboardButton(text="🔙 К настройкам")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -751,6 +752,23 @@ async def btn_sync_price_sheet(message: Message) -> None:
         "Прайс-лист → GSheet",
         sync_price_sheet,
         lock_key="gsheet_price",
+        triggered_by=triggered,
+    )
+
+
+@router.message(F.text == "📊 Зарплаты → GSheet")
+@permission_required(PERM_SETTINGS)
+async def btn_sync_salary_gsheet(message: Message) -> None:
+    """Выгрузить список сотрудников в лист «Зарплаты» Google Sheets."""
+    from use_cases.salary import export_salary_sheet
+
+    triggered = f"tg:{message.from_user.id}"
+    logger.info("[sync] зарплаты > GSheet tg:%d", message.from_user.id)
+    await sync_with_progress(
+        message,
+        "Зарплаты → GSheet",
+        export_salary_sheet,
+        lock_key="gsheet_salary",
         triggered_by=triggered,
     )
 

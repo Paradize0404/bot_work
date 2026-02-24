@@ -174,6 +174,7 @@ TEXT_PERMISSIONS: dict[str, str] = {
     "📤 Номенклатура → GSheet": PERM_SETTINGS,
     "📥 Мин. остатки GSheet → БД": PERM_SETTINGS,
     "💰 Прайс-лист → GSheet": PERM_SETTINGS,
+    "📊 Зарплаты → GSheet": PERM_SETTINGS,
     "⚡ Синхр. ВСЁ (iiko + FT)": PERM_SETTINGS,
     "🔄 Синхр. ВСЁ iiko": PERM_SETTINGS,
     "💹 FT: Синхр. ВСЁ": PERM_SETTINGS,
