@@ -207,7 +207,7 @@ async def close_history_for_deleted_employees() -> int:
         if not deleted_emps:
             return 0
 
-        # Строим множество ФИО удалённых
+        # Строим множество ФИО и iiko-UUID удалённых сотрудников
         def _full_name(emp: Employee) -> str:
             parts = [
                 p
@@ -217,6 +217,7 @@ async def close_history_for_deleted_employees() -> int:
             return " ".join(parts) if parts else (emp.name or "").strip()
 
         deleted_names: set[str] = {_full_name(e) for e in deleted_emps if _full_name(e)}
+        deleted_iiko_ids: set[str] = {str(e.id) for e in deleted_emps}
 
         # Открытые записи истории для этих сотрудников
         open_records = (
@@ -248,19 +249,27 @@ async def close_history_for_deleted_employees() -> int:
     )
 
     # ── 2. Обновляем GSheet: читаем лист и пишем Дата по ──
+    # Сопоставляем по iiko_id (колонка H) — главный ключ.
+    # Имя используем только как запасной вариант (для старых строк без колонки H).
     try:
-        # Строим индекс: (имя, valid_from как "DD.MM.YYYY") → дата закрытия
-        closed_map: dict[tuple[str, str], date] = {
+        # Строим индекс: employee_name + valid_from → today
+        closed_map_by_name: dict[tuple[str, str], date] = {
             (r.employee_name, _fmt_date(r.valid_from)): today for r in open_records
         }
         raw_rows = await read_salary_history_sheet()
         sheet_updates: list[dict] = []
         for r in raw_rows:
-            key = (r["name"], r["valid_from"])
-            if key in closed_map:
-                sheet_updates.append(
-                    {"row": r["row"], "valid_to": _fmt_date(closed_map[key])}
-                )
+            matched = False
+            # Приоритет 1: по iiko_id (колонка H)
+            if r.get("iiko_id") and r["iiko_id"] in deleted_iiko_ids:
+                matched = True
+            # Приоритет 2: по имени (только если колонка H пустая)
+            elif not r.get("iiko_id"):
+                key = (r["name"], r["valid_from"])
+                if key in closed_map_by_name:
+                    matched = True
+            if matched:
+                sheet_updates.append({"row": r["row"], "valid_to": _fmt_date(today)})
         if sheet_updates:
             await write_salary_history_valid_to(sheet_updates)
     except Exception:
@@ -324,17 +333,11 @@ async def delete_history_for_employee(employee_id: str) -> int:
             emp_name,
         )
 
-    # Удаляем строки из GSheet всегда — даже если в БД записей не было.
-    # Сопоставляем по iiko_id (колонка H) ИЛИ по имени — чтобы не промахнуться
-    # даже если имя в таблице отличается от вычисленного из БД.
+    # Удаляем строки из GSheet — сопоставляем строго по iiko_id (колонка H).
+    # Имя НЕ используем как ключ: у разных сотрудников могут совпадать ФИО.
     try:
         raw_rows = await read_salary_history_sheet()
-        all_names = {emp_name, emp_name_alt} - {""}
-        row_nums = [
-            r["row"]
-            for r in raw_rows
-            if r.get("iiko_id") == employee_id or r["name"] in all_names
-        ]
+        row_nums = [r["row"] for r in raw_rows if r.get("iiko_id") == employee_id]
         if row_nums:
             await delete_salary_history_rows(row_nums)
             logger.info(
@@ -344,14 +347,17 @@ async def delete_history_for_employee(employee_id: str) -> int:
                 employee_id,
             )
         else:
-            logger.info(
-                "[salary_history] GSheet «История ставок»: строк для %s (id=%s) не найдено",
-                emp_name,
+            logger.warning(
+                "[salary_history] GSheet «История ставок»: строк с iiko_id=%s не найдено"
+                " (имя=%s) — возможно, колонка H пустая или запись ещё не синхронизировалась",
                 employee_id,
+                emp_name,
             )
     except Exception:
         logger.exception(
-            "[salary_history] Ошибка GSheet при удалении строк для %s", emp_name
+            "[salary_history] Ошибка GSheet при удалении строк для %s (id=%s)",
+            emp_name,
+            employee_id,
         )
 
     return deleted_count
