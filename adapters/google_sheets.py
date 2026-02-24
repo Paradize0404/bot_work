@@ -3437,10 +3437,20 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
             )
 
         # ── 4. Очищаем и записываем ──
+        # batch_clear гарантированно стирает весь диапазон (включая «хвост» от
+        # предыдущих синков, когда сотрудников было больше).
         try:
-            ws.clear()
-        except json.JSONDecodeError:
-            logger.debug("[%s] clear() пустой body (ОК)", LABEL)
+            ws.batch_clear(["A1:Z1000"])
+        except Exception:
+            logger.warning(
+                "[%s] batch_clear Зарплаты: ошибка, пробуем reset_all",
+                LABEL,
+                exc_info=True,
+            )
+            try:
+                ws.clear()
+            except Exception:
+                logger.warning("[%s] ws.clear() тоже не сработал", LABEL, exc_info=True)
 
         end_cell = gspread.utils.rowcol_to_a1(n_rows, n_cols)
         try:
@@ -3448,7 +3458,23 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
         except json.JSONDecodeError:
             logger.debug("[%s] update() пустой body (ОК)", LABEL)
 
-        # ── 5. Форматирование ──
+        # Явно стираем «хвост» — строки после последней строки данных,
+        # чтобы удалённые/исключённые сотрудники не оставались в листе.
+        tail_from = n_rows + 1
+        if ws.row_count >= tail_from:
+            try:
+                ws.batch_clear([f"A{tail_from}:Z{ws.row_count}"])
+                logger.debug(
+                    "[%s] хвост строк %d–%d очищен",
+                    LABEL,
+                    tail_from,
+                    ws.row_count,
+                )
+            except Exception:
+                logger.warning(
+                    "[%s] Ошибка очистки хвоста Зарплаты", LABEL, exc_info=True
+                )
+
         try:
             # Заголовок — жирный и по центру
             ws.format(
