@@ -294,12 +294,19 @@ async def delete_history_for_employee(employee_id: str) -> int:
             if p and p.strip()
         ]
         emp_name = " ".join(parts) if parts else (emp.name or "").strip()
+        # Запасное имя — поле name из iiko (может отличаться от ФИО по частям)
+        emp_name_alt = (emp.name or "").strip()
         if not emp_name:
             return 0
 
-        # Удаляем все записи из БД
+        # Удаляем все записи из БД — пробуем оба варианта имени
+        names_to_delete = {emp_name}
+        if emp_name_alt and emp_name_alt != emp_name:
+            names_to_delete.add(emp_name_alt)
         result = await session.execute(
-            delete(SalaryHistory).where(SalaryHistory.employee_name == emp_name)
+            delete(SalaryHistory).where(
+                SalaryHistory.employee_name.in_(names_to_delete)
+            )
         )
         deleted_count = result.rowcount
         await session.commit()
@@ -317,22 +324,30 @@ async def delete_history_for_employee(employee_id: str) -> int:
             emp_name,
         )
 
-    # Удаляем строки из GSheet всегда — даже если в БД записей не было
-    # (строки могут быть введены вручную в листе без синхронизации в БД)
+    # Удаляем строки из GSheet всегда — даже если в БД записей не было.
+    # Сопоставляем по iiko_id (колонка H) ИЛИ по имени — чтобы не промахнуться
+    # даже если имя в таблице отличается от вычисленного из БД.
     try:
         raw_rows = await read_salary_history_sheet()
-        row_nums = [r["row"] for r in raw_rows if r["name"] == emp_name]
+        all_names = {emp_name, emp_name_alt} - {""}
+        row_nums = [
+            r["row"]
+            for r in raw_rows
+            if r.get("iiko_id") == employee_id or r["name"] in all_names
+        ]
         if row_nums:
             await delete_salary_history_rows(row_nums)
             logger.info(
-                "[salary_history] Удалено %d строк GSheet «История ставок» для %s",
+                "[salary_history] Удалено %d строк GSheet «История ставок» для %s (id=%s)",
                 len(row_nums),
                 emp_name,
+                employee_id,
             )
         else:
             logger.info(
-                "[salary_history] GSheet «История ставок»: строк для %s не найдено",
+                "[salary_history] GSheet «История ставок»: строк для %s (id=%s) не найдено",
                 emp_name,
+                employee_id,
             )
     except Exception:
         logger.exception(
