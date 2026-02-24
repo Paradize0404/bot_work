@@ -13,7 +13,7 @@ Use-case: зарплатная ведомость → Google Sheets.
 
 import logging
 import time
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import select, delete
 
@@ -132,6 +132,30 @@ async def export_salary_sheet(triggered_by: str | None = None) -> int:
     logger.info(
         "[salary] Сортировка завершена, %d записей для выгрузки", len(employees_data)
     )
+
+    # ── 4b. Подгружаем актуальные ставки из «Истории ставок» как fallback ──
+    # (используются только если ячейка в листе «Зарплаты» пустая)
+    try:
+        from use_cases.salary_history import (
+            load_salary_history_index,
+            get_rate_for_date,
+        )
+
+        history_index = await load_salary_history_index()
+        today = date.today()
+        for emp in employees_data:
+            history = history_index.get(emp["name"], [])
+            active = get_rate_for_date(history, today)
+            if active:
+                emp["hint_sal_type"] = active["sal_type"]
+                emp["hint_rate"] = (
+                    str(int(active["rate"]))
+                    if active["rate"] == int(active["rate"])
+                    else str(active["rate"])
+                )
+        logger.info("[salary] История ставок загружена для fallback")
+    except Exception:
+        logger.exception("[salary] Ошибка загрузки истории ставок для fallback")
 
     # ── 5. Выгружаем в Google Sheets ──
     count = await sync_salary_sheet(employees_data)

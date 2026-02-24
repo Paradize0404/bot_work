@@ -3417,6 +3417,11 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
                 continue
             iiko_id = str(emp.get("id") or "")
             sal_type, rate, mot_pct, mot_base = saved.get(name, ("", "", "", ""))
+            # Fallback из «Истории ставок» для пустых ячеек
+            if not sal_type:
+                sal_type = emp.get("hint_sal_type", "")
+            if not rate:
+                rate = emp.get("hint_rate", "")
             data_rows.append([name, sal_type, rate, mot_pct, mot_base, iiko_id])
 
         all_rows = [_SALARY_HEADERS] + data_rows
