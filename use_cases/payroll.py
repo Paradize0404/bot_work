@@ -40,9 +40,18 @@ logger = logging.getLogger(__name__)
 
 # Названия месяцев (именительный падеж) для заголовка вкладки
 _MONTH_NAMES_RU = {
-    1: "январь", 2: "февраль", 3: "март", 4: "апрель",
-    5: "май", 6: "июнь", 7: "июль", 8: "август",
-    9: "сентябрь", 10: "октябрь", 11: "ноябрь", 12: "декабрь",
+    1: "январь",
+    2: "февраль",
+    3: "март",
+    4: "апрель",
+    5: "май",
+    6: "июнь",
+    7: "июль",
+    8: "август",
+    9: "сентябрь",
+    10: "октябрь",
+    11: "ноябрь",
+    12: "декабрь",
 }
 
 
@@ -70,7 +79,9 @@ def _display_name(emp: Employee) -> str:
 
 def _full_name(emp: Employee) -> str:
     """Фамилия Имя Отчество — ключ для сопоставления с листом «Зарплаты»."""
-    parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+    parts = [
+        p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()
+    ]
     return " ".join(parts) if parts else (emp.name or "").strip()
 
 
@@ -128,16 +139,18 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
 
     month_name = _MONTH_NAMES_RU[today.month]
     tab_name = f"ФОТ {month_name} {today.year}"
-    period_label = (
-        f"{month_start.strftime('%d.%m.%Y')} – {today.strftime('%d.%m.%Y')}"
-    )
+    period_label = f"{month_start.strftime('%d.%m.%Y')} – {today.strftime('%d.%m.%Y')}"
 
     days_in_m = _days_in_month(today.year, today.month)
     days_passed = today.day  # сегодня включительно
 
     logger.info(
         "[payroll] Расчёт ФОТ: период %s – %s (%d/%d дней), вкладка «%s»",
-        date_from_str, date_to_str, days_passed, days_in_m, tab_name,
+        date_from_str,
+        date_to_str,
+        days_passed,
+        days_in_m,
+        tab_name,
     )
 
     # ── 1. Загружаем данные параллельно ──
@@ -176,9 +189,9 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
 
     # ── 3. Агрегация явок ──
     # emp_iiko_id → {dept_id: {"dept_name": str, "shifts": int, "hours": float}}
-    emp_dept_stats: dict[str, dict[str, dict]] = defaultdict(lambda: defaultdict(
-        lambda: {"dept_name": "", "shifts": 0, "hours": 0.0}
-    ))
+    emp_dept_stats: dict[str, dict[str, dict]] = defaultdict(
+        lambda: defaultdict(lambda: {"dept_name": "", "shifts": 0, "hours": 0.0})
+    )
     # emp_iiko_id → суммарный заработок по почасовой (hours × role.payment_per_hour)
     emp_hourly_earnings: dict[str, float] = defaultdict(float)
     # emp_iiko_id → суммарные часы (для отображения в Ед.)
@@ -264,14 +277,16 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
                 "employees": [],
             }
 
-        dept_sections_map[primary_dept_id]["employees"].append({
-            "name": _display_name(emp),
-            "role": role_name,
-            "sal_type": sal_type or "—",
-            "rate": rate,
-            "units": units,
-            "total": total,
-        })
+        dept_sections_map[primary_dept_id]["employees"].append(
+            {
+                "name": _display_name(emp),
+                "role": role_name,
+                "sal_type": sal_type or "—",
+                "rate": rate,
+                "units": units,
+                "total": total,
+            }
+        )
 
     # ── 5. Секция ежемесячных (без явок + с явками) ──
     monthly_section: list[dict] = []
@@ -310,21 +325,21 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
 
         # Пропорциональный расчёт с учётом смены ставки внутри месяца
         if history:
-            total = get_prorated_monthly(
-                history, month_start, today, days_in_m
-            )
+            total = get_prorated_monthly(history, month_start, today, days_in_m)
         else:
             total = round(rate / days_in_m * days_passed, 2) if days_in_m else 0.0
         units = days_passed  # дней прошло (включительно)
 
-        monthly_section.append({
-            "name": _display_name(emp),
-            "role": role_name,
-            "sal_type": "ежемесячная",
-            "rate": rate,
-            "units": units,
-            "total": total,
-        })
+        monthly_section.append(
+            {
+                "name": _display_name(emp),
+                "role": role_name,
+                "sal_type": "ежемесячная",
+                "rate": rate,
+                "units": units,
+                "total": total,
+            }
+        )
 
     # Сортируем внутри каждой секции по имени
     for sec in dept_sections_map.values():
@@ -353,7 +368,9 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
     elapsed = time.monotonic() - t0
     logger.info(
         "[payroll] ФОТ «%s» записан: %d сотрудников за %.1f сек",
-        tab_name, count, elapsed,
+        tab_name,
+        count,
+        elapsed,
     )
     return count
 

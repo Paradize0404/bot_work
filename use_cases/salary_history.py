@@ -78,21 +78,28 @@ async def sync_salary_history(triggered_by: str | None = None) -> int:
 
     # ── 2. Парсим даты, группируем по имени ──
     # name → [(row_index, sal_type, rate, mot_pct, mot_base, valid_from_date), ...]
-    grouped: dict[str, list[tuple[int, str, float, object, object, date]]] = defaultdict(list)
+    grouped: dict[str, list[tuple[int, str, float, object, object, date]]] = (
+        defaultdict(list)
+    )
     skipped = 0
     for r in raw_rows:
         d = _parse_date(r["valid_from"])
         if d is None:
             logger.warning(
                 "[salary_history] Строка %d: не удалось разобрать дату «%s», пропускаю",
-                r["row"], r["valid_from"],
+                r["row"],
+                r["valid_from"],
             )
             skipped += 1
             continue
-        grouped[r["name"]].append((r["row"], r["sal_type"], r["rate"], r.get("mot_pct"), r.get("mot_base"), d))
+        grouped[r["name"]].append(
+            (r["row"], r["sal_type"], r["rate"], r.get("mot_pct"), r.get("mot_base"), d)
+        )
 
     if skipped:
-        logger.warning("[salary_history] Пропущено строк из-за неверной даты: %d", skipped)
+        logger.warning(
+            "[salary_history] Пропущено строк из-за неверной даты: %d", skipped
+        )
 
     # ── 3. Вычисляем valid_to, готовим данные для БД и GSheet ──
     db_records: list[dict] = []
@@ -102,7 +109,9 @@ async def sync_salary_history(triggered_by: str | None = None) -> int:
         # Сортируем по дате начала
         entries.sort(key=lambda x: x[5])
 
-        for i, (row_idx, sal_type, rate, mot_pct, mot_base, valid_from) in enumerate(entries):
+        for i, (row_idx, sal_type, rate, mot_pct, mot_base, valid_from) in enumerate(
+            entries
+        ):
             if i + 1 < len(entries):
                 # valid_to = день перед следующей записью
                 next_from = entries[i + 1][5]
@@ -111,23 +120,28 @@ async def sync_salary_history(triggered_by: str | None = None) -> int:
                 # Последняя (текущая) запись
                 valid_to = None
 
-            db_records.append({
-                "employee_name": name,
-                "sal_type": sal_type,
-                "rate": rate,
-                "mot_pct": mot_pct,
-                "mot_base": mot_base,
-                "valid_from": valid_from,
-                "valid_to": valid_to,
-            })
-            sheet_updates.append({
-                "row": row_idx,
-                "valid_to": _fmt_date(valid_to),
-            })
+            db_records.append(
+                {
+                    "employee_name": name,
+                    "sal_type": sal_type,
+                    "rate": rate,
+                    "mot_pct": mot_pct,
+                    "mot_base": mot_base,
+                    "valid_from": valid_from,
+                    "valid_to": valid_to,
+                }
+            )
+            sheet_updates.append(
+                {
+                    "row": row_idx,
+                    "valid_to": _fmt_date(valid_to),
+                }
+            )
 
     logger.info(
         "[salary_history] Подготовлено: %d записей по %d сотрудникам",
-        len(db_records), len(grouped),
+        len(db_records),
+        len(grouped),
     )
 
     # ── 4. Upsert в БД ──
@@ -180,27 +194,43 @@ async def close_history_for_deleted_employees() -> int:
     # ── 1. Загружаем удалённых сотрудников + открытые записи истории ──
     async with async_session_factory() as session:
         # Сотрудники с deleted=True (ФИО для сравнения)
-        deleted_emps = (await session.execute(
-            select(Employee).where(Employee.deleted == True)  # noqa: E712
-        )).scalars().all()
+        deleted_emps = (
+            (
+                await session.execute(
+                    select(Employee).where(Employee.deleted == True)  # noqa: E712
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         if not deleted_emps:
             return 0
 
         # Строим множество ФИО удалённых
         def _full_name(emp: Employee) -> str:
-            parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+            parts = [
+                p
+                for p in (emp.last_name, emp.first_name, emp.middle_name)
+                if p and p.strip()
+            ]
             return " ".join(parts) if parts else (emp.name or "").strip()
 
         deleted_names: set[str] = {_full_name(e) for e in deleted_emps if _full_name(e)}
 
         # Открытые записи истории для этих сотрудников
-        open_records = (await session.execute(
-            select(SalaryHistory).where(
-                SalaryHistory.valid_to == None,  # noqa: E711
-                SalaryHistory.employee_name.in_(deleted_names),
+        open_records = (
+            (
+                await session.execute(
+                    select(SalaryHistory).where(
+                        SalaryHistory.valid_to == None,  # noqa: E711
+                        SalaryHistory.employee_name.in_(deleted_names),
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
 
         if not open_records:
             return 0
@@ -213,22 +243,24 @@ async def close_history_for_deleted_employees() -> int:
     closed_names = [r.employee_name for r in open_records]
     logger.info(
         "[salary_history] Закрыто записей в Истории для удалённых: %d — %s",
-        len(closed_names), ", ".join(closed_names[:5]),
+        len(closed_names),
+        ", ".join(closed_names[:5]),
     )
 
     # ── 2. Обновляем GSheet: читаем лист и пишем Дата по ──
     try:
         # Строим индекс: (имя, valid_from как "DD.MM.YYYY") → дата закрытия
         closed_map: dict[tuple[str, str], date] = {
-            (r.employee_name, _fmt_date(r.valid_from)): today
-            for r in open_records
+            (r.employee_name, _fmt_date(r.valid_from)): today for r in open_records
         }
         raw_rows = await read_salary_history_sheet()
         sheet_updates: list[dict] = []
         for r in raw_rows:
             key = (r["name"], r["valid_from"])
             if key in closed_map:
-                sheet_updates.append({"row": r["row"], "valid_to": _fmt_date(closed_map[key])})
+                sheet_updates.append(
+                    {"row": r["row"], "valid_to": _fmt_date(closed_map[key])}
+                )
         if sheet_updates:
             await write_salary_history_valid_to(sheet_updates)
     except Exception:
@@ -250,10 +282,17 @@ async def delete_history_for_employee(employee_id: str) -> int:
     async with async_session_factory() as session:
         emp = await session.get(Employee, employee_id)
         if emp is None:
-            logger.warning("[salary_history] delete_history_for_employee: сотрудник %s не найден", employee_id)
+            logger.warning(
+                "[salary_history] delete_history_for_employee: сотрудник %s не найден",
+                employee_id,
+            )
             return 0
 
-        parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+        parts = [
+            p
+            for p in (emp.last_name, emp.first_name, emp.middle_name)
+            if p and p.strip()
+        ]
         emp_name = " ".join(parts) if parts else (emp.name or "").strip()
         if not emp_name:
             return 0
@@ -266,10 +305,17 @@ async def delete_history_for_employee(employee_id: str) -> int:
         await session.commit()
 
     if deleted_count == 0:
-        logger.info("[salary_history] delete_history_for_employee: записей для %s не найдено", emp_name)
+        logger.info(
+            "[salary_history] delete_history_for_employee: записей для %s не найдено",
+            emp_name,
+        )
         return 0
 
-    logger.info("[salary_history] Удалено из БД %d записей истории для %s", deleted_count, emp_name)
+    logger.info(
+        "[salary_history] Удалено из БД %d записей истории для %s",
+        deleted_count,
+        emp_name,
+    )
 
     # Удаляем строки из GSheet
     try:
@@ -277,9 +323,15 @@ async def delete_history_for_employee(employee_id: str) -> int:
         row_nums = [r["row"] for r in raw_rows if r["name"] == emp_name]
         if row_nums:
             await delete_salary_history_rows(row_nums)
-            logger.info("[salary_history] Удалено %d строк GSheet для %s", len(row_nums), emp_name)
+            logger.info(
+                "[salary_history] Удалено %d строк GSheet для %s",
+                len(row_nums),
+                emp_name,
+            )
     except Exception:
-        logger.exception("[salary_history] Ошибка GSheet при удалении строк для %s", emp_name)
+        logger.exception(
+            "[salary_history] Ошибка GSheet при удалении строк для %s", emp_name
+        )
 
     return deleted_count
 
@@ -299,24 +351,30 @@ async def load_salary_history_index() -> dict[str, list[dict]]:
     """
     async with async_session_factory() as session:
         rows = (
-            await session.execute(
-                select(SalaryHistory).order_by(
-                    SalaryHistory.employee_name,
-                    SalaryHistory.valid_from,
+            (
+                await session.execute(
+                    select(SalaryHistory).order_by(
+                        SalaryHistory.employee_name,
+                        SalaryHistory.valid_from,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     index: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
-        index[r.employee_name].append({
-            "sal_type": r.sal_type,
-            "rate": float(r.rate),
-            "mot_pct": float(r.mot_pct) if r.mot_pct is not None else None,
-            "mot_base": r.mot_base,
-            "valid_from": r.valid_from,
-            "valid_to": r.valid_to,
-        })
+        index[r.employee_name].append(
+            {
+                "sal_type": r.sal_type,
+                "rate": float(r.rate),
+                "mot_pct": float(r.mot_pct) if r.mot_pct is not None else None,
+                "mot_base": r.mot_base,
+                "valid_from": r.valid_from,
+                "valid_to": r.valid_to,
+            }
+        )
     return dict(index)
 
 
@@ -373,7 +431,9 @@ def get_prorated_monthly(
 async def refresh_history_sheet_dropdowns(employee_names: list[str]) -> None:
     """Обновить выпадающий список сотрудников на листе «История ставок»."""
     await setup_salary_history_sheet(employee_names)
-    logger.info("[salary_history] Дропдауны обновлены: %d сотрудников", len(employee_names))
+    logger.info(
+        "[salary_history] Дропдауны обновлены: %d сотрудников", len(employee_names)
+    )
 
 
 _DEFAULT_HISTORY_DATE = "01.01.2020"
@@ -409,7 +469,11 @@ async def bootstrap_salary_history_sheet() -> int:
     role_by_iiko_id: dict[str, EmployeeRole] = {str(r.id): r for r in roles_db}
 
     def _full_name_from_emp(emp: Employee) -> str:
-        parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+        parts = [
+            p
+            for p in (emp.last_name, emp.first_name, emp.middle_name)
+            if p and p.strip()
+        ]
         return " ".join(parts) if parts else (emp.name or "").strip()
 
     # full_name → Employee
@@ -428,7 +492,10 @@ async def bootstrap_salary_history_sheet() -> int:
                 id_updates.append({"row": r["row"], "iiko_id": str(emp_found.id)})
     if id_updates:
         await write_history_iiko_ids(id_updates)
-        logger.info("[salary_history] bootstrap: обновлено iiko_id для %d существующих строк", len(id_updates))
+        logger.info(
+            "[salary_history] bootstrap: обновлено iiko_id для %d существующих строк",
+            len(id_updates),
+        )
 
     # ── 2. Строим список новых строк ──
     new_rows: list[dict] = []
@@ -448,15 +515,17 @@ async def bootstrap_salary_history_sheet() -> int:
                 if role and role.payment_per_hour:
                     rate = float(role.payment_per_hour)
 
-        new_rows.append({
-            "name": name,
-            "sal_type": sal_type,
-            "rate": round(rate) if sal_type != "почасовая" else rate,
-            "mot_pct": settings.get("mot_pct") or "",
-            "mot_base": settings.get("mot_base") or "",
-            "valid_from": _DEFAULT_HISTORY_DATE,
-            "iiko_id": str(emp.id) if emp else "",
-        })
+        new_rows.append(
+            {
+                "name": name,
+                "sal_type": sal_type,
+                "rate": round(rate) if sal_type != "почасовая" else rate,
+                "mot_pct": settings.get("mot_pct") or "",
+                "mot_base": settings.get("mot_base") or "",
+                "valid_from": _DEFAULT_HISTORY_DATE,
+                "iiko_id": str(emp.id) if emp else "",
+            }
+        )
 
     # Сортируем: сначала по типу, потом по имени
     new_rows.sort(key=lambda r: (r["sal_type"], r["name"].lower()))

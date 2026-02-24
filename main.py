@@ -69,7 +69,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp.include_router(day_report_router)
     dp.include_router(pending_docs_router)  # Ожидают отправки — сводный список
     dp.include_router(invoice_edit_router)  # Редактирование pending накладных
-    dp.include_router(salary_router)         # Управление списком ФОТ
+    dp.include_router(salary_router)  # Управление списком ФОТ
     dp.include_router(router)
 
     # Error handler: ловим оставшиеся сетевые ошибки (после retry)

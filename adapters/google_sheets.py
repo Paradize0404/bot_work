@@ -3343,7 +3343,7 @@ _SALARY_HEADERS = [
     "Ставка",
     "Мотивация, %",
     "База мотивации",
-    "iiko_id",   # скрытый столбец F
+    "iiko_id",  # скрытый столбец F
 ]
 
 _SALARY_TYPE_OPTIONS = ["почасовая", "посменная", "ежемесячная"]
@@ -3402,7 +3402,7 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
                     continue
                 name = row[0].strip()
                 sal_type = row[1].strip() if len(row) > 1 else ""
-                rate    = row[2].strip() if len(row) > 2 else ""
+                rate = row[2].strip() if len(row) > 2 else ""
                 mot_pct = row[3].strip() if len(row) > 3 else ""
                 mot_base = row[4].strip() if len(row) > 4 else ""
                 saved[name] = (sal_type, rate, mot_pct, mot_base)
@@ -3624,7 +3624,11 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
                         "cell": {
                             "userEnteredFormat": {
                                 "verticalAlignment": "MIDDLE",
-                                "backgroundColor": {"red": 1.0, "green": 1.0, "blue": 1.0},
+                                "backgroundColor": {
+                                    "red": 1.0,
+                                    "green": 1.0,
+                                    "blue": 1.0,
+                                },
                             }
                         },
                         "fields": "userEnteredFormat(verticalAlignment,backgroundColor)",
@@ -3735,9 +3739,7 @@ _FOT_HEADERS = ["Сотрудник", "Должность", "Тип расчёт
 _FOT_NCOLS = len(_FOT_HEADERS)
 
 
-def _get_or_create_fot_worksheet(
-    spreadsheet: Any, tab_name: str
-) -> Any:
+def _get_or_create_fot_worksheet(spreadsheet: Any, tab_name: str) -> Any:
     """Открыть вкладку ФОТ (или создать, если не существует)."""
     try:
         ws = spreadsheet.worksheet(tab_name)
@@ -3793,9 +3795,11 @@ async def sync_fot_sheet(
         all_values.append([period_label] + [""] * (_FOT_NCOLS - 1))
 
         total_emp_count = 0
-        dept_header_rows: list[int] = []      # 0-based row indices for dept headers
-        col_header_rows: list[int] = []       # 0-based row indices for column headers
-        data_row_ranges: list[tuple[int, int]] = []  # (start, end) 0-based for data rows
+        dept_header_rows: list[int] = []  # 0-based row indices for dept headers
+        col_header_rows: list[int] = []  # 0-based row indices for column headers
+        data_row_ranges: list[tuple[int, int]] = (
+            []
+        )  # (start, end) 0-based for data rows
 
         for section in dept_sections:
             dept_name = section.get("dept_name", "Подразделение")
@@ -3814,14 +3818,16 @@ async def sync_fot_sheet(
             # Данные
             data_start = len(all_values)
             for emp in employees:
-                all_values.append([
-                    emp.get("name", ""),
-                    emp.get("role", ""),
-                    emp.get("sal_type", ""),
-                    _fmt_num(emp.get("rate", 0)),
-                    _fmt_num(emp.get("units", 0)),
-                    _fmt_num(emp.get("total", 0)),
-                ])
+                all_values.append(
+                    [
+                        emp.get("name", ""),
+                        emp.get("role", ""),
+                        emp.get("sal_type", ""),
+                        _fmt_num(emp.get("rate", 0)),
+                        _fmt_num(emp.get("units", 0)),
+                        _fmt_num(emp.get("total", 0)),
+                    ]
+                )
                 total_emp_count += 1
             data_row_ranges.append((data_start, len(all_values)))
 
@@ -3838,14 +3844,16 @@ async def sync_fot_sheet(
 
             data_start = len(all_values)
             for emp in monthly_section:
-                all_values.append([
-                    emp.get("name", ""),
-                    emp.get("role", ""),
-                    emp.get("sal_type", ""),
-                    _fmt_num(emp.get("rate", 0)),
-                    _fmt_num(emp.get("units", 0)),
-                    _fmt_num(emp.get("total", 0)),
-                ])
+                all_values.append(
+                    [
+                        emp.get("name", ""),
+                        emp.get("role", ""),
+                        emp.get("sal_type", ""),
+                        _fmt_num(emp.get("rate", 0)),
+                        _fmt_num(emp.get("units", 0)),
+                        _fmt_num(emp.get("total", 0)),
+                    ]
+                )
                 total_emp_count += 1
             data_row_ranges.append((data_start, len(all_values)))
 
@@ -3862,80 +3870,37 @@ async def sync_fot_sheet(
         requests: list[dict] = []
 
         # Строка 1: период — жирный, залит серым
-        requests.append({
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 0,
-                    "endRowIndex": 1,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": _FOT_NCOLS,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": {"red": 0.85, "green": 0.85, "blue": 0.85},
-                        "textFormat": {"bold": True, "fontSize": 11},
-                        "horizontalAlignment": "CENTER",
-                        "verticalAlignment": "MIDDLE",
-                    }
-                },
-                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)",
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 0,
+                        "endRowIndex": 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": _FOT_NCOLS,
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {
+                                "red": 0.85,
+                                "green": 0.85,
+                                "blue": 0.85,
+                            },
+                            "textFormat": {"bold": True, "fontSize": 11},
+                            "horizontalAlignment": "CENTER",
+                            "verticalAlignment": "MIDDLE",
+                        }
+                    },
+                    "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)",
+                }
             }
-        })
+        )
 
         # Заголовки подразделений — жирные, светло-голубой фон
         for r in dept_header_rows:
-            requests.append({
-                "repeatCell": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "startRowIndex": r,
-                        "endRowIndex": r + 1,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": _FOT_NCOLS,
-                    },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "backgroundColor": {"red": 0.73, "green": 0.85, "blue": 0.98},
-                            "textFormat": {"bold": True, "fontSize": 10},
-                            "verticalAlignment": "MIDDLE",
-                        }
-                    },
-                    "fields": "userEnteredFormat(backgroundColor,textFormat,verticalAlignment)",
-                }
-            })
-
-        # Заголовки колонок — серый фон, жирный
-        for r in col_header_rows:
-            requests.append({
-                "repeatCell": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "startRowIndex": r,
-                        "endRowIndex": r + 1,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": _FOT_NCOLS,
-                    },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "backgroundColor": {"red": 0.91, "green": 0.91, "blue": 0.91},
-                            "textFormat": {"bold": True, "fontSize": 9},
-                            "verticalAlignment": "MIDDLE",
-                        }
-                    },
-                    "fields": "userEnteredFormat(backgroundColor,textFormat,verticalAlignment)",
-                }
-            })
-
-        # Строки данных — чередование белый/светло-серый + числа вправо
-        for data_start, data_end in data_row_ranges:
-            for i, r in enumerate(range(data_start, data_end)):
-                bg = (
-                    {"red": 1.0, "green": 1.0, "blue": 1.0}
-                    if i % 2 == 0
-                    else {"red": 0.96, "green": 0.96, "blue": 0.96}
-                )
-                requests.append({
+            requests.append(
+                {
                     "repeatCell": {
                         "range": {
                             "sheetId": sheet_id,
@@ -3946,79 +3911,152 @@ async def sync_fot_sheet(
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": bg,
-                                "textFormat": {"fontSize": 9},
+                                "backgroundColor": {
+                                    "red": 0.73,
+                                    "green": 0.85,
+                                    "blue": 0.98,
+                                },
+                                "textFormat": {"bold": True, "fontSize": 10},
                                 "verticalAlignment": "MIDDLE",
                             }
                         },
                         "fields": "userEnteredFormat(backgroundColor,textFormat,verticalAlignment)",
                     }
-                })
-            # Выровнять числовые колонки (D, E, F) вправо
-            for col_i in [3, 4, 5]:
-                requests.append({
+                }
+            )
+
+        # Заголовки колонок — серый фон, жирный
+        for r in col_header_rows:
+            requests.append(
+                {
                     "repeatCell": {
                         "range": {
                             "sheetId": sheet_id,
-                            "startRowIndex": data_start,
-                            "endRowIndex": data_end,
-                            "startColumnIndex": col_i,
-                            "endColumnIndex": col_i + 1,
+                            "startRowIndex": r,
+                            "endRowIndex": r + 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": _FOT_NCOLS,
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "horizontalAlignment": "RIGHT",
+                                "backgroundColor": {
+                                    "red": 0.91,
+                                    "green": 0.91,
+                                    "blue": 0.91,
+                                },
+                                "textFormat": {"bold": True, "fontSize": 9},
+                                "verticalAlignment": "MIDDLE",
                             }
                         },
-                        "fields": "userEnteredFormat.horizontalAlignment",
+                        "fields": "userEnteredFormat(backgroundColor,textFormat,verticalAlignment)",
                     }
-                })
+                }
+            )
+
+        # Строки данных — чередование белый/светло-серый + числа вправо
+        for data_start, data_end in data_row_ranges:
+            for i, r in enumerate(range(data_start, data_end)):
+                bg = (
+                    {"red": 1.0, "green": 1.0, "blue": 1.0}
+                    if i % 2 == 0
+                    else {"red": 0.96, "green": 0.96, "blue": 0.96}
+                )
+                requests.append(
+                    {
+                        "repeatCell": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "startRowIndex": r,
+                                "endRowIndex": r + 1,
+                                "startColumnIndex": 0,
+                                "endColumnIndex": _FOT_NCOLS,
+                            },
+                            "cell": {
+                                "userEnteredFormat": {
+                                    "backgroundColor": bg,
+                                    "textFormat": {"fontSize": 9},
+                                    "verticalAlignment": "MIDDLE",
+                                }
+                            },
+                            "fields": "userEnteredFormat(backgroundColor,textFormat,verticalAlignment)",
+                        }
+                    }
+                )
+            # Выровнять числовые колонки (D, E, F) вправо
+            for col_i in [3, 4, 5]:
+                requests.append(
+                    {
+                        "repeatCell": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "startRowIndex": data_start,
+                                "endRowIndex": data_end,
+                                "startColumnIndex": col_i,
+                                "endColumnIndex": col_i + 1,
+                            },
+                            "cell": {
+                                "userEnteredFormat": {
+                                    "horizontalAlignment": "RIGHT",
+                                }
+                            },
+                            "fields": "userEnteredFormat.horizontalAlignment",
+                        }
+                    }
+                )
 
         # Ширины колонок: A=180, B=130, C=100, D=80, E=60, F=90
         col_widths = [180, 130, 100, 80, 60, 90]
         for i, px in enumerate(col_widths):
-            requests.append({
+            requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": i,
+                            "endIndex": i + 1,
+                        },
+                        "properties": {"pixelSize": px},
+                        "fields": "pixelSize",
+                    }
+                }
+            )
+
+        # Высота строк
+        requests.append(
+            {
                 "updateDimensionProperties": {
                     "range": {
                         "sheetId": sheet_id,
-                        "dimension": "COLUMNS",
-                        "startIndex": i,
-                        "endIndex": i + 1,
+                        "dimension": "ROWS",
+                        "startIndex": 0,
+                        "endIndex": len(all_values),
                     },
-                    "properties": {"pixelSize": px},
+                    "properties": {"pixelSize": 22},
                     "fields": "pixelSize",
                 }
-            })
-
-        # Высота строк
-        requests.append({
-            "updateDimensionProperties": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "dimension": "ROWS",
-                    "startIndex": 0,
-                    "endIndex": len(all_values),
-                },
-                "properties": {"pixelSize": 22},
-                "fields": "pixelSize",
             }
-        })
+        )
 
         # Заморозить строку 1
-        requests.append({
-            "updateSheetProperties": {
-                "properties": {
-                    "sheetId": sheet_id,
-                    "gridProperties": {"frozenRowCount": 1},
-                },
-                "fields": "gridProperties.frozenRowCount",
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": sheet_id,
+                        "gridProperties": {"frozenRowCount": 1},
+                    },
+                    "fields": "gridProperties.frozenRowCount",
+                }
             }
-        })
+        )
 
         try:
             spreadsheet.batch_update({"requests": requests})
         except Exception:
-            logger.warning("[%s] sync_fot_sheet batch_update ошибка", LABEL, exc_info=True)
+            logger.warning(
+                "[%s] sync_fot_sheet batch_update ошибка", LABEL, exc_info=True
+            )
 
         return total_emp_count
 
@@ -4040,25 +4078,43 @@ async def sync_fot_sheet(
 
 _HISTORY_TAB = "История ставок"
 # A=Сотрудник  B=Тип  C=Ставка  D=Мотив., %  E=База мотив.  F=Дата с  G=Дата по(H)  H=iiko_id(H)
-_HISTORY_HEADERS = ["Сотрудник", "Тип расчёта", "Ставка", "Мотивация, %", "База мотивации", "Дата с", "Дата по", "iiko_id"]
+_HISTORY_HEADERS = [
+    "Сотрудник",
+    "Тип расчёта",
+    "Ставка",
+    "Мотивация, %",
+    "База мотивации",
+    "Дата с",
+    "Дата по",
+    "iiko_id",
+]
 _HISTORY_NCOLS = len(_HISTORY_HEADERS)  # 8
 
 
-def _get_protection_delete_requests(sheet_id: int, spreadsheet: gspread.Spreadsheet) -> list[dict]:
+def _get_protection_delete_requests(
+    sheet_id: int, spreadsheet: gspread.Spreadsheet
+) -> list[dict]:
     """Вернуть список deleteProtectedRange-запросов для регистрации всех существующих защит на листе."""
     requests: list[dict] = []
     try:
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet.id}"
         resp = spreadsheet.client.request(
-            "get", url,
-            params={"fields": "sheets(properties/sheetId,protectedRanges/protectedRangeId)"},
+            "get",
+            url,
+            params={
+                "fields": "sheets(properties/sheetId,protectedRanges/protectedRangeId)"
+            },
         )
         for sheet in resp.json().get("sheets", []):
             if sheet.get("properties", {}).get("sheetId") == sheet_id:
                 for pr in sheet.get("protectedRanges", []):
-                    requests.append({
-                        "deleteProtectedRange": {"protectedRangeId": pr["protectedRangeId"]}
-                    })
+                    requests.append(
+                        {
+                            "deleteProtectedRange": {
+                                "protectedRangeId": pr["protectedRangeId"]
+                            }
+                        }
+                    )
     except Exception:
         logger.debug("[%s] Не удалось получить список защит листа %d", LABEL, sheet_id)
     return requests
@@ -4071,7 +4127,9 @@ def _get_history_worksheet() -> gspread.Worksheet:
     try:
         return spreadsheet.worksheet(_HISTORY_TAB)
     except gspread.exceptions.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title=_HISTORY_TAB, rows=2000, cols=_HISTORY_NCOLS + 2)
+        ws = spreadsheet.add_worksheet(
+            title=_HISTORY_TAB, rows=2000, cols=_HISTORY_NCOLS + 2
+        )
         logger.info("[%s] Лист «%s» создан", LABEL, _HISTORY_TAB)
         return ws
 
@@ -4087,6 +4145,7 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
 
     Вызывается при выгрузке зарплатного листа (после обновления списка сотрудников).
     """
+
     def _sync() -> None:
         ws = _get_history_worksheet()
         spreadsheet = _get_client().open_by_key(SALARY_SHEET_ID)
@@ -4108,16 +4167,26 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
             for row in existing[1:]:
                 if not row or not (row[0] if row else "").strip():
                     continue
-                name       = row[0] if len(row) > 0 else ""
-                sal_type   = row[1] if len(row) > 1 else ""
-                rate       = row[2] if len(row) > 2 else ""
-                old_date   = row[3] if len(row) > 3 else ""  # old: Дата с
-                old_iiko   = row[5] if len(row) > 5 else ""  # old: iiko_id
-                migration_rows.append([name, sal_type, rate, "", "", old_date, "", old_iiko])
+                name = row[0] if len(row) > 0 else ""
+                sal_type = row[1] if len(row) > 1 else ""
+                rate = row[2] if len(row) > 2 else ""
+                old_date = row[3] if len(row) > 3 else ""  # old: Дата с
+                old_iiko = row[5] if len(row) > 5 else ""  # old: iiko_id
+                migration_rows.append(
+                    [name, sal_type, rate, "", "", old_date, "", old_iiko]
+                )
             if migration_rows:
-                end_cell = gspread.utils.rowcol_to_a1(1 + len(migration_rows), _HISTORY_NCOLS)
-                ws.update(range_name=f"A2:{end_cell}", values=migration_rows, value_input_option="USER_ENTERED")
-            logger.info("[%s] Миграция старого формата: %d строк", LABEL, len(migration_rows))
+                end_cell = gspread.utils.rowcol_to_a1(
+                    1 + len(migration_rows), _HISTORY_NCOLS
+                )
+                ws.update(
+                    range_name=f"A2:{end_cell}",
+                    values=migration_rows,
+                    value_input_option="USER_ENTERED",
+                )
+            logger.info(
+                "[%s] Миграция старого формата: %d строк", LABEL, len(migration_rows)
+            )
 
         # Формат заголовка
         requests: list[dict] = [
@@ -4125,12 +4194,18 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
                 "repeatCell": {
                     "range": {
                         "sheetId": sheet_id,
-                        "startRowIndex": 0, "endRowIndex": 1,
-                        "startColumnIndex": 0, "endColumnIndex": _HISTORY_NCOLS,
+                        "startRowIndex": 0,
+                        "endRowIndex": 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": _HISTORY_NCOLS,
                     },
                     "cell": {
                         "userEnteredFormat": {
-                            "backgroundColor": {"red": 0.73, "green": 0.85, "blue": 0.98},
+                            "backgroundColor": {
+                                "red": 0.73,
+                                "green": 0.85,
+                                "blue": 0.98,
+                            },
                             "textFormat": {"bold": True},
                             "verticalAlignment": "MIDDLE",
                         }
@@ -4143,8 +4218,10 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
                 "repeatCell": {
                     "range": {
                         "sheetId": sheet_id,
-                        "startRowIndex": 1, "endRowIndex": 2001,
-                        "startColumnIndex": 0, "endColumnIndex": 6,  # A–F (видимые)
+                        "startRowIndex": 1,
+                        "endRowIndex": 2001,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 6,  # A–F (видимые)
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -4162,7 +4239,7 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
                         "sheetId": sheet_id,
                         "dimension": "COLUMNS",
                         "startIndex": 3,  # D
-                        "endIndex": 6,    # D + E + F
+                        "endIndex": 6,  # D + E + F
                     },
                     "properties": {"hiddenByUser": False},
                     "fields": "hiddenByUser",
@@ -4175,7 +4252,7 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
                         "sheetId": sheet_id,
                         "dimension": "COLUMNS",
                         "startIndex": 6,  # G
-                        "endIndex": 8,    # G + H
+                        "endIndex": 8,  # G + H
                     },
                     "properties": {"hiddenByUser": True},
                     "fields": "hiddenByUser",
@@ -4185,8 +4262,10 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
             {
                 "updateDimensionProperties": {
                     "range": {
-                        "sheetId": sheet_id, "dimension": "ROWS",
-                        "startIndex": 0, "endIndex": 2000,
+                        "sheetId": sheet_id,
+                        "dimension": "ROWS",
+                        "startIndex": 0,
+                        "endIndex": 2000,
                     },
                     "properties": {"pixelSize": 22},
                     "fields": "pixelSize",
@@ -4195,91 +4274,114 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
             # Ширины: A=200, B=120, C=90, D=90, E=180, F=100 (G и H скрыты — не задаём ширину)
         ]
         for i, px in enumerate([200, 120, 90, 90, 180, 100]):
-            requests.append({
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": sheet_id, "dimension": "COLUMNS",
-                        "startIndex": i, "endIndex": i + 1,
-                    },
-                    "properties": {"pixelSize": px},
-                    "fields": "pixelSize",
+            requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": i,
+                            "endIndex": i + 1,
+                        },
+                        "properties": {"pixelSize": px},
+                        "fields": "pixelSize",
+                    }
                 }
-            })
+            )
 
         # Выпадающий список сотрудников в колонке A (строки 2..2000)
         if employee_names:
             emp_values = [{"userEnteredValue": n} for n in sorted(employee_names)]
-            requests.append({
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1,
+                            "endRowIndex": 2000,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 1,
+                        },
+                        "rule": {
+                            "condition": {
+                                "type": "ONE_OF_LIST",
+                                "values": emp_values,
+                            },
+                            "showCustomUi": True,
+                            "strict": False,
+                        },
+                    }
+                }
+            )
+
+        # Выпадающий список типов в колонке B (строки 2..2000)
+        type_values = [{"userEnteredValue": t} for t in _SALARY_TYPE_OPTIONS]
+        requests.append(
+            {
                 "setDataValidation": {
                     "range": {
                         "sheetId": sheet_id,
-                        "startRowIndex": 1, "endRowIndex": 2000,
-                        "startColumnIndex": 0, "endColumnIndex": 1,
+                        "startRowIndex": 1,
+                        "endRowIndex": 2000,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 2,
                     },
                     "rule": {
                         "condition": {
                             "type": "ONE_OF_LIST",
-                            "values": emp_values,
+                            "values": type_values,
                         },
                         "showCustomUi": True,
                         "strict": False,
                     },
                 }
-            })
-
-        # Выпадающий список типов в колонке B (строки 2..2000)
-        type_values = [{"userEnteredValue": t} for t in _SALARY_TYPE_OPTIONS]
-        requests.append({
-            "setDataValidation": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1, "endRowIndex": 2000,
-                    "startColumnIndex": 1, "endColumnIndex": 2,
-                },
-                "rule": {
-                    "condition": {
-                        "type": "ONE_OF_LIST",
-                        "values": type_values,
-                    },
-                    "showCustomUi": True,
-                    "strict": False,
-                },
             }
-        })
+        )
 
         # Выпадающий список баз мотивации в колонке E (index=4, строки 2..2000)
         base_values = [{"userEnteredValue": t} for t in _SALARY_BASE_OPTIONS]
-        requests.append({
-            "setDataValidation": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1, "endRowIndex": 2000,
-                    "startColumnIndex": 4, "endColumnIndex": 5,
-                },
-                "rule": {
-                    "condition": {
-                        "type": "ONE_OF_LIST",
-                        "values": base_values,
+        requests.append(
+            {
+                "setDataValidation": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 1,
+                        "endRowIndex": 2000,
+                        "startColumnIndex": 4,
+                        "endColumnIndex": 5,
                     },
-                    "showCustomUi": True,
-                    "strict": False,
-                },
+                    "rule": {
+                        "condition": {
+                            "type": "ONE_OF_LIST",
+                            "values": base_values,
+                        },
+                        "showCustomUi": True,
+                        "strict": False,
+                    },
+                }
             }
-        })
+        )
 
         # Заморозить строку 1
-        requests.append({
-            "updateSheetProperties": {
-                "properties": {
-                    "sheetId": sheet_id,
-                    "gridProperties": {"frozenRowCount": 1},
-                },
-                "fields": "gridProperties.frozenRowCount",
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": sheet_id,
+                        "gridProperties": {"frozenRowCount": 1},
+                    },
+                    "fields": "gridProperties.frozenRowCount",
+                }
             }
-        })
+        )
 
         spreadsheet.batch_update({"requests": requests})
-        logger.info("[%s] Лист «%s» настроен (%d сотрудников в списке)", LABEL, _HISTORY_TAB, len(employee_names))
+        logger.info(
+            "[%s] Лист «%s» настроен (%d сотрудников в списке)",
+            LABEL,
+            _HISTORY_TAB,
+            len(employee_names),
+        )
 
         # Защита от случайного удаления (предупреждение)
         prot_reqs = _get_protection_delete_requests(sheet_id, spreadsheet) + [
@@ -4308,6 +4410,7 @@ async def read_salary_history_sheet() -> list[dict]:
 
     Строки с пустым именем или датой пропускаются.
     """
+
     def _sync_read() -> list[dict]:
         ws = _get_history_worksheet()
         rows = ws.get_all_values()
@@ -4333,16 +4436,18 @@ async def read_salary_history_sheet() -> list[dict]:
             except ValueError:
                 mot_pct = None
 
-            result.append({
-                "row": i,
-                "name": name,
-                "sal_type": sal_type,
-                "rate": rate,
-                "mot_pct": mot_pct,
-                "mot_base": mot_base or None,
-                "valid_from": valid_from,  # строка DD.MM.YYYY
-                "iiko_id": iiko_id,
-            })
+            result.append(
+                {
+                    "row": i,
+                    "name": name,
+                    "sal_type": sal_type,
+                    "rate": rate,
+                    "mot_pct": mot_pct,
+                    "mot_base": mot_base or None,
+                    "valid_from": valid_from,  # строка DD.MM.YYYY
+                    "iiko_id": iiko_id,
+                }
+            )
         logger.info("[%s] read_salary_history_sheet: %d записей", LABEL, len(result))
         return result
 
@@ -4363,9 +4468,15 @@ async def write_salary_history_valid_to(updates: list[dict]) -> None:
         # Пишем в колонку E батчем
         cell_updates = []
         for upd in updates:
-            cell_updates.append(gspread.Cell(row=upd["row"], col=7, value=upd["valid_to"]))
+            cell_updates.append(
+                gspread.Cell(row=upd["row"], col=7, value=upd["valid_to"])
+            )
         ws.update_cells(cell_updates, value_input_option="USER_ENTERED")
-        logger.info("[%s] write_salary_history_valid_to: обновлено %d строк", LABEL, len(updates))
+        logger.info(
+            "[%s] write_salary_history_valid_to: обновлено %d строк",
+            LABEL,
+            len(updates),
+        )
 
     await asyncio.to_thread(_sync_write)
 
@@ -4382,11 +4493,12 @@ async def write_history_iiko_ids(updates: list[dict]) -> None:
     def _sync_write_ids() -> None:
         ws = _get_history_worksheet()
         cell_updates = [
-            gspread.Cell(row=upd["row"], col=8, value=upd["iiko_id"])
-            for upd in updates
+            gspread.Cell(row=upd["row"], col=8, value=upd["iiko_id"]) for upd in updates
         ]
         ws.update_cells(cell_updates, value_input_option="USER_ENTERED")
-        logger.info("[%s] write_history_iiko_ids: обновлено %d строк", LABEL, len(updates))
+        logger.info(
+            "[%s] write_history_iiko_ids: обновлено %d строк", LABEL, len(updates)
+        )
 
     await asyncio.to_thread(_sync_write_ids)
 
@@ -4411,19 +4523,41 @@ async def append_salary_history_rows(rows: list[dict]) -> int:
 
         values = []
         for r in rows:
-            rate_val = int(r["rate"]) if isinstance(r["rate"], float) and r["rate"] == int(r["rate"]) else r["rate"]
+            rate_val = (
+                int(r["rate"])
+                if isinstance(r["rate"], float) and r["rate"] == int(r["rate"])
+                else r["rate"]
+            )
             iiko_id = str(r.get("iiko_id") or "")
             mot_pct = r.get("mot_pct") or ""
             mot_base = r.get("mot_base") or ""
-            values.append([r["name"], r["sal_type"], rate_val, mot_pct, mot_base, r["valid_from"], "", iiko_id])
+            values.append(
+                [
+                    r["name"],
+                    r["sal_type"],
+                    rate_val,
+                    mot_pct,
+                    mot_base,
+                    r["valid_from"],
+                    "",
+                    iiko_id,
+                ]
+            )
 
         # Записываем батчем
         if values:
             end_row = start_row + len(values) - 1
             range_name = f"A{start_row}:H{end_row}"
-            ws.update(range_name=range_name, values=values, value_input_option="USER_ENTERED")
+            ws.update(
+                range_name=range_name, values=values, value_input_option="USER_ENTERED"
+            )
 
-        logger.info("[%s] append_salary_history_rows: добавлено %d строк (с %d)", LABEL, len(values), start_row)
+        logger.info(
+            "[%s] append_salary_history_rows: добавлено %d строк (с %d)",
+            LABEL,
+            len(values),
+            start_row,
+        )
         return len(values)
 
     return await asyncio.to_thread(_sync_append)
@@ -4446,18 +4580,22 @@ async def delete_salary_history_rows(row_numbers: list[int]) -> int:
         # Удаляем снизу вверх — чтобы индексы не смещались
         requests = []
         for r in sorted(set(row_numbers), reverse=True):
-            requests.append({
-                "deleteDimension": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "dimension": "ROWS",
-                        "startIndex": r - 1,  # 0-базовый
-                        "endIndex": r,
+            requests.append(
+                {
+                    "deleteDimension": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "ROWS",
+                            "startIndex": r - 1,  # 0-базовый
+                            "endIndex": r,
+                        }
                     }
                 }
-            })
+            )
         spreadsheet.batch_update({"requests": requests})
-        logger.info("[%s] delete_salary_history_rows: удалено %d строк", LABEL, len(requests))
+        logger.info(
+            "[%s] delete_salary_history_rows: удалено %d строк", LABEL, len(requests)
+        )
         return len(requests)
 
     return await asyncio.to_thread(_sync_delete)

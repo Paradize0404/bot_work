@@ -1362,38 +1362,50 @@ class SalaryHistory(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     employee_name = Column(
-        String(500), nullable=False, index=True,
+        String(500),
+        nullable=False,
+        index=True,
         comment="ФИО сотрудника (совпадает с именем в листе Зарплаты)",
     )
     sal_type = Column(
-        String(50), nullable=False,
+        String(50),
+        nullable=False,
         comment="почасовая / посменная / ежемесячная",
     )
     rate = Column(
-        Numeric(12, 2), nullable=False,
+        Numeric(12, 2),
+        nullable=False,
         comment="Ставка: руб/час, руб/смену или руб/месяц",
     )
     valid_from = Column(
-        Date, nullable=False, index=True,
+        Date,
+        nullable=False,
+        index=True,
         comment="С какой даты действует (включительно)",
     )
     valid_to = Column(
-        Date, nullable=True, index=True,
+        Date,
+        nullable=True,
+        index=True,
         comment="До какой даты действует (включительно). NULL = сейчас активна.",
     )
     mot_pct = Column(
-        Numeric(6, 2), nullable=True,
+        Numeric(6, 2),
+        nullable=True,
         comment="Мотивация, % (из листа История ставок)",
     )
     mot_base = Column(
-        String(200), nullable=True,
+        String(200),
+        nullable=True,
         comment="База мотивации (из листа История ставок)",
     )
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("employee_name", "valid_from", name="uq_salary_history_emp_from"),
+        UniqueConstraint(
+            "employee_name", "valid_from", name="uq_salary_history_emp_from"
+        ),
     )
 
 

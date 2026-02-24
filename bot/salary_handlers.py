@@ -10,6 +10,7 @@
   - Нажатие на имя переключает статус
   - Пагинация по 12 сотрудников на странице
 """
+
 import logging
 
 from aiogram import Router, F
@@ -38,13 +39,19 @@ _PAGE_SIZE = 12
 async def _get_all_employees() -> list[dict]:
     """Вернуть всех не-удалённых сотрудников (id, full_name) отсортированных по имени."""
     async with async_session_factory() as session:
-        rows = (await session.execute(
-            select(Employee).where(Employee.deleted == False)
-        )).scalars().all()
+        rows = (
+            (await session.execute(select(Employee).where(Employee.deleted == False)))
+            .scalars()
+            .all()
+        )
 
     result = []
     for emp in rows:
-        parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+        parts = [
+            p
+            for p in (emp.last_name, emp.first_name, emp.middle_name)
+            if p and p.strip()
+        ]
         full_name = " ".join(parts) if parts else (emp.name or "").strip()
         if full_name:
             result.append({"id": str(emp.id), "name": full_name})
@@ -77,23 +84,35 @@ def _build_keyboard(
     for emp in chunk:
         is_excluded = emp["id"] in exclusions
         icon = "❌" if is_excluded else "✅"
-        buttons.append([
-            InlineKeyboardButton(
-                text=f"{icon} {emp['name']}",
-                callback_data=f"sal_excl_tog:{emp['id']}:{page}",
-            )
-        ])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{icon} {emp['name']}",
+                    callback_data=f"sal_excl_tog:{emp['id']}:{page}",
+                )
+            ]
+        )
 
     # Навигация
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton(text="◀ Назад", callback_data=f"sal_excl_pg:{page - 1}"))
+        nav.append(
+            InlineKeyboardButton(
+                text="◀ Назад", callback_data=f"sal_excl_pg:{page - 1}"
+            )
+        )
     if page < total_pages - 1:
-        nav.append(InlineKeyboardButton(text="Вперёд ▶", callback_data=f"sal_excl_pg:{page + 1}"))
+        nav.append(
+            InlineKeyboardButton(
+                text="Вперёд ▶", callback_data=f"sal_excl_pg:{page + 1}"
+            )
+        )
     if nav:
         buttons.append(nav)
 
-    buttons.append([InlineKeyboardButton(text="✖ Закрыть", callback_data="sal_excl_close")])
+    buttons.append(
+        [InlineKeyboardButton(text="✖ Закрыть", callback_data="sal_excl_close")]
+    )
 
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -101,6 +120,7 @@ def _build_keyboard(
 # ─────────────────────────────────────────────
 # Точка входа: текстовая кнопка
 # ─────────────────────────────────────────────
+
 
 @router.message(F.text == _BUTTON)
 @permission_required(PERM_SETTINGS)
@@ -116,6 +136,7 @@ async def salary_list_menu(message: Message, state: FSMContext) -> None:
 # Пагинация
 # ─────────────────────────────────────────────
 
+
 @router.callback_query(F.data.startswith("sal_excl_pg:"))
 @permission_required(PERM_SETTINGS)
 async def salary_excl_page(call: CallbackQuery, state: FSMContext) -> None:
@@ -130,6 +151,7 @@ async def salary_excl_page(call: CallbackQuery, state: FSMContext) -> None:
 # ─────────────────────────────────────────────
 # Переключение исключения
 # ─────────────────────────────────────────────
+
 
 @router.callback_query(F.data.startswith("sal_excl_tog:"))
 @permission_required(PERM_SETTINGS)
@@ -153,6 +175,7 @@ async def salary_excl_toggle(call: CallbackQuery, state: FSMContext) -> None:
 # ─────────────────────────────────────────────
 # Закрыть
 # ─────────────────────────────────────────────
+
 
 @router.callback_query(F.data == "sal_excl_close")
 @permission_required(PERM_SETTINGS)
