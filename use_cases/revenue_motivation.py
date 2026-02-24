@@ -35,36 +35,59 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════
 
 
+def _normalize_date(raw: str) -> str:
+    """
+    Привести строку даты к формату YYYY-MM-DD.
+
+    Поддерживает:
+      - DD.MM.YYYY [HH:MM:SS]  — формат OLAP v1
+      - YYYY-MM-DD [THH:MM:SS] — формат ISO / attendance API
+    """
+    s = raw.strip()
+    if len(s) >= 10:
+        if s[2] == "." and s[5] == ".":
+            # DD.MM.YYYY
+            return f"{s[6:10]}-{s[3:5]}-{s[:2]}"
+        else:
+            # YYYY-MM-DD или YYYY-MM-DDTHH:MM:SS
+            return s[:10]
+    return s
+
+
 def _build_revenue_index(olap_rows: list[dict]) -> dict[tuple[str, str], float]:
     """
     Преобразовать строки OLAP-отчёта в индекс:
       (date_str "YYYY-MM-DD", dept_name) → DishDiscountSumInt (руб.)
 
-    OLAP может вернуть несколько строк на одну пару (дата, подразделение)
-    в случае разных часовых поясов или промежуточных итогов — суммируем.
+    OLAP v1 возвращает CloseTime в формате DD.MM.YYYY — нормализуется в YYYY-MM-DD.
+    OLAP может вернуть несколько строк на одну пару (дата, подразделение) — суммируем.
+    Строки без Department (итоговые) игнорируются.
     """
     index: dict[tuple[str, str], float] = defaultdict(float)
+    skipped = 0
     for row in olap_rows:
         close_time_raw = str(row.get("CloseTime") or "").strip()
         dept = str(row.get("Department") or "").strip()
         revenue_raw = row.get("DishDiscountSumInt", 0)
 
+        # Пропускаем итоговые строки (нет департамента или нет даты)
         if not close_time_raw or not dept:
+            skipped += 1
             continue
 
-        # Берём только дату (yyyy-mm-dd) из CloseTime
-        date_str = close_time_raw[:10]
+        date_str = _normalize_date(close_time_raw)
         try:
-            revenue = float(revenue_raw) if revenue_raw else 0.0
+            revenue = float(revenue_raw) if revenue_raw is not None else 0.0
         except (ValueError, TypeError):
             revenue = 0.0
 
-        if revenue > 0:
+        if revenue != 0:
             index[(date_str, dept)] += revenue
 
-    logger.debug(
-        "[revenue_motivation] OLAP-индекс построен: %d уникальных (дата, подразд.)",
+    logger.info(
+        "[revenue_motivation] OLAP-индекс: %d уникальных (дата, подразд.), пропущено итоговых: %d",
         len(index),
+        skipped,
     )
     return dict(index)
 

@@ -704,25 +704,72 @@ async def fetch_motivation_revenue_olap(
     """
     Получить выручку по дням и подразделениям для расчёта мотивации.
 
-    Endpoint: GET /resto/api/v2/reports/olap/byPresetId/{preset_id}
-    Пресет: «Отчет по мотивации БОТ» (id = df94cd59-…)
-      - Метрика: DishDiscountSumInt (сумма со скидкой)
-      - Строки: CloseTime (DATETIME) — день закрытия заказа
-      - Столбцы: Department (STRING) — торговое предприятие
+    Использует OLAP v1 (GET /resto/api/reports/olap, report=SALES):
+      - groupRow=CloseTime  — дата закрытия заказа
+      - groupRow=Department — торговое предприятие
+      - agr=DishDiscountSumInt — сумма со скидкой
+
+    ПРИМЕЧАНИЕ: пресет df94cd59-… типа «Отчет по продажам» возвращает 409
+    при обращении через v2 /byPresetId — это ограничение iiko API.
+    v1 с теми же параметрами работает корректно.
 
     Параметры:
-      date_from / date_to — YYYY-MM-DD (конвертируются в ISO 8601 для API)
+      date_from / date_to — YYYY-MM-DD
 
     Возвращает список dict:
-      {"CloseTime": "YYYY-MM-DDTHH:MM:SS", "Department": "Название", "DishDiscountSumInt": <float>}
+      {"CloseTime": "DD.MM.YYYY HH:MM:SS" или аналог, "Department": "Название",
+       "DishDiscountSumInt": <float>}
     """
-    iso_from = f"{date_from[:10]}T00:00:00"
-    iso_to = f"{date_to[:10]}T23:59:59"
-    return await fetch_olap_by_preset(
-        MOTIVATION_REVENUE_PRESET_ID,
-        iso_from,
-        iso_to,
+
+    def _to_ddmmyyyy(iso: str) -> str:
+        d = iso[:10]
+        y, m, day = d.split("-")
+        return f"{day}.{m}.{y}"
+
+    from_ddmm = _to_ddmmyyyy(date_from)
+    to_ddmm = _to_ddmmyyyy(date_to)
+
+    key = await _get_key()
+    url = f"{_base()}/resto/api/reports/olap"
+    params: list[tuple[str, str]] = [
+        ("key", key),
+        ("report", "SALES"),
+        ("from", from_ddmm),
+        ("to", to_ddmm),
+        ("groupRow", "CloseTime"),
+        ("groupRow", "Department"),
+        ("agr", "DishDiscountSumInt"),
+    ]
+
+    label = f"olap_motivation_v1 {from_ddmm}..{to_ddmm}"
+    logger.info("[API] GET %s — запрашиваю...", label)
+    t0 = time.monotonic()
+    client = await _get_client()
+    resp = await client.get(url, params=params)
+    elapsed = time.monotonic() - t0
+
+    if resp.status_code >= 400:
+        body = resp.text[:500] if resp.text else ""
+        logger.error(
+            "[API] GET %s FAIL — HTTP %d, %.1fs, body=%s",
+            label,
+            resp.status_code,
+            elapsed,
+            body,
+        )
+        resp.raise_for_status()
+
+    rows = _parse_olap_xml(resp.text)
+
+    logger.info(
+        "[API] GET %s — %d строк, HTTP %d, %.1f сек, %d байт",
+        label,
+        len(rows),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
     )
+    return rows
 
 
 # ─────────────────────────────────────────────────────
