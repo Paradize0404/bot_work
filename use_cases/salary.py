@@ -173,6 +173,16 @@ async def export_salary_sheet(triggered_by: str | None = None) -> int:
     except Exception:
         logger.exception("[salary] Ошибка обновления дропдаунов в «История ставок»")
 
+    # ── 7. Зачистка «История ставок» — удаляем строки для всех исключённых ──
+    # Запускается при каждом экспорте и гарантирует удаление даже старых строк,
+    # которые не были удалены при нажатии кнопки (например, исключены ранее).
+    try:
+        from use_cases.salary_history import purge_history_for_exclusions
+
+        await purge_history_for_exclusions(exclusions)
+    except Exception:
+        logger.exception("[salary] Ошибка при зачистке «История ставок» от исключённых")
+
     logger.info(
         "[salary] Выгрузка завершена: %d сотрудников за %.1f сек",
         count,

@@ -594,3 +594,62 @@ async def _load_db_for_bootstrap() -> tuple[list, list]:
         emps = (await session.execute(select(Employee))).scalars().all()
         roles = (await session.execute(select(EmployeeRole))).scalars().all()
     return list(emps), list(roles)
+
+
+async def purge_history_for_exclusions(excluded_ids: set[str]) -> int:
+    """
+    Удалить строки «История ставок» для ВСЕХ исключённых сотрудников.
+
+    excluded_ids — set[str] iiko UUID (строки) из таблицы salary_exclusions.
+
+    Гарантирует чистоту листа при каждом экспорте: даже если исключение
+    произошло до появления delete_history_for_employee или тогда не сработало.
+    """
+    if not excluded_ids:
+        return 0
+
+    # Строим набор имён по iiko_id, читая всех сотрудников из БД
+    async with async_session_factory() as session:
+        emps = (await session.execute(select(Employee))).scalars().all()
+
+    excluded_names: set[str] = set()
+    for emp in emps:
+        if str(emp.id) not in excluded_ids:
+            continue
+        parts = [
+            p
+            for p in (emp.last_name, emp.first_name, emp.middle_name)
+            if p and p.strip()
+        ]
+        name = " ".join(parts) if parts else (emp.name or "").strip()
+        if name:
+            excluded_names.add(name)
+        alt = (emp.name or "").strip()
+        if alt and alt != name:
+            excluded_names.add(alt)
+
+    logger.info(
+        "[salary_history] purge: ищем строки для %d исключённых (имена: %s)",
+        len(excluded_ids),
+        excluded_names,
+    )
+
+    raw_rows = await read_salary_history_sheet()
+    row_nums: list[int] = []
+    for r in raw_rows:
+        if r.get("iiko_id") and r["iiko_id"] in excluded_ids:
+            row_nums.append(r["row"])
+        elif r["name"] in excluded_names:
+            row_nums.append(r["row"])
+
+    if not row_nums:
+        logger.info("[salary_history] purge: строк для исключённых не найдено")
+        return 0
+
+    await delete_salary_history_rows(row_nums)
+    logger.info(
+        "[salary_history] purge: удалено %d строк «История ставок» для %d исключённых",
+        len(row_nums),
+        len(excluded_ids),
+    )
+    return len(row_nums)
