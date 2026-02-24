@@ -306,26 +306,32 @@ async def delete_history_for_employee(employee_id: str) -> int:
 
     if deleted_count == 0:
         logger.info(
-            "[salary_history] delete_history_for_employee: записей для %s не найдено",
+            "[salary_history] delete_history_for_employee: записей БД для %s не найдено,"
+            " всё равно проверяем GSheet",
             emp_name,
         )
-        return 0
+    else:
+        logger.info(
+            "[salary_history] Удалено из БД %d записей истории для %s",
+            deleted_count,
+            emp_name,
+        )
 
-    logger.info(
-        "[salary_history] Удалено из БД %d записей истории для %s",
-        deleted_count,
-        emp_name,
-    )
-
-    # Удаляем строки из GSheet
+    # Удаляем строки из GSheet всегда — даже если в БД записей не было
+    # (строки могут быть введены вручную в листе без синхронизации в БД)
     try:
         raw_rows = await read_salary_history_sheet()
         row_nums = [r["row"] for r in raw_rows if r["name"] == emp_name]
         if row_nums:
             await delete_salary_history_rows(row_nums)
             logger.info(
-                "[salary_history] Удалено %d строк GSheet для %s",
+                "[salary_history] Удалено %d строк GSheet «История ставок» для %s",
                 len(row_nums),
+                emp_name,
+            )
+        else:
+            logger.info(
+                "[salary_history] GSheet «История ставок»: строк для %s не найдено",
                 emp_name,
             )
     except Exception:
