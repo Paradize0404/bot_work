@@ -3428,52 +3428,22 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
         n_rows = len(all_rows)
         n_cols = len(_SALARY_HEADERS)
 
-        # ── 3. Resize при необходимости ──
-        needed_rows = n_rows + 10
-        if ws.row_count < needed_rows or ws.col_count < n_cols:
-            ws.resize(
-                rows=max(needed_rows, ws.row_count),
-                cols=max(n_cols, ws.col_count),
-            )
+        # ── 3. Resize до точного числа строк ──
+        # ws.resize() — СТРУКТУРНАЯ операция (не values.clear): физически удаляет
+        # строки/столбцы за пределами указанного диапазона. Это гарантированно
+        # убирает стрелки/данные строк с исключёнными сотрудниками без зависимости
+        # от values.batchClear, который молча не работает при пустом HTTP-ответе.
+        ws.resize(rows=n_rows, cols=n_cols)
 
-        # ── 4. Очищаем и записываем ──
-        # batch_clear гарантированно стирает весь диапазон (включая «хвост» от
-        # предыдущих синков, когда сотрудников было больше).
-        try:
-            ws.batch_clear(["A1:Z1000"])
-        except Exception:
-            logger.warning(
-                "[%s] batch_clear Зарплаты: ошибка, пробуем reset_all",
-                LABEL,
-                exc_info=True,
-            )
-            try:
-                ws.clear()
-            except Exception:
-                logger.warning("[%s] ws.clear() тоже не сработал", LABEL, exc_info=True)
-
+        # ── 4. Записываем актуальные данные ──
         end_cell = gspread.utils.rowcol_to_a1(n_rows, n_cols)
         try:
             ws.update(f"A1:{end_cell}", all_rows, value_input_option="USER_ENTERED")
         except json.JSONDecodeError:
             logger.debug("[%s] update() пустой body (ОК)", LABEL)
 
-        # Явно стираем «хвост» — строки после последней строки данных,
-        # чтобы удалённые/исключённые сотрудники не оставались в листе.
-        tail_from = n_rows + 1
-        if ws.row_count >= tail_from:
-            try:
-                ws.batch_clear([f"A{tail_from}:Z{ws.row_count}"])
-                logger.debug(
-                    "[%s] хвост строк %d–%d очищен",
-                    LABEL,
-                    tail_from,
-                    ws.row_count,
-                )
-            except Exception:
-                logger.warning(
-                    "[%s] Ошибка очистки хвоста Зарплаты", LABEL, exc_info=True
-                )
+        # Добавляем несколько пустых строк для удобства ввода
+        ws.resize(rows=n_rows + 15, cols=n_cols)
 
         try:
             # Заголовок — жирный и по центру
