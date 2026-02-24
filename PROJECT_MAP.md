@@ -1,6 +1,6 @@
 # 🗂 Карта проекта iiko + FinTablo Sync Bot
 
-> Версия MAP: **2.0** | Обновлено: 2026-02-22  
+> Версия MAP: **2.1** | Обновлено: 2026-02-24  
 > Язык: **русский** | Python 3.12 | asyncio + aiogram 3 + SQLAlchemy 2.0 + asyncpg + Redis  
 > Deploy: Railway (PostgreSQL ~400ms RTT, Redis FSM)
 

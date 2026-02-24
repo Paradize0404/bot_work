@@ -5,6 +5,50 @@
 
 ---
 
+### 2026-02-24 — [FEAT] Система ФОТ: исключения, мотивация, удаление истории, защита листа
+
+**Файлы:** `db/models.py`, `db/init_db.py`, `adapters/google_sheets.py`, `use_cases/salary.py`, `use_cases/salary_history.py`, `bot/salary_handlers.py` (NEW), `main.py`, `bot/global_commands.py`, `bot/permission_map.py`, `bot/handlers.py`
+
+#### Модель SalaryExclusion (новая таблица `salary_exclusions`)
+
+- Новая ORM-модель: `employee_id` (VARCHAR 36 PK), `excluded_by` (String), `excluded_at` (DateTime)
+- Миграция в `init_db.py`: `CREATE TABLE IF NOT EXISTS salary_exclusions (...)`
+- Сотрудник в исключениях → не попадает в таблицу "Зарплаты" в GSheet
+
+#### Новые колонки SalaryHistory (mot_pct, mot_base)
+
+- `mot_pct = Column(Numeric(6,2), nullable=True)` — процент мотивации
+- `mot_base = Column(String(200), nullable=True)` — база мотивации
+- Миграции: `ALTER TABLE salary_history ADD COLUMN IF NOT EXISTS mot_pct NUMERIC(6,2)` и `mot_base VARCHAR(200)`
+- "История ставок" в GSheet расширена до 8 колонок: `[Сотрудник, Тип расчёта, Ставка, Мотивация %, База мотивации, Дата с, Дата по (скрыта), iiko_id (скрыт)]`
+
+#### Удаление истории при исключении (toggle_salary_exclusion)
+
+- **Раньше:** history закрывалась с датой
+- **Теперь:** при исключении сотрудника → `delete_history_for_employee(id)` → полное удаление строк из DB + GSheet
+- При возврате (снятие исключения) — история не восстанавливается, добавляется вручную
+- `delete_salary_history_rows(row_numbers)` — физическое удаление строк через GSheet `deleteDimension` API
+
+#### close_history_for_deleted_employees (для iiko-удалённых)
+
+- Сотрудники с `deleted=True` в iiko — history закрывается датой `date.today()` (не удаляется)
+- Вызывается автоматически в конце `sync_salary_history()`
+
+#### Защита листов и белый фон
+
+- `warningOnly=True` protection добавлена к листам "Зарплаты" и "История ставок"
+- Старые защиты удаляются через `_get_protection_delete_requests()` перед добавлением новых
+- Явный белый фон (`backgroundColor: {r:1,g:1,b:1}`) для data rows — фикс серых ячеек в "База мотивации"
+
+#### Новый роутер «👥 Список ФОТ» (bot/salary_handlers.py)
+
+- Кнопка в главном меню (`PERM_SETTINGS`)
+- Пагинация по 12 сотрудников: ✅ включён / ❌ исключён
+- Callback-префиксы: `sal_excl_pg:`, `sal_excl_tog:{emp_id}:{page}`, `sal_excl_close`
+- Зарегистрирован в `main.py`, права в `permission_map.py`, нав кнопка в `global_commands.py`
+
+---
+
 ### 2026-02-23 — [FIX] + [AUDIT] bot/pastry_handlers.py — соответствие контрактам K1/K4/K5
 
 **Файл:** `bot/pastry_handlers.py`

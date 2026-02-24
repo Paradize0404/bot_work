@@ -1,64 +1,70 @@
 """
 Use-case: зарплатная ведомость → Google Sheets.
 
-Выгружает список реальных сотрудников из БД (синхронизированных из iiko)
+Выгружает список сотрудников из БД (синхронизированных из iiko)
 в лист «Зарплаты» Google Таблицы.
 
 Фильтрация:
-  - удалённые (deleted=True) — исключаются
-  - системные записи (raw_json->>'employee' != 'true') — исключаются
-  - записи со словом «фриланс» в имени — исключаются
+  - удалённые (deleted=True) — исключаются автоматически
+  - вручную исключённые через бот (таблица salary_exclusions) — исключаются
 
 Сотрудники сортируются по имени (ФИО) в алфавитном порядке.
 """
 
 import logging
 import time
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from db.engine import async_session_factory
-from db.models import Employee
+from db.models import Employee, SalaryExclusion
 from adapters.google_sheets import sync_salary_sheet
 
 logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════
-# Фильтрация сотрудников
+# Управление списком исключений
 # ═══════════════════════════════════════════════════════
 
-_SYSTEM_KEYWORDS = ("системн", "system", "admin", "админ", "тест", "test")
-"""Подстроки в нижнем регистре, при наличии которых сотрудник считается системным."""
+
+async def load_salary_exclusions() -> set[str]:
+    """Вернуть set[employee_id] (iiko UUID) всех вручную исключённых сотрудников."""
+    async with async_session_factory() as session:
+        rows = (await session.execute(select(SalaryExclusion))).scalars().all()
+    return {r.employee_id for r in rows}
 
 
-def _is_real_employee(emp: Employee) -> bool:
+async def toggle_salary_exclusion(employee_id: str, excluded_by: str | None = None) -> bool:
     """
-    True — если это реальный (не системный, не удалённый, не фрилансер) сотрудник.
+    Переключить статус исключения сотрудника.
 
-    Правила:
-      1. deleted=False
-      2. raw_json->>'employee' == 'true'  (флаг iiko: является сотрудником, не только поставщиком/клиентом)
-      3. имя не содержит «фриланс»
-      4. имя не содержит слова-маркеры системных учёток (системн, system, admin, …)
+    Возвращает True если сотрудник теперь исключён, False если снова включён.
     """
-    if emp.deleted:
-        return False
-
-    # Флаг «является сотрудником» из iiko XML → raw_json
-    raw = emp.raw_json or {}
-    employee_flag = str(raw.get("employee", "true")).strip().lower()
-    if employee_flag == "false":
-        return False
-
-    name_lower = (emp.name or "").lower()
-
-    if "фриланс" in name_lower:
-        return False
-
-    for kw in _SYSTEM_KEYWORDS:
-        if kw in name_lower:
+    async with async_session_factory() as session:
+        existing = await session.get(SalaryExclusion, employee_id)
+        if existing:
+            await session.delete(existing)
+            await session.commit()
+            logger.info("[salary] Сотрудник %s возвращён в список ФОТ (by=%s)", employee_id, excluded_by)
             return False
+        else:
+            session.add(SalaryExclusion(
+                employee_id=employee_id,
+                excluded_by=excluded_by,
+                excluded_at=datetime.utcnow(),
+            ))
+            await session.commit()
+
+    logger.info("[salary] Сотрудник %s исключён из списка ФОТ (by=%s)", employee_id, excluded_by)
+
+    # Закрываем активную запись в «Истории ставок» сегодняшней датой
+    try:
+        from use_cases.salary_history import delete_history_for_employee
+        await delete_history_for_employee(employee_id)
+    except Exception:
+        logger.exception("[salary] Ошибка при удалении истории для %s", employee_id)
 
     return True
 
@@ -86,12 +92,15 @@ async def export_salary_sheet(triggered_by: str | None = None) -> int:
 
     logger.info("[salary] Из БД получено %d записей сотрудников", len(rows))
 
-    # ── 2. Фильтруем ──
-    real = [emp for emp in rows if _is_real_employee(emp)]
+    # ── 2. Фильтруем: только не удалённые, затем убираем вручную исключённых ──
+    exclusions = await load_salary_exclusions()
+    real = [
+        emp for emp in rows
+        if not emp.deleted and str(emp.id) not in exclusions
+    ]
     logger.info(
-        "[salary] После фильтрации: %d реальных сотрудников (из %d в БД)",
-        len(real),
-        len(rows),
+        "[salary] После фильтрации: %d сотрудников (из %d в БД, %d исключений)",
+        len(real), len(rows), len(exclusions),
     )
 
     # ── 3. Формируем ФИО = Фамилия Имя Отчество ──
@@ -116,6 +125,15 @@ async def export_salary_sheet(triggered_by: str | None = None) -> int:
 
     # ── 5. Выгружаем в Google Sheets ──
     count = await sync_salary_sheet(employees_data)
+
+    # ── 6. Обновляем дропдаун сотрудников в «История ставок» + первичное заполнение ──
+    try:
+        from use_cases.salary_history import refresh_history_sheet_dropdowns, bootstrap_salary_history_sheet
+        emp_names = [e["name"] for e in employees_data]
+        await refresh_history_sheet_dropdowns(emp_names)
+        await bootstrap_salary_history_sheet()
+    except Exception:
+        logger.exception("[salary] Ошибка обновления дропдаунов в «История ставок»")
 
     logger.info(
         "[salary] Выгрузка завершена: %d сотрудников за %.1f сек",

@@ -132,6 +132,7 @@ MENU_BUTTON_GROUPS: dict[str, list[str]] = {
     "📑 Документы": [PERM_OCR_UPLOAD, PERM_OCR_SEND],
     "⚙️ Настройки": [PERM_SETTINGS],
     "🍰 Группы кондитеров": [PERM_PASTRY_MANAGE],
+    "👥 Список ФОТ": [PERM_SETTINGS],
     "📋 Ожидают отправки": [
         PERM_WRITEOFF_APPROVE,
         PERM_REQUEST_APPROVE,
@@ -168,6 +169,7 @@ TEXT_PERMISSIONS: dict[str, str] = {
     "📤 Google Таблицы": PERM_SETTINGS,
     "☁️ iikoCloud вебхук": PERM_SETTINGS,
     "🍰 Группы кондитеров": PERM_PASTRY_MANAGE,
+    "👥 Список ФОТ": PERM_SETTINGS,
     # ── GSheet / Sync (admin-only через PERM_SETTINGS + admin_required) ──
     "📤 Номенклатура → GSheet": PERM_SETTINGS,
     "📥 Мин. остатки GSheet → БД": PERM_SETTINGS,
@@ -210,4 +212,6 @@ CALLBACK_PERMISSIONS: dict[str, str] = {
     "req_reject:": PERM_REQUEST_APPROVE,
     # Кондитерка: управление группами
     "pastry_": PERM_PASTRY_MANAGE,
+    # Список ФОТ: исключения
+    "sal_excl_": PERM_SETTINGS,
 }

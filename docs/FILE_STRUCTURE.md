@@ -29,6 +29,7 @@
 | `min_stock_handlers.py` | handler | Редактирование мин. остатков |
 | `day_report_handlers.py` | handler | Отчёт дня: плюсы/минусы → iiko OLAP |
 | `pastry_handlers.py` | handler | Кондитерские операции |
+| `salary_handlers.py` | handler | 👥 Список ФОТ: исключения сотрудников (пагинация) |
 | `global_commands.py` | handler | /cancel, NavResetMiddleware, PermissionMiddleware |
 | `middleware.py` | handler | Авторизация, cancel-kb, menu helpers |
 | `permission_map.py` | handler | Единый реестр прав (roles, perm_key, groups) |
@@ -74,6 +75,8 @@
 | `json_receipt.py` | use_case | JSON-чеки |
 | `errors.py` | use_case | Кастомные исключения |
 | `admin.py` | use_case | Управление админами (legacy) |
+| `salary.py` | use_case | Экспорт листа "Зарплаты", управление исключениями ФОТ |
+| `salary_history.py` | use_case | История ставок: sync, bootstrap, delete, close |
 | **db/** | | |
 | `engine.py` | db | Async engine + session factory (singleton) |
 | `models.py` | db | 18 моделей iiko/bot (SyncMixin) |
@@ -266,6 +269,11 @@ test/
 │   │                         #   👑 Управление админами (только для админов)
 │   │                         #   Показать текущих | Добавить (из сотрудников с tg) | Удалить
 │   │                         #   AdminMgmtStates: menu | choosing_employee | confirm_remove
+│   ├── salary_handlers.py   # 👥 Список ФОТ: исключения сотрудников из листа "Зарплаты"
+│   │                         #   Пагинация по 12: ✅ включён / ❌ исключён
+│   │                         #   sal_excl_pg: / sal_excl_tog:{id}:{page} / sal_excl_close
+│   │                         #   @permission_required(PERM_SETTINGS)
+│   │                         #   toggle → delete_history_for_employee (DB + GSheet)
 │   ├── document_handlers.py # OCR накладных: загрузка фото → распознавание → маппинг
 │   ├── day_report_handlers.py # Отчёт дня: FSM-флоу плюсы → минусы → данные iiko → отправка
 │   │                         #   DayReportStates: positives → negatives
@@ -404,6 +412,18 @@ test/
 │   │                         #   is_admin(), list_admins()
 │   │                         #   get_employees_with_telegram() — для выбора нового админа
 │   │                         #   add_admin(), remove_admin()
+│   ├── salary.py            # Экспорт листа "Зарплаты" + управление исключениями ФОТ
+│   │                         #   export_salary_sheet() — синхр. iiko → GSheet (лист "Зарплаты")
+│   │                         #   load_salary_exclusions() → set[str] — загрузка исключённых id из DB
+│   │                         #   toggle_salary_exclusion(employee_id, excluded_by)
+│   │                         #     при исключении: INSERT salary_exclusions + delete_history_for_employee
+│   │                         #     при снятии: DELETE salary_exclusions
+│   ├── salary_history.py    # История ставок сотрудников (DB + GSheet)
+│   │                         #   sync_salary_history() — синхр. GSheet "История ставок" → DB
+│   │                         #   bootstrap_salary_history_sheet() — первичное заполнение листа
+│   │                         #   load_salary_history_index() — индекс {iiko_id: record}
+│   │                         #   delete_history_for_employee(employee_id) — purge DB + GSheet rows
+│   │                         #   close_history_for_deleted_employees() — valid_to=today для iiko-удалённых
 │   ├── sync_stock_balances.py # Синхронизация остатков по складам
 │   │                         #   sync_stock_balances(triggered_by, timestamp) → int
 │   │                         #   Паттерн: full-replace (DELETE + batch INSERT)

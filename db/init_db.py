@@ -107,6 +107,14 @@ async def create_tables() -> None:
         "ALTER TABLE product_request ADD COLUMN IF NOT EXISTS date_incoming VARCHAR(20)",
         "ALTER TABLE product_request ADD COLUMN IF NOT EXISTS edited_by_name VARCHAR(500)",
         "ALTER TABLE pending_incoming_invoice ADD COLUMN IF NOT EXISTS summary_msg_ids JSONB DEFAULT '{}'",
+        # salary_history — история ставок сотрудников
+        "CREATE INDEX IF NOT EXISTS ix_salary_history_emp ON salary_history (employee_name)",
+        "CREATE INDEX IF NOT EXISTS ix_salary_history_valid ON salary_history (valid_from, valid_to)",
+        # salary_history: мотивация
+        "ALTER TABLE salary_history ADD COLUMN IF NOT EXISTS mot_pct NUMERIC(6,2)",
+        "ALTER TABLE salary_history ADD COLUMN IF NOT EXISTS mot_base VARCHAR(200)",
+        # salary_exclusions — ручное исключение сотрудников из ведомости
+        "CREATE TABLE IF NOT EXISTS salary_exclusions (employee_id VARCHAR(36) PRIMARY KEY, excluded_by VARCHAR(500), excluded_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now())",
     ]
     async with engine.begin() as conn:
         for sql in _MIGRATIONS:

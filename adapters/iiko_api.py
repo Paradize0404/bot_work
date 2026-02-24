@@ -1220,3 +1220,82 @@ async def fetch_assembly_charts(
         len(resp.content),
     )
     return data
+
+
+# ═════════════════════════════════════════════════════
+# 13. Явки сотрудников (XML)
+# ═════════════════════════════════════════════════════
+
+
+async def fetch_attendance(
+    date_from: str,
+    date_to: str,
+    with_payment_details: bool = False,
+    employee_uuid: str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Получить явки сотрудников за период.
+
+    Endpoint: GET /resto/api/employees/attendance
+    Параметры:
+      date_from / date_to — YYYY-MM-DD
+      with_payment_details — если True, сервер дополняет явку информацией об окладе
+      employee_uuid — UUID конкретного сотрудника (опционально)
+
+    Ответ — XML:
+      <attendances>
+        <attendance>
+          <id>UUID</id>
+          <employeeId>UUID</employeeId>
+          <roleId>UUID</roleId>
+          <dateFrom>2024-01-15T09:00:00</dateFrom>
+          <dateTo>2024-01-15T17:00:00</dateTo>
+          <departmentId>UUID</departmentId>
+          <departmentName>Название цеха</departmentName>
+          ...
+        </attendance>
+      </attendances>
+
+    Возвращает список словарей с теми же ключами.
+    """
+    key = await _get_key()
+    url = f"{_base()}/resto/api/employees/attendance"
+    params: dict[str, str] = {
+        "key": key,
+        "from": date_from,
+        "to": date_to,
+        "withPaymentDetails": str(with_payment_details).lower(),
+    }
+    if employee_uuid:
+        params["employeeId"] = employee_uuid
+
+    label = f"attendance {date_from}..{date_to}"
+    logger.info("[API] GET %s — отправляю запрос...", label)
+    t0 = time.monotonic()
+    resp = await _get_with_retry(url, params, label=label)
+    elapsed = time.monotonic() - t0
+
+    records = _parse_attendance_xml(resp.text)
+    logger.info(
+        "[API] GET %s — %d явок, HTTP %d, %.1f сек, %d байт",
+        label,
+        len(records),
+        resp.status_code,
+        elapsed,
+        len(resp.content),
+    )
+    return records
+
+
+def _parse_attendance_xml(xml_str: str) -> list[dict[str, Any]]:
+    """Разобрать XML-ответ явок в список словарей."""
+    root = ET.fromstring(xml_str)
+    result: list[dict[str, Any]] = []
+    # Корневой тег — <attendances>, дочерние — <attendance>
+    for att_el in root.findall("attendance"):
+        item: dict[str, Any] = {}
+        for child in att_el:
+            item[child.tag] = (child.text or "").strip()
+        result.append(item)
+    logger.debug("Parsed %d attendance records from XML", len(result))
+    return result

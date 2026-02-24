@@ -112,6 +112,27 @@ async def _daily_full_sync() -> None:
         logger.exception("[scheduler] Ошибка обновления справочника маппинга")
         report_lines.append("🗂 Маппинг справочник: ❌ ошибка")
 
+    # ── 6. История ставок — синхронизация перед расчётом ФОТ ──
+    try:
+        from use_cases.salary_history import sync_salary_history
+
+        hist_count = await sync_salary_history(triggered_by=TRIGGERED_BY)
+        report_lines.append(f"📋 История ставок: ✅ {hist_count} записей")
+    except Exception:
+        logger.exception("[scheduler] Ошибка синхронизации истории ставок")
+        report_lines.append("📋 История ставок: ❌ ошибка")
+
+    # ── 7. ФОТ — расчёт зарплат за текущий месяц ──
+    try:
+        from use_cases.payroll import update_fot_sheet
+
+        fot_count = await update_fot_sheet(triggered_by=TRIGGERED_BY)
+        report_lines.append(f"💰 ФОТ: ✅ {fot_count} сотрудников")
+    except Exception:
+        logger.exception("[scheduler] Ошибка обновления ФОТ")
+        report_lines.append("💰 ФОТ: ❌ ошибка")
+
+
     elapsed = time.monotonic() - t0
     report_lines.append(f"\n⏱ Время: {elapsed:.1f} сек")
     logger.info(
