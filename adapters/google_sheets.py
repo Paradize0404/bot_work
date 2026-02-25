@@ -3844,8 +3844,21 @@ async def sync_fot_sheet(
                     LABEL,
                 )
 
-        # Очистка
+        # Очистка значений + форматирования
         ws.clear()
+        spreadsheet.batch_update(
+            {
+                "requests": [
+                    {
+                        "repeatCell": {
+                            "range": {"sheetId": sheet_id},
+                            "cell": {"userEnteredFormat": {}},
+                            "fields": "userEnteredFormat",
+                        }
+                    }
+                ]
+            }
+        )
 
         # ── 1. Построить массив данных ──
         all_values: list[list] = []
