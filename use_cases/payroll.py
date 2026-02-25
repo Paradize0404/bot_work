@@ -84,7 +84,9 @@ def _display_name(emp: Employee) -> str:
 
 def _full_name(emp: Employee) -> str:
     """Фамилия Имя Отчество — ключ для сопоставления с листом «Зарплаты»."""
-    parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+    parts = [
+        p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()
+    ]
     return " ".join(parts) if parts else (emp.name or "").strip()
 
 

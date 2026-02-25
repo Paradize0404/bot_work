@@ -117,7 +117,9 @@ def _main_keyboard(
     rows.append([KeyboardButton(text="💰 Прайс-лист")])
 
     # Добавляем кнопку смены зала, отображающая текущий ресторан
-    dept_label = f"🏠 Сменить ресторан ({dept_name})" if dept_name else "🏠 Сменить ресторан"
+    dept_label = (
+        f"🏠 Сменить ресторан ({dept_name})" if dept_name else "🏠 Сменить ресторан"
+    )
     rows.append([KeyboardButton(text=dept_label)])
 
     # Настройки в главном меню если есть право
@@ -203,7 +205,9 @@ def _employees_inline_kb(employees: list[dict]) -> InlineKeyboardMarkup:
         ]
         for emp in employees
     ]
-    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")])
+    buttons.append(
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -333,10 +337,14 @@ async def process_choose_employee(callback: CallbackQuery, state: FSMContext) ->
     employee_id = await validate_callback_uuid(callback, callback.data)
     if not employee_id:
         return
-    logger.info("[auth] выбор сотрудника tg:%d, emp_id=%s", callback.from_user.id, employee_id)
+    logger.info(
+        "[auth] выбор сотрудника tg:%d, emp_id=%s", callback.from_user.id, employee_id
+    )
     await callback.message.edit_text("⏳ Загрузка...")
 
-    result = await auth_uc.complete_employee_selection(callback.from_user.id, employee_id)
+    result = await auth_uc.complete_employee_selection(
+        callback.from_user.id, employee_id
+    )
     await state.update_data(employee_id=employee_id)
 
     if not result.restaurants:
@@ -366,7 +374,9 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
     department_id = await validate_callback_uuid(callback, callback.data)
     if not department_id:
         return
-    logger.info("[auth] выбор ресторана tg:%d, dept_id=%s", callback.from_user.id, department_id)
+    logger.info(
+        "[auth] выбор ресторана tg:%d, dept_id=%s", callback.from_user.id, department_id
+    )
 
     data = await state.get_data()
     dept_name = await auth_uc.complete_department_selection(
@@ -393,7 +403,9 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
                 triggered_by=f"auth:{callback.from_user.id}",
             )
         except Exception:
-            logger.warning("[auth] не удалось синхронизировать права доступа", exc_info=True)
+            logger.warning(
+                "[auth] не удалось синхронизировать права доступа", exc_info=True
+            )
 
     asyncio.create_task(
         _sync_perms(),
@@ -458,7 +470,9 @@ async def btn_change_department(message: Message, state: FSMContext) -> None:
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     restaurants = await auth_uc.get_restaurants()
     if not restaurants:
-        await message.answer("🏢 Ресторан не определён. Нажмите /start для авторизации повторно.")
+        await message.answer(
+            "🏢 Ресторан не определён. Нажмите /start для авторизации повторно."
+        )
         return
 
     await state.set_state(ChangeDeptStates.choosing_department)
@@ -468,7 +482,9 @@ async def btn_change_department(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(ChangeDeptStates.choosing_department, F.data.startswith("change_dept:"))
+@router.callback_query(
+    ChangeDeptStates.choosing_department, F.data.startswith("change_dept:")
+)
 async def process_change_department(callback: CallbackQuery, state: FSMContext) -> None:
     """Применяет новый ресторан."""
     await callback.answer()
@@ -480,7 +496,9 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
         callback.from_user.id,
         department_id,
     )
-    dept_name = await auth_uc.complete_department_selection(callback.from_user.id, department_id)
+    dept_name = await auth_uc.complete_department_selection(
+        callback.from_user.id, department_id
+    )
 
     await state.clear()
     await callback.message.edit_text(
@@ -615,7 +633,9 @@ async def btn_price_list(message: Message, state: FSMContext) -> None:
             reply_markup=await _get_main_kb(message.from_user.id),
         )
     except Exception as exc:
-        logger.exception("[price_list] ошибка получения прайс-листа tg:%d", message.from_user.id)
+        logger.exception(
+            "[price_list] ошибка получения прайс-листа tg:%d", message.from_user.id
+        )
         await message.answer(
             "❌ Ошибка при загрузке прайс-листа. Попробуйте позже.",
             reply_markup=await _get_main_kb(message.from_user.id),
@@ -817,7 +837,9 @@ async def btn_sync_entities(message: Message) -> None:
     logger.info("[sync] справочники tg:%d", message.from_user.id)
     lock = get_sync_lock("sync_entities")
     if lock.locked():
-        await message.answer("⏳ Синхронизация справочников уже выполняется. Подождите.")
+        await message.answer(
+            "⏳ Синхронизация справочников уже выполняется. Подождите."
+        )
         return
     placeholder = await message.answer("⏳ Синхронизация справочников (16 типов)...")
 
@@ -950,7 +972,9 @@ async def btn_sync_all_iiko(message: Message) -> None:
     if lock.locked():
         await message.answer("⏳ Синхр. iiko уже выполняется. Подождите.")
         return
-    placeholder = await message.answer("⏳ Запускаем полную синхронизацию iiko (параллельно)...")
+    placeholder = await message.answer(
+        "⏳ Запускаем полную синхронизацию iiko (параллельно)..."
+    )
     async with lock:
         report = await sync_uc.sync_all_iiko_with_report(triggered)
     await placeholder.edit_text("✅ iiko — результаты:\n\n" + "\n".join(report))
@@ -1067,13 +1091,17 @@ async def btn_sync_everything(message: Message) -> None:
     if lock.locked():
         await message.answer("⏳ Полная синхронизация уже выполняется. Подождите.")
         return
-    placeholder = await message.answer("⏳ Запускаем полную синхронизацию iiko + FinTablo...")
+    placeholder = await message.answer(
+        "⏳ Запускаем полную синхронизацию iiko + FinTablo..."
+    )
 
     async with lock:
         iiko_lines, ft_lines = await sync_uc.sync_everything_with_report(triggered)
 
     lines = ["-- iiko --"] + iiko_lines + ["\n-- FinTablo --"] + ft_lines
-    await placeholder.edit_text("✅ Итоговые результаты синхронизации:\n\n" + "\n".join(lines))
+    await placeholder.edit_text(
+        "✅ Итоговые результаты синхронизации:\n\n" + "\n".join(lines)
+    )
 
 
 # -----------------------------------------------------
@@ -1226,7 +1254,9 @@ async def btn_cloud_register_webhook(message: Message) -> None:
                 logger.warning("[cloud] ошибка регистрации для org %s: %s", oid, exc)
                 fail_ids.append(oid)
 
-        lines = [f"✅ Вебхук зарегистрирован для {len(ok_ids)}/{len(org_ids)} организаций\n"]
+        lines = [
+            f"✅ Вебхук зарегистрирован для {len(ok_ids)}/{len(org_ids)} организаций\n"
+        ]
         lines.append(f"URL: `{webhook_url}`")
         lines.append("События: Closed Orders + StopListUpdate")
         if fail_ids:
@@ -1281,7 +1311,9 @@ async def btn_cloud_webhook_status(message: Message) -> None:
 async def btn_force_stock_check(message: Message) -> None:
     """Принудительная проверка остатков + отправка уведомлений в цепочку пользователей."""
     logger.info("[cloud] принудительная проверка остатков tg:%d", message.from_user.id)
-    placeholder = await message.answer("⏳ Принудительная проверка складских остатков...")
+    placeholder = await message.answer(
+        "⏳ Принудительная проверка складских остатков..."
+    )
 
     try:
         from use_cases.iiko_webhook_handler import force_stock_check

@@ -78,7 +78,9 @@ async def sync_salary_history(triggered_by: str | None = None) -> int:
 
     # ── 2. Парсим даты, группируем по имени ──
     # name → [(row_index, sal_type, rate, mot_pct, mot_base, valid_from_date), ...]
-    grouped: dict[str, list[tuple[int, str, float, object, object, date]]] = defaultdict(list)
+    grouped: dict[str, list[tuple[int, str, float, object, object, date]]] = (
+        defaultdict(list)
+    )
     skipped = 0
     for r in raw_rows:
         d = _parse_date(r["valid_from"])
@@ -95,7 +97,9 @@ async def sync_salary_history(triggered_by: str | None = None) -> int:
         )
 
     if skipped:
-        logger.warning("[salary_history] Пропущено строк из-за неверной даты: %d", skipped)
+        logger.warning(
+            "[salary_history] Пропущено строк из-за неверной даты: %d", skipped
+        )
 
     # ── 3. Вычисляем valid_to, готовим данные для БД и GSheet ──
     db_records: list[dict] = []
@@ -105,7 +109,9 @@ async def sync_salary_history(triggered_by: str | None = None) -> int:
         # Сортируем по дате начала
         entries.sort(key=lambda x: x[5])
 
-        for i, (row_idx, sal_type, rate, mot_pct, mot_base, valid_from) in enumerate(entries):
+        for i, (row_idx, sal_type, rate, mot_pct, mot_base, valid_from) in enumerate(
+            entries
+        ):
             if i + 1 < len(entries):
                 # valid_to = день перед следующей записью
                 next_from = entries[i + 1][5]
@@ -162,10 +168,14 @@ async def sync_salary_history(triggered_by: str | None = None) -> int:
     async with async_session_factory() as session:
         all_db = (await session.execute(select(SalaryHistory))).scalars().all()
         orphan_ids = [
-            rec.id for rec in all_db if (rec.employee_name, rec.valid_from) not in sheet_keys
+            rec.id
+            for rec in all_db
+            if (rec.employee_name, rec.valid_from) not in sheet_keys
         ]
         if orphan_ids:
-            await session.execute(delete(SalaryHistory).where(SalaryHistory.id.in_(orphan_ids)))
+            await session.execute(
+                delete(SalaryHistory).where(SalaryHistory.id.in_(orphan_ids))
+            )
             await session.commit()
             logger.info(
                 "[salary_history] Удалено из БД %d записей, " "отсутствующих в GSheet",
@@ -206,7 +216,9 @@ async def close_history_for_deleted_employees() -> int:
     async with async_session_factory() as session:
         # Сотрудники с deleted=True (ФИО для сравнения)
         deleted_emps = (
-            (await session.execute(select(Employee).where(Employee.deleted == True)))  # noqa: E712
+            (
+                await session.execute(select(Employee).where(Employee.deleted == True))
+            )  # noqa: E712
             .scalars()
             .all()
         )
@@ -217,7 +229,9 @@ async def close_history_for_deleted_employees() -> int:
         # Строим множество ФИО и iiko-UUID удалённых сотрудников
         def _full_name(emp: Employee) -> str:
             parts = [
-                p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()
+                p
+                for p in (emp.last_name, emp.first_name, emp.middle_name)
+                if p and p.strip()
             ]
             return " ".join(parts) if parts else (emp.name or "").strip()
 
@@ -302,7 +316,11 @@ async def delete_history_for_employee(employee_id: str) -> int:
             )
             return 0
 
-        parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+        parts = [
+            p
+            for p in (emp.last_name, emp.first_name, emp.middle_name)
+            if p and p.strip()
+        ]
         emp_name = " ".join(parts) if parts else (emp.name or "").strip()
         # Запасное имя — поле name из iiko (может отличаться от ФИО по частям)
         emp_name_alt = (emp.name or "").strip()
@@ -314,7 +332,9 @@ async def delete_history_for_employee(employee_id: str) -> int:
         if emp_name_alt and emp_name_alt != emp_name:
             names_to_delete.add(emp_name_alt)
         result = await session.execute(
-            delete(SalaryHistory).where(SalaryHistory.employee_name.in_(names_to_delete))
+            delete(SalaryHistory).where(
+                SalaryHistory.employee_name.in_(names_to_delete)
+            )
         )
         deleted_count = result.rowcount
         await session.commit()
@@ -476,7 +496,9 @@ def get_prorated_monthly(
 async def refresh_history_sheet_dropdowns(employee_names: list[str]) -> None:
     """Обновить выпадающий список сотрудников на листе «История ставок»."""
     await setup_salary_history_sheet(employee_names)
-    logger.info("[salary_history] Дропдауны обновлены: %d сотрудников", len(employee_names))
+    logger.info(
+        "[salary_history] Дропдауны обновлены: %d сотрудников", len(employee_names)
+    )
 
 
 _DEFAULT_HISTORY_DATE = "01.01.2020"
@@ -508,7 +530,11 @@ async def bootstrap_salary_history_sheet() -> int:
     existing_names: set[str] = {r["name"] for r in existing_rows}
 
     def _full_name_from_emp(emp: Employee) -> str:
-        parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+        parts = [
+            p
+            for p in (emp.last_name, emp.first_name, emp.middle_name)
+            if p and p.strip()
+        ]
         return " ".join(parts) if parts else (emp.name or "").strip()
 
     # full_name → Employee
@@ -598,7 +624,11 @@ async def purge_history_for_exclusions(excluded_ids: set[str]) -> int:
     for emp in emps:
         if str(emp.id) not in excluded_ids:
             continue
-        parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
+        parts = [
+            p
+            for p in (emp.last_name, emp.first_name, emp.middle_name)
+            if p and p.strip()
+        ]
         name = " ".join(parts) if parts else (emp.name or "").strip()
         if name:
             excluded_names.add(name)

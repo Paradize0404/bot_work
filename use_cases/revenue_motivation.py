@@ -238,7 +238,8 @@ async def calculate_revenue_motivation(
                 # Попытка нечёткого поиска: ищем dept_name как подстроку ключей
                 for (d, dep), v in revenue_index.items():
                     if d == shift_date and (
-                        dept_name.lower() in dep.lower() or dep.lower() in dept_name.lower()
+                        dept_name.lower() in dep.lower()
+                        or dep.lower() in dept_name.lower()
                     ):
                         rev = v
                         break
@@ -248,7 +249,8 @@ async def calculate_revenue_motivation(
 
         if total_revenue <= 0:
             logger.debug(
-                "[revenue_motivation] %s: выручка=0 за период " "(явок %d, подразд.: %s)",
+                "[revenue_motivation] %s: выручка=0 за период "
+                "(явок %d, подразд.: %s)",
                 full_name,
                 len(shifts),
                 {d for _, d in shifts},
@@ -261,7 +263,8 @@ async def calculate_revenue_motivation(
             dept_revenues[dept_name_mp] += rev
 
         result[full_name] = {
-            dept: round(rev * mot_pct_val / 100.0, 2) for dept, rev in dept_revenues.items()
+            dept: round(rev * mot_pct_val / 100.0, 2)
+            for dept, rev in dept_revenues.items()
         }
         motivation_total = sum(result[full_name].values())
 

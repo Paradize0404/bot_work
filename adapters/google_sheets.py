@@ -365,7 +365,9 @@ async def sync_products_to_sheet(
                 len(departments),
             )
         except Exception:
-            logger.warning("[%s] Ошибка batch_update (скрытие/границы)", LABEL, exc_info=True)
+            logger.warning(
+                "[%s] Ошибка batch_update (скрытие/границы)", LABEL, exc_info=True
+            )
 
         return len(data_rows)
 
@@ -471,7 +473,9 @@ async def read_all_levels() -> list[dict[str, Any]]:
 
     result = await asyncio.to_thread(_sync_read)
     elapsed = time.monotonic() - t0
-    logger.info("[%s] Прочитано %d записей из таблицы за %.1f сек", LABEL, len(result), elapsed)
+    logger.info(
+        "[%s] Прочитано %d записей из таблицы за %.1f сек", LABEL, len(result), elapsed
+    )
     return result
 
 
@@ -514,7 +518,9 @@ async def update_min_max(
             col += 2
 
         if dept_min_col is None:
-            logger.warning("[%s] Department %s не найден в таблице", LABEL, department_id)
+            logger.warning(
+                "[%s] Department %s не найден в таблице", LABEL, department_id
+            )
             return False
 
         # Найти строку для product (1-based row number, данные с row 4)
@@ -678,7 +684,11 @@ async def sync_invoice_prices_to_sheet(
                 if len(row) > cost_col_idx and row[cost_col_idx].strip():
                     old_costs[pid] = row[cost_col_idx].strip()
                 # Склад (только если столбец существовал)
-                if store_col_idx >= 0 and len(row) > store_col_idx and row[store_col_idx].strip():
+                if (
+                    store_col_idx >= 0
+                    and len(row) > store_col_idx
+                    and row[store_col_idx].strip()
+                ):
                     old_stores[pid] = row[store_col_idx].strip()
                 # Цены поставщиков
                 for ci in range(old_num_fixed, len(row)):
@@ -718,7 +728,9 @@ async def sync_invoice_prices_to_sheet(
         prev_type = None  # Отслеживаем переходы между типами
 
         for prod in products:
-            pid = prod["id"].lower()  # нормализуем — cost_prices и old_costs ключи lowercase
+            pid = prod[
+                "id"
+            ].lower()  # нормализуем — cost_prices и old_costs ключи lowercase
             current_type = prod.get("product_type", "")
 
             # Добавляем заголовок блока при смене типа
@@ -863,7 +875,9 @@ async def sync_invoice_prices_to_sheet(
                         },
                     )
         except Exception:
-            logger.warning("[%s] Ошибка форматирования прайс-листа", LABEL, exc_info=True)
+            logger.warning(
+                "[%s] Ошибка форматирования прайс-листа", LABEL, exc_info=True
+            )
 
         # ── 11. batch_update: скрыть строку 1 + колонку B, ширина столбцов ──
         try:
@@ -962,7 +976,9 @@ async def sync_invoice_prices_to_sheet(
             ]
 
             spreadsheet.batch_update({"requests": requests})
-            logger.info("[%s] batch_update прайс-листа: скрыты строка 1 + колонка B", LABEL)
+            logger.info(
+                "[%s] batch_update прайс-листа: скрыты строка 1 + колонка B", LABEL
+            )
         except Exception:
             logger.warning("[%s] Ошибка batch_update прайс-листа", LABEL, exc_info=True)
 
@@ -1152,14 +1168,18 @@ async def read_permissions_sheet() -> list[dict[str, Any]]:
                 if not key:
                     continue
                 cell_val = row[2 + ci].strip().lower() if (2 + ci) < len(row) else ""
-                perms[key] = cell_val in _TRUTHY or cell_val in {v.lower() for v in _TRUTHY}
+                perms[key] = cell_val in _TRUTHY or cell_val in {
+                    v.lower() for v in _TRUTHY
+                }
             result.append({"telegram_id": tg_id, "perms": perms})
 
         return result
 
     result = await asyncio.to_thread(_sync_read)
     elapsed = time.monotonic() - t0
-    logger.info("[%s] Прочитано %d записей прав за %.1f сек", LABEL, len(result), elapsed)
+    logger.info(
+        "[%s] Прочитано %d записей прав за %.1f сек", LABEL, len(result), elapsed
+    )
     return result
 
 
@@ -1251,7 +1271,9 @@ async def sync_permissions_to_sheet(
         # ── 4. Объединяем сотрудников (старые + новые) ──
         # Сохраняем порядок старых, добавляем новых в конец (отсортированных по имени)
         existing_tg_ids = set(old_tg_ids_order)
-        new_employees = [e for e in employees if str(e["telegram_id"]) not in existing_tg_ids]
+        new_employees = [
+            e for e in employees if str(e["telegram_id"]) not in existing_tg_ids
+        ]
         # Сортируем новых по имени
         new_employees.sort(key=lambda e: e.get("name", ""))
 
@@ -1322,7 +1344,9 @@ async def sync_permissions_to_sheet(
 
         # ── 7. Форматирование ──
         try:
-            last_col = gspread.utils.rowcol_to_a1(1, num_cols)[-1] if num_cols <= 26 else "Z"
+            last_col = (
+                gspread.utils.rowcol_to_a1(1, num_cols)[-1] if num_cols <= 26 else "Z"
+            )
             # Мета-строка — мелкий серый шрифт
             ws.format(
                 f"A1:{last_col}1",
@@ -1438,7 +1462,9 @@ async def sync_permissions_to_sheet(
                 },
             ]
             spreadsheet.batch_update({"requests": requests})
-            logger.info("[%s] batch_update прав: скрыта строка 1, ширины столбцов", LABEL)
+            logger.info(
+                "[%s] batch_update прав: скрыта строка 1, ширины столбцов", LABEL
+            )
         except Exception:
             logger.warning("[%s] Ошибка batch_update прав", LABEL, exc_info=True)
 
@@ -1533,7 +1559,11 @@ async def sync_request_stores_to_sheet(
 
         # VLOOKUP формула: ищет имя из C{data_row} в справочнике E:F
         vlookup = (
-            (f"=IFERROR(VLOOKUP(C{data_row}," f"$E${ref_start}:$F${ref_last}," f'2,FALSE),"")')
+            (
+                f"=IFERROR(VLOOKUP(C{data_row},"
+                f"$E${ref_start}:$F${ref_last},"
+                f'2,FALSE),"")'
+            )
             if sorted_stores
             else ""
         )
@@ -1673,7 +1703,8 @@ async def sync_request_stores_to_sheet(
                         }
                     },
                     "fields": (
-                        "userEnteredFormat(" "backgroundColor,textFormat,verticalAlignment)"
+                        "userEnteredFormat("
+                        "backgroundColor,textFormat,verticalAlignment)"
                     ),
                 }
             }
@@ -2023,7 +2054,9 @@ async def sync_cloud_org_mapping_to_sheet(
         for i, dr in enumerate(data_rows):
             row_num = first_data + i
             vlookup = (
-                f"=IFERROR(VLOOKUP(C{row_num}," f"$A${ref_first}:$B${ref_last}," f'2,FALSE),"")'
+                f"=IFERROR(VLOOKUP(C{row_num},"
+                f"$A${ref_first}:$B${ref_last},"
+                f'2,FALSE),"")'
             )
             block.append([dr[0], dr[1], dr[2], vlookup])
 
@@ -2308,8 +2341,12 @@ async def sync_cloud_org_mapping_to_sheet(
 
 _MAPPING_BASE_TAB = "Маппинг"
 _MAPPING_IMPORT_TAB = "Маппинг Импорт"
-_MAPPING_REF_TAB = "Маппинг Справочник"  # скрытый лист с полным списком товаров/поставщиков
-_MAPPING_MAX_DROPDOWN = 500  # лимит ONE_OF_LIST (для коротких списков — типы складов, поставщики)
+_MAPPING_REF_TAB = (
+    "Маппинг Справочник"  # скрытый лист с полным списком товаров/поставщиков
+)
+_MAPPING_MAX_DROPDOWN = (
+    500  # лимит ONE_OF_LIST (для коротких списков — типы складов, поставщики)
+)
 
 
 def _get_mapping_worksheet(tab_name: str) -> gspread.Worksheet:
@@ -2624,12 +2661,16 @@ def write_mapping_import_sheet(
     try:
         spreadsheet.batch_update({"requests": fmt_requests})
     except Exception:
-        logger.warning("[%s] Ошибка форматирования листа маппинга", LABEL, exc_info=True)
+        logger.warning(
+            "[%s] Ошибка форматирования листа маппинга", LABEL, exc_info=True
+        )
 
     # ── Dropdown для поставщиков ──
     if unmapped_suppliers and iiko_supplier_names:
         end_row = sup_start_row + len(unmapped_suppliers) - 1
-        _set_dropdown(spreadsheet, ws, sup_start_row, end_row + 1, 3, iiko_supplier_names)
+        _set_dropdown(
+            spreadsheet, ws, sup_start_row, end_row + 1, 3, iiko_supplier_names
+        )
 
     # ── Dropdown для товаров: записываем все в справочный лист + ONE_OF_RANGE (без лимита 500) ──
     if iiko_product_names:
@@ -2780,7 +2821,9 @@ def upsert_base_mapping(items: list[dict[str, str]]) -> int:
         cells_to_update = []
         for row_idx, row_data in updates:
             for col_idx, val in enumerate(row_data, start=1):
-                cells_to_update.append(gspread.Cell(row=row_idx, col=col_idx, value=val))
+                cells_to_update.append(
+                    gspread.Cell(row=row_idx, col=col_idx, value=val)
+                )
         ws.update_cells(cells_to_update, value_input_option="RAW")
 
     # Добавление новых строк
@@ -2868,7 +2911,9 @@ def _is_pay_col(name: str) -> bool:
     if name in (*_STATIC_START, _SALES_TOTAL_COL, _COST_TOTAL_COL, _COST_AVG_COL):
         return False
     return (
-        name.endswith(", ₽") and not name.endswith(" выр, ₽") and not name.endswith(" себест, ₽")
+        name.endswith(", ₽")
+        and not name.endswith(" выр, ₽")
+        and not name.endswith(" себест, ₽")
     )
 
 
@@ -3210,7 +3255,9 @@ def _apply_day_report_style(ws: gspread.Worksheet, headers: list[str]) -> None:
         )
 
     except Exception:
-        logger.warning("[%s] Ошибка стилизации листа «%s»", LABEL, _DAY_REPORT_TAB, exc_info=True)
+        logger.warning(
+            "[%s] Ошибка стилизации листа «%s»", LABEL, _DAY_REPORT_TAB, exc_info=True
+        )
 
 
 def append_day_report_row(data: dict) -> None:
@@ -3337,7 +3384,9 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
     Возвращает количество сотрудников в листе.
     """
     t0 = time.monotonic()
-    logger.info("[%s] Синхронизация → «%s»: %d сотрудников", LABEL, _SALARY_TAB, len(employees))
+    logger.info(
+        "[%s] Синхронизация → «%s»: %d сотрудников", LABEL, _SALARY_TAB, len(employees)
+    )
 
     def _sync_write() -> int:
         ws = _get_salary_worksheet()
@@ -3397,7 +3446,9 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
             # Заморозить заголовок
             ws.freeze(rows=1)
         except Exception:
-            logger.warning("[%s] Ошибка форматирования «%s»", LABEL, _SALARY_TAB, exc_info=True)
+            logger.warning(
+                "[%s] Ошибка форматирования «%s»", LABEL, _SALARY_TAB, exc_info=True
+            )
 
         # ── 6. batch_update: выпадающие списки + ширина колонок ──
         try:
@@ -3600,7 +3651,9 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
             if prot_reqs:
                 spreadsheet.batch_update({"requests": prot_reqs})
         except Exception:
-            logger.warning("[%s] Ошибка batch_update «%s»", LABEL, _SALARY_TAB, exc_info=True)
+            logger.warning(
+                "[%s] Ошибка batch_update «%s»", LABEL, _SALARY_TAB, exc_info=True
+            )
 
         return len(data_rows)
 
@@ -3763,7 +3816,11 @@ async def sync_fot_sheet(
                     cell_a = (row[0] if row else "").strip()
                     cell_b = (row[1] if len(row) > 1 else "").strip()
                     # Секция: заполнена A, но B пустая и D пустая
-                    if cell_a and not cell_b and (len(row) < 4 or not str(row[3]).strip()):
+                    if (
+                        cell_a
+                        and not cell_b
+                        and (len(row) < 4 or not str(row[3]).strip())
+                    ):
                         if cell_a != _FOT_HEADERS[0] and cell_a != period_label:
                             cur_section = cell_a
                         continue
@@ -3771,7 +3828,10 @@ async def sync_fot_sheet(
                         continue
                     if not cell_a:
                         continue
-                    vals = [_parse_fot_num(row[i] if len(row) > i else "") for i in range(5, 10)]
+                    vals = [
+                        _parse_fot_num(row[i] if len(row) > i else "")
+                        for i in range(5, 10)
+                    ]
                     if any(v != 0 for v in vals):
                         saved[(cur_section, cell_a)] = vals
             except Exception:
@@ -3795,7 +3855,9 @@ async def sync_fot_sheet(
 
         all_sections = list(dept_sections)
         if monthly_section:
-            all_sections.append({"dept_name": "Администрация", "employees": monthly_section})
+            all_sections.append(
+                {"dept_name": "Администрация", "employees": monthly_section}
+            )
 
         for section in all_sections:
             sect_name = section.get("dept_name", "Подразделение")
@@ -3956,7 +4018,9 @@ async def sync_fot_sheet(
                     requests.append(
                         {
                             "repeatCell": {
-                                "range": _sr(sheet_id, data_start, data_end, ci, ci + 1),
+                                "range": _sr(
+                                    sheet_id, data_start, data_end, ci, ci + 1
+                                ),
                                 "cell": {
                                     "userEnteredFormat": {
                                         "backgroundColor": bg,
@@ -4161,7 +4225,9 @@ _HISTORY_HEADERS = [
 _HISTORY_NCOLS = len(_HISTORY_HEADERS)  # 8
 
 
-def _get_protection_delete_requests(sheet_id: int, spreadsheet: gspread.Spreadsheet) -> list[dict]:
+def _get_protection_delete_requests(
+    sheet_id: int, spreadsheet: gspread.Spreadsheet
+) -> list[dict]:
     """Вернуть список deleteProtectedRange-запросов для регистрации всех существующих защит на листе."""
     requests: list[dict] = []
     try:
@@ -4169,13 +4235,19 @@ def _get_protection_delete_requests(sheet_id: int, spreadsheet: gspread.Spreadsh
         resp = spreadsheet.client.request(
             "get",
             url,
-            params={"fields": "sheets(properties/sheetId,protectedRanges/protectedRangeId)"},
+            params={
+                "fields": "sheets(properties/sheetId,protectedRanges/protectedRangeId)"
+            },
         )
         for sheet in resp.json().get("sheets", []):
             if sheet.get("properties", {}).get("sheetId") == sheet_id:
                 for pr in sheet.get("protectedRanges", []):
                     requests.append(
-                        {"deleteProtectedRange": {"protectedRangeId": pr["protectedRangeId"]}}
+                        {
+                            "deleteProtectedRange": {
+                                "protectedRangeId": pr["protectedRangeId"]
+                            }
+                        }
                     )
     except Exception:
         logger.debug("[%s] Не удалось получить список защит листа %d", LABEL, sheet_id)
@@ -4189,7 +4261,9 @@ def _get_history_worksheet() -> gspread.Worksheet:
     try:
         return spreadsheet.worksheet(_HISTORY_TAB)
     except gspread.exceptions.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title=_HISTORY_TAB, rows=2000, cols=_HISTORY_NCOLS + 2)
+        ws = spreadsheet.add_worksheet(
+            title=_HISTORY_TAB, rows=2000, cols=_HISTORY_NCOLS + 2
+        )
         logger.info("[%s] Лист «%s» создан", LABEL, _HISTORY_TAB)
         return ws
 
@@ -4215,7 +4289,9 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
         existing = ws.get_all_values()
         # Детекция старого формата (D = "Дата с") — миграция данных
         is_old_format = (
-            len(existing) > 0 and len(existing[0]) >= 4 and existing[0][3].strip() == "Дата с"
+            len(existing) > 0
+            and len(existing[0]) >= 4
+            and existing[0][3].strip() == "Дата с"
         )
         header_end = gspread.utils.rowcol_to_a1(1, _HISTORY_NCOLS)
         ws.update(range_name=f"A1:{header_end}", values=[_HISTORY_HEADERS])
@@ -4230,15 +4306,21 @@ async def setup_salary_history_sheet(employee_names: list[str]) -> None:
                 rate = row[2] if len(row) > 2 else ""
                 old_date = row[3] if len(row) > 3 else ""  # old: Дата с
                 old_iiko = row[5] if len(row) > 5 else ""  # old: iiko_id
-                migration_rows.append([name, sal_type, rate, "", "", old_date, "", old_iiko])
+                migration_rows.append(
+                    [name, sal_type, rate, "", "", old_date, "", old_iiko]
+                )
             if migration_rows:
-                end_cell = gspread.utils.rowcol_to_a1(1 + len(migration_rows), _HISTORY_NCOLS)
+                end_cell = gspread.utils.rowcol_to_a1(
+                    1 + len(migration_rows), _HISTORY_NCOLS
+                )
                 ws.update(
                     range_name=f"A2:{end_cell}",
                     values=migration_rows,
                     value_input_option="USER_ENTERED",
                 )
-            logger.info("[%s] Миграция старого формата: %d строк", LABEL, len(migration_rows))
+            logger.info(
+                "[%s] Миграция старого формата: %d строк", LABEL, len(migration_rows)
+            )
 
         # Формат заголовка
         requests: list[dict] = [
@@ -4520,7 +4602,9 @@ async def write_salary_history_valid_to(updates: list[dict]) -> None:
         # Пишем в колонку E батчем
         cell_updates = []
         for upd in updates:
-            cell_updates.append(gspread.Cell(row=upd["row"], col=7, value=upd["valid_to"]))
+            cell_updates.append(
+                gspread.Cell(row=upd["row"], col=7, value=upd["valid_to"])
+            )
         ws.update_cells(cell_updates, value_input_option="USER_ENTERED")
         logger.info(
             "[%s] write_salary_history_valid_to: обновлено %d строк",
@@ -4546,7 +4630,9 @@ async def write_history_iiko_ids(updates: list[dict]) -> None:
             gspread.Cell(row=upd["row"], col=8, value=upd["iiko_id"]) for upd in updates
         ]
         ws.update_cells(cell_updates, value_input_option="USER_ENTERED")
-        logger.info("[%s] write_history_iiko_ids: обновлено %d строк", LABEL, len(updates))
+        logger.info(
+            "[%s] write_history_iiko_ids: обновлено %d строк", LABEL, len(updates)
+        )
 
     await asyncio.to_thread(_sync_write_ids)
 
@@ -4596,7 +4682,9 @@ async def append_salary_history_rows(rows: list[dict]) -> int:
         if values:
             end_row = start_row + len(values) - 1
             range_name = f"A{start_row}:H{end_row}"
-            ws.update(range_name=range_name, values=values, value_input_option="USER_ENTERED")
+            ws.update(
+                range_name=range_name, values=values, value_input_option="USER_ENTERED"
+            )
 
         logger.info(
             "[%s] append_salary_history_rows: добавлено %d строк (с %d)",
@@ -4639,7 +4727,9 @@ async def delete_salary_history_rows(row_numbers: list[int]) -> int:
                 }
             )
         spreadsheet.batch_update({"requests": requests})
-        logger.info("[%s] delete_salary_history_rows: удалено %d строк", LABEL, len(requests))
+        logger.info(
+            "[%s] delete_salary_history_rows: удалено %d строк", LABEL, len(requests)
+        )
         return len(requests)
 
     return await asyncio.to_thread(_sync_delete)
