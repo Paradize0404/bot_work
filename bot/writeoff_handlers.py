@@ -377,6 +377,7 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
         _build_summary(await state.get_data()), parse_mode="HTML"
     )
     await state.update_data(header_msg_id=summary_msg.message_id)
+    await state.set_state(WriteoffStates.store)
     msg = await message.answer(
         "🏬 Выберите склад:", reply_markup=_stores_kb(wo_start.stores, page=0)
     )
@@ -400,9 +401,25 @@ async def writeoff_store_page(callback: CallbackQuery, state: FSMContext) -> Non
 # ── 2. Выбор склада ──
 
 
-@router.callback_query(WriteoffStates.store, F.data.startswith("wo_store:"))
+@router.callback_query(F.data.startswith("wo_store:"))
 async def choose_store(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
+    # Validate that we're in the correct FSM state; stale inline keyboards
+    # or race conditions (e.g., NavResetMiddleware clearing state) may cause
+    # the state to be None or belong to a different flow.
+    current = await state.get_state()
+    if current != WriteoffStates.store.state:
+        logger.warning(
+            "[writeoff] choose_store: wrong state=%s (expected %s) tg:%d",
+            current,
+            WriteoffStates.store.state,
+            callback.from_user.id,
+        )
+        await callback.answer(
+            "⚠️ Сессия истекла. Нажмите «📝 Создать списание» заново.",
+            show_alert=True,
+        )
+        return
     store_id = await validate_callback_uuid(callback, callback.data)
     if not store_id:
         return
