@@ -3627,14 +3627,22 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
                 len(data_rows),
             )
 
-            # Защита от случайного удаления (предупреждение)
+            # Защита листа: редактировать может ТОЛЬКО сервисный аккаунт бота
+            bot_email = ""
+            try:
+                bot_email = spreadsheet.client.auth.service_account_email
+            except Exception:
+                pass
             prot_reqs = _get_protection_delete_requests(sheet_id, spreadsheet) + [
                 {
                     "addProtectedRange": {
                         "protectedRange": {
                             "range": {"sheetId": sheet_id},
-                            "description": "Защита зарплаты: предупреждение при изменении",
-                            "warningOnly": True,
+                            "description": "Лист «Зарплаты» — только для чтения (источник: История ставок)",
+                            "warningOnly": False,
+                            "editors": {
+                                "users": [bot_email] if bot_email else [],
+                            },
                         }
                     }
                 }
