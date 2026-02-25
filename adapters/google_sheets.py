@@ -3733,7 +3733,7 @@ _FOT_HEADERS = [
     "Начислено, р.",  # C (2) red formula
     "Ставка",  # D (3) red
     "Бонус",  # E (4) red
-    "Начисления",  # F (5) yellow
+    "Премия",  # F (5) yellow
     "Удержания",  # G (6) yellow
     "Аванс",  # H (7) green
     "25 Выплата",  # I (8) green
@@ -3789,7 +3789,7 @@ async def sync_fot_sheet(
 
     Колонки:
       A Сотрудник | B Должность | C Начислено, р. (=D+E+F-G)
-      D Ставка    | E Бонус     | F Начисления (ручн.)
+      D Ставка    | E Бонус     | F Премия (ручн.)
       G Удержания (ручн.) | H Аванс | I 25 Выплата
       J 10 Выплата | K К выплате, р. (=C-I-J)
 
@@ -3812,21 +3812,25 @@ async def sync_fot_sheet(
             try:
                 existing = ws.get_all_values()
                 cur_section = ""
+                format_valid = False  # флаг: заголовки нового формата
                 for row in existing:
                     cell_a = (row[0] if row else "").strip()
                     cell_b = (row[1] if len(row) > 1 else "").strip()
-                    # Секция: заполнена A, но B пустая и D пустая
+                    # Строка-заголовок колонок: проверяем формат
+                    if cell_a == _FOT_HEADERS[0]:
+                        hdr_f = (row[5] if len(row) > 5 else "").strip()
+                        format_valid = hdr_f == _FOT_HEADERS[5]
+                        continue
+                    # Секция: заполнена A, но B и D пустые
                     if (
                         cell_a
                         and not cell_b
                         and (len(row) < 4 or not str(row[3]).strip())
                     ):
-                        if cell_a != _FOT_HEADERS[0] and cell_a != period_label:
+                        if cell_a != period_label:
                             cur_section = cell_a
                         continue
-                    if cell_a == _FOT_HEADERS[0]:
-                        continue
-                    if not cell_a:
+                    if not cell_a or not format_valid:
                         continue
                     vals = [
                         _parse_fot_num(row[i] if len(row) > i else "")
