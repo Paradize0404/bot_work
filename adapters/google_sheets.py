@@ -3675,26 +3675,54 @@ async def read_salary_settings() -> dict[str, dict]:
 # ─────────────────────────────────────────────────────
 
 _FOT_HEADERS = [
-    "Сотрудник",
-    "Должность",
-    "Тип расчёта",
-    "Ставка",
-    "Ед.",
-    "Начислено",
-    "Мотивация",
+    "Сотрудник",  # A (0) red
+    "Должность",  # B (1) red
+    "Начислено, р.",  # C (2) red formula
+    "Ставка",  # D (3) red
+    "Бонус",  # E (4) red
+    "Начисления",  # F (5) yellow
+    "Удержания",  # G (6) yellow
+    "Аванс",  # H (7) green
+    "25 Выплата",  # I (8) green
+    "10 Выплата",  # J (9) green
+    "К выплате, р.",  # K (10) green formula
 ]
 _FOT_NCOLS = len(_FOT_HEADERS)
 
+# Индексы колонок для защиты / раскраски
+_FOT_RED_COLS = [0, 1, 2, 3, 4]  # A-E  (бот-only)
+_FOT_YELLOW_COLS = [5, 6]  # F-G  (руч. корректировки)
+_FOT_GREEN_COLS = [7, 8, 9, 10]  # H-K  (выплаты + формула)
+_FOT_EDITABLE_COLS = (5, 10)  # F-J  startCol..endCol (exclusive)
 
-def _get_or_create_fot_worksheet(spreadsheet: Any, tab_name: str) -> Any:
-    """Открыть вкладку ФОТ (или создать, если не существует)."""
+
+def _parse_fot_num(s: str) -> float:
+    """Распарсить числовое значение из ячейки ФОТ."""
+    if not s or not str(s).strip():
+        return 0.0
+    cleaned = (
+        str(s)
+        .strip()
+        .replace("\xa0", "")
+        .replace(" ", "")
+        .replace("₽", "")
+        .replace("Р", "")
+        .replace(",", ".")
+    )
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
+def _get_or_create_fot_worksheet(spreadsheet: Any, tab_name: str) -> tuple[Any, bool]:
+    """Открыть вкладку ФОТ (или создать). Возвращает (ws, is_new)."""
     try:
         ws = spreadsheet.worksheet(tab_name)
-        ws.clear()
-        return ws
+        return ws, False
     except gspread.exceptions.WorksheetNotFound:
         ws = spreadsheet.add_worksheet(title=tab_name, rows=2000, cols=_FOT_NCOLS + 2)
-        return ws
+        return ws, True
 
 
 async def sync_fot_sheet(
@@ -3706,255 +3734,287 @@ async def sync_fot_sheet(
     """
     Записать лист ФОТ в Google Sheets.
 
-    Параметры:
-      dept_sections  — список секций по подразделениям:
-                       [{"dept_name": "Кухня", "employees": [emp_dict, ...]}]
-      monthly_section — список сотрудников с ежемесячной ставкой (без явок):
-                       [emp_dict]
-      tab_name       — название вкладки, например «ФОТ январь 2025»
-      period_label   — строка периода, например «01.01.2025 – 15.01.2025»
+    Колонки:
+      A Сотрудник | B Должность | C Начислено, р. (=D+E+F-G)
+      D Ставка    | E Бонус     | F Начисления (ручн.)
+      G Удержания (ручн.) | H Аванс | I 25 Выплата
+      J 10 Выплата | K К выплате, р. (=C-I-J)
 
-    emp_dict ключи:
-      name (str)      — Фамилия И.О.
-      role (str)      — должность
-      sal_type (str)  — тип расчёта
-      rate (float)    — ставка
-      units (float)   — кол-во единиц (смены / часы / дни)
-      total (float)   — начислено
+    Защита: колонки A-E и K — только бот; F-J — пользователь.
+    При повторной синхронизации значения F-J сохраняются.
 
-    Возвращает количество строк данных (сотрудников).
+    emp_dict ключи:  name, role, rate_total, bonus.
     """
     t0 = time.monotonic()
-
-    def _fmt_num(v: float) -> str:
-        if v == int(v):
-            return str(int(v))
-        return f"{v:.2f}".rstrip("0").rstrip(".")
 
     def _sync_write() -> int:
         client = _get_client()
         spreadsheet = client.open_by_key(SALARY_SHEET_ID)
-        ws = _get_or_create_fot_worksheet(spreadsheet, tab_name)
+        ws, is_new = _get_or_create_fot_worksheet(spreadsheet, tab_name)
         sheet_id = ws.id
 
-        all_values: list[list[str]] = []
-        # Строка 1 — период
+        # ── 0. Прочитать существующие user-editable значения (F-J) ──
+        saved: dict[tuple[str, str], list[float]] = {}
+        if not is_new:
+            try:
+                existing = ws.get_all_values()
+                cur_section = ""
+                for row in existing:
+                    cell_a = (row[0] if row else "").strip()
+                    cell_b = (row[1] if len(row) > 1 else "").strip()
+                    # Секция: заполнена A, но B пустая и D пустая
+                    if cell_a and not cell_b and (len(row) < 4 or not str(row[3]).strip()):
+                        if cell_a != _FOT_HEADERS[0] and cell_a != period_label:
+                            cur_section = cell_a
+                        continue
+                    if cell_a == _FOT_HEADERS[0]:
+                        continue
+                    if not cell_a:
+                        continue
+                    vals = [_parse_fot_num(row[i] if len(row) > i else "") for i in range(5, 10)]
+                    if any(v != 0 for v in vals):
+                        saved[(cur_section, cell_a)] = vals
+            except Exception:
+                logger.debug(
+                    "[%s] Не удалось прочитать существующие данные ФОТ",
+                    LABEL,
+                )
+
+        # Очистка
+        ws.clear()
+
+        # ── 1. Построить массив данных ──
+        all_values: list[list] = []
         all_values.append([period_label] + [""] * (_FOT_NCOLS - 1))
 
         total_emp_count = 0
-        dept_header_rows: list[int] = []  # 0-based row indices for dept headers
-        col_header_rows: list[int] = []  # 0-based row indices for column headers
-        data_row_ranges: list[tuple[int, int]] = []  # (start, end) 0-based for data rows
+        dept_header_rows: list[int] = []
+        col_header_rows: list[int] = []
+        data_row_ranges: list[tuple[int, int]] = []
+        total_rows: list[int] = []
 
-        for section in dept_sections:
-            dept_name = section.get("dept_name", "Подразделение")
+        all_sections = list(dept_sections)
+        if monthly_section:
+            all_sections.append({"dept_name": "Администрация", "employees": monthly_section})
+
+        for section in all_sections:
+            sect_name = section.get("dept_name", "Подразделение")
             employees = section.get("employees", [])
             if not employees:
                 continue
 
-            # Заголовок подразделения
             dept_header_rows.append(len(all_values))
-            all_values.append([dept_name] + [""] * (_FOT_NCOLS - 1))
+            all_values.append([sect_name] + [""] * (_FOT_NCOLS - 1))
 
-            # Колонки
             col_header_rows.append(len(all_values))
-            all_values.append(_FOT_HEADERS[:])
+            all_values.append(list(_FOT_HEADERS))
 
-            # Данные
             data_start = len(all_values)
             for emp in employees:
-                mot = emp.get("motivation", 0.0)
+                r = len(all_values) + 1  # 1-based row
+                name = emp.get("name", "")
+                rate_total = emp.get("rate_total", 0)
+                bonus = emp.get("bonus", 0)
+
+                sv = saved.get((sect_name, name), [0, 0, 0, 0, 0])
+                nach, uderz, avans, v25, v10 = sv
+
                 all_values.append(
                     [
-                        emp.get("name", ""),
+                        name,
                         emp.get("role", ""),
-                        emp.get("sal_type", ""),
-                        _fmt_num(emp.get("rate", 0)),
-                        _fmt_num(emp.get("units", 0)),
-                        _fmt_num(emp.get("total", 0)),
-                        _fmt_num(mot) if mot else "",
+                        f"=D{r}+E{r}+F{r}-G{r}",
+                        rate_total,
+                        bonus,
+                        nach,
+                        uderz,
+                        avans,
+                        v25,
+                        v10,
+                        f"=C{r}-I{r}-J{r}",
                     ]
                 )
                 total_emp_count += 1
-            data_row_ranges.append((data_start, len(all_values)))
+            data_end = len(all_values)
+            data_row_ranges.append((data_start, data_end))
 
-            # Пустая строка-разделитель
+            # Строка итогов секции
+            ds1 = data_start + 1
+            de1 = data_end
+            total_rows.append(len(all_values))
+            all_values.append(
+                [
+                    "",
+                    "",
+                    f"=SUM(C{ds1}:C{de1})",
+                    f"=SUM(D{ds1}:D{de1})",
+                    f"=SUM(E{ds1}:E{de1})",
+                    f"=SUM(F{ds1}:F{de1})",
+                    f"=SUM(G{ds1}:G{de1})",
+                    f"=SUM(H{ds1}:H{de1})",
+                    f"=SUM(I{ds1}:I{de1})",
+                    f"=SUM(J{ds1}:J{de1})",
+                    f"=SUM(K{ds1}:K{de1})",
+                ]
+            )
+
             all_values.append([""] * _FOT_NCOLS)
 
-        # Секция ежемесячных сотрудников (без явок)
-        if monthly_section:
-            dept_header_rows.append(len(all_values))
-            all_values.append(["Ежемесячные сотрудники"] + [""] * (_FOT_NCOLS - 1))
-
-            col_header_rows.append(len(all_values))
-            all_values.append(_FOT_HEADERS[:])
-
-            data_start = len(all_values)
-            for emp in monthly_section:
-                mot = emp.get("motivation", 0.0)
-                all_values.append(
-                    [
-                        emp.get("name", ""),
-                        emp.get("role", ""),
-                        emp.get("sal_type", ""),
-                        _fmt_num(emp.get("rate", 0)),
-                        _fmt_num(emp.get("units", 0)),
-                        _fmt_num(emp.get("total", 0)),
-                        _fmt_num(mot) if mot else "",
-                    ]
-                )
-                total_emp_count += 1
-            data_row_ranges.append((data_start, len(all_values)))
-
-        if not all_values:
+        if not all_values or total_emp_count == 0:
             logger.info("[%s] sync_fot_sheet: нет данных, лист не обновлён", LABEL)
             return 0
 
         ws.update(
             range_name=f"A1:{gspread.utils.rowcol_to_a1(len(all_values), _FOT_NCOLS)}",
             values=all_values,
+            value_input_option="USER_ENTERED",
         )
 
-        # ── Форматирование ──
+        # ── 2. Форматирование ──
         requests: list[dict] = []
 
-        # Строка 1: период — жирный, залит серым
+        # -- Период (строка 1): серый, жирный, по центру --
         requests.append(
             {
                 "repeatCell": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "startRowIndex": 0,
-                        "endRowIndex": 1,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": _FOT_NCOLS,
-                    },
+                    "range": _sr(sheet_id, 0, 1, 0, _FOT_NCOLS),
                     "cell": {
                         "userEnteredFormat": {
-                            "backgroundColor": {
-                                "red": 0.85,
-                                "green": 0.85,
-                                "blue": 0.85,
-                            },
+                            "backgroundColor": _rgb(0.85, 0.85, 0.85),
                             "textFormat": {"bold": True, "fontSize": 11},
                             "horizontalAlignment": "CENTER",
                             "verticalAlignment": "MIDDLE",
                         }
                     },
-                    "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)",
+                    "fields": "userEnteredFormat(backgroundColor,textFormat,"
+                    "horizontalAlignment,verticalAlignment)",
                 }
             }
         )
 
-        # Заголовки подразделений — жирные, светло-голубой фон
+        # -- Заголовки секций --
         for r in dept_header_rows:
             requests.append(
                 {
                     "repeatCell": {
-                        "range": {
-                            "sheetId": sheet_id,
-                            "startRowIndex": r,
-                            "endRowIndex": r + 1,
-                            "startColumnIndex": 0,
-                            "endColumnIndex": _FOT_NCOLS,
-                        },
+                        "range": _sr(sheet_id, r, r + 1, 0, _FOT_NCOLS),
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": {
-                                    "red": 0.73,
-                                    "green": 0.85,
-                                    "blue": 0.98,
-                                },
+                                "backgroundColor": _rgb(0.73, 0.85, 0.98),
                                 "textFormat": {"bold": True, "fontSize": 10},
                                 "verticalAlignment": "MIDDLE",
                             }
                         },
-                        "fields": "userEnteredFormat(backgroundColor,textFormat,verticalAlignment)",
+                        "fields": "userEnteredFormat(backgroundColor,textFormat,"
+                        "verticalAlignment)",
                     }
                 }
             )
 
-        # Заголовки колонок — серый фон, жирный
+        # -- Заголовки колонок: красные / жёлтые / зелёные --
+        _hdr_red = _rgb(0.92, 0.73, 0.73)
+        _hdr_yel = _rgb(1.0, 0.95, 0.6)
+        _hdr_grn = _rgb(0.71, 0.88, 0.70)
         for r in col_header_rows:
+            for cols, bg in [
+                (_FOT_RED_COLS, _hdr_red),
+                (_FOT_YELLOW_COLS, _hdr_yel),
+                (_FOT_GREEN_COLS, _hdr_grn),
+            ]:
+                for ci in cols:
+                    requests.append(
+                        {
+                            "repeatCell": {
+                                "range": _sr(sheet_id, r, r + 1, ci, ci + 1),
+                                "cell": {
+                                    "userEnteredFormat": {
+                                        "backgroundColor": bg,
+                                        "textFormat": {
+                                            "bold": True,
+                                            "fontSize": 9,
+                                        },
+                                        "verticalAlignment": "MIDDLE",
+                                    }
+                                },
+                                "fields": "userEnteredFormat(backgroundColor,"
+                                "textFormat,verticalAlignment)",
+                            }
+                        }
+                    )
+
+        # -- Строки данных: цвет по колонке --
+        _bg_red = _rgb(0.98, 0.87, 0.87)
+        _bg_yel = _rgb(1.0, 0.98, 0.80)
+        _bg_grn = _rgb(0.85, 0.95, 0.85)
+        for data_start, data_end in data_row_ranges:
+            for ci_list, bg in [
+                (_FOT_RED_COLS, _bg_red),
+                (_FOT_YELLOW_COLS, _bg_yel),
+                (_FOT_GREEN_COLS, _bg_grn),
+            ]:
+                for ci in ci_list:
+                    requests.append(
+                        {
+                            "repeatCell": {
+                                "range": _sr(sheet_id, data_start, data_end, ci, ci + 1),
+                                "cell": {
+                                    "userEnteredFormat": {
+                                        "backgroundColor": bg,
+                                        "textFormat": {"fontSize": 9},
+                                        "verticalAlignment": "MIDDLE",
+                                    }
+                                },
+                                "fields": "userEnteredFormat(backgroundColor,"
+                                "textFormat,verticalAlignment)",
+                            }
+                        }
+                    )
+
+            # Числовые колонки (C-K) — вправо + формат рублей
             requests.append(
                 {
                     "repeatCell": {
-                        "range": {
-                            "sheetId": sheet_id,
-                            "startRowIndex": r,
-                            "endRowIndex": r + 1,
-                            "startColumnIndex": 0,
-                            "endColumnIndex": _FOT_NCOLS,
-                        },
+                        "range": _sr(sheet_id, data_start, data_end, 2, _FOT_NCOLS),
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": {
-                                    "red": 0.91,
-                                    "green": 0.91,
-                                    "blue": 0.91,
+                                "horizontalAlignment": "RIGHT",
+                                "numberFormat": {
+                                    "type": "NUMBER",
+                                    "pattern": '#,##0 "₽"',
                                 },
-                                "textFormat": {"bold": True, "fontSize": 9},
-                                "verticalAlignment": "MIDDLE",
                             }
                         },
-                        "fields": "userEnteredFormat(backgroundColor,textFormat,verticalAlignment)",
+                        "fields": "userEnteredFormat(horizontalAlignment,numberFormat)",
                     }
                 }
             )
 
-        # Строки данных — чередование белый/светло-серый + числа вправо
-        for data_start, data_end in data_row_ranges:
-            for i, r in enumerate(range(data_start, data_end)):
-                bg = (
-                    {"red": 1.0, "green": 1.0, "blue": 1.0}
-                    if i % 2 == 0
-                    else {"red": 0.96, "green": 0.96, "blue": 0.96}
-                )
-                requests.append(
-                    {
-                        "repeatCell": {
-                            "range": {
-                                "sheetId": sheet_id,
-                                "startRowIndex": r,
-                                "endRowIndex": r + 1,
-                                "startColumnIndex": 0,
-                                "endColumnIndex": _FOT_NCOLS,
-                            },
-                            "cell": {
-                                "userEnteredFormat": {
-                                    "backgroundColor": bg,
-                                    "textFormat": {"fontSize": 9},
-                                    "verticalAlignment": "MIDDLE",
-                                }
-                            },
-                            "fields": "userEnteredFormat(backgroundColor,textFormat,verticalAlignment)",
-                        }
+        # -- Строки итогов: жирный, серый фон, формат рублей --
+        for r in total_rows:
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": _sr(sheet_id, r, r + 1, 0, _FOT_NCOLS),
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": _rgb(0.91, 0.91, 0.91),
+                                "textFormat": {"bold": True, "fontSize": 9},
+                                "verticalAlignment": "MIDDLE",
+                                "horizontalAlignment": "RIGHT",
+                                "numberFormat": {
+                                    "type": "NUMBER",
+                                    "pattern": '#,##0 "₽"',
+                                },
+                            }
+                        },
+                        "fields": "userEnteredFormat(backgroundColor,textFormat,"
+                        "verticalAlignment,horizontalAlignment,numberFormat)",
                     }
-                )
-            # Выровнять числовые колонки (D, E, F, G) вправо
-            for col_i in [3, 4, 5, 6]:
-                requests.append(
-                    {
-                        "repeatCell": {
-                            "range": {
-                                "sheetId": sheet_id,
-                                "startRowIndex": data_start,
-                                "endRowIndex": data_end,
-                                "startColumnIndex": col_i,
-                                "endColumnIndex": col_i + 1,
-                            },
-                            "cell": {
-                                "userEnteredFormat": {
-                                    "horizontalAlignment": "RIGHT",
-                                }
-                            },
-                            "fields": "userEnteredFormat.horizontalAlignment",
-                        }
-                    }
-                )
+                }
+            )
 
-        # Ширины колонок: A=180, B=130, C=100, D=80, E=60, F=90, G=90
-        col_widths = [180, 130, 100, 80, 60, 90, 90]
+        # -- Ширины колонок --
+        col_widths = [160, 160, 110, 100, 90, 100, 100, 100, 100, 100, 110]
         for i, px in enumerate(col_widths):
             requests.append(
                 {
@@ -3981,7 +4041,7 @@ async def sync_fot_sheet(
                         "startIndex": 0,
                         "endIndex": len(all_values),
                     },
-                    "properties": {"pixelSize": 22},
+                    "properties": {"pixelSize": 24},
                     "fields": "pixelSize",
                 }
             }
@@ -4000,10 +4060,51 @@ async def sync_fot_sheet(
             }
         )
 
+        # ── 3. Защита: весь лист, кроме F-J в данных ──
+        bot_email = ""
+        try:
+            bot_email = spreadsheet.client.auth.service_account_email
+        except Exception:
+            pass
+
+        prot_reqs = _get_protection_delete_requests(sheet_id, spreadsheet)
+        unprotected = []
+        for ds, de in data_row_ranges:
+            unprotected.append(
+                {
+                    "sheetId": sheet_id,
+                    "startRowIndex": ds,
+                    "endRowIndex": de,
+                    "startColumnIndex": 5,
+                    "endColumnIndex": 10,
+                }
+            )
+        prot_reqs.append(
+            {
+                "addProtectedRange": {
+                    "protectedRange": {
+                        "range": {"sheetId": sheet_id},
+                        "description": "ФОТ — расчётные колонки защищены",
+                        "warningOnly": False,
+                        "editors": {
+                            "users": [bot_email] if bot_email else [],
+                            "domainUsersCanEdit": False,
+                        },
+                        "unprotectedRanges": unprotected,
+                    }
+                }
+            }
+        )
+        requests.extend(prot_reqs)
+
         try:
             spreadsheet.batch_update({"requests": requests})
         except Exception:
-            logger.warning("[%s] sync_fot_sheet batch_update ошибка", LABEL, exc_info=True)
+            logger.warning(
+                "[%s] sync_fot_sheet batch_update ошибка",
+                LABEL,
+                exc_info=True,
+            )
 
         return total_emp_count
 
@@ -4017,6 +4118,28 @@ async def sync_fot_sheet(
         elapsed,
     )
     return count
+
+
+def _sr(
+    sheet_id: int,
+    r0: int,
+    r1: int,
+    c0: int,
+    c1: int,
+) -> dict:
+    """Shortcut для gridRange."""
+    return {
+        "sheetId": sheet_id,
+        "startRowIndex": r0,
+        "endRowIndex": r1,
+        "startColumnIndex": c0,
+        "endColumnIndex": c1,
+    }
+
+
+def _rgb(r: float, g: float, b: float) -> dict:
+    """Shortcut для backgroundColor."""
+    return {"red": r, "green": g, "blue": b}
 
 
 # ─────────────────────────────────────────────────────

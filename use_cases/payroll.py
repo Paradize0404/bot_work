@@ -84,9 +84,7 @@ def _display_name(emp: Employee) -> str:
 
 def _full_name(emp: Employee) -> str:
     """Фамилия Имя Отчество — ключ для сопоставления с листом «Зарплаты»."""
-    parts = [
-        p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()
-    ]
+    parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
     return " ".join(parts) if parts else (emp.name or "").strip()
 
 
@@ -200,15 +198,13 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
     # role_id (iiko UUID) → EmployeeRole DB
     role_by_iiko_id: dict[str, EmployeeRole] = {str(r.id): r for r in roles_db}
 
-    # ── 3. Агрегация явок ──
+    # ── 3. Агрегация явок ПО ПОДРАЗДЕЛЕНИЯМ ──
     # emp_iiko_id → {dept_id: {"dept_name": str, "shifts": int, "hours": float}}
     emp_dept_stats: dict[str, dict[str, dict]] = defaultdict(
         lambda: defaultdict(lambda: {"dept_name": "", "shifts": 0, "hours": 0.0})
     )
-    # emp_iiko_id → суммарный заработок (каждая смена × ставка из истории на дату смены)
-    emp_shift_earnings: dict[str, float] = defaultdict(float)
-    # emp_iiko_id → суммарные часы (для отображения в Ед.)
-    emp_total_hours: dict[str, float] = defaultdict(float)
+    # (emp_iiko_id, dept_id) → заработок за смены в этом подразделении
+    emp_dept_earnings: dict[tuple[str, str], float] = defaultdict(float)
 
     # iiko_id → full_name (для доступа к history_index)
     _iiko_to_fn: dict[str, str] = {
@@ -225,7 +221,6 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         emp_dept_stats[emp_id][dept_id]["shifts"] += 1
         hours = _hours_from_attendance(rec)
         emp_dept_stats[emp_id][dept_id]["hours"] += hours
-        emp_total_hours[emp_id] += hours
 
         # Начисление за смену: ставка из «Истории ставок» на дату смены
         fn = _iiko_to_fn.get(emp_id)
@@ -237,17 +232,18 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
                 if active:
                     shift_rate = float(active["rate"])
                     if active["sal_type"] == "посменная":
-                        emp_shift_earnings[emp_id] += shift_rate
+                        emp_dept_earnings[(emp_id, dept_id)] += shift_rate
                     elif active["sal_type"] == "почасовая":
-                        emp_shift_earnings[emp_id] += shift_rate * hours
+                        emp_dept_earnings[(emp_id, dept_id)] += shift_rate * hours
 
     logger.info("[payroll] Уникальных сотрудников с явками: %d", len(emp_dept_stats))
 
-    # ── 3b. Расчёт мотивации «от выручки» ──
+    # ── 3b. Расчёт мотивации «от выручки» (по подразделениям) ──
     emp_iiko_to_fullname: dict[str, str] = {
         iiko_id: _full_name(emp) for iiko_id, emp in emp_by_iiko_id.items()
     }
-    motivation_map: dict[str, float] = await get_revenue_motivation_map(
+    # motivation_by_dept: {full_name: {dept_name: руб.}}
+    motivation_by_dept: dict[str, dict[str, float]] = await get_revenue_motivation_map(
         attendance_records=attendance_records,
         emp_iiko_to_fullname=emp_iiko_to_fullname,
         date_from=month_start,
@@ -256,14 +252,12 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
     )
     logger.info(
         "[payroll] Мотивация «от выручки»: %d сотрудников с ненулёвой суммой",
-        len(motivation_map),
+        len(motivation_by_dept),
     )
 
-    # ── 4. Расчёт начислений ──
-    # dept_id → {"dept_name": str, "employees": [emp_row]}
+    # ── 4. Построение секций по подразделениям ──
+    # Сотрудник появляется в КАЖДОМ подразделении, где были его смены.
     dept_sections_map: dict[str, dict] = {}
-    # Имена сотрудников с ежемесячной ставкой, у которых есть явки (они НЕ попадают в monthly_section)
-    monthly_with_attendance: set[str] = set()
 
     for emp_iiko_id, dept_map in emp_dept_stats.items():
         emp = emp_by_iiko_id.get(emp_iiko_id)
@@ -272,78 +266,44 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
             continue
 
         fn = _full_name(emp)
-        # Сначала ищем в истории ставок, затем фолбэк на плоские настройки
         history = history_index.get(fn, [])
         active = get_rate_for_date(history, today)
-        if active:
-            sal_type = active["sal_type"]
-            rate = float(active["rate"])
-        else:
-            sal_type = ""
-            rate = 0.0
+        sal_type = active["sal_type"] if active else ""
 
-        # Должность из iiko: ищем роль по role_id (из Employee или из явки)
-        role_name = _get_role_name(emp, emp_dept_stats[emp_iiko_id], role_by_iiko_id)
+        if sal_type == "ежемесячная":
+            continue  # → секция «Администрация»
 
-        # Суммарные данные по всем подразделениям
-        total_shifts = sum(d["shifts"] for d in dept_map.values())
-        total_hours = sum(d["hours"] for d in dept_map.values())
+        role_name = _get_role_name(emp, dept_map, role_by_iiko_id)
 
-        # Начисление (ставка берётся из «Истории ставок» на дату каждой смены)
-        if sal_type == "почасовая":
-            units = round(emp_total_hours.get(emp_iiko_id, total_hours), 2)
-            total = round(emp_shift_earnings.get(emp_iiko_id, 0.0), 2)
-            # Эффективная ставка для отображения = total / hours (средневзвешенная)
-            rate = round(total / units) if units else 0
-        elif sal_type == "посменная":
-            units = total_shifts
-            total = round(emp_shift_earnings.get(emp_iiko_id, 0.0), 2)
-        elif sal_type == "ежемесячная":
-            # Ежемесячные с явками → в monthly_section (не в dept-секции)
-            monthly_with_attendance.add(fn)
-            # Сохраняем историю для расчёта в monthly_section
-            continue
-        else:
-            # Тип не задан — показываем но не считаем
-            units = total_shifts
-            total = 0.0
+        for dept_id, dept_info in dept_map.items():
+            dept_name = dept_info["dept_name"]
+            earnings = round(emp_dept_earnings.get((emp_iiko_id, dept_id), 0.0), 2)
+            bonus = round((motivation_by_dept.get(fn) or {}).get(dept_name, 0.0), 2)
 
-        # Основное подразделение = то, где больше всего смен
-        primary_dept_id = max(dept_map, key=lambda d: dept_map[d]["shifts"])
-        primary_dept_name = dept_map[primary_dept_id]["dept_name"]
+            if dept_id not in dept_sections_map:
+                dept_sections_map[dept_id] = {
+                    "dept_name": dept_name,
+                    "employees": [],
+                }
 
-        if primary_dept_id not in dept_sections_map:
-            dept_sections_map[primary_dept_id] = {
-                "dept_name": primary_dept_name,
-                "employees": [],
-            }
+            dept_sections_map[dept_id]["employees"].append(
+                {
+                    "name": _display_name(emp),
+                    "role": role_name,
+                    "rate_total": earnings,
+                    "bonus": bonus,
+                }
+            )
 
-        dept_sections_map[primary_dept_id]["employees"].append(
-            {
-                "name": _display_name(emp),
-                "role": role_name,
-                "sal_type": sal_type or "—",
-                "rate": rate,
-                "units": units,
-                "total": total,
-                "motivation": motivation_map.get(fn, 0.0),
-            }
-        )
-
-    # ── 5. Секция ежемесячных (без явок + с явками) ──
+    # ── 5. Секция «Администрация» (ежемесячные сотрудники) ──
     monthly_section: list[dict] = []
-
-    # Собираем всех ежемесячных: из истории + фолбэк из flat-настроек
     monthly_names: set[str] = set()
-    # Из истории
     for fn, hist in history_index.items():
         active = get_rate_for_date(hist, today)
         if active and active["sal_type"] == "ежемесячная":
             monthly_names.add(fn)
-    # Источник — только История ставок
 
     for fn in monthly_names:
-        # Ставка: из истории или flat-настроек
         history = history_index.get(fn, [])
         active = get_rate_for_date(history, today)
         if active:
@@ -353,7 +313,6 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
 
         emp = emp_by_full_name.get(fn)
         if emp is None:
-            # Не нашли в БД — пропускаем
             logger.debug("[payroll] Ежемесячный сотрудник «%s» не найден в БД", fn)
             continue
 
@@ -361,22 +320,19 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         if emp.role_id and str(emp.role_id) in role_by_iiko_id:
             role_name = role_by_iiko_id[str(emp.role_id)].name or ""
 
-        # Пропорциональный расчёт с учётом смены ставки внутри месяца
         if history:
             total = get_prorated_monthly(history, month_start, today, days_in_m)
         else:
             total = round(rate / days_in_m * days_passed, 2) if days_in_m else 0.0
-        units = days_passed  # дней прошло (включительно)
+
+        bonus = round(sum((motivation_by_dept.get(fn) or {}).values()), 2)
 
         monthly_section.append(
             {
                 "name": _display_name(emp),
                 "role": role_name,
-                "sal_type": "ежемесячная",
-                "rate": rate,
-                "units": units,
-                "total": total,
-                "motivation": motivation_map.get(fn, 0.0),
+                "rate_total": round(total, 2),
+                "bonus": bonus,
             }
         )
 

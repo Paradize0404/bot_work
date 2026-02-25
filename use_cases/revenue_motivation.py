@@ -132,7 +132,7 @@ async def calculate_revenue_motivation(
     date_from: date,
     date_to: date,
     history_index: Optional[dict[str, list[dict]]] = None,
-) -> dict[str, float]:
+) -> dict[str, dict[str, float]]:
     """
     Рассчитать мотивацию «от выручки» для всех сотрудников за период.
 
@@ -143,7 +143,7 @@ async def calculate_revenue_motivation(
       history_index      — кэш истории ставок (если None — загружается из БД)
 
     Возвращает:
-      { "Фамилия И.О.": <motivation_rubles>, ... }
+      { "Фамилия И.О.": {"Подразделение": <motivation_rubles>, ...}, ... }
       Только сотрудники с mot_base="от выручки" и mot_pct>0.
     """
     t_from_str = date_from.strftime("%Y-%m-%d")
@@ -190,7 +190,7 @@ async def calculate_revenue_motivation(
         emp_shifts[emp_id].add((shift_date_str, dept_name))
 
     # ── 4. Для каждого сотрудника рассчитываем мотивацию ──
-    result: dict[str, float] = {}
+    result: dict[str, dict[str, float]] = {}
 
     for emp_iiko_id, full_name in emp_full_names.items():
         if not full_name:
@@ -238,8 +238,7 @@ async def calculate_revenue_motivation(
                 # Попытка нечёткого поиска: ищем dept_name как подстроку ключей
                 for (d, dep), v in revenue_index.items():
                     if d == shift_date and (
-                        dept_name.lower() in dep.lower()
-                        or dep.lower() in dept_name.lower()
+                        dept_name.lower() in dep.lower() or dep.lower() in dept_name.lower()
                     ):
                         rev = v
                         break
@@ -249,26 +248,33 @@ async def calculate_revenue_motivation(
 
         if total_revenue <= 0:
             logger.debug(
-                "[revenue_motivation] %s: выручка=0 за период "
-                "(явок %d, подразд.: %s)",
+                "[revenue_motivation] %s: выручка=0 за период " "(явок %d, подразд.: %s)",
                 full_name,
                 len(shifts),
                 {d for _, d in shifts},
             )
             continue
 
-        motivation = round(total_revenue * mot_pct_val / 100.0, 2)
-        result[full_name] = motivation
+        # Разбиваем мотивацию по подразделениям
+        dept_revenues: dict[str, float] = defaultdict(float)
+        for _, dept_name_mp, rev in matched_pairs:
+            dept_revenues[dept_name_mp] += rev
+
+        result[full_name] = {
+            dept: round(rev * mot_pct_val / 100.0, 2) for dept, rev in dept_revenues.items()
+        }
+        motivation_total = sum(result[full_name].values())
 
         logger.info(
             "[revenue_motivation] %s: выручка=%.2f × %.2f%% = %.2f руб. "
-            "(%d смен, %d дней совпало)",
+            "(%d смен, %d дней совпало, %d подразд.)",
             full_name,
             total_revenue,
             mot_pct_val,
-            motivation,
+            motivation_total,
             len(shifts),
             len(matched_pairs),
+            len(dept_revenues),
         )
 
     logger.info(
@@ -289,13 +295,13 @@ async def get_revenue_motivation_map(
     date_from: date,
     date_to: date,
     history_index: Optional[dict[str, list[dict]]] = None,
-) -> dict[str, float]:
+) -> dict[str, dict[str, float]]:
     """
     Тонкая обёртка над calculate_revenue_motivation.
 
     Безопасно: при любой ошибке API возвращает {} (не ломает ФОТ).
 
-    Возвращает: full_name → motivation_rubles
+    Возвращает: full_name → {dept_name → motivation_rubles}
     """
     try:
         return await calculate_revenue_motivation(
