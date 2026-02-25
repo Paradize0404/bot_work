@@ -1,15 +1,19 @@
 """
 Use-case: расчёт ФОТ (фонд оплаты труда) за текущий месяц → Google Sheets.
 
+Единственный источник ставок — лист «История ставок» (salary_history).
+Для каждой смены ставка берётся из истории НА ДАТУ ТОЙ СМЕНЫ, поэтому
+если ставка менялась в середине месяца — начисления корректны.
+
 Логика:
   1. Период = 1-е число текущего месяца … сегодня (по Калининграду)
   2. Загружаем явки из iiko (GET /resto/api/employees/attendance)
-  3. Читаем настройки зарплат из листа «Зарплаты» Google Sheets
+  3. Из «Истории ставок» (БД) берём ставки / тип / мотивацию
   4. Из БД берём сотрудников + должности
   5. Рассчитываем начисления по типу:
-       - почасовая:    ставка × кол-во_часов_из_явок
-       - посменная:    ставка × кол-во_явок (смен, не часов)
-       - ежемесячная:  ставка ÷ дней_в_месяце × дней_прошло  (без явок)
+       - почасовая:    Σ(ставка_на_дату_смени × часов_в_смене)
+       - посменная:    Σ(ставка_на_дату_смени)  за каждую смену
+       - ежемесячная:  пропорционально дням с учётом смены ставки
   6. Группируем по подразделениям (из данных явок)
   7. Ниже — секция ежемесячных сотрудников (пропорциональная оплата)
   8. Создаём/обновляем вкладку «ФОТ {месяц} {год}»
@@ -193,10 +197,15 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
     emp_dept_stats: dict[str, dict[str, dict]] = defaultdict(
         lambda: defaultdict(lambda: {"dept_name": "", "shifts": 0, "hours": 0.0})
     )
-    # emp_iiko_id → суммарный заработок по почасовой (hours × role.payment_per_hour)
-    emp_hourly_earnings: dict[str, float] = defaultdict(float)
+    # emp_iiko_id → суммарный заработок (каждая смена × ставка из истории на дату смены)
+    emp_shift_earnings: dict[str, float] = defaultdict(float)
     # emp_iiko_id → суммарные часы (для отображения в Ед.)
-    emp_hourly_hours: dict[str, float] = defaultdict(float)
+    emp_total_hours: dict[str, float] = defaultdict(float)
+
+    # iiko_id → full_name (для доступа к history_index)
+    _iiko_to_fn: dict[str, str] = {
+        iiko_id: _full_name(emp) for iiko_id, emp in emp_by_iiko_id.items()
+    }
 
     for rec in attendance_records:
         emp_id = (rec.get("employeeId") or "").strip()
@@ -208,12 +217,21 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         emp_dept_stats[emp_id][dept_id]["shifts"] += 1
         hours = _hours_from_attendance(rec)
         emp_dept_stats[emp_id][dept_id]["hours"] += hours
-        # Для почасовой: считаем заработок с учётом роли конкретной смены
-        role_id = (rec.get("roleId") or "").strip()
-        role = role_by_iiko_id.get(role_id)
-        rate_per_hour = float(role.payment_per_hour or 0) if role else 0.0
-        emp_hourly_earnings[emp_id] += hours * rate_per_hour
-        emp_hourly_hours[emp_id] += hours
+        emp_total_hours[emp_id] += hours
+
+        # Начисление за смену: ставка из «Истории ставок» на дату смены
+        fn = _iiko_to_fn.get(emp_id)
+        if fn:
+            history = history_index.get(fn, [])
+            shift_dt = _parse_dt(rec.get("dateFrom"))
+            if shift_dt and history:
+                active = get_rate_for_date(history, shift_dt.date())
+                if active:
+                    shift_rate = float(active["rate"])
+                    if active["sal_type"] == "посменная":
+                        emp_shift_earnings[emp_id] += shift_rate
+                    elif active["sal_type"] == "почасовая":
+                        emp_shift_earnings[emp_id] += shift_rate * hours
 
     logger.info("[payroll] Уникальных сотрудников с явками: %d", len(emp_dept_stats))
 
@@ -263,16 +281,15 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         total_shifts = sum(d["shifts"] for d in dept_map.values())
         total_hours = sum(d["hours"] for d in dept_map.values())
 
-        # Начисление
+        # Начисление (ставка берётся из «Истории ставок» на дату каждой смены)
         if sal_type == "почасовая":
-            # Ставка и заработок берутся из iiko (payment_per_hour роли каждой смены)
-            units = round(emp_hourly_hours.get(emp_iiko_id, total_hours), 2)
-            total = round(emp_hourly_earnings.get(emp_iiko_id, 0.0), 2)
-            # Эффективная ставка для отображения = total / hours (средневзвешенная), целая
+            units = round(emp_total_hours.get(emp_iiko_id, total_hours), 2)
+            total = round(emp_shift_earnings.get(emp_iiko_id, 0.0), 2)
+            # Эффективная ставка для отображения = total / hours (средневзвешенная)
             rate = round(total / units) if units else 0
         elif sal_type == "посменная":
             units = total_shifts
-            total = round(rate * units, 2)
+            total = round(emp_shift_earnings.get(emp_iiko_id, 0.0), 2)
         elif sal_type == "ежемесячная":
             # Ежемесячные с явками → в monthly_section (не в dept-секции)
             monthly_with_attendance.add(fn)

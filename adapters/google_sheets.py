@@ -3392,36 +3392,18 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
         ws = _get_salary_worksheet()
         sheet_id = ws.id
 
-        # ── 1. Читаем существующие данные (сохраняем B/C/D/E по имени) ──
-        existing = ws.get_all_values()
-        # {name: (salary_type, rate, motivation_pct, motivation_base)}
-        saved: dict[str, tuple[str, str, str, str]] = {}
-        if len(existing) >= 2:
-            for row in existing[1:]:  # пропускаем заголовок
-                if not row or not row[0].strip():
-                    continue
-                name = row[0].strip()
-                sal_type = row[1].strip() if len(row) > 1 else ""
-                rate = row[2].strip() if len(row) > 2 else ""
-                mot_pct = row[3].strip() if len(row) > 3 else ""
-                mot_base = row[4].strip() if len(row) > 4 else ""
-                saved[name] = (sal_type, rate, mot_pct, mot_base)
-
-        logger.info("[%s] Из таблицы сохранено %d записей B/C/D/E", LABEL, len(saved))
-
-        # ── 2. Строим новые строки (A-F, col F = iiko_id скрытый) ──
+        # ── 1. Строим новые строки (A-F, col F = iiko_id скрытый) ──
+        # Данные B/C/D/E берутся из «Истории ставок» (актуальная ставка на сегодня)
         data_rows: list[list[str]] = []
         for emp in employees:
             name = (emp.get("name") or "").strip()
             if not name:
                 continue
             iiko_id = str(emp.get("id") or "")
-            sal_type, rate, mot_pct, mot_base = saved.get(name, ("", "", "", ""))
-            # Fallback из «Истории ставок» для пустых ячеек
-            if not sal_type:
-                sal_type = emp.get("hint_sal_type", "")
-            if not rate:
-                rate = emp.get("hint_rate", "")
+            sal_type = emp.get("sal_type", "")
+            rate = emp.get("rate", "")
+            mot_pct = emp.get("mot_pct", "")
+            mot_base = emp.get("mot_base", "")
             data_rows.append([name, sal_type, rate, mot_pct, mot_base, iiko_id])
 
         all_rows = [_SALARY_HEADERS] + data_rows

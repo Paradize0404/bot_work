@@ -133,8 +133,8 @@ async def export_salary_sheet(triggered_by: str | None = None) -> int:
         "[salary] Сортировка завершена, %d записей для выгрузки", len(employees_data)
     )
 
-    # ── 4b. Подгружаем актуальные ставки из «Истории ставок» как fallback ──
-    # (используются только если ячейка в листе «Зарплаты» пустая)
+    # ── 4b. Подгружаем актуальные ставки из «Истории ставок» ──
+    # «Зарплаты» = зеркало текущих ставок из «Истории ставок»
     try:
         from use_cases.salary_history import (
             load_salary_history_index,
@@ -147,15 +147,17 @@ async def export_salary_sheet(triggered_by: str | None = None) -> int:
             history = history_index.get(emp["name"], [])
             active = get_rate_for_date(history, today)
             if active:
-                emp["hint_sal_type"] = active["sal_type"]
-                emp["hint_rate"] = (
+                emp["sal_type"] = active["sal_type"]
+                emp["rate"] = (
                     str(int(active["rate"]))
                     if active["rate"] == int(active["rate"])
                     else str(active["rate"])
                 )
-        logger.info("[salary] История ставок загружена для fallback")
+                emp["mot_pct"] = str(active["mot_pct"]) if active.get("mot_pct") else ""
+                emp["mot_base"] = active.get("mot_base") or ""
+        logger.info("[salary] Актуальные ставки загружены из «Истории ставок»")
     except Exception:
-        logger.exception("[salary] Ошибка загрузки истории ставок для fallback")
+        logger.exception("[salary] Ошибка загрузки «Истории ставок»")
 
     # ── 5. Выгружаем в Google Sheets ──
     count = await sync_salary_sheet(employees_data)
