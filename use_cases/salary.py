@@ -133,14 +133,16 @@ async def export_salary_sheet(triggered_by: str | None = None) -> int:
         "[salary] Сортировка завершена, %d записей для выгрузки", len(employees_data)
     )
 
-    # ── 4b. Подгружаем актуальные ставки из «Истории ставок» ──
+    # ── 4b. Синхронизируем «Историю ставок» GSheet → БД, затем читаем актуальные ставки ──
     # «Зарплаты» = зеркало текущих ставок из «Истории ставок»
     try:
         from use_cases.salary_history import (
+            sync_salary_history,
             load_salary_history_index,
             get_rate_for_date,
         )
 
+        await sync_salary_history(triggered_by=triggered_by or "salary")
         history_index = await load_salary_history_index()
         today = date.today()
         for emp in employees_data:

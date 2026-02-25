@@ -173,6 +173,14 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         attendance_records = []
 
     # История ставок + данные из БД — параллельно
+    # Сначала синхронизируем GSheet → БД (чтобы подхватить ручные изменения)
+    try:
+        from use_cases.salary_history import sync_salary_history
+
+        await sync_salary_history(triggered_by=triggered_by or "fot")
+    except Exception:
+        logger.exception("[payroll] Ошибка синхронизации «Истории ставок» GSheet → БД")
+
     history_index, (employees_db, roles_db) = await asyncio.gather(
         load_salary_history_index(),
         _load_db_data(),
