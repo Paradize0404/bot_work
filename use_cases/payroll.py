@@ -258,42 +258,88 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
     )
 
     # ── 4. Построение секций по подразделениям ──
-    # Сотрудник появляется в КАЖДОМ подразделении, где были его смены.
+    # Источник сотрудников — «История ставок».
+    # Каждый сотрудник, у которого есть активная запись:
+    #   • ежемесячная → секция «Администрация»
+    #   • почасовая БЕЗ смен в текущем месяце → пропускаем
+    #   • остальные → по подразделениям (если смены есть, иначе в «unassigned»)
     dept_sections_map: dict[str, dict] = {}
 
-    for emp_iiko_id, dept_map in emp_dept_stats.items():
-        emp = emp_by_iiko_id.get(emp_iiko_id)
-        if emp is None:
-            logger.debug("[payroll] Сотрудник %s не найден в БД", emp_iiko_id)
-            continue
+    # full_name → iiko_id (обратный индекс)
+    _fn_to_iiko: dict[str, str] = {
+        _full_name(emp): iiko_id
+        for iiko_id, emp in emp_by_iiko_id.items()
+        if _full_name(emp)
+    }
 
-        fn = _full_name(emp)
-        history = history_index.get(fn, [])
+    # Множество имён, которые уже обработаны в dept-секции (не дублировать в monthly)
+    processed_in_dept: set[str] = set()
+
+    for fn, history in history_index.items():
         active = get_rate_for_date(history, today)
-        sal_type = active["sal_type"] if active else ""
+        if not active:
+            continue
+        sal_type = active["sal_type"]
 
         if sal_type == "ежемесячная":
             continue  # → секция «Администрация»
 
+        emp_iiko_id = _fn_to_iiko.get(fn)
+        emp = emp_by_full_name.get(fn)
+        if emp is None:
+            continue
+
+        dept_map = emp_dept_stats.get(emp_iiko_id, {}) if emp_iiko_id else {}
+        has_shifts = bool(dept_map)
+
+        # Почасовая без смен — не выводим
+        if sal_type == "почасовая" and not has_shifts:
+            continue
+
         role_name = _get_role_name(emp, dept_map, role_by_iiko_id)
+        processed_in_dept.add(fn)
 
-        for dept_id, dept_info in dept_map.items():
-            dept_name = dept_info["dept_name"]
-            earnings = round(emp_dept_earnings.get((emp_iiko_id, dept_id), 0.0), 2)
-            bonus = round((motivation_by_dept.get(fn) or {}).get(dept_name, 0.0), 2)
+        if has_shifts:
+            # Разбиваем по подразделениям
+            for dept_id, dept_info in dept_map.items():
+                dept_name = dept_info["dept_name"]
+                earnings = round(
+                    emp_dept_earnings.get((emp_iiko_id, dept_id), 0.0),
+                    2,
+                )
+                bonus = round(
+                    (motivation_by_dept.get(fn) or {}).get(dept_name, 0.0),
+                    2,
+                )
 
-            if dept_id not in dept_sections_map:
-                dept_sections_map[dept_id] = {
-                    "dept_name": dept_name,
+                if dept_id not in dept_sections_map:
+                    dept_sections_map[dept_id] = {
+                        "dept_name": dept_name,
+                        "employees": [],
+                    }
+
+                dept_sections_map[dept_id]["employees"].append(
+                    {
+                        "name": _display_name(emp),
+                        "role": role_name,
+                        "rate_total": earnings,
+                        "bonus": bonus,
+                    }
+                )
+        else:
+            # Посменная без смен → показываем с 0, берём первое подразделение
+            _unassigned = "_unassigned"
+            if _unassigned not in dept_sections_map:
+                dept_sections_map[_unassigned] = {
+                    "dept_name": "Без подразделения",
                     "employees": [],
                 }
-
-            dept_sections_map[dept_id]["employees"].append(
+            dept_sections_map[_unassigned]["employees"].append(
                 {
                     "name": _display_name(emp),
                     "role": role_name,
-                    "rate_total": earnings,
-                    "bonus": bonus,
+                    "rate_total": 0.0,
+                    "bonus": 0.0,
                 }
             )
 
