@@ -25,7 +25,7 @@ from datetime import datetime
 
 from sqlalchemy import select
 
-from adapters.google_sheets import read_salary_settings, sync_fot_sheet
+from adapters.google_sheets import sync_fot_sheet
 from adapters.iiko_api import fetch_attendance
 from use_cases.revenue_motivation import get_revenue_motivation_map
 from use_cases.salary_history import (
@@ -168,9 +168,9 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         logger.exception("[payroll] Ошибка загрузки явок из iiko")
         attendance_records = []
 
-    # Настройки зарплат из GSheets + история ставок + данные из БД — параллельно
-    (salary_settings, history_index), (employees_db, roles_db) = await asyncio.gather(
-        asyncio.gather(read_salary_settings(), load_salary_history_index()),
+    # История ставок + данные из БД — параллельно
+    history_index, (employees_db, roles_db) = await asyncio.gather(
+        load_salary_history_index(),
         _load_db_data(),
     )
 
@@ -253,9 +253,8 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
             sal_type = active["sal_type"]
             rate = float(active["rate"])
         else:
-            settings = salary_settings.get(fn, {})
-            sal_type = settings.get("type", "")
-            rate = settings.get("rate", 0.0)
+            sal_type = ""
+            rate = 0.0
 
         # Должность из iiko: ищем роль по role_id (из Employee или из явки)
         role_name = _get_role_name(emp, emp_dept_stats[emp_iiko_id], role_by_iiko_id)
@@ -316,10 +315,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         active = get_rate_for_date(hist, today)
         if active and active["sal_type"] == "ежемесячная":
             monthly_names.add(fn)
-    # Фолбэк: из flat-настроек (если нет в истории)
-    for fn, settings in salary_settings.items():
-        if settings.get("type") == "ежемесячная" and fn not in history_index:
-            monthly_names.add(fn)
+    # Источник — только История ставок
 
     for fn in monthly_names:
         # Ставка: из истории или flat-настроек
@@ -328,8 +324,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         if active:
             rate = float(active["rate"])
         else:
-            settings = salary_settings.get(fn, {})
-            rate = settings.get("rate", 0.0)
+            rate = 0.0
 
         emp = emp_by_full_name.get(fn)
         if emp is None:
