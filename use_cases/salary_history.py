@@ -490,7 +490,6 @@ async def bootstrap_salary_history_sheet() -> int:
     - Читаем уже существующие строки в «История ставок» — их трогаем
     - Для каждого сотрудника из «Зарплаты», которого ещё нет в истории:
         * тип и ставка берутся из «Зарплаты»
-        * если тип = «почасовая» — ставка из iiko (EmployeeRole.payment_per_hour)
         * дата начала = 01.01.2020 (базовая точка отсчёта)
     - Дописываем новые строки в конец листа
 
@@ -499,7 +498,7 @@ async def bootstrap_salary_history_sheet() -> int:
     import asyncio as _asyncio
 
     # ── 1. Параллельно читаем текущую историю + настройки зарплат + данные БД ──
-    existing_rows, salary_settings, (employees_db, roles_db) = await _asyncio.gather(
+    existing_rows, salary_settings, (employees_db, _roles_db) = await _asyncio.gather(
         read_salary_history_sheet(),
         read_salary_settings(),
         _load_db_for_bootstrap(),
@@ -507,9 +506,6 @@ async def bootstrap_salary_history_sheet() -> int:
 
     # Имена уже присутствующих в листе (не дублируем)
     existing_names: set[str] = {r["name"] for r in existing_rows}
-
-    # full_name → EmployeeRole (главная роль по employee.role_id)
-    role_by_iiko_id: dict[str, EmployeeRole] = {str(r.id): r for r in roles_db}
 
     def _full_name_from_emp(emp: Employee) -> str:
         parts = [p for p in (emp.last_name, emp.first_name, emp.middle_name) if p and p.strip()]
@@ -546,13 +542,6 @@ async def bootstrap_salary_history_sheet() -> int:
         rate = settings.get("rate", 0.0)
 
         emp = emp_by_full_name.get(name)
-
-        if sal_type == "почасовая":
-            # Берём ставку из iiko (EmployeeRole.payment_per_hour)
-            if emp and emp.role_id:
-                role = role_by_iiko_id.get(str(emp.role_id))
-                if role and role.payment_per_hour:
-                    rate = float(role.payment_per_hour)
 
         new_rows.append(
             {
