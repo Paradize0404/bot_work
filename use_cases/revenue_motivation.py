@@ -40,17 +40,46 @@ def _normalize_date(raw: str) -> str:
     Привести строку даты к формату YYYY-MM-DD.
 
     Поддерживает:
-      - DD.MM.YYYY [HH:MM:SS]  — формат OLAP v1
-      - YYYY-MM-DD [THH:MM:SS] — формат ISO / attendance API
+      - "Sun Feb 01 09:07:46 EET 2026" — Java toString (iiko OLAP v1)
+      - "DD.MM.YYYY [HH:MM:SS]"       — числовой формат OLAP v1
+      - "YYYY-MM-DD[THH:MM:SS]"       — ISO / attendance API
     """
     s = raw.strip()
-    if len(s) >= 10:
-        if s[2] == "." and s[5] == ".":
-            # DD.MM.YYYY
-            return f"{s[6:10]}-{s[3:5]}-{s[:2]}"
-        else:
-            # YYYY-MM-DD или YYYY-MM-DDTHH:MM:SS
-            return s[:10]
+    if not s:
+        return s
+
+    # Java toString: "Mon Feb 01 09:07:46 EET 2026"
+    # Шаблон: Day Mon DD HH:MM:SS TZ YYYY
+    _JAVA_MONTHS = {
+        "Jan": "01",
+        "Feb": "02",
+        "Mar": "03",
+        "Apr": "04",
+        "May": "05",
+        "Jun": "06",
+        "Jul": "07",
+        "Aug": "08",
+        "Sep": "09",
+        "Oct": "10",
+        "Nov": "11",
+        "Dec": "12",
+    }
+    parts = s.split()
+    if len(parts) >= 5 and parts[1] in _JAVA_MONTHS:
+        # parts = ["Sun", "Feb", "01", "09:07:46", "EET", "2026"]
+        month = _JAVA_MONTHS[parts[1]]
+        day = parts[2].zfill(2)
+        year = parts[-1]  # год всегда последний
+        return f"{year}-{month}-{day}"
+
+    # DD.MM.YYYY [HH:MM:SS]
+    if len(s) >= 10 and s[2] == "." and s[5] == ".":
+        return f"{s[6:10]}-{s[3:5]}-{s[:2]}"
+
+    # YYYY-MM-DD или YYYY-MM-DDTHH:MM:SS+02:00
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+
     return s
 
 
