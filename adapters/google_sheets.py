@@ -3784,6 +3784,7 @@ async def sync_fot_sheet(
     tab_name: str,
     period_label: str,
     dept_revenue: dict[str, float] | None = None,
+    pastry_revenue: float = 0.0,
 ) -> int:
     """
     Записать лист ФОТ в Google Sheets.
@@ -3799,6 +3800,7 @@ async def sync_fot_sheet(
 
     emp_dict ключи:  name, role, rate_total, bonus.
     dept_revenue: {dept_name → total_revenue} (OLAP) — отображается в заголовке.
+    pastry_revenue: общая сумма кондитерских расходных накладных (для шапки).
     """
     t0 = time.monotonic()
 
@@ -3830,8 +3832,8 @@ async def sync_fot_sheet(
                         and (len(row) < 4 or not str(row[3]).strip())
                     ):
                         if cell_a != period_label:
-                            # Отсечь суффикс «  —  Выручка: ...»
-                            sec = cell_a.split("  —  Выручка:")[0].strip()
+                            # Отсечь суффикс «  —  Выручка: ...» или «  —  Кондитерка: ...»
+                            sec = cell_a.split("  —  ")[0].strip()
                             cur_section = sec
                         continue
                     if not cell_a or not format_valid:
@@ -3897,17 +3899,26 @@ async def sync_fot_sheet(
                         rev = rv
                         break
 
+            _pastry = pastry_revenue or 0.0
+
             # Сумма начислений секции (rate_total + bonus) для % ФОТ
             sect_payroll = sum(
                 (e.get("rate_total", 0) or 0) + (e.get("bonus", 0) or 0)
                 for e in employees
             )
 
-            if rev:
-                pct = (sect_payroll / rev * 100) if rev else 0
-                header_text = (
-                    f"{sect_name}  —  " f"Выручка: {rev:,.0f} ₽  |  " f"ФОТ: {pct:.1f}%"
-                ).replace(",", "\u00a0")
+            if rev or _pastry:
+                total_rev = rev + _pastry
+                pct = (sect_payroll / total_rev * 100) if total_rev else 0
+                parts = [sect_name, "  —  "]
+                if rev:
+                    parts.append(f"Выручка: {rev:,.0f} ₽")
+                if _pastry:
+                    if rev:
+                        parts.append("  |  ")
+                    parts.append(f"Кондитерка: {_pastry:,.0f} ₽")
+                parts.append(f"  |  ФОТ: {pct:.1f}%")
+                header_text = "".join(parts).replace(",", "\u00a0")
             else:
                 header_text = sect_name
 

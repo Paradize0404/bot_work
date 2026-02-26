@@ -424,7 +424,7 @@ async def calculate_pastry_invoice_motivation(
     date_from: date,
     date_to: date,
     history_index: dict[str, list[dict]] | None = None,
-) -> dict[str, dict[str, float]]:
+) -> tuple[dict[str, dict[str, float]], float]:
     """
     Рассчитать мотивацию «от накладных кондитерки» за период.
 
@@ -434,10 +434,14 @@ async def calculate_pastry_invoice_motivation(
          product.parent_id → product_group.id → входит ли в кондитерские группы.
       3. Суммируем стоимость всех кондитерских позиций → total_pastry_sum.
       4. Для сотрудников с mot_base="от накладных кондитерки":
-         мотивация = total_pastry_sum × mot_pct / 100.
+         - считаем уникальные дни работы сотрудника;
+         - пропорция = дни_работы / дни_в_периоде;
+         - бонус = total_pastry_sum × пропорция × mot_pct / 100.
          Бонус назначается на первое подразделение сотрудника из явок.
 
-    Возвращает: {full_name: {dept_name: motivation_rubles}}
+    Возвращает: (result_map, total_pastry_sum)
+      result_map: {full_name: {dept_name: motivation_rubles}}
+      total_pastry_sum: общая сумма кондитерских позиций (для шапки ФОТ)
     """
     import asyncio
 
@@ -445,6 +449,9 @@ async def calculate_pastry_invoice_motivation(
 
     t_from_str = date_from.strftime("%Y-%m-%d")
     t_to_str = date_to.strftime("%Y-%m-%d")
+
+    # Количество дней в периоде
+    period_days = (date_to - date_from).days + 1
 
     # ── 1. Параллельная загрузка данных ──
     if history_index is None:
@@ -477,7 +484,7 @@ async def calculate_pastry_invoice_motivation(
 
     if not pastry_groups:
         logger.warning("[pastry_motivation] Нет кондитерских групп в БД")
-        return {}
+        return {}, 0.0
 
     # ── 2. Суммируем ВСЕ кондитерские позиции из расходных накладных ──
     total_pastry_sum = 0.0
@@ -509,17 +516,23 @@ async def calculate_pastry_invoice_motivation(
     )
 
     if total_pastry_sum <= 0:
-        return {}
+        return {}, 0.0
 
-    # ── 3. Индексируем явки по iiko_id → dept_names (сохраняем порядок) ──
+    # ── 3. Индексируем явки: iiko_id → уникальные даты + подразделения ──
+    emp_dates: dict[str, set[str]] = defaultdict(set)
     emp_depts: dict[str, list[str]] = defaultdict(list)
     for rec in attendance_records:
         emp_id = (rec.get("employeeId") or "").strip()
         dept_name = (rec.get("departmentName") or "").strip()
-        if emp_id and dept_name and dept_name not in emp_depts[emp_id]:
+        date_from_raw = (rec.get("dateFrom") or "").strip()
+        if not emp_id:
+            continue
+        if date_from_raw:
+            emp_dates[emp_id].add(date_from_raw[:10])  # "YYYY-MM-DD"
+        if dept_name and dept_name not in emp_depts[emp_id]:
             emp_depts[emp_id].append(dept_name)
 
-    # ── 4. Рассчитываем мотивацию ──
+    # ── 4. Рассчитываем мотивацию с пропорцией по дням ──
     result: dict[str, dict[str, float]] = {}
 
     for emp_iiko_id, full_name in emp_full_names.items():
@@ -548,7 +561,13 @@ async def calculate_pastry_invoice_motivation(
         if mot_pct_val <= 0:
             continue
 
-        bonus = round(total_pastry_sum * mot_pct_val / 100, 2)
+        # Пропорция: дни работы / дни в периоде
+        work_days = len(emp_dates.get(emp_iiko_id, set()))
+        if work_days <= 0:
+            continue
+        proportion = work_days / period_days if period_days > 0 else 0.0
+
+        bonus = round(total_pastry_sum * proportion * mot_pct_val / 100, 2)
 
         # Назначаем бонус на первое подразделение из явок
         my_depts = emp_depts.get(emp_iiko_id, [])
@@ -556,9 +575,11 @@ async def calculate_pastry_invoice_motivation(
 
         result[full_name] = {dept_key: bonus}
         logger.info(
-            "[pastry_motivation] %s: %.0f ₽ × %.1f%% = %.0f ₽ → %s",
+            "[pastry_motivation] %s: %.0f ₽ × %d/%d дн. × %.1f%% = %.0f ₽ → %s",
             full_name,
             total_pastry_sum,
+            work_days,
+            period_days,
             mot_pct_val,
             bonus,
             dept_key,
@@ -570,7 +591,7 @@ async def calculate_pastry_invoice_motivation(
         len(result),
         total_pastry_sum,
     )
-    return result
+    return result, total_pastry_sum
 
 
 async def get_pastry_invoice_motivation_map(
@@ -579,11 +600,11 @@ async def get_pastry_invoice_motivation_map(
     date_from: date,
     date_to: date,
     history_index: dict[str, list[dict]] | None = None,
-) -> dict[str, dict[str, float]]:
+) -> tuple[dict[str, dict[str, float]], float]:
     """
     Безопасная обёртка над calculate_pastry_invoice_motivation.
 
-    Возвращает: full_name → {dept_name → motivation_rubles}
+    Возвращает: (full_name → {dept_name → motivation_rubles}, total_pastry_sum)
     """
     try:
         return await calculate_pastry_invoice_motivation(
@@ -598,4 +619,4 @@ async def get_pastry_invoice_motivation_map(
             "[pastry_motivation] Ошибка при расчёте мотивации "
             "от накладных кондитерки, возвращаю пустой результат"
         )
-        return {}
+        return {}, 0.0

@@ -251,7 +251,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
     # motivation_by_dept: {full_name: {dept_name: руб.}}
     # dept_revenue_totals: {dept_name: total_revenue}
     # pastry_motivation: {full_name: {dept_name: руб.}}
-    motivation_by_dept, dept_revenue_totals, pastry_motivation = await asyncio.gather(
+    motivation_by_dept, dept_revenue_totals, pastry_result = await asyncio.gather(
         get_revenue_motivation_map(
             attendance_records=attendance_records,
             emp_iiko_to_fullname=emp_iiko_to_fullname,
@@ -271,6 +271,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
             history_index=history_index,
         ),
     )
+    pastry_motivation, pastry_revenue_total = pastry_result
     logger.info(
         "[payroll] Мотивация «от выручки»: %d сотрудников с ненулёвой суммой",
         len(motivation_by_dept),
@@ -428,6 +429,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         tab_name=tab_name,
         period_label=period_label,
         dept_revenue=dept_revenue_totals,
+        pastry_revenue=pastry_revenue_total,
     )
 
     elapsed = time.monotonic() - t0
