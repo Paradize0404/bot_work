@@ -22,7 +22,6 @@ OLAP-отчёт:
 import logging
 from collections import defaultdict
 from datetime import date
-from typing import Optional
 
 from adapters.iiko_api import fetch_motivation_revenue_olap
 from use_cases.salary_history import load_salary_history_index, get_rate_for_date
@@ -131,7 +130,7 @@ async def calculate_revenue_motivation(
     emp_full_names: dict[str, str],  # iiko_id → full_name
     date_from: date,
     date_to: date,
-    history_index: Optional[dict[str, list[dict]]] = None,
+    history_index: dict[str, list[dict]] | None = None,
 ) -> dict[str, dict[str, float]]:
     """
     Рассчитать мотивацию «от выручки» для всех сотрудников за период.
@@ -297,7 +296,7 @@ async def get_revenue_motivation_map(
     emp_iiko_to_fullname: dict[str, str],
     date_from: date,
     date_to: date,
-    history_index: Optional[dict[str, list[dict]]] = None,
+    history_index: dict[str, list[dict]] | None = None,
 ) -> dict[str, dict[str, float]]:
     """
     Тонкая обёртка над calculate_revenue_motivation.
@@ -318,5 +317,36 @@ async def get_revenue_motivation_map(
         logger.exception(
             "[revenue_motivation] Ошибка при расчёте мотивации от выручки, "
             "возвращаю пустой результат"
+        )
+        return {}
+
+
+async def get_department_revenue_totals(
+    date_from: date,
+    date_to: date,
+) -> dict[str, float]:
+    """
+    Получить суммарную выручку по подразделениям из OLAP-отчёта.
+
+    Возвращает: {dept_name → total_revenue_rubles}
+    Безопасно: при ошибке возвращает {}.
+    """
+    try:
+        olap_rows = await fetch_motivation_revenue_olap(
+            date_from.strftime("%Y-%m-%d"),
+            date_to.strftime("%Y-%m-%d"),
+        )
+        revenue_index = _build_revenue_index(olap_rows)
+        totals: dict[str, float] = defaultdict(float)
+        for (_, dept_name), rev in revenue_index.items():
+            totals[dept_name] += rev
+        logger.info(
+            "[revenue_motivation] Выручка по подразделениям: %d шт.",
+            len(totals),
+        )
+        return dict(totals)
+    except Exception:
+        logger.exception(
+            "[revenue_motivation] Ошибка при получении выручки по подразделениям"
         )
         return {}

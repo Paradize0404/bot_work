@@ -3783,6 +3783,7 @@ async def sync_fot_sheet(
     monthly_section: list[dict],
     tab_name: str,
     period_label: str,
+    dept_revenue: dict[str, float] | None = None,
 ) -> int:
     """
     Записать лист ФОТ в Google Sheets.
@@ -3797,6 +3798,7 @@ async def sync_fot_sheet(
     При повторной синхронизации значения F-J сохраняются.
 
     emp_dict ключи:  name, role, rate_total, bonus.
+    dept_revenue: {dept_name → total_revenue} (OLAP) — отображается в заголовке.
     """
     t0 = time.monotonic()
 
@@ -3828,7 +3830,9 @@ async def sync_fot_sheet(
                         and (len(row) < 4 or not str(row[3]).strip())
                     ):
                         if cell_a != period_label:
-                            cur_section = cell_a
+                            # Отсечь суффикс «  —  Выручка: ...»
+                            sec = cell_a.split("  —  Выручка:")[0].strip()
+                            cur_section = sec
                         continue
                     if not cell_a or not format_valid:
                         continue
@@ -3876,14 +3880,32 @@ async def sync_fot_sheet(
                 {"dept_name": "Администрация", "employees": monthly_section}
             )
 
+        _dept_rev = dept_revenue or {}
+
         for section in all_sections:
             sect_name = section.get("dept_name", "Подразделение")
             employees = section.get("employees", [])
             if not employees:
                 continue
 
+            # Ищем выручку подразделения (точное совпадение → подстрока)
+            rev = _dept_rev.get(sect_name, 0.0)
+            if not rev:
+                sn_low = sect_name.lower()
+                for rk, rv in _dept_rev.items():
+                    if sn_low in rk.lower() or rk.lower() in sn_low:
+                        rev = rv
+                        break
+
+            if rev:
+                header_text = f"{sect_name}  —  Выручка: {rev:,.0f} ₽".replace(
+                    ",", "\u00a0"
+                )
+            else:
+                header_text = sect_name
+
             dept_header_rows.append(len(all_values))
-            all_values.append([sect_name] + [""] * (_FOT_NCOLS - 1))
+            all_values.append([header_text] + [""] * (_FOT_NCOLS - 1))
 
             col_header_rows.append(len(all_values))
             all_values.append(list(_FOT_HEADERS))

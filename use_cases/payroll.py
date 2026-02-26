@@ -31,7 +31,10 @@ from sqlalchemy import select
 
 from adapters.google_sheets import sync_fot_sheet
 from adapters.iiko_api import fetch_attendance
-from use_cases.revenue_motivation import get_revenue_motivation_map
+from use_cases.revenue_motivation import (
+    get_revenue_motivation_map,
+    get_department_revenue_totals,
+)
 from use_cases.salary_history import (
     load_salary_history_index,
     get_rate_for_date,
@@ -245,16 +248,27 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         iiko_id: _full_name(emp) for iiko_id, emp in emp_by_iiko_id.items()
     }
     # motivation_by_dept: {full_name: {dept_name: руб.}}
-    motivation_by_dept: dict[str, dict[str, float]] = await get_revenue_motivation_map(
-        attendance_records=attendance_records,
-        emp_iiko_to_fullname=emp_iiko_to_fullname,
-        date_from=month_start,
-        date_to=today,
-        history_index=history_index,
+    # dept_revenue_totals: {dept_name: total_revenue}
+    motivation_by_dept, dept_revenue_totals = await asyncio.gather(
+        get_revenue_motivation_map(
+            attendance_records=attendance_records,
+            emp_iiko_to_fullname=emp_iiko_to_fullname,
+            date_from=month_start,
+            date_to=today,
+            history_index=history_index,
+        ),
+        get_department_revenue_totals(
+            date_from=month_start,
+            date_to=today,
+        ),
     )
     logger.info(
         "[payroll] Мотивация «от выручки»: %d сотрудников с ненулёвой суммой",
         len(motivation_by_dept),
+    )
+    logger.info(
+        "[payroll] Выручка по подразделениям: %s",
+        {k: f"{v:,.0f}" for k, v in dept_revenue_totals.items()},
     )
 
     # ── 4. Построение секций по подразделениям ──
@@ -406,6 +420,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         monthly_section=monthly_section,
         tab_name=tab_name,
         period_label=period_label,
+        dept_revenue=dept_revenue_totals,
     )
 
     elapsed = time.monotonic() - t0
