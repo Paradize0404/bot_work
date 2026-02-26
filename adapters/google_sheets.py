@@ -4254,6 +4254,84 @@ async def sync_fot_sheet(
     return count
 
 
+# ─────────────────────────────────────────────────────
+# Чтение ФОТ-строк конкретного сотрудника
+# ─────────────────────────────────────────────────────
+
+
+async def read_fot_employee_rows(
+    tab_name: str,
+    display_name: str,
+) -> tuple[str, list[dict]]:
+    """
+    Прочитать лист ФОТ и вернуть все строки с данным *display_name*.
+
+    Возвращает ``(period_label, rows)`` где каждый элемент *rows*::
+
+        {section, name, role, accrued, rate, bonus,
+         premium, deductions, advance, pay_25, pay_10, to_pay}
+
+    Если вкладка не найдена — ``("", [])``.
+    """
+
+    def _sync_read() -> tuple[str, list[dict]]:
+        client = _get_client()
+        spreadsheet = client.open_by_key(SALARY_SHEET_ID)
+        try:
+            ws = spreadsheet.worksheet(tab_name)
+        except gspread.exceptions.WorksheetNotFound:
+            return ("", [])
+
+        all_rows = ws.get_all_values()
+        if not all_rows:
+            return ("", [])
+
+        # Первая строка — period_label
+        period_label = (all_rows[0][0] if all_rows[0] else "").strip()
+        current_section = ""
+        results: list[dict] = []
+        name_lower = display_name.lower()
+
+        for row in all_rows:
+            cell_a = (row[0] if row else "").strip()
+            cell_b = (row[1] if len(row) > 1 else "").strip()
+            cell_d = (row[3] if len(row) > 3 else "").strip()
+
+            # Строка заголовков колонок — пропускаем
+            if cell_a == _FOT_HEADERS[0]:
+                continue
+
+            # Секция: A заполнена, B и D пустые, не period_label
+            if cell_a and not cell_b and not cell_d:
+                sec = cell_a.split("  —  ")[0].strip()
+                if sec != period_label:
+                    current_section = sec
+                continue
+
+            # Строка сотрудника: ищем совпадение (case-insensitive)
+            if cell_a.lower() == name_lower:
+                results.append(
+                    {
+                        "section": current_section,
+                        "name": cell_a,
+                        "role": cell_b,
+                        "accrued": _parse_fot_num(row[2] if len(row) > 2 else ""),
+                        "rate": _parse_fot_num(row[3] if len(row) > 3 else ""),
+                        "bonus": _parse_fot_num(row[4] if len(row) > 4 else ""),
+                        "premium": _parse_fot_num(row[5] if len(row) > 5 else ""),
+                        "deductions": _parse_fot_num(row[6] if len(row) > 6 else ""),
+                        "advance": _parse_fot_num(row[7] if len(row) > 7 else ""),
+                        "pay_25": _parse_fot_num(row[8] if len(row) > 8 else ""),
+                        "pay_10": _parse_fot_num(row[9] if len(row) > 9 else ""),
+                        "to_pay": _parse_fot_num(row[10] if len(row) > 10 else ""),
+                    }
+                )
+
+        return (period_label, results)
+
+    return await asyncio.to_thread(_sync_read)
+
+
 def _sr(
     sheet_id: int,
     r0: int,

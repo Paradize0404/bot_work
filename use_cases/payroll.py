@@ -29,7 +29,7 @@ from datetime import datetime
 
 from sqlalchemy import select
 
-from adapters.google_sheets import sync_fot_sheet
+from adapters.google_sheets import sync_fot_sheet, read_fot_employee_rows
 from adapters.iiko_api import fetch_attendance
 from use_cases.revenue_motivation import (
     get_revenue_motivation_map,
@@ -473,3 +473,57 @@ def _get_role_name(
         if role and role.name:
             return role.name
     return ""
+
+
+# ─────────────────────────────────────────────────────
+# «Моя зарплата» — данные текущего пользователя
+# ─────────────────────────────────────────────────────
+
+
+async def get_my_salary(telegram_id: int) -> dict | None:
+    """
+    Вернуть данные ФОТ для сотрудника, привязанного к *telegram_id*.
+
+    Возвращает::
+
+        {
+            "employee_name": str,
+            "period_label": str,
+            "tab_name": str,
+            "rows": [
+                {section, name, role, accrued, rate, bonus,
+                 premium, deductions, advance, pay_25, pay_10, to_pay},
+                ...
+            ],
+        }
+
+    ``None`` если сотрудник не найден в БД.
+    Пустой ``rows`` если вкладка ФОТ текущего месяца не существует
+    или сотрудника нет в ней.
+    """
+    # 1. Найти сотрудника по telegram_id
+    async with async_session_factory() as session:
+        stmt = select(Employee).where(Employee.telegram_id == telegram_id)
+        emp = (await session.execute(stmt)).scalar_one_or_none()
+    if emp is None:
+        return None
+
+    # 2. Сформировать display_name (идентично записи в листе ФОТ)
+    dname = _display_name(emp)
+    if not dname:
+        return None
+
+    # 3. Имя вкладки текущего месяца
+    today = now_kgd().date()
+    month_name = _MONTH_NAMES_RU[today.month]
+    tab_name = f"ФОТ {month_name} {today.year}"
+
+    # 4. Прочитать данные из Google Sheets
+    period_label, rows = await read_fot_employee_rows(tab_name, dname)
+
+    return {
+        "employee_name": dname,
+        "period_label": period_label,
+        "tab_name": tab_name,
+        "rows": rows,
+    }

@@ -113,8 +113,13 @@ def _main_keyboard(
     for i in range(0, len(visible), 2):
         rows.append(visible[i : i + 2])
 
-    # Прайс-лист в конце всегда виден пользователям
-    rows.append([KeyboardButton(text="💰 Прайс-лист")])
+    # Прайс-лист и зарплата — всегда видны авторизованным
+    rows.append(
+        [
+            KeyboardButton(text="💰 Прайс-лист"),
+            KeyboardButton(text="💰 Моя зарплата"),
+        ]
+    )
 
     # Добавляем кнопку смены зала, отображающая текущий ресторан
     dept_label = (
@@ -613,6 +618,90 @@ async def btn_documents_menu(message: Message, state: FSMContext) -> None:
     """Кнопка 'Документы' (OCR распознавание документов)."""
     logger.info("[nav] меню документов tg:%d", message.from_user.id)
     await reply_menu(message, state, "📑 Документы:", _ocr_keyboard())
+
+
+@router.message(F.text == "💰 Моя зарплата")
+@auth_required
+async def btn_my_salary(message: Message, state: FSMContext) -> None:
+    """Показать данные ФОТ текущего пользователя за текущий месяц."""
+    from use_cases.payroll import get_my_salary
+
+    logger.info("[my_salary] запрос tg:%d", message.from_user.id)
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+
+    try:
+        result = await get_my_salary(message.from_user.id)
+    except Exception:
+        logger.exception("[my_salary] ошибка чтения ФОТ tg:%d", message.from_user.id)
+        await message.answer(
+            "❌ Не удалось загрузить данные. Попробуйте позже.",
+            reply_markup=await _get_main_kb(message.from_user.id),
+        )
+        return
+
+    if result is None:
+        await message.answer(
+            "⚠️ Ваш профиль не привязан к сотруднику."
+            "\nНажмите /start для авторизации.",
+            reply_markup=await _get_main_kb(message.from_user.id),
+        )
+        return
+
+    rows = result["rows"]
+    if not rows:
+        await message.answer(
+            f"ℹ️ Ваших данных ({result['employee_name']}) пока нет "
+            f"в листе «{result['tab_name']}».\n"
+            "Возможно, лист ещё не сформирован.",
+            reply_markup=await _get_main_kb(message.from_user.id),
+        )
+        return
+
+    # Формируем красивое сообщение
+    def _fmt(v: float) -> str:
+        return f"{v:,.0f}".replace(",", "\u00a0")
+
+    lines: list[str] = [
+        f"💰 <b>Моя зарплата</b>  —  {result['employee_name']}",
+        f"📅 {result['period_label']}",
+        "",
+    ]
+
+    grand_accrued = 0.0
+    grand_to_pay = 0.0
+
+    for r in rows:
+        lines.append(f"🏢 <b>{r['section']}</b>")
+        if r["role"]:
+            lines.append(f"   Должность: {r['role']}")
+        lines.append(f"   Ставка: {_fmt(r['rate'])} ₽")
+        if r["bonus"]:
+            lines.append(f"   Бонус: {_fmt(r['bonus'])} ₽")
+        if r["premium"]:
+            lines.append(f"   Премия: {_fmt(r['premium'])} ₽")
+        if r["deductions"]:
+            lines.append(f"   Удержания: {_fmt(r['deductions'])} ₽")
+        if r["advance"]:
+            lines.append(f"   Аванс: {_fmt(r['advance'])} ₽")
+        if r["pay_25"]:
+            lines.append(f"   25 Выплата: {_fmt(r['pay_25'])} ₽")
+        if r["pay_10"]:
+            lines.append(f"   10 Выплата: {_fmt(r['pay_10'])} ₽")
+        lines.append(f"   <b>Начислено: {_fmt(r['accrued'])} ₽</b>")
+        lines.append(f"   <b>К выплате: {_fmt(r['to_pay'])} ₽</b>")
+        lines.append("")
+        grand_accrued += r["accrued"]
+        grand_to_pay += r["to_pay"]
+
+    if len(rows) > 1:
+        lines.append(f"📊 <b>Итого начислено: {_fmt(grand_accrued)} ₽</b>")
+        lines.append(f"📊 <b>Итого к выплате: {_fmt(grand_to_pay)} ₽</b>")
+
+    await message.answer(
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=await _get_main_kb(message.from_user.id),
+    )
 
 
 @router.message(F.text == "💰 Прайс-лист")
