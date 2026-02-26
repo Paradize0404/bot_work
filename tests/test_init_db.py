@@ -7,9 +7,7 @@ test_init_db.py — smoke-тест миграций и валидация мод
 3. Numeric-колонки вмещают документированный диапазон значений.
 """
 
-import asyncio
 import importlib
-import inspect
 import os
 
 import pytest
@@ -109,8 +107,6 @@ class TestInitDbMigrations:
             await conn.run_sync(Base.metadata.create_all)
 
         # run migrations
-        from db.init_db import create_tables as _orig_create_tables
-
         # We need to call the migration SQL list directly, using our test engine
         # because init_db.create_tables imports `engine` from db.engine (prod config)
         await self._run_migrations()
@@ -212,21 +208,21 @@ class TestInitDbMigrations:
         # Reload to pick up any changes
         importlib.reload(init_mod)
 
-        # Extract _MIGRATIONS list from create_tables source
-        src = inspect.getsource(init_mod.create_tables)
-        # We'll just exec the function body with our engine
         from db.init_db import create_tables
 
-        # Read the _MIGRATIONS list by parsing the function
-        # Simplest: call the function but monkey-patch the engine
+        # Monkey-patch BOTH db.engine.engine AND db.init_db.engine
+        # (create_tables resolves `engine` from db.init_db module globals)
         import db.engine as eng_mod
 
-        orig_engine = eng_mod.engine
+        orig_eng = eng_mod.engine
+        orig_init_eng = init_mod.engine
         eng_mod.engine = _engine
+        init_mod.engine = _engine
         try:
             await create_tables()
         finally:
-            eng_mod.engine = orig_engine
+            eng_mod.engine = orig_eng
+            init_mod.engine = orig_init_eng
 
 
 class TestNumericPrecision:
