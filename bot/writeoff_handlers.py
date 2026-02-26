@@ -1031,11 +1031,6 @@ async def admin_approve(callback: CallbackQuery) -> None:
     except Exception:
         pass
 
-    # Убираем кнопки у остальных
-    await _remove_admin_keyboards(
-        bot, doc, f"✅ Одобрено admin {admin_name}", except_admin=admin_id
-    )
-
     # Отправляем в iiko через use_case
     try:
         approval = await wo_uc.approve_writeoff(doc)
@@ -1062,25 +1057,68 @@ async def admin_approve(callback: CallbackQuery) -> None:
         await pending.unlock(doc_id)
         return
 
-    # Сохраняем в историю при успешной отправке
-    if approval.success:
+    # ── Ошибка отправки (не exception, а success=False) ──
+    if not approval.success:
+        logger.warning(
+            "[writeoff] Отправка неуспешна doc=%s: %s",
+            doc_id,
+            approval.result_text,
+        )
+        from use_cases.admin import alert_admins
+
+        await alert_admins(
+            bot,
+            f"Ошибка отправки списания #{doc_id}\n"
+            f"Автор: {doc.author_name}\n"
+            f"Одобрил: {admin_name}\n"
+            f"Ошибка: {approval.result_text}",
+        )
+        # Возвращаем кнопки текущему админу — можно попробовать снова
         try:
-            await wo_hist.save_to_history(
-                telegram_id=doc.author_chat_id,
-                employee_name=doc.author_name,
-                department_id=doc.department_id,
-                store_id=doc.store_id,
-                store_name=doc.store_name,
-                account_id=doc.account_id,
-                account_name=doc.account_name,
-                reason=doc.reason,
-                items=doc.items,
-                approved_by_name=admin_name,
+            await callback.message.edit_text(
+                pending.build_summary_text(doc)
+                + f"\n\n{approval.result_text}\n👤 {admin_name}\n"
+                "Попробуйте ещё раз.",
+                parse_mode="HTML",
+                reply_markup=pending.admin_keyboard(doc_id),
             )
         except Exception:
-            logger.warning(
-                "[writeoff] Ошибка сохранения в историю doc=%s", doc_id, exc_info=True
+            pass
+        # Уведомляем автора об ошибке
+        try:
+            await bot.send_message(
+                doc.author_chat_id,
+                "❌ Произошла техническая ошибка при отправке. "
+                "Администраторы уведомлены, повторят попытку.",
             )
+        except Exception:
+            pass
+        await pending.unlock(doc_id)
+        return
+
+    # ── Успех — убираем кнопки у остальных админов ──
+    await _remove_admin_keyboards(
+        bot, doc, f"✅ Одобрено admin {admin_name}", except_admin=admin_id
+    )
+
+    # Сохраняем в историю
+    try:
+        await wo_hist.save_to_history(
+            telegram_id=doc.author_chat_id,
+            employee_name=doc.author_name,
+            department_id=doc.department_id,
+            store_id=doc.store_id,
+            store_name=doc.store_name,
+            account_id=doc.account_id,
+            account_name=doc.account_name,
+            reason=doc.reason,
+            items=doc.items,
+            approved_by_name=admin_name,
+        )
+    except Exception:
+        logger.warning(
+            "[writeoff] Ошибка сохранения в историю doc=%s", doc_id, exc_info=True
+        )
 
     # Обновляем сообщение админа
     try:
@@ -1092,27 +1130,12 @@ async def admin_approve(callback: CallbackQuery) -> None:
     except Exception:
         pass
 
-    # Уведомляем автора
+    # Уведомляем автора об успехе
     try:
-        if approval.success:
-            await bot.send_message(
-                doc.author_chat_id,
-                f"{approval.result_text}\n(проверил: {admin_name})",
-            )
-        else:
-            await bot.send_message(
-                doc.author_chat_id,
-                "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены.",
-            )
-            from use_cases.admin import alert_admins
-
-            await alert_admins(
-                bot,
-                f"Ошибка одобрения списания #{doc_id}\n"
-                f"Автор: {doc.author_name}\n"
-                f"Одобрил: {admin_name}\n"
-                f"Ошибка: {approval.result_text}",
-            )
+        await bot.send_message(
+            doc.author_chat_id,
+            f"{approval.result_text}\n(проверил: {admin_name})",
+        )
     except Exception:
         pass
 
