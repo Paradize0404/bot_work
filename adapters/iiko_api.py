@@ -1323,15 +1323,32 @@ def _parse_outgoing_invoices_xml(xml_str: str) -> list[dict[str, Any]]:
     root = ET.fromstring(xml_str)
     documents: list[dict[str, Any]] = []
 
+    # Расходные накладные используют ДРУГИЕ теги, чем приходные:
+    #   productId (не product), defaultStoreId (не defaultStore),
+    #   counteragentId (не counteragent), storeId (не store).
+    # Но на всякий случай поддерживаем оба варианта.
     _ITEM_TAG_MAP: dict[str, str] = {
+        "productId": "productId",
         "product": "productId",
+        "storeId": "storeId",
         "store": "storeId",
         "amount": "amount",
         "price": "price",
         "sum": "sum",
     }
 
-    for doc_el in root.findall("document"):
+    doc_elements = root.findall("document")
+    if not doc_elements:
+        # Debug: log root tag and first-level child tags
+        child_tags = [ch.tag for ch in root][:5]
+        logger.warning(
+            "[outgoing_xml] root=<%s>, first children=%s, total children=%d",
+            root.tag,
+            child_tags,
+            len(list(root)),
+        )
+
+    for doc_el in doc_elements:
         doc: dict[str, Any] = {
             "id": None,
             "dateIncoming": None,
@@ -1341,17 +1358,19 @@ def _parse_outgoing_invoices_xml(xml_str: str) -> list[dict[str, Any]]:
             "items": [],
         }
         for child in doc_el:
-            if child.tag == "id":
-                doc["id"] = (child.text or "").strip()
-            elif child.tag == "dateIncoming":
-                doc["dateIncoming"] = (child.text or "").strip()
-            elif child.tag == "status":
-                doc["status"] = (child.text or "").strip()
-            elif child.tag == "counteragent":
-                doc["counteragent"] = (child.text or "").strip()
-            elif child.tag == "defaultStore":
-                doc["defaultStore"] = (child.text or "").strip()
-            elif child.tag == "items":
+            tag = child.tag
+            val = (child.text or "").strip()
+            if tag == "id":
+                doc["id"] = val
+            elif tag == "dateIncoming":
+                doc["dateIncoming"] = val
+            elif tag == "status":
+                doc["status"] = val
+            elif tag in ("counteragent", "counteragentId"):
+                doc["counteragent"] = val
+            elif tag in ("defaultStore", "defaultStoreId"):
+                doc["defaultStore"] = val
+            elif tag == "items":
                 for item_el in child.findall("item"):
                     item: dict[str, Any] = {}
                     for ic in item_el:
