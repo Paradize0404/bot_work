@@ -418,29 +418,6 @@ async def _load_product_group_index() -> dict[str, str]:
     return {str(pid): str(gid) for pid, gid in rows if gid}
 
 
-async def _load_store_name_index() -> dict[str, str]:
-    """Загрузить store_id → store_name."""
-    from sqlalchemy import select
-
-    from db.engine import async_session_factory
-    from db.models import Store
-
-    async with async_session_factory() as session:
-        stmt = select(Store.id, Store.name).where(Store.deleted.is_(False))
-        rows = (await session.execute(stmt)).all()
-    return {str(sid): (name or "") for sid, name in rows}
-
-
-def _match_store_to_dept(store_name: str, dept_names: set[str]) -> str | None:
-    """Нечёткое сопоставление имени склада с именем подразделения."""
-    sn = store_name.lower()
-    for dn in dept_names:
-        dl = dn.lower()
-        if sn in dl or dl in sn:
-            return dn
-    return None
-
-
 async def calculate_pastry_invoice_motivation(
     attendance_records: list[dict],
     emp_full_names: dict[str, str],
@@ -453,11 +430,12 @@ async def calculate_pastry_invoice_motivation(
 
     Логика:
       1. Получаем расходные накладные за период.
-      2. Для каждой позиции проверяем, входит ли товар в кондитерские группы.
-      3. Суммируем стоимость кондитерских позиций по складам.
-      4. Сопоставляем склады с подразделениями.
-      5. Для сотрудников с mot_base="от накладных кондитерки":
-         мотивация = сумма кондитерских позиций по подразделениям × mot_pct / 100.
+      2. Для каждой позиции берём productId, проверяем через БД:
+         product.parent_id → product_group.id → входит ли в кондитерские группы.
+      3. Суммируем стоимость всех кондитерских позиций → total_pastry_sum.
+      4. Для сотрудников с mot_base="от накладных кондитерки":
+         мотивация = total_pastry_sum × mot_pct / 100.
+         Бонус назначается на первое подразделение сотрудника из явок.
 
     Возвращает: {full_name: {dept_name: motivation_rubles}}
     """
@@ -475,26 +453,23 @@ async def calculate_pastry_invoice_motivation(
             history_index,
             pastry_groups,
             product_index,
-            store_names,
         ) = await asyncio.gather(
             fetch_outgoing_invoices(t_from_str, t_to_str),
             load_salary_history_index(),
             _load_pastry_group_ids_expanded(),
             _load_product_group_index(),
-            _load_store_name_index(),
         )
     else:
-        outgoing_docs, pastry_groups, product_index, store_names = await asyncio.gather(
+        outgoing_docs, pastry_groups, product_index = await asyncio.gather(
             fetch_outgoing_invoices(t_from_str, t_to_str),
             _load_pastry_group_ids_expanded(),
             _load_product_group_index(),
-            _load_store_name_index(),
         )
 
     logger.info(
         "[pastry_motivation] Расходных накладных: %d, "
         "кондитерских групп (с подгруппами): %d, "
-        "товаров: %d",
+        "товаров в БД: %d",
         len(outgoing_docs),
         len(pastry_groups),
         len(product_index),
@@ -504,16 +479,12 @@ async def calculate_pastry_invoice_motivation(
         logger.warning("[pastry_motivation] Нет кондитерских групп в БД")
         return {}
 
-    # ── 2. Суммируем кондитерские позиции по складам ──
-    # store_id → total sum
-    store_pastry_sum: dict[str, float] = defaultdict(float)
+    # ── 2. Суммируем ВСЕ кондитерские позиции из расходных накладных ──
+    total_pastry_sum = 0.0
     matched_items = 0
     total_items = 0
 
     for doc in outgoing_docs:
-        store_id = (doc.get("defaultStore") or "").strip()
-        if not store_id:
-            continue
         for item in doc.get("items", []):
             total_items += 1
             product_id = (item.get("productId") or "").strip()
@@ -526,79 +497,29 @@ async def calculate_pastry_invoice_motivation(
                 except (ValueError, TypeError):
                     item_sum = 0.0
                 if item_sum > 0:
-                    store_pastry_sum[store_id] += item_sum
+                    total_pastry_sum += item_sum
                     matched_items += 1
 
     logger.info(
         "[pastry_motivation] Позиций в расходных: %d, "
-        "из них кондитерских: %d, складов: %d",
+        "из них кондитерских: %d, общая сумма: %.0f ₽",
         total_items,
         matched_items,
-        len(store_pastry_sum),
+        total_pastry_sum,
     )
 
-    if not store_pastry_sum:
+    if total_pastry_sum <= 0:
         return {}
 
-    # ── 3. Сопоставляем склады → подразделения (dept_name) ──
-    # Собираем уникальные dept_name из attendance
-    dept_names: set[str] = set()
-    for rec in attendance_records:
-        dn = (rec.get("departmentName") or "").strip()
-        if dn:
-            dept_names.add(dn)
-
-    # store_id → dept_name (matched)
-    store_to_dept: dict[str, str] = {}
-    for sid, s_total in store_pastry_sum.items():
-        sname = store_names.get(sid, "")
-        if not sname:
-            continue
-        matched_dept = _match_store_to_dept(sname, dept_names)
-        if matched_dept:
-            store_to_dept[sid] = matched_dept
-
-    # dept_name → total pastry sum
-    dept_pastry_sum: dict[str, float] = defaultdict(float)
-    unmatched_sum = 0.0
-    for sid, total in store_pastry_sum.items():
-        dept = store_to_dept.get(sid)
-        if dept:
-            dept_pastry_sum[dept] += total
-        else:
-            unmatched_sum += total
-
-    # Если есть незамэтченные склады — добавляем ко всем подразделениям поровну
-    # (либо ко всем, либо в «Без подразделения»)
-    if unmatched_sum > 0:
-        logger.info(
-            "[pastry_motivation] Незамэтченные склады: %.0f ₽ "
-            "(будет распределено по всем подразделениям)",
-            unmatched_sum,
-        )
-        if dept_pastry_sum:
-            share = unmatched_sum / len(dept_pastry_sum)
-            for dept in dept_pastry_sum:
-                dept_pastry_sum[dept] += share
-        else:
-            # Нет ни одного замэтченного подразделения:
-            # кладём под общий ключ
-            dept_pastry_sum["_all_"] = unmatched_sum
-
-    logger.info(
-        "[pastry_motivation] Кондитерские суммы по подразделениям: %s",
-        {k: f"{v:,.0f}" for k, v in dept_pastry_sum.items()},
-    )
-
-    # ── 4. Индексируем явки по iiko_id → dept_names ──
-    emp_depts: dict[str, set[str]] = defaultdict(set)
+    # ── 3. Индексируем явки по iiko_id → dept_names (сохраняем порядок) ──
+    emp_depts: dict[str, list[str]] = defaultdict(list)
     for rec in attendance_records:
         emp_id = (rec.get("employeeId") or "").strip()
         dept_name = (rec.get("departmentName") or "").strip()
-        if emp_id and dept_name:
-            emp_depts[emp_id].add(dept_name)
+        if emp_id and dept_name and dept_name not in emp_depts[emp_id]:
+            emp_depts[emp_id].append(dept_name)
 
-    # ── 5. Рассчитываем мотивацию ──
+    # ── 4. Рассчитываем мотивацию ──
     result: dict[str, dict[str, float]] = {}
 
     for emp_iiko_id, full_name in emp_full_names.items():
@@ -627,36 +548,27 @@ async def calculate_pastry_invoice_motivation(
         if mot_pct_val <= 0:
             continue
 
-        # Подразделения сотрудника из явок
-        my_depts = emp_depts.get(emp_iiko_id, set())
-        if not my_depts:
-            # Нет явок — если есть общий ключ _all_, используем его
-            if "_all_" in dept_pastry_sum:
-                total = dept_pastry_sum["_all_"]
-                result[full_name] = {
-                    "Без подразделения": round(total * mot_pct_val / 100, 2)
-                }
-            continue
+        bonus = round(total_pastry_sum * mot_pct_val / 100, 2)
 
-        emp_motivation: dict[str, float] = {}
-        for dept in my_depts:
-            pastry_sum = dept_pastry_sum.get(dept, 0.0)
-            if pastry_sum > 0:
-                emp_motivation[dept] = round(pastry_sum * mot_pct_val / 100, 2)
+        # Назначаем бонус на первое подразделение из явок
+        my_depts = emp_depts.get(emp_iiko_id, [])
+        dept_key = my_depts[0] if my_depts else "Без подразделения"
 
-        if emp_motivation:
-            result[full_name] = emp_motivation
-            logger.info(
-                "[pastry_motivation] %s: %.1f%% × кондитерские → %s",
-                full_name,
-                mot_pct_val,
-                {k: f"{v:,.0f}" for k, v in emp_motivation.items()},
-            )
+        result[full_name] = {dept_key: bonus}
+        logger.info(
+            "[pastry_motivation] %s: %.0f ₽ × %.1f%% = %.0f ₽ → %s",
+            full_name,
+            total_pastry_sum,
+            mot_pct_val,
+            bonus,
+            dept_key,
+        )
 
     logger.info(
         "[pastry_motivation] Итог: мотивация «от накладных кондитерки» "
-        "для %d сотрудников",
+        "для %d сотрудников, общая сумма кондитерских: %.0f ₽",
         len(result),
+        total_pastry_sum,
     )
     return result
 
