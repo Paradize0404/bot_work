@@ -44,6 +44,11 @@ logger = logging.getLogger(__name__)
 
 router = Router(name="day_report_handlers")
 
+# Lock per user — предотвращает race condition при приёме альбомов.
+# Telegram отправляет каждое фото альбома как отдельный Message,
+# без lock все хэндлеры конкурентно читают photo_ids и перезаписывают друг друга.
+_photo_locks: dict[int, asyncio.Lock] = {}
+
 
 # ══════════════════════════════════════════════════════
 #  FSM States
@@ -180,16 +185,22 @@ async def step_photos(message: Message, state: FSMContext) -> None:
     except Exception:
         pass
 
-    data = await state.get_data()
-    photo_ids: list[str] = data.get("photo_ids", [])
+    # Lock per user — альбом приходит как N параллельных Message,
+    # без lock все читают photo_ids=[] и перезаписывают друг друга.
+    if tg_id not in _photo_locks:
+        _photo_locks[tg_id] = asyncio.Lock()
 
-    # Берём фото самого большого размера (последний элемент)
-    file_id = message.photo[-1].file_id
-    photo_ids.append(file_id)
-    await state.update_data(photo_ids=photo_ids)
+    async with _photo_locks[tg_id]:
+        data = await state.get_data()
+        photo_ids: list[str] = data.get("photo_ids", [])
 
-    received = len(photo_ids)
-    remaining = REQUIRED_PHOTOS - received
+        # Берём фото самого большого размера (последний элемент)
+        file_id = message.photo[-1].file_id
+        photo_ids.append(file_id)
+        await state.update_data(photo_ids=photo_ids)
+
+        received = len(photo_ids)
+        remaining = REQUIRED_PHOTOS - received
 
     if remaining > 0:
         logger.info(
@@ -207,7 +218,8 @@ async def step_photos(message: Message, state: FSMContext) -> None:
         )
         return
 
-    # Все фото собраны — финализация
+    # Все фото собраны — финализация (освобождаем lock)
+    _photo_locks.pop(tg_id, None)
     logger.info("[day_report] Все %d фото получены tg:%d", REQUIRED_PHOTOS, tg_id)
     await _finalize_day_report(message, state)
 
