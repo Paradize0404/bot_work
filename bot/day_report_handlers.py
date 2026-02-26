@@ -5,8 +5,9 @@ FSM-флоу:
   1. Сотрудник нажимает «📋 Отчёт дня»
   2. Бот спрашивает плюсы дня
   3. Бот спрашивает минусы дня
-  4. Бот загружает данные из iiko (продажи + себестоимость)
-  5. Формирует финальный отчёт и отправляет всем админам
+  4. Бот просит прислать 10 фото блюд (обязательно)
+  5. Бот загружает данные из iiko (продажи + себестоимость)
+  6. Формирует финальный отчёт и отправляет текст + фото всем получателям
 
 Паттерны:
   - Тонкий handler → use_cases/day_report.py
@@ -22,7 +23,7 @@ from aiogram import Router, F
 from aiogram.enums import ChatAction
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import Message
+from aiogram.types import Message, InputMediaPhoto
 
 from use_cases import user_context as uctx
 from use_cases import permissions as perm_uc
@@ -49,9 +50,13 @@ router = Router(name="day_report_handlers")
 # ══════════════════════════════════════════════════════
 
 
+REQUIRED_PHOTOS = 10  # обязательное количество фото блюд
+
+
 class DayReportStates(StatesGroup):
     positives = State()  # ввод плюсов
     negatives = State()  # ввод минусов
+    photos = State()     # загрузка фото блюд
 
 
 # ══════════════════════════════════════════════════════
@@ -137,7 +142,7 @@ async def step_positives(message: Message, state: FSMContext) -> None:
 
 @router.message(DayReportStates.negatives, F.text)
 async def step_negatives(message: Message, state: FSMContext) -> None:
-    """Приём минусов → сбор данных iiko → отправка отчёта."""
+    """Приём минусов → переход к загрузке фото блюд."""
     tg_id = message.from_user.id
     logger.info("[day_report] Минусы получены tg:%d", tg_id)
 
@@ -147,8 +152,73 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
         pass
 
     text = truncate_input(message.text, MAX_TEXT_GENERAL)
-    await state.update_data(negatives=text)
+    await state.update_data(negatives=text, photo_ids=[])
+
+    # Спрашиваем фото блюд
+    await send_prompt_msg(
+        message.bot,
+        message.chat.id,
+        state,
+        f"📸 Пришлите {REQUIRED_PHOTOS} фото блюд (можно альбомом):",
+        log_tag="day_report",
+    )
+    await state.set_state(DayReportStates.photos)
+
+
+# ══════════════════════════════════════════════════════
+#  Шаг 3: Фото блюд → финализация
+# ══════════════════════════════════════════════════════
+
+
+@router.message(DayReportStates.photos, F.photo)
+async def step_photos(message: Message, state: FSMContext) -> None:
+    """Приём фото блюд. Собираем ровно REQUIRED_PHOTOS штук."""
+    tg_id = message.from_user.id
+
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
     data = await state.get_data()
+    photo_ids: list[str] = data.get("photo_ids", [])
+
+    # Берём фото самого большого размера (последний элемент)
+    file_id = message.photo[-1].file_id
+    photo_ids.append(file_id)
+    await state.update_data(photo_ids=photo_ids)
+
+    received = len(photo_ids)
+    remaining = REQUIRED_PHOTOS - received
+
+    if remaining > 0:
+        logger.info(
+            "[day_report] Фото %d/%d получено tg:%d",
+            received,
+            REQUIRED_PHOTOS,
+            tg_id,
+        )
+        await send_prompt_msg(
+            message.bot,
+            message.chat.id,
+            state,
+            f"📸 Получено {received}/{REQUIRED_PHOTOS} фото. Осталось {remaining}:",
+            log_tag="day_report",
+        )
+        return
+
+    # Все фото собраны — финализация
+    logger.info(
+        "[day_report] Все %d фото получены tg:%d", REQUIRED_PHOTOS, tg_id
+    )
+    await _finalize_day_report(message, state)
+
+
+async def _finalize_day_report(message: Message, state: FSMContext) -> None:
+    """Сбор данных iiko → отправка отчёта + фото всем получателям."""
+    tg_id = message.from_user.id
+    data = await state.get_data()
+    photo_ids: list[str] = data.get("photo_ids", [])
 
     # ── Placeholder ──
     await send_prompt_msg(
@@ -160,8 +230,6 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
     )
 
     # ── Запрос данных из iiko (фильтруем по подразделению сотрудника) ──
-    # Перечитываем user context здесь — берём самое актуальное значение department_name
-    # из кеша/БД, а не из FSM (который мог устареть или не содержать имя).
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     fresh_ctx = await uctx.get_user_context(tg_id)
     department_id = fresh_ctx.department_id if fresh_ctx else data.get("department_id")
@@ -174,11 +242,12 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
     )
 
     # ── Формируем итоговый текст ──
+    negatives = data["negatives"]
     report_text = day_report_uc.format_day_report(
         employee_name=data["employee_name"],
         date_str=data["date"],
         positives=data["positives"],
-        negatives=text,
+        negatives=negatives,
         iiko_data=iiko_data,
     )
 
@@ -190,6 +259,14 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
         f"✅ Отчёт дня отправлен!\n\n{report_text}",
         log_tag="day_report",
     )
+
+    # Отправляем фото автору как альбом
+    if photo_ids:
+        media = [InputMediaPhoto(media=fid) for fid in photo_ids]
+        try:
+            await message.bot.send_media_group(message.chat.id, media)
+        except Exception as exc:
+            logger.warning("[day_report] Не удалось отправить фото автору: %s", exc)
 
     # ── Запись в Google Sheets ──
     logger.info(
@@ -207,9 +284,7 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
                 "employee_name": data["employee_name"],
                 "department_name": department_name or "",
                 "positives": data["positives"],
-                "negatives": text,
-                # Детальные строки — каждый тип оплаты и каждое место приготовления
-                # станут отдельными колонками в таблице
+                "negatives": negatives,
                 "sales_lines": [
                     {"pay_type": sl.pay_type, "amount": sl.amount}
                     for sl in iiko_data.sales_lines
@@ -249,10 +324,7 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
         except Exception:
             pass
 
-    # ── Отправляем отчёт всем у кого стоит «📋 Получатель отчёта дня» в таблице прав ──
-    # PERM_DAY_REPORT  = право ОТПРАВИТЬ отчёт (кнопка в меню)
-    # PERM_DAY_REPORT_RECEIVE = право ПОЛУЧАТЬ отчёт (рассылка)
-    # Автор уже видит свой отчёт через send_prompt_msg выше — исключаем дублирование
+    # ── Отправляем отчёт + фото всем получателям ──
     day_report_ids = await perm_uc.get_users_with_permission(PERM_DAY_REPORT_RECEIVE)
     recipients = [uid for uid in day_report_ids if uid != tg_id]
 
@@ -264,6 +336,10 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
                 f"📋 <b>Отчёт дня</b> ({data.get('department_name', '')})\n\n{report_text}",
                 parse_mode="HTML",
             )
+            # Отправляем фото блюд получателю
+            if photo_ids:
+                media = [InputMediaPhoto(media=fid) for fid in photo_ids]
+                await message.bot.send_media_group(uid, media)
             sent_count += 1
         except Exception as exc:
             logger.warning(
@@ -323,5 +399,25 @@ async def guard_negatives(message: Message, state: FSMContext) -> None:
         message.chat.id,
         state,
         "⚠️ Ожидается текст. Напишите минусы смены:",
+        log_tag="day_report",
+    )
+
+
+@router.message(DayReportStates.photos)
+async def guard_photos(message: Message, state: FSMContext) -> None:
+    """Нефото ввод на шаге фотографий блюд."""
+    logger.info("[day_report] guard_photos tg:%d", message.from_user.id)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    data = await state.get_data()
+    received = len(data.get("photo_ids", []))
+    remaining = REQUIRED_PHOTOS - received
+    await send_prompt_msg(
+        message.bot,
+        message.chat.id,
+        state,
+        f"⚠️ Ожидаются фото. Пришлите ещё {remaining} фото блюд:",
         log_tag="day_report",
     )

@@ -508,3 +508,29 @@ def test_append_day_report_row_creates_sheet_if_missing():
 
     mock_ss.add_worksheet.assert_called_once()
     mock_ws.append_row.assert_called_once()
+
+
+# ═══════════════════════════════════════════════════════
+# 7. Фото блюд — FSM states и REQUIRED_PHOTOS
+# ═══════════════════════════════════════════════════════
+
+
+def test_day_report_states_has_photos():
+    """DayReportStates должен содержать состояние photos."""
+    from bot.day_report_handlers import DayReportStates
+
+    assert hasattr(DayReportStates, "photos")
+
+
+def test_required_photos_is_10():
+    """REQUIRED_PHOTOS должно быть 10."""
+    from bot.day_report_handlers import REQUIRED_PHOTOS
+
+    assert REQUIRED_PHOTOS == 10
+
+
+def test_input_media_photo_imported():
+    """InputMediaPhoto должен быть импортирован для отправки альбомов."""
+    from bot.day_report_handlers import InputMediaPhoto
+
+    assert InputMediaPhoto is not None
