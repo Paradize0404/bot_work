@@ -306,54 +306,37 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         dept_map = emp_dept_stats.get(emp_iiko_id, {}) if emp_iiko_id else {}
         has_shifts = bool(dept_map)
 
-        # Почасовая без смен — не выводим
-        if sal_type == "почасовая" and not has_shifts:
+        # Без смен — не выводим (почасовая и посменная)
+        if not has_shifts:
             continue
 
         role_name = _get_role_name(emp, dept_map, role_by_iiko_id)
         processed_in_dept.add(fn)
 
-        if has_shifts:
-            # Разбиваем по подразделениям
-            for dept_id, dept_info in dept_map.items():
-                dept_name = dept_info["dept_name"]
-                earnings = round(
-                    emp_dept_earnings.get((emp_iiko_id, dept_id), 0.0),
-                    2,
-                )
-                bonus = round(
-                    (motivation_by_dept.get(fn) or {}).get(dept_name, 0.0),
-                    2,
-                )
+        # Разбиваем по подразделениям
+        for dept_id, dept_info in dept_map.items():
+            dept_name = dept_info["dept_name"]
+            earnings = round(
+                emp_dept_earnings.get((emp_iiko_id, dept_id), 0.0),
+                2,
+            )
+            bonus = round(
+                (motivation_by_dept.get(fn) or {}).get(dept_name, 0.0),
+                2,
+            )
 
-                if dept_id not in dept_sections_map:
-                    dept_sections_map[dept_id] = {
-                        "dept_name": dept_name,
-                        "employees": [],
-                    }
-
-                dept_sections_map[dept_id]["employees"].append(
-                    {
-                        "name": _display_name(emp),
-                        "role": role_name,
-                        "rate_total": earnings,
-                        "bonus": bonus,
-                    }
-                )
-        else:
-            # Посменная без смен → показываем с 0, берём первое подразделение
-            _unassigned = "_unassigned"
-            if _unassigned not in dept_sections_map:
-                dept_sections_map[_unassigned] = {
-                    "dept_name": "Без подразделения",
+            if dept_id not in dept_sections_map:
+                dept_sections_map[dept_id] = {
+                    "dept_name": dept_name,
                     "employees": [],
                 }
-            dept_sections_map[_unassigned]["employees"].append(
+
+            dept_sections_map[dept_id]["employees"].append(
                 {
                     "name": _display_name(emp),
                     "role": role_name,
-                    "rate_total": 0.0,
-                    "bonus": 0.0,
+                    "rate_total": earnings,
+                    "bonus": bonus,
                 }
             )
 

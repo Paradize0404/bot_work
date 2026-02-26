@@ -3897,10 +3897,17 @@ async def sync_fot_sheet(
                         rev = rv
                         break
 
+            # Сумма начислений секции (rate_total + bonus) для % ФОТ
+            sect_payroll = sum(
+                (e.get("rate_total", 0) or 0) + (e.get("bonus", 0) or 0)
+                for e in employees
+            )
+
             if rev:
-                header_text = f"{sect_name}  —  Выручка: {rev:,.0f} ₽".replace(
-                    ",", "\u00a0"
-                )
+                pct = (sect_payroll / rev * 100) if rev else 0
+                header_text = (
+                    f"{sect_name}  —  " f"Выручка: {rev:,.0f} ₽  |  " f"ФОТ: {pct:.1f}%"
+                ).replace(",", "\u00a0")
             else:
                 header_text = sect_name
 
