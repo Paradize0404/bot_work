@@ -1,6 +1,6 @@
 # 🗂 Карта проекта iiko + FinTablo Sync Bot
 
-> Версия MAP: **2.1** | Обновлено: 2026-02-24  
+> Версия MAP: **2.2** | Обновлено: 2026-02-26  
 > Язык: **русский** | Python 3.12 | asyncio + aiogram 3 + SQLAlchemy 2.0 + asyncpg + Redis  
 > Deploy: Railway (PostgreSQL ~400ms RTT, Redis FSM)
 
@@ -122,7 +122,7 @@ PROJECT_MAP.md (ЭТОТ ФАЙЛ, ~10k) — ВСЕГДА загружать
 | `Optional[X]` | `X \| None` |
 | `except Exception: pass` | `logger.exception()` |
 | `datetime.now()` / `utcnow()` | `now_kgd()` из `_helpers` |
-| `_KGD_TZ = ZoneInfo(...)` заново | `from use_cases._helpers import KGD_TZ` |
+| `_KGD_TZ = ZoneInfo(...)` заново | `from use_cases._helpers import KGD_TZ` или `from db.models import _now_kgd` |
 | `default=[]` / `default={}` в Column | `default=list` / `default=dict` |
 | `REAL` / `FLOAT` для денег | `Numeric(precision, scale)` |
 | `JSON` в PostgreSQL | `JSONB` |

@@ -270,7 +270,7 @@ test/
 │   │                         #   D) DuplicateRequestStates: enter_quantities → confirm
 │   │                         #      📋 История (10 последних) → 🔄 Повторить → ввод новых qty → отправка
 │   │                         #   Защиты: UUID-валидация, guard-хэндлеры, MAX_ITEMS=50
-│   ├── admin_handlers.py    # Управление администраторами бота
+│   ├── handlers.py          # Управление администраторами (вынесено из удалённого admin_handlers.py)
 │   │                         #   /admin_init — bootstrap первого админа (только когда таблица пуста)
 │   │                         #   👑 Управление админами (только для админов)
 │   │                         #   Показать текущих | Добавить (из сотрудников с tg) | Удалить
@@ -813,7 +813,9 @@ admin_msg_ids: JSONB {chat_id: msg_id}
 
 ## 👑 Управление администраторами
 
-**Модули:** `bot/admin_handlers.py`, `use_cases/admin.py`, `db/models.py` → `BotAdmin`
+**Модули:** `bot/handlers.py` (админ-секция), `use_cases/admin.py`, `db/models.py` → `BotAdmin`
+
+> ℹ️ `bot/admin_handlers.py` удалён — функционал перенесён в `bot/handlers.py` + `use_cases/admin.py`.
 
 ### Поток
 

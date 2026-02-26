@@ -1,0 +1,1001 @@
+﻿2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=MeasureUnit — отправляю запрос...
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=Account — 155 записей, HTTP 200, 0.2 сек, 41020 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=AccountingCategory — 1 записей, HTTP 200, 0.2 сек, 126 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=TaxCategory — 0 записей, HTTP 200, 0.2 сек, 2 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=DiscountType — 23 записей, HTTP 200, 0.2 сек, 3346 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=CookingPlaceType — 4 записей, HTTP 200, 0.2 сек, 504 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=AlcoholClass — 305 записей, HTTP 200, 0.3 сек, 57378 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=Conception — 5 записей, HTTP 200, 0.2 сек, 619 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=ProductSize — 21 записей, HTTP 200, 0.2 сек, 3367 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=PaymentType — 51 записей, HTTP 200, 0.2 сек, 6982 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=AllergenGroup — 14 записей, HTTP 200, 0.2 сек, 1817 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=OrderType — 7 записей, HTTP 200, 0.2 сек, 1477 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=ProductScale — 7 записей, HTTP 200, 0.2 сек, 867 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=MeasureUnit — 4 записей, HTTP 200, 0.2 сек, 458 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=ScheduleType — 4 записей, HTTP 200, 0.2 сек, 535 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=ProductCategory — 24 записей, HTTP 200, 0.2 сек, 3144 байт
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET entities rootType=AttendanceType — 6 записей, HTTP 200, 0.2 сек, 771 байт
+2026-02-26 09:56:13 | INFO     | use_cases.sync | === API: все 16 типов за 1.2 сек ===
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [Account] 155 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [AccountingCategory] 1 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [AlcoholClass] 305 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [AllergenGroup] 14 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [AttendanceType] 6 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [Conception] 5 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [CookingPlaceType] 4 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [DiscountType] 23 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [MeasureUnit] 4 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [OrderType] 7 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [PaymentType] 51 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [ProductCategory] 24 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [ProductScale] 7 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [ProductSize] 21 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [ScheduleType] 4 записей
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [TaxCategory] 0 записей
+2026-02-26 09:56:13 | INFO     | adapters.iiko_api | [API] GET products — 1936 записей, HTTP 200, 0.4 сек, 3079984 байт
+2026-02-26 09:56:13 | INFO     | use_cases.sync | [Product] API: 1936 записей за 1.3 сек
+2026-02-26 09:56:14 | INFO     | use_cases.sync | [entities_all] Batch: 500 / 631
+2026-02-26 09:56:14 | INFO     | use_cases.sync | [entities_all] Batch: 631 / 631
+2026-02-26 09:56:14 | INFO     | use_cases.sync | [Product] Batch: 500 / 1936
+2026-02-26 09:56:14 | INFO     | use_cases.sync | [Product] Batch: 1000 / 1936
+2026-02-26 09:56:14 | INFO     | use_cases.sync | [Product] Batch: 1500 / 1936
+2026-02-26 09:56:14 | INFO     | use_cases.sync | [Product] Batch: 1936 / 1936
+2026-02-26 09:56:14 | INFO     | use_cases.sync | === Справочники: 16 ok, 0 err | 631 записей, удалено 0 | 2.5 сек (API 1.2 + БД 1.3) ===
+2026-02-26 09:56:14 | INFO     | use_cases.sync | [Product] БД: upsert 1936, удалено 0 за 1.2 сек | Итого 2.6 сек
+2026-02-26 09:56:14 | INFO     | use_cases.sync | [documents] Фоновая синхронизация номенклатуры + справочников завершена (bg:requests:1028538977)
+2026-02-26 09:56:15 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:09:56:15 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:56:16 | INFO     | bot.request_handlers | [request_handlers] start_create_request tg:1028538977
+2026-02-26 09:56:17 | INFO     | bot.request_handlers | [request] Старт создания заявки tg:1028538977, dept=fb855535-5d3a-447c-b951-71c3059b705b (PizzaYolo / Пицца Йоло (Московский))
+2026-02-26 09:56:17 | INFO     | use_cases.outgoing_invoice | [invoice] Поиск счёта реализации...
+2026-02-26 09:56:17 | INFO     | use_cases.outgoing_invoice | [invoice] Счёт реализации: Реализация на точки (9f2f336e-ef5a-49a6-8bc2-6c33be346c23) за 0.24 сек
+2026-02-26 09:56:17 | INFO     | adapters.google_sheets | [GSheets] Заведение для заявок из GSheet: 0 за 0.7 сек
+2026-02-26 09:56:17 | INFO     | use_cases.product_request | [request] Заведение для заявок из GSheet: 0 шт
+2026-02-26 09:56:18 | INFO     | aiogram.event | Update id=520044349 is handled. Duration 3747 ms by bot id=8301059555
+2026-02-26 09:56:22 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:09:56:22 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:56:22 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Шу'
+2026-02-26 09:56:23 | INFO     | aiogram.event | Update id=520044350 is handled. Duration 990 ms by bot id=8301059555
+2026-02-26 09:56:33 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:09:56:33 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:56:33 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 09:56:34 | INFO     | aiogram.event | Update id=520044351 is handled. Duration 984 ms by bot id=8301059555
+2026-02-26 09:56:42 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:09:56:42 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:56:42 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='3'
+2026-02-26 09:56:43 | INFO     | bot.request_handlers | [request] Добавлен товар #1: «Шу ванильные цех» qty=3 порц, price=50.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 09:56:43 | INFO     | aiogram.event | Update id=520044352 is handled. Duration 1163 ms by bot id=8301059555
+2026-02-26 09:56:47 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:09:56:47 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:56:47 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Шу шоколад'
+2026-02-26 09:56:48 | INFO     | aiogram.event | Update id=520044353 is handled. Duration 1006 ms by bot id=8301059555
+2026-02-26 09:56:52 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:09:56:52 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:56:52 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 09:56:53 | INFO     | aiogram.event | Update id=520044354 is handled. Duration 986 ms by bot id=8301059555
+2026-02-26 09:56:55 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:09:56:55 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:56:55 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='3'
+2026-02-26 09:56:55 | INFO     | bot.request_handlers | [request] Добавлен товар #2: «Шу шоколадные цех» qty=3 порц, price=55.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 09:56:56 | INFO     | aiogram.event | Update id=520044355 is handled. Duration 1228 ms by bot id=8301059555
+2026-02-26 09:58:08 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:08 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:08 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Шу творожный'
+2026-02-26 09:58:09 | INFO     | aiogram.event | Update id=520044356 is handled. Duration 856 ms by bot id=8301059555
+2026-02-26 09:58:12 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:12 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:12 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Шу'
+2026-02-26 09:58:13 | INFO     | aiogram.event | Update id=520044357 is handled. Duration 1067 ms by bot id=8301059555
+2026-02-26 09:58:17 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:17 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:17 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 09:58:18 | INFO     | aiogram.event | Update id=520044358 is handled. Duration 957 ms by bot id=8301059555
+2026-02-26 09:58:20 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:20 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:21 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='3'
+2026-02-26 09:58:21 | INFO     | bot.request_handlers | [request] Добавлен товар #3: «Шу творожные цех» qty=3 порц, price=55.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 09:58:22 | INFO     | aiogram.event | Update id=520044359 is handled. Duration 1223 ms by bot id=8301059555
+2026-02-26 09:58:24 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:24 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:25 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Шу Роше'
+2026-02-26 09:58:26 | INFO     | aiogram.event | Update id=520044360 is handled. Duration 1076 ms by bot id=8301059555
+2026-02-26 09:58:29 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:29 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:29 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 09:58:30 | INFO     | aiogram.event | Update id=520044361 is handled. Duration 1038 ms by bot id=8301059555
+2026-02-26 09:58:32 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:32 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:32 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='2'
+2026-02-26 09:58:33 | INFO     | bot.request_handlers | [request] Добавлен товар #4: «Шу роше цех» qty=2 порц, price=125.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 09:58:33 | INFO     | aiogram.event | Update id=520044362 is handled. Duration 1176 ms by bot id=8301059555
+2026-02-26 09:58:39 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:39 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:39 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Шу меренга'
+2026-02-26 09:58:40 | INFO     | aiogram.event | Update id=520044363 is handled. Duration 962 ms by bot id=8301059555
+2026-02-26 09:58:42 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:42 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:42 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 09:58:43 | INFO     | aiogram.event | Update id=520044364 is handled. Duration 956 ms by bot id=8301059555
+2026-02-26 09:58:46 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:46 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:46 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='2'
+2026-02-26 09:58:47 | INFO     | bot.request_handlers | [request] Добавлен товар #5: «Шу меренга цех» qty=2 порц, price=45.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 09:58:47 | INFO     | aiogram.event | Update id=520044365 is handled. Duration 1127 ms by bot id=8301059555
+2026-02-26 09:58:54 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:54 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:54 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Шу тирамиссу'
+2026-02-26 09:58:55 | INFO     | aiogram.event | Update id=520044366 is handled. Duration 1046 ms by bot id=8301059555
+2026-02-26 09:58:56 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:58:56 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:58:56 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 09:58:57 | INFO     | aiogram.event | Update id=520044367 is handled. Duration 959 ms by bot id=8301059555
+2026-02-26 09:59:03 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:09:59:03 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 09:59:03 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='2'
+2026-02-26 09:59:03 | INFO     | bot.request_handlers | [request] Добавлен товар #6: «Шу тирамиссу цех» qty=2 порц, price=130.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 09:59:04 | INFO     | aiogram.event | Update id=520044368 is handled. Duration 1285 ms by bot id=8301059555
+2026-02-26 10:00:18 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:10:00:18 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:00:18 | INFO     | bot.request_handlers | [request_handlers] preview_request tg:1028538977
+2026-02-26 10:00:18 | INFO     | aiogram.event | Update id=520044369 is handled. Duration 605 ms by bot id=8301059555
+2026-02-26 10:00:29 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:10:00:29 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:00:30 | INFO     | bot.request_handlers | [request_handlers] confirm_send_request tg:1028538977
+2026-02-26 10:00:30 | INFO     | use_cases.product_request | [request] ✅ Заявка pk=36 создана: tg:1028538977, dept=PizzaYolo / Пицца Йоло (Московский), store=Кухня (Клиническая), items=6, sum=1080.00 (0.05 сек)
+2026-02-26 10:00:30 | INFO     | bot.request_handlers | [request] Создана заявка #36, items=6, tg:1028538977
+2026-02-26 10:00:32 | INFO     | bot.request_handlers | [request] Заявка #36: admin=7, receiver=12, sent=12
+2026-02-26 10:00:33 | INFO     | aiogram.event | Update id=520044370 is handled. Duration 3951 ms by bot id=8301059555
+2026-02-26 10:06:18 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:06:18.203", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "5c251312-af5b-4ed1-a6fc-de53d804e425", "eventInfo": {"id": "7917db77-8446-4256-b069-2234e25b6c77", "posId": "ecfa8cd5-9ca7-4f83-a58f-6bfca1d061b7", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772100378183, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:06:18 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:10:06:18 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:06:18 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:06:18.203
+2026-02-26 10:06:18 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:06:18 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:08:40 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:08:39.817", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "5ba2e8f1-ebd5-4b4c-9418-79342add1d70", "eventInfo": {"id": "49151ebb-68b7-4abe-895b-d6b8b0192501", "posId": "125d9c78-3e84-4943-a41b-0be207b82d97", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772100519792, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:08:40 | INFO     | aiohttp.access | 100.64.0.3 [26/Feb/2026:10:08:40 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:08:40 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 10:08:39.817
+2026-02-26 10:08:40 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 10:08:40 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:12:45 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:12:45.282", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "b1e5282e-f01f-4255-a8c0-bbc2f7318e8e", "eventInfo": {"id": "7917db77-8446-4256-b069-2234e25b6c77", "posId": "ecfa8cd5-9ca7-4f83-a58f-6bfca1d061b7", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772100765257, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:12:45 | INFO     | aiohttp.access | 100.64.0.6 [26/Feb/2026:10:12:45 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:12:45 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:12:45.282
+2026-02-26 10:12:45 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:12:45 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:12:53 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:12:53.069", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "b9a4df63-df4f-4e35-bc7c-ce7723bc899b", "eventInfo": {"id": "7917db77-8446-4256-b069-2234e25b6c77", "posId": "ecfa8cd5-9ca7-4f83-a58f-6bfca1d061b7", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772100773049, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:12:53 | INFO     | aiohttp.access | 100.64.0.3 [26/Feb/2026:10:12:53 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:12:53 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:12:53.069
+2026-02-26 10:12:53 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 10:12:53 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 10:12:53 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 10:12:53 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 10:12:53 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 10:12:53 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T12:12:53
+2026-02-26 10:12:54 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.2 сек, 119128 байт
+2026-02-26 10:12:54 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.6 сек
+2026-02-26 10:12:54 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 10:12:54 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 10:12:54 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 10:12:54 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 10:12:54 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.6 сек, БД 0.2 сек | Итого 0.9 сек
+2026-02-26 10:12:54 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 10:12:54 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 10:12:54 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.4 сек (department=None)
+2026-02-26 10:12:54 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Позиция 'Желток паст. / Клиническая PizzaYol' изменилась 22.9% >= 3.0% (4.36 → 3.36) — обновляем
+2026-02-26 10:12:55 | INFO     | adapters.google_sheets | [GSheets] Прочитано 20 записей прав за 1.0 сек
+2026-02-26 10:12:55 | INFO     | use_cases.permissions | [Permissions] Кеш обновлён: 20 пользователей
+2026-02-26 10:12:56 | INFO     | use_cases.pinned_stock_message | [StockAlert] Обновляю stock-alert для 6 пользователей...
+2026-02-26 10:12:56 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1059714785 → «Асташевская Эвита», ресторан «Клиническая PizzaYolo» за 0.07 сек
+2026-02-26 10:12:56 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=fa85468e-af74-495e-a33c-37d6562e4699)...
+2026-02-26 10:12:56 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 104
+2026-02-26 10:12:56 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 36/104 ниже минимума за 0.1 сек (department=Клиническая PizzaYolo)
+2026-02-26 10:12:57 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:10:12:57 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:12:57 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:12:57.130", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "992aa4c2-7e3e-4395-a0ed-cdaf79d9d547", "eventInfo": {"id": "a9c902cf-0694-4ad7-9c8e-d1187314c6be", "posId": "00f9cabe-0359-4e58-b1e4-a454d720e038", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772100777115, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:12:57 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:10:12:57 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:12:57 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:12:57.130
+2026-02-26 10:12:57 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:12:57 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:12:57 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:6446544048 → «Бахин Владислав Станиславович», ресторан «Клиническая PizzaYolo» за 0.06 сек
+2026-02-26 10:12:57 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:12:57.149", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "992aa4c2-7e3e-4395-a0ed-cdaf79d9d547", "eventInfo": {"id": "a56c2f05-88de-4699-861e-899151e37326", "posId": "aebeb3fa-62ae-4710-9aec-4d6d89d55e6e", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772100777135, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:12:57 | INFO     | aiohttp.access | 100.64.0.10 [26/Feb/2026:10:12:57 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:12:57 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:12:57.149
+2026-02-26 10:12:57 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:12:57 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:12:57 | INFO     | aiogram.event | Update id=520044371 is handled. Duration 242 ms by bot id=8301059555
+2026-02-26 10:12:58 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:10:12:58 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:12:58 | INFO     | aiogram.event | Update id=520044372 is handled. Duration 250 ms by bot id=8301059555
+2026-02-26 10:12:58 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:2069928993 → «Лямм Ольга Ивановна», ресторан «Клиническая PizzaYolo» за 0.05 сек
+2026-02-26 10:12:59 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:10:12:59 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:12:59 | INFO     | aiogram.event | Update id=520044373 is handled. Duration 233 ms by bot id=8301059555
+2026-02-26 10:12:59 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1877127405 → «Мерзляков Егор Андреевич», ресторан «Клиническая PizzaYolo» за 0.05 сек
+2026-02-26 10:13:00 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:10:13:00 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:13:00 | INFO     | aiogram.event | Update id=520044374 is handled. Duration 222 ms by bot id=8301059555
+2026-02-26 10:13:00 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:853263652 → «Сорокина Виктория», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.05 сек
+2026-02-26 10:13:00 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=fb855535-5d3a-447c-b951-71c3059b705b)...
+2026-02-26 10:13:00 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 56
+2026-02-26 10:13:00 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 23/56 ниже минимума за 0.1 сек (department=PizzaYolo / Пицца Йоло (Московский))
+2026-02-26 10:13:01 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:10:13:01 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:13:01 | INFO     | aiogram.event | Update id=520044375 is handled. Duration 204 ms by bot id=8301059555
+2026-02-26 10:13:01 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1078562089 → «Карагодин Георгий Артурович», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.06 сек
+2026-02-26 10:13:02 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:10:13:02 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:13:02 | INFO     | use_cases.pinned_stock_message | [StockAlert] Обновлено 6/6 сообщений (2 подразд.) за 7.5 сек
+2026-02-26 10:13:02 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки обновлены и разосланы за 8.8 сек (items=60)
+2026-02-26 10:13:02 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': True, 'stoplist_updated': False}
+2026-02-26 10:13:02 | INFO     | aiogram.event | Update id=520044376 is handled. Duration 257 ms by bot id=8301059555
+2026-02-26 10:14:00 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:13:59.979", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "98e42a27-a427-458b-aef4-fc413d1db2f0", "eventInfo": {"id": "49151ebb-68b7-4abe-895b-d6b8b0192501", "posId": "125d9c78-3e84-4943-a41b-0be207b82d97", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772100839959, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:14:00 | INFO     | aiohttp.access | 100.64.0.6 [26/Feb/2026:10:14:00 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:14:00 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 10:13:59.979
+2026-02-26 10:14:00 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 10:14:00 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:17:40 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:17:40.035", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "a2753286-0e63-429b-bc18-ad2bca2fd36e", "eventInfo": {"id": "a9c902cf-0694-4ad7-9c8e-d1187314c6be", "posId": "00f9cabe-0359-4e58-b1e4-a454d720e038", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772101060015, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:17:40 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:10:17:40 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:17:40 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:17:40.035
+2026-02-26 10:17:40 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:17:40 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:17:45 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:17:45.934", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "17f5211c-8ea4-47dc-b556-581911eea57c", "eventInfo": {"id": "a9c902cf-0694-4ad7-9c8e-d1187314c6be", "posId": "00f9cabe-0359-4e58-b1e4-a454d720e038", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772101065920, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:17:45 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:10:17:45 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:17:45 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:17:45.934
+2026-02-26 10:17:45 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 10:17:45 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 10:17:45 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 10:17:45 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 10:17:45 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T12:17:45
+2026-02-26 10:17:46 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 10:17:46 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.4 сек, 119128 байт
+2026-02-26 10:17:46 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.4 сек
+2026-02-26 10:17:46 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 10:17:46 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 10:17:46 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 10:17:46 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 10:17:46 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.4 сек, БД 0.2 сек | Итого 0.5 сек
+2026-02-26 10:17:46 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 10:17:46 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 10:17:46 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.1 сек (department=None)
+2026-02-26 10:17:46 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 10:17:46 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.6 сек)
+2026-02-26 10:17:46 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:17:52 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:17:52 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:17:52 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:17:51.841", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "95c62b6e-faa2-4cdf-851d-5533330271a3", "eventInfo": {"id": "a56c2f05-88de-4699-861e-899151e37326", "posId": "aebeb3fa-62ae-4710-9aec-4d6d89d55e6e", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772101071826, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:17:52 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:10:17:52 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:17:52 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:17:51.841
+2026-02-26 10:17:55 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:17:55.849", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "48758ab5-265b-4526-a84d-08a574207b3d", "eventInfo": {"id": "a56c2f05-88de-4699-861e-899151e37326", "posId": "aebeb3fa-62ae-4710-9aec-4d6d89d55e6e", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772101075837, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:17:55 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:10:17:55 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:17:55 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:17:55.849
+2026-02-26 10:17:55 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 10:17:55 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 10:17:55 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 10:17:55 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 10:17:55 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T12:17:55
+2026-02-26 10:17:56 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.2 сек, 119128 байт
+2026-02-26 10:17:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 10:17:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.3 сек
+2026-02-26 10:17:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 10:17:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 10:17:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 10:17:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 10:17:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.3 сек, БД 0.2 сек | Итого 0.5 сек
+2026-02-26 10:17:56 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 10:17:56 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 10:17:56 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.2 сек (department=None)
+2026-02-26 10:17:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 10:17:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.8 сек)
+2026-02-26 10:17:56 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:23:52 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:23:52.303", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "67bb129a-9e1a-4d15-804f-0c5c3278813c", "eventInfo": {"id": "49151ebb-68b7-4abe-895b-d6b8b0192501", "posId": "125d9c78-3e84-4943-a41b-0be207b82d97", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772101432285, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:23:52 | INFO     | aiohttp.access | 100.64.0.10 [26/Feb/2026:10:23:52 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:23:52 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 10:23:52.303
+2026-02-26 10:23:52 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:23:52 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:27:03 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:27:03.197", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "2d20e0ea-2698-4cfe-8f3b-e54122be17d7", "eventInfo": {"id": "0075cfc5-92ef-4119-9f5d-4e4a7cfade02", "posId": "ae745986-416f-4c7b-aa6a-cc05a87bfe6e", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772101623165, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:27:03 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:10:27:03 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:27:03 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:27:03.197
+2026-02-26 10:27:03 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 10:27:03 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:27:11 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:27:10.961", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "94a4b0de-4c48-483b-b24a-8ef030b2f7ad", "eventInfo": {"id": "49151ebb-68b7-4abe-895b-d6b8b0192501", "posId": "125d9c78-3e84-4943-a41b-0be207b82d97", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772101630942, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:27:11 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:10:27:11 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:27:11 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 10:27:10.961
+2026-02-26 10:27:11 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:27:11 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:27:31 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:27:31.334", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "2c86d45d-034d-4d1b-81d3-710410fcf8d4", "eventInfo": {"id": "0075cfc5-92ef-4119-9f5d-4e4a7cfade02", "posId": "ae745986-416f-4c7b-aa6a-cc05a87bfe6e", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772101651314, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:27:31 | INFO     | aiohttp.access | 100.64.0.13 [26/Feb/2026:10:27:31 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:27:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:27:31.334
+2026-02-26 10:27:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 10:27:31 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:30:56 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:30:55.854", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "e049a116-a81b-4169-824b-fa501e4204b5", "eventInfo": {"id": "49151ebb-68b7-4abe-895b-d6b8b0192501", "posId": "125d9c78-3e84-4943-a41b-0be207b82d97", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772101855838, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:30:56 | INFO     | aiohttp.access | 100.64.0.13 [26/Feb/2026:10:30:56 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:30:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 10:30:55.854
+2026-02-26 10:30:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 10:30:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 10:30:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 10:30:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 10:30:56 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T12:30:56
+2026-02-26 10:30:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.5 сек
+2026-02-26 10:30:56 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.2 сек, 119128 байт
+2026-02-26 10:30:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.6 сек
+2026-02-26 10:30:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 10:30:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 10:30:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 10:30:56 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 10:30:57 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.6 сек, БД 0.3 сек | Итого 0.9 сек
+2026-02-26 10:30:57 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 10:30:57 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 10:30:57 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.2 сек (department=None)
+2026-02-26 10:30:57 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 10:30:57 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (1.1 сек)
+2026-02-26 10:30:57 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:36:44 | INFO     | aiohttp.access | 100.64.0.2 [26/Feb/2026:10:36:44 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:36:44 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] StopListUpdate debounce: +1 org(s), буфер=1, flush через 60 сек
+2026-02-26 10:36:44 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=StopListUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:36:44.439
+2026-02-26 10:36:44 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': True}
+2026-02-26 10:36:44 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "StopListUpdate", "eventTime": "2026-02-26 10:36:44.439", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "540c62a8-e78e-4253-a30d-857951ebae47", "eventInfo": {"terminalGroupsStopListsUpdates": [{"id": "b9e7dfaf-5e60-47b1-8698-dddb18ceed28", "isFull": false}]}}]
+2026-02-26 10:36:46 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "StopListUpdate", "eventTime": "2026-02-26 10:36:45.968", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "170589d9-0435-4616-b4f9-824d7cc179c5", "eventInfo": {"terminalGroupsStopListsUpdates": [{"id": "b9e7dfaf-5e60-47b1-8698-dddb18ceed28", "isFull": false}]}}]
+2026-02-26 10:36:46 | INFO     | aiohttp.access | 100.64.0.13 [26/Feb/2026:10:36:46 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:36:46 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] StopListUpdate debounce: +1 org(s), буфер=1, flush через 60 сек
+2026-02-26 10:36:46 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=StopListUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:36:45.968
+2026-02-26 10:36:46 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': True}
+2026-02-26 10:36:47 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "StopListUpdate", "eventTime": "2026-02-26 10:36:47.201", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "5874305b-a72a-46a6-8d18-13beeba23048", "eventInfo": {"terminalGroupsStopListsUpdates": [{"id": "b9e7dfaf-5e60-47b1-8698-dddb18ceed28", "isFull": false}]}}]
+2026-02-26 10:36:47 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:10:36:47 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:36:47 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] StopListUpdate debounce: +1 org(s), буфер=1, flush через 60 сек
+2026-02-26 10:36:47 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=StopListUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:36:47.201
+2026-02-26 10:36:47 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': True}
+2026-02-26 10:36:49 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "StopListUpdate", "eventTime": "2026-02-26 10:36:49.044", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "9db3c76f-8528-4907-be74-b51870e03aee", "eventInfo": {"terminalGroupsStopListsUpdates": [{"id": "b9e7dfaf-5e60-47b1-8698-dddb18ceed28", "isFull": false}]}}]
+2026-02-26 10:36:49 | INFO     | aiohttp.access | 100.64.0.3 [26/Feb/2026:10:36:49 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:36:49 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] StopListUpdate debounce: +1 org(s), буфер=1, flush через 60 сек
+2026-02-26 10:36:49 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=StopListUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:36:49.044
+2026-02-26 10:36:49 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': True}
+2026-02-26 10:37:49 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Debounce flush: обрабатываю StopListUpdate для 1 org(s): {'e506f24f-533b-49a5-9e3f-52cd462d2e6a'}
+2026-02-26 10:37:49 | INFO     | adapters.iiko_cloud_api | [iikoCloud] Получено 1 терминальных групп (org=e506f24f-533b-49a5-9e3f-52cd462d2e6a) за 0.4 сек
+2026-02-26 10:37:49 | INFO     | adapters.iiko_cloud_api | [iikoCloud] Стоп-лист: 1 групп, 2 позиций (org=e506f24f-533b-49a5-9e3f-52cd462d2e6a) за 0.2 сек
+2026-02-26 10:37:49 | INFO     | use_cases.stoplist | [Stoplist] Получено 2 позиций стоп-листа из 1 терминальных групп за 0.7 сек
+2026-02-26 10:37:50 | INFO     | use_cases.stoplist | [Stoplist] История: 0 вошли в стоп, 4 вышли из стопа
+2026-02-26 10:37:50 | INFO     | use_cases.stoplist | [Stoplist] Diff: +0 -4 ~0 =2 (0.3 сек)
+2026-02-26 10:37:52 | INFO     | adapters.google_sheets | [GSheets] Прочитано 20 записей прав за 1.7 сек
+2026-02-26 10:37:52 | INFO     | use_cases.permissions | [Permissions] Кеш обновлён: 20 пользователей
+2026-02-26 10:37:53 | INFO     | adapters.google_sheets | [GSheets] cloud_org_mapping: 2 привязок за 0.8 сек
+2026-02-26 10:37:53 | INFO     | use_cases.cloud_org_mapping | [CloudOrgMap] Кеш обновлён: 2 привязок
+2026-02-26 10:37:54 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:10:37:54 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:37:55 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:10:37:55 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:37:55 | INFO     | aiogram.event | Update id=520044379 is handled. Duration 202 ms by bot id=8301059555
+2026-02-26 10:37:56 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:10:37:56 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:37:56 | INFO     | aiogram.event | Update id=520044380 is handled. Duration 197 ms by bot id=8301059555
+2026-02-26 10:37:56 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:5270566760 → «Кожанов Олег Николаевич», ресторан «Клиническая PizzaYolo» за 0.06 сек
+2026-02-26 10:37:57 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:10:37:57 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:37:57 | INFO     | aiogram.event | Update id=520044381 is handled. Duration 190 ms by bot id=8301059555
+2026-02-26 10:37:58 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:5001657221 → «Афанасьева Анастасия», ресторан «Клиническая PizzaYolo» за 0.05 сек
+2026-02-26 10:37:54 | INFO     | aiogram.event | Update id=520044377 is handled. Duration 189 ms by bot id=8301059555
+2026-02-26 10:37:54 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:10:37:54 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:37:54 | INFO     | aiogram.event | Update id=520044378 is handled. Duration 207 ms by bot id=8301059555
+2026-02-26 10:37:58 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:10:37:58 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 10:37:58 | INFO     | use_cases.pinned_stoplist_message | [StoplistAlert] org=e506f24f-533b-49a5-9e3f-52cd462d2e6a: обновлено 6 пользователей за 8.5 сек
+2026-02-26 10:37:58 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] org=e506f24f-533b-49a5-9e3f-52cd462d2e6a: +0 -4 ~0 =2, отправлено 6 пользователям
+2026-02-26 10:37:58 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Flush завершён за 9.4 сек
+2026-02-26 10:37:58 | INFO     | aiogram.event | Update id=520044382 is handled. Duration 197 ms by bot id=8301059555
+2026-02-26 10:50:54 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:50:54.510", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "74f56513-4098-4a44-9a89-0560cecbb94e", "eventInfo": {"id": "49151ebb-68b7-4abe-895b-d6b8b0192501", "posId": "f09d4a2a-aaf3-44f8-bf65-84d21840302f", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772103054490, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:50:54 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:10:50:54 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:50:54 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 10:50:54.510
+2026-02-26 10:50:54 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 10:50:54 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 10:50:54 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 10:50:54 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 10:50:55 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T12:50:54
+2026-02-26 10:50:55 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.1 сек, 119128 байт
+2026-02-26 10:50:55 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.5 сек
+2026-02-26 10:50:55 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.5 сек
+2026-02-26 10:50:55 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 10:50:55 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 10:50:55 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 10:50:55 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 10:50:55 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.5 сек, БД 0.2 сек | Итого 0.7 сек
+2026-02-26 10:50:55 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 10:50:55 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 10:50:55 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.2 сек (department=None)
+2026-02-26 10:50:55 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 10:50:55 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.9 сек)
+2026-02-26 10:50:55 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:54:18 | INFO     | aiohttp.access | 100.64.0.10 [26/Feb/2026:10:54:18 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:54:18 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:54:17.923
+2026-02-26 10:54:18 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:54:18 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:54:18 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:54:17.923", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "fcdd42a9-b93b-4911-9dc6-091bd5e98b4a", "eventInfo": {"id": "0075cfc5-92ef-4119-9f5d-4e4a7cfade02", "posId": "ae745986-416f-4c7b-aa6a-cc05a87bfe6e", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103257903, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:55:10 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:55:10.002", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "86fded8e-fd05-4c62-b559-b808808d09cb", "eventInfo": {"id": "0075cfc5-92ef-4119-9f5d-4e4a7cfade02", "posId": "ae745986-416f-4c7b-aa6a-cc05a87bfe6e", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103309982, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:55:10 | INFO     | aiohttp.access | 100.64.0.6 [26/Feb/2026:10:55:10 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:55:10 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:55:10.002
+2026-02-26 10:55:10 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:55:10 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:55:16 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:55:16.173", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "9f882867-cbe6-4464-b2ae-5f60adc80ae7", "eventInfo": {"id": "0075cfc5-92ef-4119-9f5d-4e4a7cfade02", "posId": "ae745986-416f-4c7b-aa6a-cc05a87bfe6e", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103316152, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:55:16 | INFO     | aiohttp.access | 100.64.0.6 [26/Feb/2026:10:55:16 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:55:16 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:55:16.173
+2026-02-26 10:55:16 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 10:55:16 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 10:55:16 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 10:55:16 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 10:55:16 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T12:55:16
+2026-02-26 10:55:16 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.1 сек
+2026-02-26 10:55:16 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.2 сек, 119128 байт
+2026-02-26 10:55:16 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.2 сек
+2026-02-26 10:55:16 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 10:55:16 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 10:55:16 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 10:55:16 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 10:55:16 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.2 сек, БД 0.1 сек | Итого 0.4 сек
+2026-02-26 10:55:16 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 10:55:16 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 10:55:16 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.1 сек (department=None)
+2026-02-26 10:55:16 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 10:55:16 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.5 сек)
+2026-02-26 10:55:16 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:56:04 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:56:04.059", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "5b551396-4e9e-4816-a1b2-3cf16f275283", "eventInfo": {"id": "56d3af9e-2f85-4582-9172-70ab7d742939", "posId": "1a53875e-470f-4fae-a6ce-5547a9a309f2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103364045, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:56:04 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:10:56:04 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:56:04 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:56:04.059
+2026-02-26 10:56:04 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 10:56:04 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 10:56:46 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 10:56:46.276", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "cba87b04-9847-4491-9515-4f06fb336440", "eventInfo": {"id": "56d3af9e-2f85-4582-9172-70ab7d742939", "posId": "1a53875e-470f-4fae-a6ce-5547a9a309f2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103406263, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 10:56:46 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:10:56:46 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 10:56:46 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 10:56:46.276
+2026-02-26 10:56:46 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 10:56:46 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:02:15 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:02:15.726", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "9a193049-fc03-4d68-ac30-7a91bbbb2934", "eventInfo": {"id": "da238454-096c-4ede-8531-1f87840f74d7", "posId": "d04c71af-f08c-43e0-ad67-d83c4b1f68d2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103735706, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:02:15 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:11:02:15 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:02:15 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:02:15.726
+2026-02-26 11:02:15 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 11:02:15 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:03:11 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:03:11.220", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "da46430d-c01d-4aff-825d-25eea65ba316", "eventInfo": {"id": "56d3af9e-2f85-4582-9172-70ab7d742939", "posId": "1a53875e-470f-4fae-a6ce-5547a9a309f2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103791206, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:03:11 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:11:03:11 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:03:11 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:03:11.220
+2026-02-26 11:03:11 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 11:03:11 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:03:13 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:03:13.092", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "1aaca54a-0d6d-4b0d-af99-0b77cb59a247", "eventInfo": {"id": "56d3af9e-2f85-4582-9172-70ab7d742939", "posId": "1a53875e-470f-4fae-a6ce-5547a9a309f2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103793079, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:03:13 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:11:03:13 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:03:13 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:03:13.092
+2026-02-26 11:03:13 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 11:03:13 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 11:03:13 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 11:03:13 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 11:03:13 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 11:03:13 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T13:03:13
+2026-02-26 11:03:13 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.1 сек, 119128 байт
+2026-02-26 11:03:13 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.7 сек
+2026-02-26 11:03:13 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 11:03:13 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 11:03:14 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 11:03:14 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 11:03:14 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.7 сек, БД 0.2 сек | Итого 0.9 сек
+2026-02-26 11:03:14 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 11:03:14 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 11:03:14 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.4 сек (department=None)
+2026-02-26 11:03:14 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 11:03:14 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (1.3 сек)
+2026-02-26 11:03:14 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:03:25 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:03:25.376", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "5c27bc66-16f8-4584-9907-34d650636a10", "eventInfo": {"id": "da238454-096c-4ede-8531-1f87840f74d7", "posId": "d04c71af-f08c-43e0-ad67-d83c4b1f68d2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772103805360, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:03:25 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:11:03:25 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:03:25 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:03:25.376
+2026-02-26 11:03:25 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 11:03:25 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:11:25 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:11:25.332", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "01d7b017-7d90-4323-aeaf-fdd0f7024eae", "eventInfo": {"id": "e09ffe64-c1e9-4d6c-bd6e-05a420484b24", "posId": "5c66e86c-8e96-437a-a8ee-5e63fa878bef", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772104285310, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:11:25 | INFO     | aiohttp.access | 100.64.0.13 [26/Feb/2026:11:11:25 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:11:25 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:11:25.332
+2026-02-26 11:11:25 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 11:11:25 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:12:31 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:12:30.750", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "9cb8cc2f-5c21-4625-ab2f-297bfdbc11aa", "eventInfo": {"id": "e09ffe64-c1e9-4d6c-bd6e-05a420484b24", "posId": "5c66e86c-8e96-437a-a8ee-5e63fa878bef", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772104350731, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:12:31 | INFO     | aiohttp.access | 100.64.0.6 [26/Feb/2026:11:12:31 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:12:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:12:30.750
+2026-02-26 11:12:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 11:12:31 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:12:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 11:12:56 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:12:56 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:12:56.319", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "c110d5e8-7867-4c5b-9c6e-aef558cb1550", "eventInfo": {"id": "4bc8bd5d-4f5b-4b96-ab10-e7c7ad28d136", "posId": "5a5843a4-e823-4193-b6ce-8f4a9455fcaf", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772104376297, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:12:56 | INFO     | aiohttp.access | 100.64.0.13 [26/Feb/2026:11:12:56 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:12:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:12:56.319
+2026-02-26 11:13:15 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:13:14.908", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "138fe409-76f9-43d0-8998-715a38517de9", "eventInfo": {"id": "da238454-096c-4ede-8531-1f87840f74d7", "posId": "d04c71af-f08c-43e0-ad67-d83c4b1f68d2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772104394893, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:13:15 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:11:13:15 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:13:15 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:13:14.908
+2026-02-26 11:13:15 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 11:13:15 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:15:06 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:15:05.641", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "9b35e31f-6fdb-4a61-848c-f7cf54407cce", "eventInfo": {"id": "4bc8bd5d-4f5b-4b96-ab10-e7c7ad28d136", "posId": "5a5843a4-e823-4193-b6ce-8f4a9455fcaf", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772104505625, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:15:06 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:11:15:06 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:15:06 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:15:05.641
+2026-02-26 11:15:06 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 11:15:06 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:19:18 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:19:18.171", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "c735496d-cb3d-40ec-888f-80722bc23501", "eventInfo": {"id": "fdd47cec-e5b2-4ddd-ae6f-722736eabae3", "posId": "5b59ce7a-6dd7-4c9c-9211-cc15ca294a85", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772104758150, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:19:18 | INFO     | aiohttp.access | 100.64.0.2 [26/Feb/2026:11:19:18 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:19:18 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:19:18.171
+2026-02-26 11:19:18 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 11:19:18 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 11:19:18 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 11:19:18 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 11:19:18 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 11:19:18 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T13:19:18
+2026-02-26 11:19:19 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.1 сек, 119128 байт
+2026-02-26 11:19:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.5 сек
+2026-02-26 11:19:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 11:19:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 11:19:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 11:19:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 11:19:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.5 сек, БД 0.2 сек | Итого 0.7 сек
+2026-02-26 11:19:19 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 11:19:19 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 11:19:19 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.2 сек (department=None)
+2026-02-26 11:19:19 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 11:19:19 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.8 сек)
+2026-02-26 11:19:19 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:20:35 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 11:20:35 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:20:35 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:20:34.569", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "43608ff6-2f54-40b9-b47e-38dd3f05f1b4", "eventInfo": {"id": "e09ffe64-c1e9-4d6c-bd6e-05a420484b24", "posId": "5c66e86c-8e96-437a-a8ee-5e63fa878bef", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772104834556, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:20:35 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:11:20:35 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:20:35 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:20:34.569
+2026-02-26 11:33:19 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:33:18.763", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "564f2235-45b1-4e6c-b15d-e63ed3701f85", "eventInfo": {"id": "e09ffe64-c1e9-4d6c-bd6e-05a420484b24", "posId": "5c66e86c-8e96-437a-a8ee-5e63fa878bef", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772105598744, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:33:19 | INFO     | aiohttp.access | 100.64.0.6 [26/Feb/2026:11:33:19 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:33:19 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:33:18.763
+2026-02-26 11:33:19 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 11:33:19 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 11:33:19 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 11:33:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 11:33:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 11:33:19 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T13:33:19
+2026-02-26 11:33:19 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.1 сек, 119128 байт
+2026-02-26 11:33:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.6 сек
+2026-02-26 11:33:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 11:33:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 11:33:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 11:33:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 11:33:19 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.6 сек, БД 0.2 сек | Итого 0.7 сек
+2026-02-26 11:33:19 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 11:33:20 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 11:33:20 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.2 сек (department=None)
+2026-02-26 11:33:20 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 11:33:20 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.9 сек)
+2026-02-26 11:33:20 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:36:16 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:36:16.656", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "81b92768-70bb-443f-ad6b-9ca5e5fbeaed", "eventInfo": {"id": "96a549f2-77e2-479a-91b6-055a721412c0", "posId": "35c77564-cb11-4056-98fb-f2045fb391a7", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772105776625, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:36:16 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:11:36:16 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:36:16 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 11:36:16.656
+2026-02-26 11:36:16 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 11:36:16 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:36:39 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:36:39.242", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "78509f5b-d205-4189-a6f6-398c4c0ce8b8", "eventInfo": {"id": "4bc8bd5d-4f5b-4b96-ab10-e7c7ad28d136", "posId": "5a5843a4-e823-4193-b6ce-8f4a9455fcaf", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772105799223, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:36:39 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:11:36:39 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:36:39 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:36:39.242
+2026-02-26 11:36:39 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 11:36:39 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:36:40 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:36:40.502", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "dab58c4e-4c15-49ee-b05c-8dbe7bfcb82a", "eventInfo": {"id": "96a549f2-77e2-479a-91b6-055a721412c0", "posId": "35c77564-cb11-4056-98fb-f2045fb391a7", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772105800483, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:36:40 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:11:36:40 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:36:40 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 11:36:40.502
+2026-02-26 11:36:40 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 11:36:40 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:43:56 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:43:56.127", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "491a9de7-a64e-4815-95e0-c39841d45abc", "eventInfo": {"id": "96a549f2-77e2-479a-91b6-055a721412c0", "posId": "35c77564-cb11-4056-98fb-f2045fb391a7", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772106236113, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:43:56 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:11:43:56 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:43:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 11:43:56.127
+2026-02-26 11:43:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 11:43:56 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:46:01 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:46:00.732", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "c81219cb-a38c-4e81-8f44-8db14b037553", "eventInfo": {"id": "96a549f2-77e2-479a-91b6-055a721412c0", "posId": "35c77564-cb11-4056-98fb-f2045fb391a7", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772106360712, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:46:01 | INFO     | aiohttp.access | 100.64.0.8 [26/Feb/2026:11:46:01 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:46:01 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 11:46:00.732
+2026-02-26 11:46:01 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 11:46:01 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 11:46:01 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 11:46:01 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 11:46:01 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 11:46:01 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T13:46:01
+2026-02-26 11:46:01 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.1 сек, 119128 байт
+2026-02-26 11:46:01 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.5 сек
+2026-02-26 11:46:01 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 11:46:01 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 11:46:01 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 11:46:01 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 11:46:01 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.5 сек, БД 0.2 сек | Итого 0.7 сек
+2026-02-26 11:46:01 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 11:46:01 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 11:46:01 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.1 сек (department=None)
+2026-02-26 11:46:01 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 11:46:01 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.8 сек)
+2026-02-26 11:46:01 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:54:48 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:54:48.569", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "f3c5f95c-ed73-486c-a769-f5d634693db5", "eventInfo": {"id": "d41a5609-a74a-4ade-84ea-61d7ec2e4093", "posId": "85e3d43a-b5c3-4814-9180-59f7f1427e4f", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772106888438, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:54:48 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:11:54:48 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:54:48 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 11:54:48.569
+2026-02-26 11:54:48 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 11:54:48 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 11:55:10 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 11:55:10.016", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "607fabce-2e91-4c9b-bfb2-6d7c82169621", "eventInfo": {"id": "da238454-096c-4ede-8531-1f87840f74d7", "posId": "d04c71af-f08c-43e0-ad67-d83c4b1f68d2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772106909995, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 11:55:10 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:11:55:10 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 11:55:10 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 11:55:10.016
+2026-02-26 11:55:10 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 11:55:10 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 11:55:10 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 11:55:10 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 11:55:10 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T13:55:10
+2026-02-26 11:55:10 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.3 сек, 119128 байт
+2026-02-26 11:55:10 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 11:55:10 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.3 сек
+2026-02-26 11:55:10 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 11:55:10 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 11:55:10 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 11:55:10 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 11:55:10 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.3 сек, БД 0.2 сек | Итого 0.5 сек
+2026-02-26 11:55:10 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 11:55:10 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 11:55:10 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.2 сек (department=None)
+2026-02-26 11:55:10 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 11:55:10 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.6 сек)
+2026-02-26 11:55:10 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:12:03 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:12:02.765", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "7a10b008-5338-4d89-a909-85c172d2d89e", "eventInfo": {"id": "674746be-ee74-42ba-9fd1-9cdb8e08504b", "posId": "08ac4d81-4ce1-4113-84ad-87bbe95d57e3", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772107922731, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:12:03 | INFO     | aiohttp.access | 100.64.0.6 [26/Feb/2026:12:12:03 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:12:03 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 12:12:02.765
+2026-02-26 12:12:03 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 12:12:03 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:12:47 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:12:47.321", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "a97f9cc2-a916-4410-af12-d00abbdaa866", "eventInfo": {"id": "674746be-ee74-42ba-9fd1-9cdb8e08504b", "posId": "08ac4d81-4ce1-4113-84ad-87bbe95d57e3", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772107967303, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:12:47 | INFO     | aiohttp.access | 100.64.0.2 [26/Feb/2026:12:12:47 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:12:47 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 12:12:47.321
+2026-02-26 12:12:47 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 12:12:47 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:13:02 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:13:02.082", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "c6a0e5e2-45cb-4744-9a72-1e01b36c0e30", "eventInfo": {"id": "d41a5609-a74a-4ade-84ea-61d7ec2e4093", "posId": "85e3d43a-b5c3-4814-9180-59f7f1427e4f", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772107982061, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:13:02 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:12:13:02 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:13:02 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 12:13:02.082
+2026-02-26 12:13:02 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 12:13:02 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:25:37 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:25:37.503", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "cab00bf0-070d-4aa7-bd1d-77dd29e4343e", "eventInfo": {"id": "674746be-ee74-42ba-9fd1-9cdb8e08504b", "posId": "08ac4d81-4ce1-4113-84ad-87bbe95d57e3", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772108737484, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:25:37 | INFO     | aiohttp.access | 100.64.0.2 [26/Feb/2026:12:25:37 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:25:37 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 12:25:37.503
+2026-02-26 12:25:37 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 12:25:37 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:32:44 | INFO     | aiohttp.access | 100.64.0.10 [26/Feb/2026:12:32:44 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:32:47 | INFO     | adapters.google_sheets | [GSheets] Прочитано 20 записей прав за 2.9 сек
+2026-02-26 12:32:47 | INFO     | use_cases.permissions | [Permissions] Кеш обновлён: 20 пользователей
+2026-02-26 12:32:48 | INFO     | bot.request_handlers | [request_handlers] start_create_request tg:1028538977
+2026-02-26 12:32:49 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1028538977 → «Заливина Ульяна Павловна», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.46 сек
+2026-02-26 12:32:49 | INFO     | bot.request_handlers | [request] Старт создания заявки tg:1028538977, dept=fb855535-5d3a-447c-b951-71c3059b705b (PizzaYolo / Пицца Йоло (Московский))
+2026-02-26 12:32:49 | INFO     | use_cases.outgoing_invoice | [invoice] Поиск счёта реализации...
+2026-02-26 12:32:49 | INFO     | use_cases.outgoing_invoice | [invoice] Счёт реализации: Реализация на точки (9f2f336e-ef5a-49a6-8bc2-6c33be346c23) за 0.12 сек
+2026-02-26 12:32:52 | INFO     | adapters.google_sheets | [GSheets] Заведение для заявок из GSheet: 0 за 2.7 сек
+2026-02-26 12:32:52 | INFO     | use_cases.product_request | [request] Заведение для заявок из GSheet: 0 шт
+2026-02-26 12:32:53 | INFO     | aiogram.event | Update id=520044383 is handled. Duration 9074 ms by bot id=8301059555
+2026-02-26 12:35:42 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:35:42 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:35:42 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Похлебка'
+2026-02-26 12:35:43 | INFO     | aiogram.event | Update id=520044384 is handled. Duration 960 ms by bot id=8301059555
+2026-02-26 12:36:38 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:36:38 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:36:38 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Розовый'
+2026-02-26 12:36:39 | INFO     | aiogram.event | Update id=520044385 is handled. Duration 1083 ms by bot id=8301059555
+2026-02-26 12:36:41 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:36:41 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:36:41 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 12:36:42 | INFO     | aiogram.event | Update id=520044386 is handled. Duration 979 ms by bot id=8301059555
+2026-02-26 12:37:25 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:37:25.201", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "74e90547-786c-426b-937b-416fbc0573bb", "eventInfo": {"id": "4bc8bd5d-4f5b-4b96-ab10-e7c7ad28d136", "posId": "5a5843a4-e823-4193-b6ce-8f4a9455fcaf", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772109445178, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:37:25 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:37:25 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:37:25 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 12:37:25.201
+2026-02-26 12:37:25 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=OnWay, creationStatus=Success
+2026-02-26 12:37:25 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:37:31 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:37:31.397", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "507d4296-ed5d-49cc-8dbd-f18f0e11f208", "eventInfo": {"id": "4bc8bd5d-4f5b-4b96-ab10-e7c7ad28d136", "posId": "5a5843a4-e823-4193-b6ce-8f4a9455fcaf", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772109451375, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:37:31 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:37:31 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:37:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 12:37:31.397
+2026-02-26 12:37:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 12:37:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 12:37:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 12:37:31 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 12:37:31 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.1 сек
+2026-02-26 12:37:31 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T14:37:31
+2026-02-26 12:37:32 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.1 сек, 119128 байт
+2026-02-26 12:37:32 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.7 сек
+2026-02-26 12:37:32 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 12:37:32 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 12:37:32 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 12:37:32 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 12:37:32 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.7 сек, БД 0.1 сек | Итого 0.8 сек
+2026-02-26 12:37:32 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 12:37:32 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 12:37:32 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.1 сек (department=None)
+2026-02-26 12:37:32 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 12:37:32 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.9 сек)
+2026-02-26 12:37:32 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:37:40 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:37:40 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:37:40 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='250'
+2026-02-26 12:37:41 | INFO     | bot.request_handlers | [request] Добавлен товар #1: «Розовый соус для сэндвича цех» qty=250 г (0.25 кг), price=215.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 12:37:41 | INFO     | aiogram.event | Update id=520044387 is handled. Duration 1195 ms by bot id=8301059555
+2026-02-26 12:37:52 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:37:52 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:37:52 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Боул'
+2026-02-26 12:37:53 | INFO     | aiogram.event | Update id=520044388 is handled. Duration 985 ms by bot id=8301059555
+2026-02-26 12:37:55 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:37:55 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:37:56 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 12:37:57 | INFO     | aiogram.event | Update id=520044389 is handled. Duration 1199 ms by bot id=8301059555
+2026-02-26 12:40:05 | INFO     | aiohttp.access | 100.64.0.13 [26/Feb/2026:12:40:05 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:40:05 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='300'
+2026-02-26 12:40:06 | INFO     | bot.request_handlers | [request] Добавлен товар #2: «Заправка на боул цех» qty=300 г (0.3 кг), price=210.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 12:40:07 | INFO     | aiogram.event | Update id=520044390 is handled. Duration 1395 ms by bot id=8301059555
+2026-02-26 12:40:20 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:40:19.705", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "e022ae1c-23bc-4037-804d-b05aef68d799", "eventInfo": {"id": "674746be-ee74-42ba-9fd1-9cdb8e08504b", "posId": "08ac4d81-4ce1-4113-84ad-87bbe95d57e3", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772109619685, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:40:20 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:12:40:20 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:40:20 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 12:40:19.705
+2026-02-26 12:40:20 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 12:40:20 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:40:26 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:40:25.839", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "9819de03-7ee1-495b-9759-b5ab95861e34", "eventInfo": {"id": "674746be-ee74-42ba-9fd1-9cdb8e08504b", "posId": "08ac4d81-4ce1-4113-84ad-87bbe95d57e3", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772109625822, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:40:26 | INFO     | aiohttp.access | 100.64.0.2 [26/Feb/2026:12:40:26 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:40:26 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 12:40:25.839
+2026-02-26 12:40:26 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 12:40:26 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 12:40:26 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 12:40:26 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 12:40:26 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T14:40:26
+2026-02-26 12:40:26 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.2 сек
+2026-02-26 12:40:26 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.3 сек, 119128 байт
+2026-02-26 12:40:26 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.3 сек
+2026-02-26 12:40:26 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 12:40:26 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 12:40:26 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 12:40:26 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 12:40:26 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.3 сек, БД 0.1 сек | Итого 0.5 сек
+2026-02-26 12:40:26 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 12:40:26 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 12:40:26 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.1 сек (department=None)
+2026-02-26 12:40:26 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 12:40:26 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.6 сек)
+2026-02-26 12:40:26 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:41:52 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:12:41:52 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:41:52 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Парбейки'
+2026-02-26 12:41:53 | INFO     | aiogram.event | Update id=520044391 is handled. Duration 863 ms by bot id=8301059555
+2026-02-26 12:41:57 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:12:41:57 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:41:57 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Парбейк'
+2026-02-26 12:41:58 | INFO     | aiogram.event | Update id=520044392 is handled. Duration 981 ms by bot id=8301059555
+2026-02-26 12:42:03 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:12:42:03 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:42:03 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 12:42:04 | INFO     | aiogram.event | Update id=520044393 is handled. Duration 941 ms by bot id=8301059555
+2026-02-26 12:42:33 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:12:42:33 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:42:33 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='15'
+2026-02-26 12:42:33 | INFO     | bot.request_handlers | [request] Добавлен товар #3: «Парбейк стандарт цех» qty=15 шт, price=25.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 12:42:34 | INFO     | aiogram.event | Update id=520044394 is handled. Duration 1135 ms by bot id=8301059555
+2026-02-26 12:42:41 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:12:42:41 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:42:42 | INFO     | bot.request_handlers | [request] Поиск товара tg:1028538977, query='Парбейк'
+2026-02-26 12:42:42 | INFO     | aiogram.event | Update id=520044395 is handled. Duration 1008 ms by bot id=8301059555
+2026-02-26 12:42:45 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:12:42:45 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:42:45 | INFO     | bot.request_handlers | [request_handlers] choose_request_product tg:1028538977
+2026-02-26 12:42:46 | INFO     | aiogram.event | Update id=520044396 is handled. Duration 1098 ms by bot id=8301059555
+2026-02-26 12:42:48 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:12:42:48 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:42:48 | INFO     | bot.request_handlers | [request] Ввод кол-ва tg:1028538977, raw='15'
+2026-02-26 12:42:49 | INFO     | bot.request_handlers | [request] Добавлен товар #4: «Парбейк большой цех» qty=15 шт, price=30.00, source_store=Кухня (Клиническая) → target_store=Кухня (Московский), tg:1028538977
+2026-02-26 12:42:49 | INFO     | aiogram.event | Update id=520044397 is handled. Duration 1130 ms by bot id=8301059555
+2026-02-26 12:43:55 | INFO     | aiohttp.access | 100.64.0.10 [26/Feb/2026:12:43:55 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:43:55 | INFO     | bot.request_handlers | [request_handlers] preview_request tg:1028538977
+2026-02-26 12:43:55 | INFO     | aiogram.event | Update id=520044398 is handled. Duration 705 ms by bot id=8301059555
+2026-02-26 12:45:19 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:45:19 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:45:19 | INFO     | bot.request_handlers | [request_handlers] confirm_send_request tg:1028538977
+2026-02-26 12:45:20 | INFO     | use_cases.product_request | [request] ✅ Заявка pk=37 создана: tg:1028538977, dept=PizzaYolo / Пицца Йоло (Московский), store=Кухня (Клиническая), items=4, sum=941.75 (0.04 сек)
+2026-02-26 12:45:20 | INFO     | bot.request_handlers | [request] Создана заявка #37, items=4, tg:1028538977
+2026-02-26 12:45:24 | INFO     | adapters.google_sheets | [GSheets] Прочитано 20 записей прав за 3.4 сек
+2026-02-26 12:45:24 | INFO     | use_cases.permissions | [Permissions] Кеш обновлён: 20 пользователей
+2026-02-26 12:45:26 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:12:45:26 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 12:45:26 | INFO     | bot.request_handlers | [request_handlers] confirm_send_request tg:1028538977
+2026-02-26 12:45:26 | INFO     | aiogram.event | Update id=520044400 is handled. Duration 196 ms by bot id=8301059555
+2026-02-26 12:45:27 | INFO     | bot.request_handlers | [request] Заявка #37: admin=7, receiver=12, sent=16
+2026-02-26 12:45:27 | INFO     | aiogram.event | Update id=520044399 is handled. Duration 8502 ms by bot id=8301059555
+2026-02-26 12:46:24 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:46:23.832", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "0d0e46b9-feab-4eea-ba07-a2b8f6dfeff8", "eventInfo": {"id": "d41a5609-a74a-4ade-84ea-61d7ec2e4093", "posId": "85e3d43a-b5c3-4814-9180-59f7f1427e4f", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772109983807, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:46:24 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:12:46:24 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:46:24 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 12:46:23.832
+2026-02-26 12:46:24 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=OnWay, creationStatus=Success
+2026-02-26 12:46:24 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 12:46:36 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 12:46:35.953", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "0d7e9132-dba9-4045-9105-20bac0f80037", "eventInfo": {"id": "d41a5609-a74a-4ade-84ea-61d7ec2e4093", "posId": "85e3d43a-b5c3-4814-9180-59f7f1427e4f", "externalNumber": null, "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "timestamp": 1772109995927, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 12:46:36 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:12:46:36 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 12:46:36 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 12:46:35.953
+2026-02-26 12:46:36 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 12:46:36 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 12:46:36 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 12:46:36 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 12:46:36 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T14:46:36
+2026-02-26 12:46:36 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.1 сек
+2026-02-26 12:46:36 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.2 сек, 119128 байт
+2026-02-26 12:46:36 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.2 сек
+2026-02-26 12:46:36 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 12:46:36 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 12:46:36 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 12:46:36 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 12:46:36 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.2 сек, БД 0.1 сек | Итого 0.4 сек
+2026-02-26 12:46:36 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 12:46:36 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 12:46:36 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.1 сек (department=None)
+2026-02-26 12:46:36 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 12:46:36 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.5 сек)
+2026-02-26 12:46:36 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 13:48:41 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "StopListUpdate", "eventTime": "2026-02-26 13:48:41.020", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "e043b4db-9291-4b55-a918-9d44fd389c4c", "eventInfo": {"terminalGroupsStopListsUpdates": [{"id": "b9e7dfaf-5e60-47b1-8698-dddb18ceed28", "isFull": false}]}}]
+2026-02-26 13:48:41 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:13:48:41 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 13:48:41 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] StopListUpdate debounce: +1 org(s), буфер=1, flush через 60 сек
+2026-02-26 13:48:41 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=StopListUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 13:48:41.020
+2026-02-26 13:48:41 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': True}
+2026-02-26 13:49:41 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Debounce flush: обрабатываю StopListUpdate для 1 org(s): {'e506f24f-533b-49a5-9e3f-52cd462d2e6a'}
+2026-02-26 13:49:42 | INFO     | adapters.iiko_cloud_api | [iikoCloud] Получено 1 терминальных групп (org=e506f24f-533b-49a5-9e3f-52cd462d2e6a) за 0.4 сек
+2026-02-26 13:49:42 | INFO     | adapters.iiko_cloud_api | [iikoCloud] Стоп-лист: 1 групп, 1 позиций (org=e506f24f-533b-49a5-9e3f-52cd462d2e6a) за 0.2 сек
+2026-02-26 13:49:42 | INFO     | use_cases.stoplist | [Stoplist] Получено 1 позиций стоп-листа из 1 терминальных групп за 0.6 сек
+2026-02-26 13:49:42 | INFO     | use_cases.stoplist | [Stoplist] История: 0 вошли в стоп, 1 вышли из стопа
+2026-02-26 13:49:42 | INFO     | use_cases.stoplist | [Stoplist] Diff: +0 -1 ~0 =1 (0.2 сек)
+2026-02-26 13:49:45 | INFO     | adapters.google_sheets | [GSheets] Прочитано 20 записей прав за 2.8 сек
+2026-02-26 13:49:45 | INFO     | use_cases.permissions | [Permissions] Кеш обновлён: 20 пользователей
+2026-02-26 13:49:46 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1059714785 → «Асташевская Эвита», ресторан «Клиническая PizzaYolo» за 0.05 сек
+2026-02-26 13:49:47 | INFO     | adapters.google_sheets | [GSheets] cloud_org_mapping: 2 привязок за 1.4 сек
+2026-02-26 13:49:47 | INFO     | use_cases.cloud_org_mapping | [CloudOrgMap] Кеш обновлён: 2 привязок
+2026-02-26 13:49:48 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:13:49:48 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 13:49:48 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:6446544048 → «Бахин Владислав Станиславович», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 13:49:48 | INFO     | aiogram.event | Update id=520044401 is handled. Duration 190 ms by bot id=8301059555
+2026-02-26 13:49:49 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:13:49:49 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 13:49:49 | INFO     | aiogram.event | Update id=520044402 is handled. Duration 187 ms by bot id=8301059555
+2026-02-26 13:49:49 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:2069928993 → «Лямм Ольга Ивановна», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 13:49:49 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:13:49:49 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 13:49:50 | INFO     | aiogram.event | Update id=520044403 is handled. Duration 190 ms by bot id=8301059555
+2026-02-26 13:49:50 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1877127405 → «Мерзляков Егор Андреевич», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 13:49:50 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:13:49:50 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 13:49:50 | INFO     | aiogram.event | Update id=520044404 is handled. Duration 188 ms by bot id=8301059555
+2026-02-26 13:49:50 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:853263652 → «Сорокина Виктория», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.04 сек
+2026-02-26 13:49:51 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:5270566760 → «Кожанов Олег Николаевич», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 13:49:52 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:13:49:52 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 13:49:52 | INFO     | aiogram.event | Update id=520044405 is handled. Duration 186 ms by bot id=8301059555
+2026-02-26 13:49:52 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1078562089 → «Карагодин Георгий Артурович», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.04 сек
+2026-02-26 13:49:52 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:5001657221 → «Афанасьева Анастасия», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 13:49:53 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:13:49:53 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 13:49:53 | INFO     | use_cases.pinned_stoplist_message | [StoplistAlert] org=e506f24f-533b-49a5-9e3f-52cd462d2e6a: обновлено 6 пользователей за 10.9 сек
+2026-02-26 13:49:53 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] org=e506f24f-533b-49a5-9e3f-52cd462d2e6a: +0 -1 ~0 =1, отправлено 6 пользователям
+2026-02-26 13:49:53 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Flush завершён за 11.7 сек
+2026-02-26 13:49:53 | INFO     | aiogram.event | Update id=520044406 is handled. Duration 193 ms by bot id=8301059555
+2026-02-26 14:46:54 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': True}
+2026-02-26 14:46:54 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "StopListUpdate", "eventTime": "2026-02-26 14:46:54.307", "organizationId": "15e8d85e-81b6-43b4-81f9-277b164739d6", "correlationId": "30dce2fe-bb7c-4ac0-901d-edcf6386a2cd", "eventInfo": {"terminalGroupsStopListsUpdates": [{"id": "340bd4e2-d5f4-4204-a728-65639741bd2e", "isFull": false}]}}]
+2026-02-26 14:46:54 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:14:46:54 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 14:46:54 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] StopListUpdate debounce: +1 org(s), буфер=1, flush через 60 сек
+2026-02-26 14:46:54 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=StopListUpdate, org=15e8d85e-81b6-43b4-81f9-277b164739d6, time=2026-02-26 14:46:54.307
+2026-02-26 14:47:54 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Debounce flush: обрабатываю StopListUpdate для 1 org(s): {'15e8d85e-81b6-43b4-81f9-277b164739d6'}
+2026-02-26 14:47:55 | INFO     | adapters.iiko_cloud_api | [iikoCloud] Получено 1 терминальных групп (org=15e8d85e-81b6-43b4-81f9-277b164739d6) за 0.4 сек
+2026-02-26 14:47:55 | INFO     | adapters.iiko_cloud_api | [iikoCloud] Стоп-лист: 1 групп, 3 позиций (org=15e8d85e-81b6-43b4-81f9-277b164739d6) за 0.2 сек
+2026-02-26 14:47:55 | INFO     | use_cases.stoplist | [Stoplist] Получено 3 позиций стоп-листа из 1 терминальных групп за 0.7 сек
+2026-02-26 14:47:55 | INFO     | use_cases.stoplist | [Stoplist] История: 1 вошли в стоп, 0 вышли из стопа
+2026-02-26 14:47:55 | INFO     | use_cases.stoplist | [Stoplist] Diff: +1 -0 ~0 =2 (0.2 сек)
+2026-02-26 14:47:57 | INFO     | adapters.google_sheets | [GSheets] Прочитано 20 записей прав за 2.3 сек
+2026-02-26 14:47:57 | INFO     | use_cases.permissions | [Permissions] Кеш обновлён: 20 пользователей
+2026-02-26 14:47:58 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1059714785 → «Асташевская Эвита», ресторан «Клиническая PizzaYolo» за 0.06 сек
+2026-02-26 14:48:00 | INFO     | adapters.google_sheets | [GSheets] cloud_org_mapping: 2 привязок за 1.4 сек
+2026-02-26 14:48:00 | INFO     | use_cases.cloud_org_mapping | [CloudOrgMap] Кеш обновлён: 2 привязок
+2026-02-26 14:48:00 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:6446544048 → «Бахин Владислав Станиславович», ресторан «Клиническая PizzaYolo» за 0.05 сек
+2026-02-26 14:48:01 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:2069928993 → «Лямм Ольга Ивановна», ресторан «Клиническая PizzaYolo» за 0.05 сек
+2026-02-26 14:48:01 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1877127405 → «Мерзляков Егор Андреевич», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 14:48:02 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:853263652 → «Сорокина Виктория», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.04 сек
+2026-02-26 14:48:03 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:14:48:03 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 14:48:03 | INFO     | aiogram.event | Update id=520044407 is handled. Duration 224 ms by bot id=8301059555
+2026-02-26 14:48:03 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:5270566760 → «Кожанов Олег Николаевич», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 14:48:04 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1078562089 → «Карагодин Георгий Артурович», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.04 сек
+2026-02-26 14:48:04 | INFO     | aiohttp.access | 100.64.0.4 [26/Feb/2026:14:48:04 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 14:48:05 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:5001657221 → «Афанасьева Анастасия», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 14:48:05 | INFO     | aiogram.event | Update id=520044408 is handled. Duration 313 ms by bot id=8301059555
+2026-02-26 14:48:05 | INFO     | use_cases.pinned_stoplist_message | [StoplistAlert] org=15e8d85e-81b6-43b4-81f9-277b164739d6: обновлено 2 пользователей за 10.0 сек
+2026-02-26 14:48:05 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] org=15e8d85e-81b6-43b4-81f9-277b164739d6: +1 -0 ~0 =2, отправлено 2 пользователям
+2026-02-26 14:48:05 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Flush завершён за 10.9 сек
+2026-02-26 15:17:49 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 15:17:48.865", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "bf33a950-6e70-49a7-a557-d6066c01604f", "eventInfo": {"id": "be95b62f-60d9-4b3b-88e5-cedec1008abf", "posId": "b390098c-711b-413a-92c4-9ccef7c8b8c2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772119068836, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 15:17:49 | INFO     | aiohttp.access | 100.64.0.8 [26/Feb/2026:15:17:49 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 15:17:49 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 15:17:48.865
+2026-02-26 15:17:49 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 15:17:49 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 15:18:13 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 15:18:12.969", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "c7634f5f-35ad-46b0-9570-ccc76fc417e1", "eventInfo": {"id": "be95b62f-60d9-4b3b-88e5-cedec1008abf", "posId": "b390098c-711b-413a-92c4-9ccef7c8b8c2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772119092941, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 15:18:13 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:15:18:13 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 15:18:13 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 15:18:12.969
+2026-02-26 15:18:13 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 15:18:13 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 15:38:29 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 15:38:29.432", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "5377e135-c451-402a-b579-6993355f820a", "eventInfo": {"id": "515543a4-99d1-4758-b635-c6dd8a6a25d5", "posId": "bfc59b6a-af44-465e-88f5-028933253848", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772120309406, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 15:38:29 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:15:38:29 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 15:38:29 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 15:38:29.432
+2026-02-26 15:38:29 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 15:38:29 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 15:39:04 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 15:39:04.018", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "2969763d-f5bb-424e-8c9d-02fb4f0adbf0", "eventInfo": {"id": "515543a4-99d1-4758-b635-c6dd8a6a25d5", "posId": "bfc59b6a-af44-465e-88f5-028933253848", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772120343995, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 15:39:04 | INFO     | aiohttp.access | 100.64.0.11 [26/Feb/2026:15:39:04 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 15:39:04 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 15:39:04.018
+2026-02-26 15:39:04 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 15:39:04 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 15:44:49 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 15:44:49.208", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "df64827e-9b57-40f4-9d86-bf975678b267", "eventInfo": {"id": "be95b62f-60d9-4b3b-88e5-cedec1008abf", "posId": "b390098c-711b-413a-92c4-9ccef7c8b8c2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772120689188, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 15:44:49 | INFO     | aiohttp.access | 100.64.0.3 [26/Feb/2026:15:44:49 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 15:44:49 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 15:44:49.208
+2026-02-26 15:44:49 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 15:44:49 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 16:03:50 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 16:03:50.381", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "ccf0de01-302f-4879-afe1-944453b129ff", "eventInfo": {"id": "515543a4-99d1-4758-b635-c6dd8a6a25d5", "posId": "bfc59b6a-af44-465e-88f5-028933253848", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772121830360, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 16:03:50 | INFO     | aiohttp.access | 100.64.0.10 [26/Feb/2026:16:03:50 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 16:03:50 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 16:03:50.381
+2026-02-26 16:03:50 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 16:03:50 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 16:03:58 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 16:03:58.122", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "ea879c29-c3dd-49ac-9334-8e703512d936", "eventInfo": {"id": "515543a4-99d1-4758-b635-c6dd8a6a25d5", "posId": "bfc59b6a-af44-465e-88f5-028933253848", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772121838101, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 16:03:58 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:16:03:58 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 16:03:58 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 16:03:58.122
+2026-02-26 16:03:58 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 16:03:58 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 16:03:58 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 16:03:58 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 16:03:58 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 16:03:59 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T18:03:58
+2026-02-26 16:03:59 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.2 сек, 119128 байт
+2026-02-26 16:03:59 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.7 сек
+2026-02-26 16:03:59 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 16:03:59 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 16:03:59 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 16:03:59 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 16:03:59 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.7 сек, БД 0.2 сек | Итого 0.9 сек
+2026-02-26 16:03:59 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 16:03:59 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 16:03:59 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.1 сек (department=None)
+2026-02-26 16:03:59 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 16:03:59 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (1.0 сек)
+2026-02-26 16:03:59 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 16:37:52 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 16:37:51.872", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "fe4bb59f-2289-4604-8dec-91d6e5b17400", "eventInfo": {"id": "be95b62f-60d9-4b3b-88e5-cedec1008abf", "posId": "b390098c-711b-413a-92c4-9ccef7c8b8c2", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772123871847, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 16:37:52 | INFO     | aiohttp.access | 100.64.0.12 [26/Feb/2026:16:37:52 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 16:37:52 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 16:37:51.872
+2026-02-26 16:37:52 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 16:37:52 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 16:37:52 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 16:37:52 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 16:37:52 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T18:37:52
+2026-02-26 16:37:52 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.4 сек
+2026-02-26 16:37:52 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.1 сек, 119128 байт
+2026-02-26 16:37:52 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.5 сек
+2026-02-26 16:37:52 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 16:37:52 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 16:37:52 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 16:37:52 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 16:37:52 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.5 сек, БД 0.2 сек | Итого 0.7 сек
+2026-02-26 16:37:52 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 16:37:53 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 16:37:53 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.2 сек (department=None)
+2026-02-26 16:37:53 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 16:37:53 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.9 сек)
+2026-02-26 16:37:53 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 16:56:29 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "StopListUpdate", "eventTime": "2026-02-26 16:56:28.908", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "8f8ab3a5-4546-428c-ae8e-afaf3c9b1e0e", "eventInfo": {"terminalGroupsStopListsUpdates": [{"id": "b9e7dfaf-5e60-47b1-8698-dddb18ceed28", "isFull": false}]}}]
+2026-02-26 16:56:29 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:16:56:29 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 16:56:29 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] StopListUpdate debounce: +1 org(s), буфер=1, flush через 60 сек
+2026-02-26 16:56:29 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=StopListUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 16:56:28.908
+2026-02-26 16:56:29 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': True}
+2026-02-26 16:56:34 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "StopListUpdate", "eventTime": "2026-02-26 16:56:34.156", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "27c6379c-05c6-48ef-882b-1da6e203aa4f", "eventInfo": {"terminalGroupsStopListsUpdates": [{"id": "b9e7dfaf-5e60-47b1-8698-dddb18ceed28", "isFull": false}]}}]
+2026-02-26 16:56:34 | INFO     | aiohttp.access | 100.64.0.8 [26/Feb/2026:16:56:34 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 16:56:34 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] StopListUpdate debounce: +1 org(s), буфер=1, flush через 60 сек
+2026-02-26 16:56:34 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=StopListUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 16:56:34.156
+2026-02-26 16:56:34 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': True}
+2026-02-26 16:57:34 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Debounce flush: обрабатываю StopListUpdate для 1 org(s): {'e506f24f-533b-49a5-9e3f-52cd462d2e6a'}
+2026-02-26 16:57:35 | INFO     | adapters.iiko_cloud_api | [iikoCloud] Получено 1 терминальных групп (org=e506f24f-533b-49a5-9e3f-52cd462d2e6a) за 0.4 сек
+2026-02-26 16:57:35 | INFO     | adapters.iiko_cloud_api | [iikoCloud] Стоп-лист: 1 групп, 3 позиций (org=e506f24f-533b-49a5-9e3f-52cd462d2e6a) за 0.2 сек
+2026-02-26 16:57:35 | INFO     | use_cases.stoplist | [Stoplist] Получено 3 позиций стоп-листа из 1 терминальных групп за 0.7 сек
+2026-02-26 16:57:35 | INFO     | use_cases.stoplist | [Stoplist] История: 2 вошли в стоп, 0 вышли из стопа
+2026-02-26 16:57:35 | INFO     | use_cases.stoplist | [Stoplist] Diff: +2 -0 ~0 =1 (0.2 сек)
+2026-02-26 16:57:38 | INFO     | adapters.google_sheets | [GSheets] Прочитано 20 записей прав за 2.8 сек
+2026-02-26 16:57:38 | INFO     | use_cases.permissions | [Permissions] Кеш обновлён: 20 пользователей
+2026-02-26 16:57:39 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1059714785 → «Асташевская Эвита», ресторан «Клиническая PizzaYolo» за 0.05 сек
+2026-02-26 16:57:41 | INFO     | adapters.google_sheets | [GSheets] cloud_org_mapping: 2 привязок за 2.4 сек
+2026-02-26 16:57:41 | INFO     | use_cases.cloud_org_mapping | [CloudOrgMap] Кеш обновлён: 2 привязок
+2026-02-26 16:57:42 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:16:57:42 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 16:57:42 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:6446544048 → «Бахин Владислав Станиславович», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 16:57:42 | INFO     | aiogram.event | Update id=520044409 is handled. Duration 211 ms by bot id=8301059555
+2026-02-26 16:57:43 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:16:57:43 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 16:57:43 | INFO     | aiogram.event | Update id=520044410 is handled. Duration 194 ms by bot id=8301059555
+2026-02-26 16:57:43 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:2069928993 → «Лямм Ольга Ивановна», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 16:57:43 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:16:57:43 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 16:57:44 | INFO     | aiogram.event | Update id=520044411 is handled. Duration 201 ms by bot id=8301059555
+2026-02-26 16:57:44 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1877127405 → «Мерзляков Егор Андреевич», ресторан «Клиническая PizzaYolo» за 0.04 сек
+2026-02-26 16:57:44 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:16:57:44 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 16:57:45 | INFO     | aiogram.event | Update id=520044412 is handled. Duration 193 ms by bot id=8301059555
+2026-02-26 16:57:45 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:853263652 → «Сорокина Виктория», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.04 сек
+2026-02-26 16:57:45 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:5270566760 → «Кожанов Олег Николаевич», ресторан «Клиническая PizzaYolo» за 0.07 сек
+2026-02-26 16:57:46 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:16:57:46 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 16:57:46 | INFO     | aiogram.event | Update id=520044413 is handled. Duration 211 ms by bot id=8301059555
+2026-02-26 16:57:46 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:1078562089 → «Карагодин Георгий Артурович», ресторан «PizzaYolo / Пицца Йоло (Московский)» за 0.04 сек
+2026-02-26 16:57:47 | INFO     | use_cases.user_context | [user_ctx] Загружен из БД: tg:5001657221 → «Афанасьева Анастасия», ресторан «Клиническая PizzaYolo» за 0.05 сек
+2026-02-26 16:57:47 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:16:57:47 +0000] "POST /webhook HTTP/1.1" 200 160 "-" "-"
+2026-02-26 16:57:47 | INFO     | use_cases.pinned_stoplist_message | [StoplistAlert] org=e506f24f-533b-49a5-9e3f-52cd462d2e6a: обновлено 6 пользователей за 12.1 сек
+2026-02-26 16:57:47 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] org=e506f24f-533b-49a5-9e3f-52cd462d2e6a: +2 -0 ~0 =1, отправлено 6 пользователям
+2026-02-26 16:57:47 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Flush завершён за 13.0 сек
+2026-02-26 16:57:47 | INFO     | aiogram.event | Update id=520044414 is handled. Duration 224 ms by bot id=8301059555
+2026-02-26 17:08:13 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 17:08:13.089", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "ab9c7181-747b-42a9-a3e6-8033638cc909", "eventInfo": {"id": "b57a6796-5b6d-4691-9e9d-6ad83a8d6078", "posId": "a18dbdc5-46b1-4902-85ed-d1cbfad1b316", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772125693061, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 17:08:13 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:17:08:13 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 17:08:13 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 17:08:13.089
+2026-02-26 17:08:13 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 17:08:13 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 17:08:56 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 17:08:56.249", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "64a473dd-3197-48d0-a5fb-947b33405acf", "eventInfo": {"id": "5ed176e7-4899-4ea9-88b8-e491cd7c9cfc", "posId": "4c420349-9dd0-40c5-802d-4cfdc26325b0", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772125736223, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 17:08:56 | INFO     | aiohttp.access | 100.64.0.8 [26/Feb/2026:17:08:56 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 17:08:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 17:08:56.249
+2026-02-26 17:08:56 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=WaitCooking, creationStatus=Success
+2026-02-26 17:08:56 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 17:09:59 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 17:09:58.835", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "8aac650e-3666-41a3-b533-a0813c0eff14", "eventInfo": {"id": "b57a6796-5b6d-4691-9e9d-6ad83a8d6078", "posId": "a18dbdc5-46b1-4902-85ed-d1cbfad1b316", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772125798815, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 17:09:59 | INFO     | aiohttp.access | 100.64.0.9 [26/Feb/2026:17:09:59 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 17:09:59 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 17:09:58.835
+2026-02-26 17:09:59 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 17:09:59 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 17:13:55 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 17:13:55.122", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "f7f96205-4206-4222-a879-9e452656c3dc", "eventInfo": {"id": "5ed176e7-4899-4ea9-88b8-e491cd7c9cfc", "posId": "4c420349-9dd0-40c5-802d-4cfdc26325b0", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772126035108, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 17:13:55 | INFO     | aiohttp.access | 100.64.0.5 [26/Feb/2026:17:13:55 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 17:13:55 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 17:13:55.122
+2026-02-26 17:13:55 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=CookingStarted, creationStatus=Success
+2026-02-26 17:13:55 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 17:31:30 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 17:31:30.074", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "b1067616-4b13-483d-97ed-292c47df78d0", "eventInfo": {"id": "5ed176e7-4899-4ea9-88b8-e491cd7c9cfc", "posId": "4c420349-9dd0-40c5-802d-4cfdc26325b0", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772127090054, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 17:31:30 | INFO     | aiohttp.access | 100.64.0.3 [26/Feb/2026:17:31:30 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 17:31:30 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 17:31:30.074
+2026-02-26 17:31:30 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Closed, creationStatus=Success
+2026-02-26 17:31:30 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Получено 1 закрытых заказов (типы: DeliveryOrderUpdate)
+2026-02-26 17:31:30 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Проверяю остатки...
+2026-02-26 17:31:30 | INFO     | use_cases.sync_stock_balances | [StockBalance] Начинаю синхронизацию остатков (timestamp=now)...
+2026-02-26 17:31:30 | INFO     | use_cases.sync_stock_balances | [StockBalance] Загружены справочники: 9 складов, 1936 товаров за 0.3 сек
+2026-02-26 17:31:31 | INFO     | adapters.iiko_api | [API] GET stock_balances — timestamp=2026-02-26T19:31:30
+2026-02-26 17:31:31 | INFO     | adapters.iiko_api | [API] GET stock_balances — 955 записей, HTTP 200, 0.1 сек, 119128 байт
+2026-02-26 17:31:31 | INFO     | use_cases.sync_stock_balances | [StockBalance] API + справочники: 955 строк за 0.6 сек
+2026-02-26 17:31:31 | INFO     | use_cases.sync_stock_balances | [StockBalance] После фильтрации: 954 строк (пропущено 1 c amount=0/невалид, 3 без имени в справочнике)
+2026-02-26 17:31:31 | INFO     | use_cases.sync_stock_balances | [StockBalance] Удалено старых записей: 954
+2026-02-26 17:31:31 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 500 / 954
+2026-02-26 17:31:31 | INFO     | use_cases.sync_stock_balances | [StockBalance] Insert batch: 954 / 954
+2026-02-26 17:31:31 | INFO     | use_cases.sync_stock_balances | [StockBalance] Готово: 954 записей | удалено 954 | API 0.6 сек, БД 0.2 сек | Итого 0.7 сек
+2026-02-26 17:31:31 | INFO     | use_cases.check_min_stock | [MinStockCheck] Начинаю проверку (department_id=None)...
+2026-02-26 17:31:31 | INFO     | use_cases.check_min_stock | [MinStockCheck] Позиций с min > 0: 161
+2026-02-26 17:31:31 | INFO     | use_cases.check_min_stock | [MinStockCheck] Готово: 60/161 ниже минимума за 0.1 сек (department=None)
+2026-02-26 17:31:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Хеш не изменился — пропускаем
+2026-02-26 17:31:31 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] Остатки без значимых изменений, пропускаем обновление (0.9 сек)
+2026-02-26 17:31:31 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 1, 'triggered_check': True, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 17:32:30 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 17:32:30.142", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "4eb88c25-c67a-462f-a8b1-9feec9465760", "eventInfo": {"id": "b57a6796-5b6d-4691-9e9d-6ad83a8d6078", "posId": "a18dbdc5-46b1-4902-85ed-d1cbfad1b316", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772127150123, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 17:32:30 | INFO     | aiohttp.access | 100.64.0.3 [26/Feb/2026:17:32:30 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 17:32:30 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 17:32:30.142
+2026-02-26 17:32:30 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=Waiting, creationStatus=Success
+2026-02-26 17:32:30 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}
+2026-02-26 17:39:09 | INFO     | __main__ | [iiko-webhook] Получен вебхук: 1 событий, body[:500]=[{"eventType": "DeliveryOrderUpdate", "eventTime": "2026-02-26 17:39:09.314", "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "correlationId": "f0829ae5-b2ae-474b-b1a9-5c4eb0e4e150", "eventInfo": {"id": "b57a6796-5b6d-4691-9e9d-6ad83a8d6078", "posId": "a18dbdc5-46b1-4902-85ed-d1cbfad1b316", "externalNumber": null, "organizationId": "e506f24f-533b-49a5-9e3f-52cd462d2e6a", "timestamp": 1772127549297, "creationStatus": "Success", "errorInfo": null, "order": {"parentDeliveryId": null, "cus
+2026-02-26 17:39:09 | INFO     | aiohttp.access | 100.64.0.7 [26/Feb/2026:17:39:09 +0000] "POST /iiko-webhook HTTP/1.1" 200 154 "-" "-"
+2026-02-26 17:39:09 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] event: type=DeliveryOrderUpdate, org=e506f24f-533b-49a5-9e3f-52cd462d2e6a, time=2026-02-26 17:39:09.314
+2026-02-26 17:39:09 | INFO     | use_cases.iiko_webhook_handler | [iikoWebhook] → order.status=OnWay, creationStatus=Success
+2026-02-26 17:39:09 | INFO     | __main__ | [iiko-webhook] Обработано: {'processed': 0, 'triggered_check': False, 'updated_messages': False, 'stoplist_updated': False}

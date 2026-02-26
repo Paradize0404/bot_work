@@ -1,6 +1,6 @@
 # 🗺️ Roadmap: аудит и улучшения бота
 
-> Последнее обновление: 2026-02-22
+> Последнее обновление: 2026-02-26
 
 ---
 
@@ -34,11 +34,13 @@
 ### Сессия N — K5: Персистентный кеш pending invoices
 **Приоритет: HIGH** | Источник: аудит 2026-02-22 (K5)
 
-- [ ] `_pending_invoices` в `use_cases/incoming_invoice.py` хранится в RAM → при рестарте/деплое теряется
-- [ ] Создать таблицу `pending_incoming_invoice` (аналогично `pending_writeoff`)
-- [ ] Перевести всю логику на PostgreSQL (CRUD через async_session_factory)
-- [ ] Добавить TTL-чистку (`_cleanup_expired`) для зависших документов
-- [ ] Проверить, что FSM-состояния корректно сбрасываются при потере документа
+- [x] `_pending_invoices` в `use_cases/incoming_invoice.py` хранится в RAM → при рестарте/деплое теряется
+- [x] Создать таблицу `pending_incoming_invoice` (аналогично `pending_writeoff`)
+- [x] Перевести всю логику на PostgreSQL (CRUD через async_session_factory)
+- [x] Добавить TTL-чистку (`_cleanup_expired`) для зависших документов
+- [x] Проверить, что FSM-состояния корректно сбрасываются при потере документа
+
+> ✅ Реализовано: таблица `pending_incoming_invoice` в models.py, CHANGELOG 2026-02-25
 
 ### Сессия N+1 — A1-A2: use_cases не должен импортировать из bot/
 **Приоритет: MEDIUM** | Источник: аудит 2026-02-22 (A1-A2)
@@ -62,11 +64,13 @@
 ### Сессия 5 — Retry writeoff POST + Error Classification
 **Приоритет: HIGH** | Источник: `docs/SECURITY_AND_RELIABILITY.md` §9, §10
 
-- [ ] `send_writeoff_with_retry()` — retry на ConnectError/ReadTimeout (2 попытки, backoff 2s/5s)
-- [ ] iiko writeoff idempotent by design (тот же doc ID → обновление, не дубликат)
-- [ ] Классификация ошибок: transient (retry) vs permanent (log + alert) vs unknown (1 retry)
-- [ ] `is_transient(exc)` helper — ConnectError, ReadTimeout, 429/502/503
-- [ ] FinTablo retry на ConnectError (если не реализован)
+- [x] `send_writeoff_with_retry()` — retry на ConnectError/ReadTimeout (2 попытки, backoff 2s/5s)
+- [x] iiko writeoff idempotent by design (тот же doc ID → обновление, не дубликат)
+- [x] Классификация ошибок: transient (retry) vs permanent (log + alert) vs unknown (1 retry)
+- [x] `is_transient(exc)` helper — ConnectError, ReadTimeout, 429/502/503
+- [x] FinTablo retry на ConnectError (если не реализован)
+
+> ✅ Реализовано: `use_cases/errors.py` (is_transient), CHANGELOG 2026-02-22
 
 ### Сессия 6 — Инфраструктура (можно объединить с 7)
 **Приоритет: MEDIUM** | Источник: `docs/SECURITY_AND_RELIABILITY.md` §6, §7, §12
@@ -99,10 +103,10 @@
 | Sync lock (конкурентность) | ✅ | 4 (реализовано) |
 | `== False` → `.is_(False)` | ✅ | аудит 22.02 |
 | `safe_page()` пагинация | ✅ | аудит 22.02 |
-| `_pending_invoices` → DB | ⬜ | K5 |
+| `_pending_invoices` → DB | ✅ | K5 (реализовано) |
 | use_cases → bot/ зависимость | ⬜ | A1-A2 |
-| Retry iiko POST (writeoff) | ⬜ | 5 |
-| Error classification | ⬜ | 5 |
+| Retry iiko POST (writeoff) | ✅ | 5 (реализовано) |
+| Error classification | ✅ | 5 (реализовано) |
 | Health endpoint | ✅ | 6 (реализовано) |
 | Graceful shutdown | ✅ | 6 (реализовано) |
 | Alerting (Telegram) | ✅ | 6 (реализовано) |

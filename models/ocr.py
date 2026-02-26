@@ -3,7 +3,8 @@ OCR модели для хранения распознанных докумен
 """
 
 from datetime import datetime
-from sqlalchemy import String, Text, REAL, Numeric, Boolean, ForeignKey, Index
+from decimal import Decimal
+from sqlalchemy import String, Text, Numeric, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from uuid import uuid4
@@ -54,8 +55,8 @@ class OcrDocument(Base):
     buyer_inn: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Суммы
-    total_amount: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
-    total_vat: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    total_vat: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="RUB")
 
     # Статус обработки
@@ -75,7 +76,7 @@ class OcrDocument(Base):
     )  # Telegram file_id[] для показа превью
 
     # Качество распознавания
-    confidence_score: Mapped[float | None] = mapped_column(REAL, nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)  # 0.0–1.0
 
     # Метаданные
     page_count: Mapped[int] = mapped_column(default=1)
@@ -153,9 +154,9 @@ class OcrItem(Base):
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)  # кг, шт, л
 
     # Количество и цены
-    qty: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
-    price: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
-    sum: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+    qty: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    sum: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
 
     # НДС
     vat_rate: Mapped[str | None] = mapped_column(
@@ -163,7 +164,7 @@ class OcrItem(Base):
     )  # 10%, 20%, без НДС
 
     # Качество распознавания
-    confidence_score: Mapped[float | None] = mapped_column(REAL, nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)  # 0.0–1.0
 
     # Статус маппинга
     mapping_status: Mapped[str] = mapped_column(

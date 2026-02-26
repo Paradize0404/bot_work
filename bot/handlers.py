@@ -1252,9 +1252,6 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
     )
 
     try:
-        from sqlalchemy import select
-        from db.engine import async_session_factory
-        from db.models import Department
         from adapters.iiko_cloud_api import get_organizations
         from adapters.google_sheets import sync_cloud_org_mapping_to_sheet
         from use_cases.cloud_org_mapping import (

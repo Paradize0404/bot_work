@@ -32,7 +32,12 @@ class TelegramAlertHandler(logging.Handler):
     def attach_bot(self, bot, loop: asyncio.AbstractEventLoop | None = None) -> None:
         """Привязать bot-инстанс (вызывать из on_startup/run_polling)."""
         self._bot = bot
-        self._loop = loop or asyncio.get_event_loop()
+        self._loop = loop
+        if self._loop is None:
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
 
     def emit(self, record: logging.LogRecord) -> None:
         if self._bot is None:

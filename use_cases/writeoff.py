@@ -26,6 +26,8 @@ from db.models import (
     Entity,
     GSheetExportGroup,
     WriteoffRequestStoreGroup,
+    WriteoffExcludedPreparedGroup,
+    WriteoffExcludedPreparedRequestGroup,
     ProductGroup,
 )
 from adapters import iiko_api
@@ -210,8 +212,10 @@ async def preload_products(department_id: str | None = None) -> None:
     Загрузить товары для списания в in-memory кеш.
 
     Логика фильтрации (если department_id задан):
-      - Точка-получатель заявок → GOODS+DISH из writeoff_request_store_group (BFS) + все PREPARED
-      - Все остальные точки     → GOODS+DISH из gsheet_export_group (BFS) + все PREPARED
+      - Точка-получатель заявок → GOODS+DISH из writeoff_request_store_group (BFS)
+                                + PREPARED минус writeoff_excluded_prepared_request_group (BFS)
+      - Все остальные точки     → GOODS+DISH из gsheet_export_group (BFS)
+                                + PREPARED минус writeoff_excluded_prepared_group (BFS)
     Если таблица папок пуста → показываем только PREPARED.
 
     Если department_id не задан → загружает все GOODS+DISH+PREPARED (без фильтрации, fallback).
@@ -227,15 +231,24 @@ async def preload_products(department_id: str | None = None) -> None:
     async with async_session_factory() as session:
         # Определяем набор разрешённых групп (если dept задан)
         allowed_groups: set[str] | None = None
+        excluded_prepared: set[str] | None = None
         if department_id is not None:
             is_req = await _is_request_department(department_id)
             group_model = WriteoffRequestStoreGroup if is_req else GSheetExportGroup
             allowed_groups = await bfs_allowed_groups(session, group_model)
+            # Исключённые папки PREPARED
+            excl_model = (
+                WriteoffExcludedPreparedRequestGroup
+                if is_req
+                else WriteoffExcludedPreparedGroup
+            )
+            excluded_prepared = await bfs_allowed_groups(session, excl_model)
             logger.info(
-                "[writeoff] Прогрев кеша для dept=%s (%s): %d разрешённых групп",
+                "[writeoff] Прогрев кеша для dept=%s (%s): %d разрешённых групп, %d искл. PREPARED групп",
                 department_id,
                 group_model.__tablename__,
                 len(allowed_groups),
+                len(excluded_prepared),
             )
 
         stmt = (
@@ -253,12 +266,20 @@ async def preload_products(department_id: str | None = None) -> None:
         result = await session.execute(stmt)
         rows = result.all()
 
-        # Фильтр папок: GOODS+DISH — только из разрешённых групп, PREPARED — всегда
+        # Фильтр папок: GOODS+DISH — только из разрешённых групп,
+        # PREPARED — все, кроме исключённых папок
         if allowed_groups is not None:
             rows = [
                 r
                 for r in rows
-                if r.product_type == "PREPARED"
+                if (
+                    r.product_type == "PREPARED"
+                    and (
+                        not excluded_prepared
+                        or not r.parent_id
+                        or str(r.parent_id) not in excluded_prepared
+                    )
+                )
                 or (
                     r.product_type in ("GOODS", "DISH")
                     and r.parent_id
@@ -347,10 +368,16 @@ async def search_products(
     # --- Попытка поиска в кеше ---
     cached_products = _cache.get_products(cache_key)
     if cached_products is not None:
+        matched = [
+            p for p in cached_products
+            if pattern in p["name_lower"]
+        ]
+        # GOODS/DISH первыми, PREPARED последними — чтобы п/ф не вытесняли
+        # реальные товары при достижении лимита
+        matched.sort(key=lambda p: (p["product_type"] == "PREPARED", p.get("name_lower", "")))
         results = [
             {k: v for k, v in p.items() if k != "name_lower"}
-            for p in cached_products
-            if pattern in p["name_lower"]
+            for p in matched
         ][:limit]
         logger.info(
             "[writeoff] Поиск «%s» → %d результатов за %.4f сек (кеш, dept=%s)",
@@ -366,10 +393,14 @@ async def search_products(
     await preload_products(department_id)
     cached_products = _cache.get_products(cache_key)
     if cached_products is not None:
+        matched = [
+            p for p in cached_products
+            if pattern in p["name_lower"]
+        ]
+        matched.sort(key=lambda p: (p["product_type"] == "PREPARED", p.get("name_lower", "")))
         results = [
             {k: v for k, v in p.items() if k != "name_lower"}
-            for p in cached_products
-            if pattern in p["name_lower"]
+            for p in matched
         ][:limit]
         logger.info(
             "[writeoff] Поиск «%s» → %d результатов за %.4f сек (после прогрева, dept=%s)",
@@ -384,12 +415,18 @@ async def search_products(
     logger.debug("[writeoff] Fallback: ищу в БД без фильтра папок...")
 
     async with async_session_factory() as session:
+        # GOODS/DISH первыми, PREPARED последними
+        from sqlalchemy import case as sa_case
+        type_order = sa_case(
+            (Product.product_type == "PREPARED", 1),
+            else_=0,
+        )
         stmt = (
             select(Product)
             .where(func.lower(Product.name).contains(pattern))
             .where(Product.product_type.in_(["GOODS", "DISH", "PREPARED"]))
             .where(Product.deleted.is_(False))
-            .order_by(Product.name)
+            .order_by(type_order, Product.name)
             .limit(limit)
         )
         result = await session.execute(stmt)

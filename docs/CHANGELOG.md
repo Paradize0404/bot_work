@@ -5,6 +5,44 @@
 
 ---
 
+### 2026-02-26 — [AUDIT] Полный аудит проекта (Фазы 1-5 по PROJECT_MAP.md)
+
+**Код — исправления:**
+
+- **R1 naming** `db/models.py` — `_utcnow()` переименована → `_now_kgd()` (старое имя оставлено как алиас для обратной совместимости). Имя `_utcnow` вводило в заблуждение — функция возвращает Калининградское время, не UTC.
+- **R4 type** `models/ocr.py` — `Mapped[float | None]` → `Mapped[Decimal | None]` для всех `Numeric` денежных колонок (`total_amount`, `total_vat`, `qty`, `price`, `sum`). Устранена потеря точности при маршаллинге.
+- **REAL→Numeric** `models/ocr.py` — `confidence_score` (OcrDocument + OcrItem): `REAL` → `Numeric(5,4)`. Убран импорт `REAL` и неиспользуемый `Index`.
+- **Deprecation** `logging_config.py` — `asyncio.get_event_loop()` → `asyncio.get_running_loop()` с fallback (Python 3.10+ deprecation fix).
+- **Dead imports** `bot/handlers.py` — удалены неиспользуемые `from sqlalchemy import select`, `from db.engine`, `from db.models import Department` в `btn_cloud_sync_org_mapping`.
+
+**Миграции (db/init_db.py):**
+
+- `ALTER TABLE ... ALTER COLUMN TYPE` обёрнуты в идемпотентные `DO $$ ... IF EXISTS ... $$` блоки (9 миграций REAL→NUMERIC, JSON→JSONB). Ранее re-execute при каждом рестарте.
+- `tg_file_ids` начальная миграция: `JSON` → `JSONB` (соответствие модели).
+- Добавлены миграции `confidence_score REAL → NUMERIC(5,4)` для обеих OCR-таблиц.
+
+**Документация:**
+
+- `PROJECT_MAP.md` v2.1 → v2.2: обновлён антипаттерн `_KGD_TZ`.
+- `docs/ROADMAP.md` — обновлена дата; помечены ✅: Сессия N (pending invoices → DB), Сессия 5 (retry + error classification).
+- `docs/FILE_STRUCTURE.md` — удалена фантомная запись `bot/admin_handlers.py` (файл не существует, функционал в `bot/handlers.py` + `use_cases/admin.py`).
+- `docs/CHANGELOG.md` — эта запись.
+
+**Найденные расхождения (не исправлены — требуют решения пользователя):**
+
+| # | Серьёзность | Описание |
+|---|------------|----------|
+| 1 | MEDIUM | `bot/handlers.py` — 4 iikoCloud-хэндлера (`btn_cloud_get_orgs`, `btn_cloud_sync_org_mapping`, `btn_cloud_register_webhook`, `btn_cloud_webhook_status`) импортируют adapters напрямую (K1). Нужен `use_cases/iiko_cloud.py` |
+| 2 | MEDIUM | `bot/day_report_handlers.py` — `_finalize_day_report` вызывает `gs_adapter.append_day_report_row` напрямую (K1) |
+| 3 | LOW | `bot/pending_docs_handlers.py` — 2 хэндлера без `logger.info` в первых 5 строках (K3) |
+| 4 | LOW | 9 мёртвых функций в use_cases/ (см. список ниже) |
+| 5 | LOW | `docs/DATABASE.md` — 5 расхождений с моделями (salary_history, pastry_nomenclature_group, writeoff_request_store_group, price_product, pending_incoming_invoice) |
+| 6 | LOW | `docs/ENV_VARS.md` — `REDIS_URL` в секции «Опциональные» но по факту обязательна |
+
+**Мёртвый код (use_cases/):** `get_product_price_for_supplier`, `update_all_stoplist_messages`, `format_invoice_info`, `run_sync_with_lock`, `delete_by_tg`, `get_pending_requests`, `invalidate_pattern`, `search_suppliers`, `delete_template`.
+
+---
+
 ### 2026-02-25 — [AUDIT] Полный аудит по PROJECT_MAP.md (K1-K5, R1-R7)
 
 **Контракты (код):**

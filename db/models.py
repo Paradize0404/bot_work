@@ -34,9 +34,13 @@ class Base(DeclarativeBase):
     pass
 
 
-def _utcnow() -> datetime:
+def _now_kgd() -> datetime:
     """Текущее время по Калининграду (naive, без tzinfo)."""
     return datetime.now(_KGD_TZ).replace(tzinfo=None)
+
+
+# Обратная совместимость — старое имя (deprecated, использовать _now_kgd)
+_utcnow = _now_kgd
 
 
 class SyncMixin:
@@ -506,6 +510,87 @@ class WriteoffRequestStoreGroup(Base):
     """
 
     __tablename__ = "writeoff_request_store_group"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    group_id = Column(
+        UUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        comment="UUID группы из iiko_product_group",
+    )
+    group_name = Column(
+        String(500),
+        nullable=True,
+        comment="Название группы (денормализовано, для удобства)",
+    )
+    added_at = Column(
+        DateTime,
+        default=_utcnow,
+        server_default="now()",
+        nullable=False,
+        comment="Когда добавлена",
+    )
+
+
+# ─────────────────────────────────────────────────────
+# 13c. Исключённые папки заготовок (PREPARED) — обычные точки
+# ─────────────────────────────────────────────────────
+
+
+class WriteoffExcludedPreparedGroup(Base):
+    """
+    Корневые группы номенклатуры, исключённые из поиска PREPARED-товаров
+    при списании на обычных точках.
+
+    При поиске: PREPARED из папок этой таблицы (BFS) не отображаются.
+    Если таблица пуста → все PREPARED показываются.
+
+    Инициализация (пример):
+        INSERT INTO writeoff_excluded_prepared_group (group_id, group_name)
+        VALUES ('uuid-здесь', 'Неиспользуемые заготовки');
+    """
+
+    __tablename__ = "writeoff_excluded_prepared_group"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    group_id = Column(
+        UUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        comment="UUID группы из iiko_product_group",
+    )
+    group_name = Column(
+        String(500),
+        nullable=True,
+        comment="Название группы (денормализовано, для удобства)",
+    )
+    added_at = Column(
+        DateTime,
+        default=_utcnow,
+        server_default="now()",
+        nullable=False,
+        comment="Когда добавлена",
+    )
+
+
+# ─────────────────────────────────────────────────────
+# 13d. Исключённые папки заготовок (PREPARED) — точка-получатель заявок
+# ─────────────────────────────────────────────────────
+
+
+class WriteoffExcludedPreparedRequestGroup(Base):
+    """
+    Корневые группы номенклатуры, исключённые из поиска PREPARED-товаров
+    при списании на точке-получателе заявок (request store).
+
+    Аналог writeoff_excluded_prepared_group, но для точки-получателя.
+
+    Инициализация (пример):
+        INSERT INTO writeoff_excluded_prepared_request_group (group_id, group_name)
+        VALUES ('uuid-здесь', 'Неиспользуемые заготовки ЦК');
+    """
+
+    __tablename__ = "writeoff_excluded_prepared_request_group"
 
     pk = Column(BigInteger, primary_key=True, autoincrement=True)
     group_id = Column(

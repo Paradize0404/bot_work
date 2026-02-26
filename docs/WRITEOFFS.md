@@ -10,7 +10,8 @@
 
 - **WO1:** Pending writeoffs → PostgreSQL (переживают рестарт). In-memory хранение запрещено.
 - **WO2:** Авто-выбор склада по должности (Бар/Кухня). Админ → ручной выбор.
-- **WO3:** Номенклатура фильтруется по разрешённым папкам: GOODS+DISH из `gsheet_export_group` (обычные точки) / `writeoff_request_store_group` (точка-получатель). PREPARED — без ограничений.
+- **WO3:** Номенклатура фильтруется по разрешённым папкам: GOODS+DISH из `gsheet_export_group` (обычные точки) / `writeoff_request_store_group` (точка-получатель). PREPARED — все, кроме исключённых папок (`writeoff_excluded_prepared_group` / `writeoff_excluded_prepared_request_group`).
+- **WO3b:** При поиске GOODS/DISH выводятся перед PREPARED (приоритетная сортировка), чтобы п/ф не вытесняли блюда при лимите.
 - **WO4:** Идемпотентный POST: UUID генерируется при создании, повторный POST = обновление (не дубликат).
 
 ---
@@ -68,6 +69,8 @@
 |---------|-----------|---------------|
 | `pending_writeoff` | Ожидающие одобрения | doc_id, is_locked, items (JSONB) |
 | `writeoff_history` | Архив списаний | telegram_id, department_id, store_type |
+| `writeoff_excluded_prepared_group` | Искл. папки PREPARED (обычные точки) | group_id (UUID) |
+| `writeoff_excluded_prepared_request_group` | Искл. папки PREPARED (точка-получатель) | group_id (UUID) |
 
 ## Частые ошибки
 
