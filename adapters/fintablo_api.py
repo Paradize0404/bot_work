@@ -9,6 +9,7 @@
   - Rate limit: 300 req/min (FinTablo ограничение)
   - Семафор (макс 4 параллельных запроса) чтобы не пробить rate limit
   - Retry с exponential backoff при 429 Too Many Requests
+  - Retry с пересозданием клиента при ReadTimeout/ConnectTimeout (до 5 попыток)
 """
 
 import asyncio
@@ -74,7 +75,7 @@ async def close_client() -> None:
 async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any]]:
     """
     Универсальный fetch для всех FinTablo list-эндпоинтов.
-    Один GET-запрос → все записи. Retry с backoff при 429.
+    Один GET-запрос → все записи. Retry с backoff при 429 и таймаутах.
     """
     client = await _get_client()
 
@@ -83,6 +84,7 @@ async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any
 
     async with _semaphore:
         resp = None
+        last_exc: Exception | None = None
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
                 resp = await client.get(
@@ -90,8 +92,35 @@ async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any
                     params=params if params else None,
                 )
                 resp.raise_for_status()
+                last_exc = None
                 break
+            except httpx.TimeoutException as exc:
+                # ReadTimeout/ConnectTimeout: keep-alive соединение могло протухнуть.
+                # Пересоздаём клиент и повторяем с backoff.
+                last_exc = exc
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "[FT-API] %s — %s (attempt %d/%d), пересоздаём клиент, retry через %.0f сек",
+                        endpoint,
+                        type(exc).__name__,
+                        attempt,
+                        _MAX_RETRIES,
+                        delay,
+                    )
+                    await close_client()
+                    client = await _get_client()
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "[FT-API] %s — %s после %d попыток, сдаёмся",
+                        endpoint,
+                        type(exc).__name__,
+                        _MAX_RETRIES,
+                    )
+                    raise
             except httpx.HTTPStatusError as exc:
+                last_exc = exc
                 if exc.response.status_code == 429 and attempt < _MAX_RETRIES:
                     delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
                     logger.warning(

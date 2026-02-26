@@ -81,6 +81,8 @@ PROJECT_MAP.md (ЭТОТ ФАЙЛ, ~10k) — ВСЕГДА загружать
 ├─ docs/OCR.md (~6k)          ←── OCR pipeline, маппинг GSheet, iiko XML
 ├─ docs/WRITEOFFS.md (~4k)    ←── акты списания, pending, история
 ├─ docs/ENV_VARS.md (~3k)     ←── все env vars, деплой-чеклист
+├─ docs/ROADMAP.md (~3k)      ←── план развития, приоритеты фич
+├─ docs/USER_PHOTO_GUIDE.md (~2k) ←── инструкция фото для OCR
 │
 └─── Архив / Песочница ───
    ├─ docs/CHANGELOG.md (~10k) ←── последние изменения (2026)

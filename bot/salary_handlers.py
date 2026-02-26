@@ -22,43 +22,20 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 from aiogram.fsm.context import FSMContext
-from sqlalchemy import select
 
 from bot.middleware import permission_required
 from bot.permission_map import PERM_SETTINGS
-from db.engine import async_session_factory
-from db.models import Employee
-from use_cases.salary import load_salary_exclusions, toggle_salary_exclusion
+from use_cases.salary import (
+    get_all_employees,
+    load_salary_exclusions,
+    toggle_salary_exclusion,
+)
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 _BUTTON = "👥 Список ФОТ"
 _PAGE_SIZE = 12
-
-
-async def _get_all_employees() -> list[dict]:
-    """Вернуть всех не-удалённых сотрудников (id, full_name) отсортированных по имени."""
-    async with async_session_factory() as session:
-        rows = (
-            (await session.execute(select(Employee).where(Employee.deleted == False)))
-            .scalars()
-            .all()
-        )
-
-    result = []
-    for emp in rows:
-        parts = [
-            p
-            for p in (emp.last_name, emp.first_name, emp.middle_name)
-            if p and p.strip()
-        ]
-        full_name = " ".join(parts) if parts else (emp.name or "").strip()
-        if full_name:
-            result.append({"id": str(emp.id), "name": full_name})
-
-    result.sort(key=lambda x: x["name"].lower())
-    return result
 
 
 def _build_keyboard(
@@ -126,8 +103,10 @@ def _build_keyboard(
 @router.message(F.text == _BUTTON)
 @permission_required(PERM_SETTINGS)
 async def salary_list_menu(message: Message, state: FSMContext) -> None:
+    logger.info("[salary] list_menu tg:%d", message.from_user.id)
     await state.clear()
-    employees = await _get_all_employees()
+    await message.delete()
+    employees = await get_all_employees()
     exclusions = await load_salary_exclusions()
     text, kb = _build_keyboard(employees, exclusions, page=0)
     await message.answer(text, parse_mode="HTML", reply_markup=kb)
@@ -141,12 +120,17 @@ async def salary_list_menu(message: Message, state: FSMContext) -> None:
 @router.callback_query(F.data.startswith("sal_excl_pg:"))
 @permission_required(PERM_SETTINGS)
 async def salary_excl_page(call: CallbackQuery, state: FSMContext) -> None:
-    page = int(call.data.split(":")[1])
-    employees = await _get_all_employees()
+    await call.answer()
+    logger.info("[salary] excl_page tg:%d", call.from_user.id)
+    try:
+        page = int(call.data.split(":")[1])
+    except (ValueError, IndexError):
+        await call.answer("⚠️ Ошибка", show_alert=True)
+        return
+    employees = await get_all_employees()
     exclusions = await load_salary_exclusions()
     text, kb = _build_keyboard(employees, exclusions, page=page)
     await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
-    await call.answer()
 
 
 # ─────────────────────────────────────────────
@@ -157,14 +141,20 @@ async def salary_excl_page(call: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data.startswith("sal_excl_tog:"))
 @permission_required(PERM_SETTINGS)
 async def salary_excl_toggle(call: CallbackQuery, state: FSMContext) -> None:
-    parts = call.data.split(":")
-    emp_id = parts[1]
-    page = int(parts[2]) if len(parts) > 2 else 0
+    await call.answer()
+    logger.info("[salary] excl_toggle tg:%d", call.from_user.id)
+    try:
+        parts = call.data.split(":")
+        emp_id = parts[1]
+        page = int(parts[2]) if len(parts) > 2 else 0
+    except (ValueError, IndexError):
+        await call.answer("⚠️ Ошибка", show_alert=True)
+        return
 
     user_name = call.from_user.full_name if call.from_user else None
     now_excluded = await toggle_salary_exclusion(emp_id, excluded_by=user_name)
 
-    employees = await _get_all_employees()
+    employees = await get_all_employees()
     exclusions = await load_salary_exclusions()
     text, kb = _build_keyboard(employees, exclusions, page=page)
     await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
@@ -196,5 +186,6 @@ async def salary_excl_toggle(call: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "sal_excl_close")
 @permission_required(PERM_SETTINGS)
 async def salary_excl_close(call: CallbackQuery, state: FSMContext) -> None:
-    await call.message.delete()
     await call.answer()
+    logger.info("[salary] excl_close tg:%d", call.from_user.id)
+    await call.message.delete()

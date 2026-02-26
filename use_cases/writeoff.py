@@ -15,7 +15,7 @@ import logging
 import time
 from dataclasses import dataclass
 from use_cases._helpers import now_kgd, bfs_allowed_groups, load_stores_for_department
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, func, or_
 
@@ -519,6 +519,7 @@ def build_writeoff_document(
         comment_parts.append(f"(Автор: {author_name})")
     comment = " ".join(comment_parts)
     return {
+        "id": str(uuid4()),
         "dateIncoming": date_incoming or now_kgd().strftime("%Y-%m-%dT%H:%M:%S"),
         "status": "PROCESSED",
         "comment": comment,

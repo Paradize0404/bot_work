@@ -29,7 +29,10 @@
 | `TIMEZONE` | Хардкод `Europe/Kaliningrad` | Не читается из env |
 | `MIN_STOCK_SHEET_ID` | Хардкод в config.py | Google Таблица (мин. остатки, права, настройки, маппинг) |
 | `INVOICE_PRICE_SHEET_ID` | = `MIN_STOCK_SHEET_ID` | Таблица прайс-листа |
-| `REDIS_URL` | — | Redis для FSM storage (если не задан — MemoryStorage) |
+| `REDIS_URL` | — | Redis для FSM storage (**обязательна** — `_require()`) |
+| `DAY_REPORT_SHEET_ID` | = `MIN_STOCK_SHEET_ID` | Google Таблица (отчёт дня) |
+| `SALARY_SHEET_ID` | = `MIN_STOCK_SHEET_ID` | Google Таблица (зарплатная ведомость) |
+| `OPENAI_API_KEY` | — | API-ключ OpenAI GPT-5.2 Vision (если не задан — OCR недоступен) |
 
 ## iikoCloud
 

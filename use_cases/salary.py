@@ -13,15 +13,45 @@ Use-case: зарплатная ведомость → Google Sheets.
 
 import logging
 import time
-from datetime import date, datetime
+from datetime import date
 
 from sqlalchemy import select, delete
 
 from db.engine import async_session_factory
 from db.models import Employee, SalaryExclusion
 from adapters.google_sheets import sync_salary_sheet
+from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════
+# Загрузка списка сотрудников
+# ═══════════════════════════════════════════════════════
+
+
+async def get_all_employees() -> list[dict]:
+    """Вернуть всех не-удалённых сотрудников (id, full_name) отсортированных по имени."""
+    async with async_session_factory() as session:
+        rows = (
+            (await session.execute(select(Employee).where(Employee.deleted == False)))
+            .scalars()
+            .all()
+        )
+
+    result = []
+    for emp in rows:
+        parts = [
+            p
+            for p in (emp.last_name, emp.first_name, emp.middle_name)
+            if p and p.strip()
+        ]
+        full_name = " ".join(parts) if parts else (emp.name or "").strip()
+        if full_name:
+            result.append({"id": str(emp.id), "name": full_name})
+
+    result.sort(key=lambda x: x["name"].lower())
+    return result
 
 
 # ═══════════════════════════════════════════════════════
@@ -60,7 +90,7 @@ async def toggle_salary_exclusion(
                 SalaryExclusion(
                     employee_id=employee_id,
                     excluded_by=excluded_by,
-                    excluded_at=datetime.utcnow(),
+                    excluded_at=now_kgd(),
                 )
             )
             await session.commit()

@@ -3,7 +3,7 @@
 > Читай этот файл при: миграция, новая таблица, sync-задача, работа с данными, запросы.
 
 **Подключение:** `postgresql+asyncpg://...@ballast.proxy.rlwy.net:17027/railway`
-**Всего таблиц:** 45 (29 iiko/bot + 13 FinTablo + 1 служебная бота + 1 внешняя)
+**Всего таблиц:** 46 (30 iiko/bot + 13 FinTablo + 1 служебная бота + 1 внешняя + 1 pending)
 
 ---
 
@@ -57,6 +57,7 @@
 | 45 | `writeoff_request_store_group` | списания | id (UUID PK), name | INSERT/DELETE |
 | 46 | `salary_history` | ФОТ | id (PK), employee_name, sal_type, rate, mot_pct, mot_base, valid_from, valid_to, iiko_id | GSheet sync |
 | 47 | `salary_exclusions` | ФОТ | employee_id (PK), excluded_by, excluded_at | INSERT/DELETE |
+| 48 | `pending_incoming_invoice` | накладные | id (PK), owner_tg_id, invoices (JSONB), created_at | INSERT/UPDATE |
 
 ---
 

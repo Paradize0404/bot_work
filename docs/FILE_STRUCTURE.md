@@ -30,6 +30,8 @@
 | `day_report_handlers.py` | handler | Отчёт дня: плюсы/минусы → iiko OLAP |
 | `pastry_handlers.py` | handler | Кондитерские операции |
 | `salary_handlers.py` | handler | 👥 Список ФОТ: исключения сотрудников (пагинация) |
+| `invoice_edit_handlers.py` | handler | FSM-редактирование pending incoming invoice (11 callback) |
+| `pending_docs_handlers.py` | handler | Список ожидающих документов (pending all) |
 | `global_commands.py` | handler | /cancel, NavResetMiddleware, PermissionMiddleware |
 | `middleware.py` | handler | Авторизация, cancel-kb, menu helpers |
 | `permission_map.py` | handler | Единый реестр прав (roles, perm_key, groups) |
@@ -50,6 +52,8 @@
 | `writeoff_cache.py` | use_case | TTL-кеш writeoff-данных |
 | `writeoff_history.py` | use_case | История списаний (JSONB, роли) |
 | `pending_writeoffs.py` | use_case | PostgreSQL pending (TTL 24h, lock) |
+| `pending_all.py` | use_case | Агрегация всех pending-документов |
+| `pending_incoming_invoice.py` | use_case | CRUD pending incoming invoice (JSONB) |
 | `outgoing_invoice.py` | use_case | Расходные накладные + прайс |
 | `invoice_cache.py` | use_case | TTL-кеш накладных |
 | `pdf_invoice.py` | use_case | PDF генерация (ReportLab, кириллица) |
@@ -108,7 +112,7 @@ test/
 ├── Procfile                 # Railway deploy: web: python -m db.init_db && python main.py
 ├── runtime.txt              # Версия Python для Railway (python-3.12.3)
 ├── PROJECT_MAP.md           # Карта проекта (ЧИТАТЬ ВСЕГДА)
-├── PROMPT_FOR_NEW_PROJECT.md # Промпт-шаблон для нового проекта
+├── docs/archive/PROMPT_FOR_NEW_PROJECT.md # Промпт-шаблон для нового проекта (архив)
 ├── iiko_auth.py             # Авторизация iiko API (токен, кеш 10 мин, retry×4)
 │                             #   get_auth_token() → str — async, кеширует в _token_cache
 │                             #   get_base_url() → str — IIKO_BASE_URL из config
@@ -276,6 +280,10 @@ test/
 │   │                         #   sal_excl_pg: / sal_excl_tog:{id}:{page} / sal_excl_close
 │   │                         #   @permission_required(PERM_SETTINGS)
 │   │                         #   toggle → delete_history_for_employee (DB + GSheet)
+│   ├── invoice_edit_handlers.py # FSM-редактирование pending incoming invoice
+│   │                         #   11 callback-хэндлеров: inv_edit_start → inv_ed_done
+│   │                         #   InvEditStates: choose_req → choose_inv → choose_field → enter_value
+│   ├── pending_docs_handlers.py # Список ожидающих документов (агрегация pending)
 │   ├── document_handlers.py # OCR накладных: загрузка фото → распознавание → маппинг
 │   ├── day_report_handlers.py # Отчёт дня: FSM-флоу плюсы → минусы → данные iiko → отправка
 │   │                         #   DayReportStates: positives → negatives
@@ -409,6 +417,8 @@ test/
 │   │                         #   async: save_admin_msg_ids(), update_items(), update_store(), update_account()
 │   │                         #   sync: build_summary_text(), admin_keyboard()
 │   │                         #   TTL: 24ч автоочистка, таблица: pending_writeoff
+│   ├── pending_all.py       # Агрегация всех pending-документов (writeoff + incoming invoice)
+│   ├── pending_incoming_invoice.py # CRUD pending incoming invoice (JSONB, таблица pending_incoming_invoice)
 │   ├── admin.py             # Управление администраторами бота (CRUD + кеш)
 │   │                         #   get_admin_ids() — из БД + in-memory кеш (инвалид. при add/remove)
 │   │                         #   is_admin(), list_admins()

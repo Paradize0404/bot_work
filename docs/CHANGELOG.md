@@ -5,6 +5,33 @@
 
 ---
 
+### 2026-02-25 — [AUDIT] Полный аудит по PROJECT_MAP.md (K1-K5, R1-R7)
+
+**Контракты (код):**
+
+- **K2 HIGH** `use_cases/writeoff.py` — добавлен `"id": str(uuid4())` в `build_writeoff_document()` → идемпотентная отправка
+- **K2 MED** `use_cases/negative_transfer.py` — TOCTOU `.locked()` → `acquire_nowait()/release` (атомарный паттерн)
+- **K4 HIGH** `bot/invoice_edit_handlers.py` — 11 callback-хэндлеров: добавлен `try/except` валидация `int()`/`UUID()`
+- **K4+K3+K1** `bot/salary_handlers.py` — SQL из хэндлера → `use_cases/salary.get_all_employees()`, логи, валидация
+- **K3** `bot/invoice_edit_handlers.py` — добавлен `logger.info` во все 11 хэндлеров
+- **K5.1** `bot/writeoff_handlers.py`, `request_handlers.py`, `pastry_handlers.py`, `document_handlers.py`, `invoice_edit_handlers.py`, `salary_handlers.py` — `callback.answer()` перед `logger.info` (≈35 мест)
+- **K5.2** `bot/invoice_edit_handlers.py` — `answer()` → `edit_text()` (11 хэндлеров)
+
+**Правила (код):**
+
+- **R1** `use_cases/salary.py` — `datetime.utcnow()` → `now_kgd()`
+- **R2** `use_cases/salary_history.py` — 4× `Optional[X]` → `X | None` + `from __future__ import annotations`
+- **R2** `use_cases/revenue_motivation.py` — 2× `Optional[X]` → `X | None`
+
+**Документация:**
+
+- `docs/ENV_VARS.md` — добавлены `DAY_REPORT_SHEET_ID`, `SALARY_SHEET_ID`, `OPENAI_API_KEY`; `REDIS_URL` помечен обязательным
+- `docs/DATABASE.md` — добавлена таблица `pending_incoming_invoice` (#48); счётчик 45→46
+- `docs/FILE_STRUCTURE.md` — добавлены 4 модуля: `invoice_edit_handlers.py`, `pending_docs_handlers.py`, `pending_all.py`, `pending_incoming_invoice.py`; исправлен `PROMPT_FOR_NEW_PROJECT.md` → `docs/archive/`
+- `PROJECT_MAP.md` — граф навигации: добавлены `docs/ROADMAP.md`, `docs/USER_PHOTO_GUIDE.md`
+
+---
+
 ### 2026-02-24 — [FEAT] Мотивация «от выручки»: OLAP-отчёт + колонка в ФОТ
 
 **Файлы:** `adapters/iiko_api.py`, `use_cases/revenue_motivation.py` (NEW), `use_cases/payroll.py`, `adapters/google_sheets.py`

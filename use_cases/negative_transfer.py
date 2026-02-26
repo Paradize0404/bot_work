@@ -650,11 +650,15 @@ async def run_negative_transfer_once(
     Запуск авто-перемещения с защитой от дублирования (asyncio.Lock).
     Если уже запущено — немедленно возвращает {"status": "locked"}.
     """
-    if _SYNC_LOCK.locked():
+    try:
+        _SYNC_LOCK.acquire_nowait()
+    except RuntimeError:
         logger.warning(
             "[%s] Уже запущено, пропускаю (triggered_by=%s)", LABEL, triggered_by
         )
         return {"status": "locked"}
 
-    async with _SYNC_LOCK:
+    try:
         return await run_negative_transfer_all_restaurants(triggered_by=triggered_by)
+    finally:
+        _SYNC_LOCK.release()

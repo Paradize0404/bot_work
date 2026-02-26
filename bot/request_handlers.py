@@ -510,8 +510,8 @@ async def search_request_product(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("req_sup_page:"))
 async def request_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] request_sup_page tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] request_sup_page tg:%d", callback.from_user.id)
     page = safe_page(callback.data)
     data = await state.get_data()
     suppliers = data.get("_suppliers_cache", [])
@@ -525,8 +525,8 @@ async def request_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("reqp_page:"))
 async def request_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] request_prod_page tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] request_prod_page tg:%d", callback.from_user.id)
     page = safe_page(callback.data)
     data = await state.get_data()
     products = data.get("_products_cache", [])
@@ -540,8 +540,8 @@ async def request_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("req_hist_page:"))
 async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] request_hist_page tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] request_hist_page tg:%d", callback.from_user.id)
     page = safe_page(callback.data)
     data = await state.get_data()
     requests = data.get("_history_cache", [])
@@ -558,10 +558,10 @@ async def request_hist_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(CreateRequestStates.add_items, F.data.startswith("reqp:"))
 async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
     logger.info(
         "[request_handlers] choose_request_product tg:%d", callback.from_user.id
     )
-    await callback.answer()
     prod_id = callback.data.split(":", 1)[1]
 
     try:
@@ -798,8 +798,8 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(CreateRequestStates.add_items, F.data == "req_remove_last")
 async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] remove_last_item tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] remove_last_item tg:%d", callback.from_user.id)
     data = await state.get_data()
     items = data.get("items", [])
     if not items:
@@ -841,8 +841,8 @@ async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(CreateRequestStates.add_items, F.data == "req_send")
 async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] preview_request tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] preview_request tg:%d", callback.from_user.id)
     data = await state.get_data()
     items = data.get("items", [])
     if not items:
@@ -1618,8 +1618,8 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
 
 @router.callback_query(F.data.startswith("req_edit:"))
 async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] start_edit_request tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] start_edit_request tg:%d", callback.from_user.id)
 
     # Проверка прав доступа
     from use_cases import permissions as perm_uc
@@ -1725,8 +1725,8 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
     EditRequestStates.choose_field, F.data.startswith("req_edit_field:")
 )
 async def req_choose_field(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] req_choose_field tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] req_choose_field tg:%d", callback.from_user.id)
     field = callback.data.split(":", 1)[1]
 
     data = await state.get_data()
@@ -1811,8 +1811,8 @@ async def req_choose_field(callback: CallbackQuery, state: FSMContext) -> None:
     EditRequestStates.edit_account, F.data.startswith("req_edit_acc:")
 )
 async def req_edit_account(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] req_edit_account tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] req_edit_account tg:%d", callback.from_user.id)
     acc_id = callback.data.split(":", 1)[1]
 
     data = await state.get_data()
@@ -1839,8 +1839,8 @@ async def req_edit_account(callback: CallbackQuery, state: FSMContext) -> None:
     EditRequestStates.choose_item, F.data.startswith("req_edit_item:")
 )
 async def choose_item_to_edit(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] choose_item_to_edit tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] choose_item_to_edit tg:%d", callback.from_user.id)
     idx_str = callback.data.split(":", 1)[1]
     try:
         idx = int(idx_str)
@@ -1902,8 +1902,8 @@ async def choose_item_to_edit(callback: CallbackQuery, state: FSMContext) -> Non
     EditRequestStates.choose_action, F.data.startswith("req_edit_action:")
 )
 async def choose_edit_action(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] choose_edit_action tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] choose_edit_action tg:%d", callback.from_user.id)
     action = callback.data.split(":", 1)[1]
 
     data = await state.get_data()
@@ -2055,8 +2055,8 @@ async def edit_search_new_product(message: Message, state: FSMContext) -> None:
     EditRequestStates.new_product_search, F.data.startswith("req_edit_newprod:")
 )
 async def edit_pick_new_product(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] edit_pick_new_product tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] edit_pick_new_product tg:%d", callback.from_user.id)
     prod_id = callback.data.split(":", 1)[1]
 
     try:
@@ -2293,8 +2293,8 @@ async def _ignore_text_edit_inline(message: Message) -> None:
 
 @router.callback_query(F.data.startswith("req_reject:"))
 async def reject_request(callback: CallbackQuery) -> None:
-    logger.info("[request_handlers] reject_request tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] reject_request tg:%d", callback.from_user.id)
 
     # Проверка прав доступа
     from use_cases import permissions as perm_uc
@@ -2441,8 +2441,8 @@ async def view_history_item(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "req_hist_back")
 async def back_to_history_list(callback: CallbackQuery, state: FSMContext) -> None:
     """Возврат из карточки заявки к списку истории."""
-    logger.info("[request_handlers] back_to_history_list tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] back_to_history_list tg:%d", callback.from_user.id)
     requests = await req_uc.get_user_requests(callback.from_user.id, limit=10)
     if not requests:
         try:
@@ -2477,10 +2477,10 @@ async def close_history(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("req_dup:"))
 async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
     logger.info(
         "[request_handlers] start_duplicate_request tg:%d", callback.from_user.id
     )
-    await callback.answer()
     pk_str = callback.data.split(":", 1)[1]
     try:
         pk = int(pk_str)
@@ -2746,8 +2746,8 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(DuplicateRequestStates.confirm, F.data == "dup_reenter")
 async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[request_handlers] dup_reenter tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[request_handlers] dup_reenter tg:%d", callback.from_user.id)
     data = await state.get_data()
     items = data.get("_dup_items", [])
 

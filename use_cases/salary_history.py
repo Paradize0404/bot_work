@@ -15,10 +15,11 @@ Use-case: синхронизация истории ставок из Google She
 Также экспортирует setup_history_sheet() — создаёт/обновляет лист с дропдаунами.
 """
 
+from __future__ import annotations
+
 import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import Optional
 
 from sqlalchemy import select, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 _DATE_FORMATS = ("%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y")
 
 
-def _parse_date(s: str) -> Optional[date]:
+def _parse_date(s: str) -> date | None:
     """Разобрать дату из строки DD.MM.YYYY или YYYY-MM-DD."""
     s = s.strip()
     for fmt in _DATE_FORMATS:
@@ -51,7 +52,7 @@ def _parse_date(s: str) -> Optional[date]:
     return None
 
 
-def _fmt_date(d: Optional[date]) -> str:
+def _fmt_date(d: date | None) -> str:
     """Форматировать дату в DD.MM.YYYY для GSheet, или '' если None."""
     return d.strftime("%d.%m.%Y") if d else ""
 
@@ -115,7 +116,7 @@ async def sync_salary_history(triggered_by: str | None = None) -> int:
             if i + 1 < len(entries):
                 # valid_to = день перед следующей записью
                 next_from = entries[i + 1][5]
-                valid_to: Optional[date] = next_from - timedelta(days=1)
+                valid_to: date | None = next_from - timedelta(days=1)
             else:
                 # Последняя (текущая) запись
                 valid_to = None
@@ -446,7 +447,7 @@ async def load_salary_history_index() -> dict[str, list[dict]]:
 def get_rate_for_date(
     history: list[dict],
     target_date: date,
-) -> Optional[dict]:
+) -> dict | None:
     """
     Найти активную запись истории на конкретную дату.
 

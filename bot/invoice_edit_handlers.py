@@ -98,7 +98,12 @@ def _back_kb(owner_tg_id: int) -> InlineKeyboardMarkup:
 @router.callback_query(F.data.startswith("inv_edit:"))
 async def inv_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    owner_tg_id = int(callback.data.split(":", 1)[1])
+    try:
+        owner_tg_id = int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка", show_alert=True)
+        return
+    logger.info("[inv_edit] start tg:%d owner:%d", callback.from_user.id, owner_tg_id)
     invoices = await inv_uc.get(owner_tg_id)
     if not invoices:
         await callback.answer("⚠️ Накладная не найдена", show_alert=True)
@@ -106,7 +111,7 @@ async def inv_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.set_state(EditInvoiceStates.choose_what)
     await state.update_data(inv_owner=owner_tg_id)
-    await callback.message.answer(
+    await callback.message.edit_text(
         "✏️ <b>Редактирование накладной</b>\n\nЧто нужно изменить?",
         parse_mode="HTML",
         reply_markup=_menu_kb(owner_tg_id),
@@ -121,6 +126,7 @@ async def inv_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(EditInvoiceStates.choose_what, F.data.startswith("inv_ed_req:"))
 async def inv_ed_req(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
+    logger.info("[inv_edit] req tg:%d", callback.from_user.id)
     data = await state.get_data()
     owner_tg_id = data["inv_owner"]
     invoices = await inv_uc.get(owner_tg_id)
@@ -145,7 +151,7 @@ async def inv_ed_req(callback: CallbackQuery, state: FSMContext) -> None:
                 )
             ]
         )
-        await callback.message.answer(
+        await callback.message.edit_text(
             "Выберите накладную для редактирования реквизитов:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         )
@@ -158,7 +164,7 @@ async def _show_req_fields(
     callback: CallbackQuery, owner_tg_id: int, inv_idx: int, inv: dict
 ) -> None:
     date_display = (inv.get("dateIncoming") or "")[:10]
-    await callback.message.answer(
+    await callback.message.edit_text(
         f"📄 Накладная №{inv.get('documentNumber', '?')}  ·  {inv.get('store_name', '?')}\n"
         "Что изменить?",
         reply_markup=InlineKeyboardMarkup(
@@ -197,8 +203,13 @@ async def _show_req_fields(
 )
 async def inv_ed_req_inv(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    _, _, owner_str, idx_str = callback.data.split(":")
-    owner_tg_id, inv_idx = int(owner_str), int(idx_str)
+    logger.info("[inv_edit] req_inv tg:%d", callback.from_user.id)
+    try:
+        _, _, owner_str, idx_str = callback.data.split(":")
+        owner_tg_id, inv_idx = int(owner_str), int(idx_str)
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка", show_alert=True)
+        return
     invoices = await inv_uc.get(owner_tg_id)
     await state.update_data(inv_inv_idx=inv_idx)
     await state.set_state(EditInvoiceStates.choose_what)
@@ -209,8 +220,13 @@ async def inv_ed_req_inv(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data.startswith("inv_ef:"))
 async def inv_ef_cb(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    parts = callback.data.split(":")
-    owner_tg_id, inv_idx, field = int(parts[1]), int(parts[2]), parts[3]
+    logger.info("[inv_edit] ef_cb tg:%d", callback.from_user.id)
+    try:
+        parts = callback.data.split(":")
+        owner_tg_id, inv_idx, field = int(parts[1]), int(parts[2]), parts[3]
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка", show_alert=True)
+        return
 
     PROMPTS = {
         "documentNumber": "🔢 Введите новый номер накладной:",
@@ -224,7 +240,7 @@ async def inv_ef_cb(callback: CallbackQuery, state: FSMContext) -> None:
         inv_edit_field=field,
         inv_edit_scope="requisite",
     )
-    await callback.message.answer(
+    await callback.message.edit_text(
         PROMPTS.get(field, f"Введите новое значение для {field}:"),
         reply_markup=_back_kb(owner_tg_id),
     )
@@ -240,6 +256,7 @@ async def inv_ef_cb(callback: CallbackQuery, state: FSMContext) -> None:
 )
 async def inv_ed_items(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
+    logger.info("[inv_edit] items tg:%d", callback.from_user.id)
     data = await state.get_data()
     owner_tg_id = data["inv_owner"]
     invoices = await inv_uc.get(owner_tg_id)
@@ -268,7 +285,7 @@ async def inv_ed_items(callback: CallbackQuery, state: FSMContext) -> None:
                 )
             ]
         )
-        await callback.message.answer(
+        await callback.message.edit_text(
             "Выберите накладную:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         )
@@ -281,8 +298,13 @@ async def inv_ed_items(callback: CallbackQuery, state: FSMContext) -> None:
 )
 async def inv_ed_items_inv(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    _, _, owner_str, idx_str = callback.data.split(":")
-    owner_tg_id, inv_idx = int(owner_str), int(idx_str)
+    logger.info("[inv_edit] items_inv tg:%d", callback.from_user.id)
+    try:
+        _, _, owner_str, idx_str = callback.data.split(":")
+        owner_tg_id, inv_idx = int(owner_str), int(idx_str)
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка", show_alert=True)
+        return
     invoices = await inv_uc.get(owner_tg_id)
     await state.update_data(inv_item_inv_idx=inv_idx)
     await state.set_state(EditInvoiceStates.choose_item)
@@ -315,7 +337,7 @@ async def _show_item_list(
             )
         ]
     )
-    await callback.message.answer(
+    await callback.message.edit_text(
         "📦 Выберите позицию для редактирования:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -325,8 +347,13 @@ async def _show_item_list(
 @router.callback_query(F.data.startswith("inv_ed_item:"))
 async def inv_ed_item(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    parts = callback.data.split(":")
-    owner_tg_id, inv_idx, item_idx = int(parts[1]), int(parts[2]), int(parts[3])
+    logger.info("[inv_edit] item tg:%d", callback.from_user.id)
+    try:
+        parts = callback.data.split(":")
+        owner_tg_id, inv_idx, item_idx = int(parts[1]), int(parts[2]), int(parts[3])
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка", show_alert=True)
+        return
     invoices = await inv_uc.get(owner_tg_id)
     item = invoices[inv_idx]["items"][item_idx]
     name = item.get("iiko_name") or item.get("raw_name") or "?"
@@ -336,7 +363,7 @@ async def inv_ed_item(callback: CallbackQuery, state: FSMContext) -> None:
         inv_item_idx=item_idx,
     )
     await state.set_state(EditInvoiceStates.choose_item_field)
-    await callback.message.answer(
+    await callback.message.edit_text(
         f"📦 <b>{name}</b>\n"
         f"Кол-во: {item.get('amount', 0):g}  |  Цена: {item.get('price', 0):.2f}₽\n"
         "Что изменить?",
@@ -382,13 +409,18 @@ async def inv_ed_item(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data.startswith("inv_if:"))
 async def inv_if_cb(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    parts = callback.data.split(":")
-    owner_tg_id, inv_idx, item_idx, field = (
-        int(parts[1]),
-        int(parts[2]),
-        int(parts[3]),
-        parts[4],
-    )
+    logger.info("[inv_edit] if_cb tg:%d", callback.from_user.id)
+    try:
+        parts = callback.data.split(":")
+        owner_tg_id, inv_idx, item_idx, field = (
+            int(parts[1]),
+            int(parts[2]),
+            int(parts[3]),
+            parts[4],
+        )
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка", show_alert=True)
+        return
     PROMPTS = {
         "iiko_name": "✏️ Введите новое название товара:",
         "amount": "📊 Введите новое количество (например: 5 или 2.5):",
@@ -402,7 +434,7 @@ async def inv_if_cb(callback: CallbackQuery, state: FSMContext) -> None:
         inv_edit_field=field,
         inv_edit_scope="item",
     )
-    await callback.message.answer(
+    await callback.message.edit_text(
         PROMPTS.get(field, f"Введите значение для {field}:"),
         reply_markup=_back_kb(owner_tg_id),
     )
@@ -415,6 +447,7 @@ async def inv_if_cb(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(EditInvoiceStates.enter_value)
 async def inv_enter_value(message: Message, state: FSMContext) -> None:
+    logger.info("[inv_edit] enter_value tg:%d", message.from_user.id)
     data = await state.get_data()
     owner_tg_id: int = data["inv_owner"]
     scope: str = data.get("inv_edit_scope", "")
@@ -473,8 +506,13 @@ async def inv_enter_value(message: Message, state: FSMContext) -> None:
 async def inv_ed_done(callback: CallbackQuery, state: FSMContext) -> None:
     """Завершить редактирование: показать обновлённый превью."""
     await callback.answer()
+    logger.info("[inv_edit] done tg:%d", callback.from_user.id)
     data = await state.get_data()
-    owner_tg_id = data.get("inv_owner") or int(callback.data.split(":", 1)[1])
+    try:
+        owner_tg_id = data.get("inv_owner") or int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка", show_alert=True)
+        return
     tg_id = callback.from_user.id
 
     invoices = await inv_uc.get(owner_tg_id)
@@ -535,11 +573,16 @@ async def inv_ed_done(callback: CallbackQuery, state: FSMContext) -> None:
 async def inv_ed_back(callback: CallbackQuery, state: FSMContext) -> None:
     """Вернуться в главное меню редактирования."""
     await callback.answer()
+    logger.info("[inv_edit] back tg:%d", callback.from_user.id)
     data = await state.get_data()
-    owner_tg_id = data.get("inv_owner") or int(callback.data.split(":", 1)[1])
+    try:
+        owner_tg_id = data.get("inv_owner") or int(callback.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await callback.answer("⚠️ Ошибка", show_alert=True)
+        return
     await state.set_state(EditInvoiceStates.choose_what)
     await state.update_data(inv_owner=owner_tg_id)
-    await callback.message.answer(
+    await callback.message.edit_text(
         "✏️ Что ещё изменить?",
         reply_markup=_menu_kb(owner_tg_id),
     )

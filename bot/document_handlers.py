@@ -866,11 +866,11 @@ async def _handle_mapping_done(placeholder, tg_id) -> None:
 @router.callback_query(F.data.startswith("iiko_invoice_send:"))
 async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
     """Отправить подготовленные накладные в iiko."""
-    logger.info("[ocr] cb_iiko_invoice_send tg:%d", callback.from_user.id)
     try:
         await callback.answer()
     except Exception:
         pass
+    logger.info("[ocr] cb_iiko_invoice_send tg:%d", callback.from_user.id)
 
     tg_id = callback.from_user.id
 
@@ -977,11 +977,11 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("iiko_invoice_cancel:"))
 async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
     """Отменить загрузку накладных в iiko."""
-    logger.info("[ocr] cb_iiko_invoice_cancel tg:%d", callback.from_user.id)
     try:
         await callback.answer()
     except Exception:
         pass
+    logger.info("[ocr] cb_iiko_invoice_cancel tg:%d", callback.from_user.id)
 
     tg_id = callback.from_user.id
 
