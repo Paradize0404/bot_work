@@ -1260,6 +1260,115 @@ def _parse_incoming_invoices_xml(xml_str: str) -> list[dict[str, Any]]:
 
 
 # ═════════════════════════════════════════════════════
+# 11b. Выгрузка расходных накладных (XML)
+# ═════════════════════════════════════════════════════
+
+
+async def fetch_outgoing_invoices(
+    date_from: str,
+    date_to: str,
+) -> list[dict[str, Any]]:
+    """
+    Экспорт расходных накладных за период.
+
+    GET /resto/api/documents/export/outgoingInvoice?from=...&to=...
+    date_from, date_to — формат YYYY-MM-DD.
+    Возвращает список документов, каждый с items[{productId, amount, sum, ...}].
+    """
+    key = await _get_key()
+    url = f"{_base()}/resto/api/documents/export/outgoingInvoice"
+    params = {"key": key, "from": date_from, "to": date_to}
+
+    label = f"outgoing_invoices {date_from}..{date_to}"
+    logger.info("[API] GET %s — отправляю запрос...", label)
+    t0 = time.monotonic()
+    resp = await _get_with_retry(url, params, label=label)
+    elapsed = time.monotonic() - t0
+
+    xml_str = resp.text
+    logger.info(
+        "[API] GET %s — HTTP %d, %.1f сек, %d байт",
+        label,
+        resp.status_code,
+        elapsed,
+        len(resp.content),
+    )
+    return _parse_outgoing_invoices_xml(xml_str)
+
+
+def _parse_outgoing_invoices_xml(xml_str: str) -> list[dict[str, Any]]:
+    """Парсинг XML-ответа расходных накладных → список документов.
+
+    XML-структура:
+      <outgoingInvoiceDtoes>
+        <document>
+          <id>UUID</id>
+          <dateIncoming>YYYY-MM-DD ...</dateIncoming>
+          <status>...</status>
+          <counteragent>UUID</counteragent>
+          <defaultStore>UUID</defaultStore>
+          <items>
+            <item>
+              <product>UUID</product>
+              <store>UUID</store>
+              <amount>...</amount>
+              <price>...</price>
+              <sum>...</sum>
+              ...
+            </item>
+          </items>
+        </document>
+      </outgoingInvoiceDtoes>
+    """
+    root = ET.fromstring(xml_str)
+    documents: list[dict[str, Any]] = []
+
+    _ITEM_TAG_MAP: dict[str, str] = {
+        "product": "productId",
+        "store": "storeId",
+        "amount": "amount",
+        "price": "price",
+        "sum": "sum",
+    }
+
+    for doc_el in root.findall("document"):
+        doc: dict[str, Any] = {
+            "id": None,
+            "dateIncoming": None,
+            "status": None,
+            "counteragent": None,
+            "defaultStore": None,
+            "items": [],
+        }
+        for child in doc_el:
+            if child.tag == "id":
+                doc["id"] = (child.text or "").strip()
+            elif child.tag == "dateIncoming":
+                doc["dateIncoming"] = (child.text or "").strip()
+            elif child.tag == "status":
+                doc["status"] = (child.text or "").strip()
+            elif child.tag == "counteragent":
+                doc["counteragent"] = (child.text or "").strip()
+            elif child.tag == "defaultStore":
+                doc["defaultStore"] = (child.text or "").strip()
+            elif child.tag == "items":
+                for item_el in child.findall("item"):
+                    item: dict[str, Any] = {}
+                    for ic in item_el:
+                        mapped = _ITEM_TAG_MAP.get(ic.tag)
+                        if mapped:
+                            item[mapped] = (ic.text or "").strip()
+                    if item.get("productId"):
+                        doc["items"].append(item)
+
+        if doc["items"]:
+            documents.append(doc)
+
+    logger.info("Parsed %d outgoing invoices from XML", len(documents))
+    return documents
+
+
+# ═════════════════════════════════════════════════════
 # 12. Технологические карты (JSON GET)
 # ═════════════════════════════════════════════════════
 

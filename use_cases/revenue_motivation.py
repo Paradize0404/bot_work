@@ -350,3 +350,340 @@ async def get_department_revenue_totals(
             "[revenue_motivation] Ошибка при получении выручки по подразделениям"
         )
         return {}
+
+
+# ═══════════════════════════════════════════════════════
+# Мотивация «от накладных кондитерки»
+# ═══════════════════════════════════════════════════════
+
+
+async def _load_pastry_group_ids_expanded() -> set[str]:
+    """
+    Загрузить все group_id из PastryNomenclatureGroup, а затем
+    рекурсивно расширить набор всеми дочерними группами из ProductGroup.
+
+    Возвращает множество UUID-строк всех групп (включая подгруппы).
+    """
+    from uuid import UUID as _UUID
+
+    from sqlalchemy import select
+
+    from db.engine import async_session_factory
+    from db.models import PastryNomenclatureGroup, ProductGroup
+
+    async with async_session_factory() as session:
+        stmt = select(PastryNomenclatureGroup.group_id)
+        root_ids = {str(gid) for gid in (await session.execute(stmt)).scalars().all()}
+        if not root_ids:
+            return set()
+
+        # Загружаем всю иерархию групп
+        stmt_groups = select(ProductGroup.id, ProductGroup.parent_id)
+        rows = (await session.execute(stmt_groups)).all()
+
+    # parent_id → [child_id, ...]
+    children_map: dict[str, list[str]] = defaultdict(list)
+    for gid, pid in rows:
+        if pid:
+            children_map[str(pid)].append(str(gid))
+
+    # BFS по иерархии
+    expanded = set(root_ids)
+    queue = list(root_ids)
+    while queue:
+        current = queue.pop()
+        for child in children_map.get(current, []):
+            if child not in expanded:
+                expanded.add(child)
+                queue.append(child)
+
+    logger.info(
+        "[pastry_motivation] Кондитерские группы: %d корневых → %d с подгруппами",
+        len(root_ids),
+        len(expanded),
+    )
+    return expanded
+
+
+async def _load_product_group_index() -> dict[str, str]:
+    """Загрузить product_id → parent_id (group UUID)."""
+    from sqlalchemy import select
+
+    from db.engine import async_session_factory
+    from db.models import Product
+
+    async with async_session_factory() as session:
+        stmt = select(Product.id, Product.parent_id).where(Product.deleted.is_(False))
+        rows = (await session.execute(stmt)).all()
+    return {str(pid): str(gid) for pid, gid in rows if gid}
+
+
+async def _load_store_name_index() -> dict[str, str]:
+    """Загрузить store_id → store_name."""
+    from sqlalchemy import select
+
+    from db.engine import async_session_factory
+    from db.models import Store
+
+    async with async_session_factory() as session:
+        stmt = select(Store.id, Store.name).where(Store.deleted.is_(False))
+        rows = (await session.execute(stmt)).all()
+    return {str(sid): (name or "") for sid, name in rows}
+
+
+def _match_store_to_dept(store_name: str, dept_names: set[str]) -> str | None:
+    """Нечёткое сопоставление имени склада с именем подразделения."""
+    sn = store_name.lower()
+    for dn in dept_names:
+        dl = dn.lower()
+        if sn in dl or dl in sn:
+            return dn
+    return None
+
+
+async def calculate_pastry_invoice_motivation(
+    attendance_records: list[dict],
+    emp_full_names: dict[str, str],
+    date_from: date,
+    date_to: date,
+    history_index: dict[str, list[dict]] | None = None,
+) -> dict[str, dict[str, float]]:
+    """
+    Рассчитать мотивацию «от накладных кондитерки» за период.
+
+    Логика:
+      1. Получаем расходные накладные за период.
+      2. Для каждой позиции проверяем, входит ли товар в кондитерские группы.
+      3. Суммируем стоимость кондитерских позиций по складам.
+      4. Сопоставляем склады с подразделениями.
+      5. Для сотрудников с mot_base="от накладных кондитерки":
+         мотивация = сумма кондитерских позиций по подразделениям × mot_pct / 100.
+
+    Возвращает: {full_name: {dept_name: motivation_rubles}}
+    """
+    import asyncio
+
+    from adapters.iiko_api import fetch_outgoing_invoices
+
+    t_from_str = date_from.strftime("%Y-%m-%d")
+    t_to_str = date_to.strftime("%Y-%m-%d")
+
+    # ── 1. Параллельная загрузка данных ──
+    if history_index is None:
+        (
+            outgoing_docs,
+            history_index,
+            pastry_groups,
+            product_index,
+            store_names,
+        ) = await asyncio.gather(
+            fetch_outgoing_invoices(t_from_str, t_to_str),
+            load_salary_history_index(),
+            _load_pastry_group_ids_expanded(),
+            _load_product_group_index(),
+            _load_store_name_index(),
+        )
+    else:
+        outgoing_docs, pastry_groups, product_index, store_names = await asyncio.gather(
+            fetch_outgoing_invoices(t_from_str, t_to_str),
+            _load_pastry_group_ids_expanded(),
+            _load_product_group_index(),
+            _load_store_name_index(),
+        )
+
+    logger.info(
+        "[pastry_motivation] Расходных накладных: %d, "
+        "кондитерских групп (с подгруппами): %d, "
+        "товаров: %d",
+        len(outgoing_docs),
+        len(pastry_groups),
+        len(product_index),
+    )
+
+    if not pastry_groups:
+        logger.warning("[pastry_motivation] Нет кондитерских групп в БД")
+        return {}
+
+    # ── 2. Суммируем кондитерские позиции по складам ──
+    # store_id → total sum
+    store_pastry_sum: dict[str, float] = defaultdict(float)
+    matched_items = 0
+    total_items = 0
+
+    for doc in outgoing_docs:
+        store_id = (doc.get("defaultStore") or "").strip()
+        if not store_id:
+            continue
+        for item in doc.get("items", []):
+            total_items += 1
+            product_id = (item.get("productId") or "").strip()
+            if not product_id:
+                continue
+            group_id = product_index.get(product_id)
+            if group_id and group_id in pastry_groups:
+                try:
+                    item_sum = float(item.get("sum") or 0)
+                except (ValueError, TypeError):
+                    item_sum = 0.0
+                if item_sum > 0:
+                    store_pastry_sum[store_id] += item_sum
+                    matched_items += 1
+
+    logger.info(
+        "[pastry_motivation] Позиций в расходных: %d, "
+        "из них кондитерских: %d, складов: %d",
+        total_items,
+        matched_items,
+        len(store_pastry_sum),
+    )
+
+    if not store_pastry_sum:
+        return {}
+
+    # ── 3. Сопоставляем склады → подразделения (dept_name) ──
+    # Собираем уникальные dept_name из attendance
+    dept_names: set[str] = set()
+    for rec in attendance_records:
+        dn = (rec.get("departmentName") or "").strip()
+        if dn:
+            dept_names.add(dn)
+
+    # store_id → dept_name (matched)
+    store_to_dept: dict[str, str] = {}
+    for sid, s_total in store_pastry_sum.items():
+        sname = store_names.get(sid, "")
+        if not sname:
+            continue
+        matched_dept = _match_store_to_dept(sname, dept_names)
+        if matched_dept:
+            store_to_dept[sid] = matched_dept
+
+    # dept_name → total pastry sum
+    dept_pastry_sum: dict[str, float] = defaultdict(float)
+    unmatched_sum = 0.0
+    for sid, total in store_pastry_sum.items():
+        dept = store_to_dept.get(sid)
+        if dept:
+            dept_pastry_sum[dept] += total
+        else:
+            unmatched_sum += total
+
+    # Если есть незамэтченные склады — добавляем ко всем подразделениям поровну
+    # (либо ко всем, либо в «Без подразделения»)
+    if unmatched_sum > 0:
+        logger.info(
+            "[pastry_motivation] Незамэтченные склады: %.0f ₽ "
+            "(будет распределено по всем подразделениям)",
+            unmatched_sum,
+        )
+        if dept_pastry_sum:
+            share = unmatched_sum / len(dept_pastry_sum)
+            for dept in dept_pastry_sum:
+                dept_pastry_sum[dept] += share
+        else:
+            # Нет ни одного замэтченного подразделения:
+            # кладём под общий ключ
+            dept_pastry_sum["_all_"] = unmatched_sum
+
+    logger.info(
+        "[pastry_motivation] Кондитерские суммы по подразделениям: %s",
+        {k: f"{v:,.0f}" for k, v in dept_pastry_sum.items()},
+    )
+
+    # ── 4. Индексируем явки по iiko_id → dept_names ──
+    emp_depts: dict[str, set[str]] = defaultdict(set)
+    for rec in attendance_records:
+        emp_id = (rec.get("employeeId") or "").strip()
+        dept_name = (rec.get("departmentName") or "").strip()
+        if emp_id and dept_name:
+            emp_depts[emp_id].add(dept_name)
+
+    # ── 5. Рассчитываем мотивацию ──
+    result: dict[str, dict[str, float]] = {}
+
+    for emp_iiko_id, full_name in emp_full_names.items():
+        if not full_name:
+            continue
+
+        history = history_index.get(full_name, [])
+        if not history:
+            continue
+
+        active = get_rate_for_date(history, date_to)
+        if active is None:
+            active = get_rate_for_date(history, date_from)
+        if active is None:
+            continue
+
+        mot_base = (active.get("mot_base") or "").strip()
+        mot_pct = active.get("mot_pct")
+
+        if mot_base != "от накладных кондитерки" or not mot_pct:
+            continue
+        try:
+            mot_pct_val = float(mot_pct)
+        except (ValueError, TypeError):
+            continue
+        if mot_pct_val <= 0:
+            continue
+
+        # Подразделения сотрудника из явок
+        my_depts = emp_depts.get(emp_iiko_id, set())
+        if not my_depts:
+            # Нет явок — если есть общий ключ _all_, используем его
+            if "_all_" in dept_pastry_sum:
+                total = dept_pastry_sum["_all_"]
+                result[full_name] = {
+                    "Без подразделения": round(total * mot_pct_val / 100, 2)
+                }
+            continue
+
+        emp_motivation: dict[str, float] = {}
+        for dept in my_depts:
+            pastry_sum = dept_pastry_sum.get(dept, 0.0)
+            if pastry_sum > 0:
+                emp_motivation[dept] = round(pastry_sum * mot_pct_val / 100, 2)
+
+        if emp_motivation:
+            result[full_name] = emp_motivation
+            logger.info(
+                "[pastry_motivation] %s: %.1f%% × кондитерские → %s",
+                full_name,
+                mot_pct_val,
+                {k: f"{v:,.0f}" for k, v in emp_motivation.items()},
+            )
+
+    logger.info(
+        "[pastry_motivation] Итог: мотивация «от накладных кондитерки» "
+        "для %d сотрудников",
+        len(result),
+    )
+    return result
+
+
+async def get_pastry_invoice_motivation_map(
+    attendance_records: list[dict],
+    emp_iiko_to_fullname: dict[str, str],
+    date_from: date,
+    date_to: date,
+    history_index: dict[str, list[dict]] | None = None,
+) -> dict[str, dict[str, float]]:
+    """
+    Безопасная обёртка над calculate_pastry_invoice_motivation.
+
+    Возвращает: full_name → {dept_name → motivation_rubles}
+    """
+    try:
+        return await calculate_pastry_invoice_motivation(
+            attendance_records=attendance_records,
+            emp_full_names=emp_iiko_to_fullname,
+            date_from=date_from,
+            date_to=date_to,
+            history_index=history_index,
+        )
+    except Exception:
+        logger.exception(
+            "[pastry_motivation] Ошибка при расчёте мотивации "
+            "от накладных кондитерки, возвращаю пустой результат"
+        )
+        return {}

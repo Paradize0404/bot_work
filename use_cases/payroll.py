@@ -34,6 +34,7 @@ from adapters.iiko_api import fetch_attendance
 from use_cases.revenue_motivation import (
     get_revenue_motivation_map,
     get_department_revenue_totals,
+    get_pastry_invoice_motivation_map,
 )
 from use_cases.salary_history import (
     load_salary_history_index,
@@ -249,7 +250,8 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
     }
     # motivation_by_dept: {full_name: {dept_name: руб.}}
     # dept_revenue_totals: {dept_name: total_revenue}
-    motivation_by_dept, dept_revenue_totals = await asyncio.gather(
+    # pastry_motivation: {full_name: {dept_name: руб.}}
+    motivation_by_dept, dept_revenue_totals, pastry_motivation = await asyncio.gather(
         get_revenue_motivation_map(
             attendance_records=attendance_records,
             emp_iiko_to_fullname=emp_iiko_to_fullname,
@@ -261,11 +263,33 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
             date_from=month_start,
             date_to=today,
         ),
+        get_pastry_invoice_motivation_map(
+            attendance_records=attendance_records,
+            emp_iiko_to_fullname=emp_iiko_to_fullname,
+            date_from=month_start,
+            date_to=today,
+            history_index=history_index,
+        ),
     )
     logger.info(
         "[payroll] Мотивация «от выручки»: %d сотрудников с ненулёвой суммой",
         len(motivation_by_dept),
     )
+
+    # Объединяем мотивацию «от накладных кондитерки» в motivation_by_dept
+    for fn, depts in pastry_motivation.items():
+        if fn not in motivation_by_dept:
+            motivation_by_dept[fn] = {}
+        for dept_name, amount in depts.items():
+            motivation_by_dept[fn][dept_name] = (
+                motivation_by_dept[fn].get(dept_name, 0.0) + amount
+            )
+    if pastry_motivation:
+        logger.info(
+            "[payroll] Мотивация «от накладных кондитерки»: "
+            "%d сотрудников с ненулёвой суммой",
+            len(pastry_motivation),
+        )
     logger.info(
         "[payroll] Выручка по подразделениям: %s",
         {k: f"{v:,.0f}" for k, v in dept_revenue_totals.items()},
