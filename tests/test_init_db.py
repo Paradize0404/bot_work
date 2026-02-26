@@ -175,15 +175,17 @@ class TestInitDbMigrations:
             # ocr_document with confidence_score = 100
             await conn.execute(
                 text(
-                    "INSERT INTO ocr_document (id, telegram_id, doc_type, confidence_score) "
-                    "VALUES ('test-overflow-1', '12345', 'upd', 100.0)"
+                    "INSERT INTO ocr_document "
+                    "(id, telegram_id, doc_type, confidence_score, status, category, currency) "
+                    "VALUES ('test-overflow-1', '12345', 'upd', 100.0, 'recognized', 'goods', 'RUB')"
                 )
             )
             # ocr_item with confidence_score = 100
             await conn.execute(
                 text(
-                    "INSERT INTO ocr_item (id, document_id, raw_name, confidence_score) "
-                    "VALUES ('test-item-1', 'test-overflow-1', 'test', 100.0)"
+                    "INSERT INTO ocr_item "
+                    "(id, document_id, raw_name, confidence_score, mapping_status, is_auto_corrected) "
+                    "VALUES ('test-item-1', 'test-overflow-1', 'test', 100.0, 'pending', false)"
                 )
             )
 
