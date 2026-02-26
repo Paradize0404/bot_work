@@ -76,7 +76,9 @@ class OcrDocument(Base):
     )  # Telegram file_id[] для показа превью
 
     # Качество распознавания
-    confidence_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)  # 0.0–1.0
+    confidence_score: Mapped[float | None] = mapped_column(
+        Numeric(5, 4), nullable=True
+    )  # 0.0–1.0
 
     # Метаданные
     page_count: Mapped[int] = mapped_column(default=1)
@@ -164,7 +166,9 @@ class OcrItem(Base):
     )  # 10%, 20%, без НДС
 
     # Качество распознавания
-    confidence_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)  # 0.0–1.0
+    confidence_score: Mapped[float | None] = mapped_column(
+        Numeric(5, 4), nullable=True
+    )  # 0.0–1.0
 
     # Статус маппинга
     mapping_status: Mapped[str] = mapped_column(

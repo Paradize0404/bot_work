@@ -368,17 +368,15 @@ async def search_products(
     # --- Попытка поиска в кеше ---
     cached_products = _cache.get_products(cache_key)
     if cached_products is not None:
-        matched = [
-            p for p in cached_products
-            if pattern in p["name_lower"]
-        ]
+        matched = [p for p in cached_products if pattern in p["name_lower"]]
         # GOODS/DISH первыми, PREPARED последними — чтобы п/ф не вытесняли
         # реальные товары при достижении лимита
-        matched.sort(key=lambda p: (p["product_type"] == "PREPARED", p.get("name_lower", "")))
-        results = [
-            {k: v for k, v in p.items() if k != "name_lower"}
-            for p in matched
-        ][:limit]
+        matched.sort(
+            key=lambda p: (p["product_type"] == "PREPARED", p.get("name_lower", ""))
+        )
+        results = [{k: v for k, v in p.items() if k != "name_lower"} for p in matched][
+            :limit
+        ]
         logger.info(
             "[writeoff] Поиск «%s» → %d результатов за %.4f сек (кеш, dept=%s)",
             pattern,
@@ -393,15 +391,13 @@ async def search_products(
     await preload_products(department_id)
     cached_products = _cache.get_products(cache_key)
     if cached_products is not None:
-        matched = [
-            p for p in cached_products
-            if pattern in p["name_lower"]
+        matched = [p for p in cached_products if pattern in p["name_lower"]]
+        matched.sort(
+            key=lambda p: (p["product_type"] == "PREPARED", p.get("name_lower", ""))
+        )
+        results = [{k: v for k, v in p.items() if k != "name_lower"} for p in matched][
+            :limit
         ]
-        matched.sort(key=lambda p: (p["product_type"] == "PREPARED", p.get("name_lower", "")))
-        results = [
-            {k: v for k, v in p.items() if k != "name_lower"}
-            for p in matched
-        ][:limit]
         logger.info(
             "[writeoff] Поиск «%s» → %d результатов за %.4f сек (после прогрева, dept=%s)",
             pattern,
@@ -417,6 +413,7 @@ async def search_products(
     async with async_session_factory() as session:
         # GOODS/DISH первыми, PREPARED последними
         from sqlalchemy import case as sa_case
+
         type_order = sa_case(
             (Product.product_type == "PREPARED", 1),
             else_=0,
