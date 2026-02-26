@@ -77,8 +77,8 @@ class OcrDocument(Base):
 
     # Качество распознавания
     confidence_score: Mapped[float | None] = mapped_column(
-        Numeric(5, 4), nullable=True
-    )  # 0.0–1.0
+        Numeric(7, 4), nullable=True
+    )  # 0–100
 
     # Метаданные
     page_count: Mapped[int] = mapped_column(default=1)
@@ -167,8 +167,8 @@ class OcrItem(Base):
 
     # Качество распознавания
     confidence_score: Mapped[float | None] = mapped_column(
-        Numeric(5, 4), nullable=True
-    )  # 0.0–1.0
+        Numeric(7, 4), nullable=True
+    )  # 0–100
 
     # Статус маппинга
     mapping_status: Mapped[str] = mapped_column(

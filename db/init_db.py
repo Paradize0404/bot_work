@@ -96,9 +96,9 @@ async def create_tables() -> None:
         "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_item' AND column_name='qty' AND data_type='real') THEN ALTER TABLE ocr_item ALTER COLUMN qty TYPE NUMERIC(12,4); END IF; END $$",
         "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_item' AND column_name='price' AND data_type='real') THEN ALTER TABLE ocr_item ALTER COLUMN price TYPE NUMERIC(12,4); END IF; END $$",
         "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_item' AND column_name='sum' AND data_type='real') THEN ALTER TABLE ocr_item ALTER COLUMN sum TYPE NUMERIC(12,4); END IF; END $$",
-        # ── OCR миграция: REAL → NUMERIC(5,4) для confidence_score ──
-        "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_document' AND column_name='confidence_score' AND data_type='real') THEN ALTER TABLE ocr_document ALTER COLUMN confidence_score TYPE NUMERIC(5,4); END IF; END $$",
-        "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_item' AND column_name='confidence_score' AND data_type='real') THEN ALTER TABLE ocr_item ALTER COLUMN confidence_score TYPE NUMERIC(5,4); END IF; END $$",
+        # ── OCR миграция: REAL → NUMERIC(7,4) для confidence_score (0–100) ──
+        "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_document' AND column_name='confidence_score' AND data_type='real') THEN ALTER TABLE ocr_document ALTER COLUMN confidence_score TYPE NUMERIC(7,4); END IF; END $$",
+        "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_item' AND column_name='confidence_score' AND data_type='real') THEN ALTER TABLE ocr_item ALTER COLUMN confidence_score TYPE NUMERIC(7,4); END IF; END $$",
         # ── OCR миграция: JSON → JSONB для GIN-индексов и скорости (B3) ──
         "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_document' AND column_name='raw_json' AND data_type='json') THEN ALTER TABLE ocr_document ALTER COLUMN raw_json TYPE JSONB USING raw_json::jsonb; END IF; END $$",
         "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ocr_document' AND column_name='validated_json' AND data_type='json') THEN ALTER TABLE ocr_document ALTER COLUMN validated_json TYPE JSONB USING validated_json::jsonb; END IF; END $$",
