@@ -13,9 +13,12 @@ import os
 import pytest
 from sqlalchemy import Numeric, text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
 
 # ---------------------------------------------------------------------------
 #  Engine для CI-базы (не пользуемся db.engine — он читает config в import-time)
+#  NullPool — каждый тест получает свой event-loop (scope=function),
+#  поэтому нельзя переиспользовать asyncpg-соединения между тестами.
 # ---------------------------------------------------------------------------
 _TEST_DB_URL = os.environ.get(
     "DATABASE_URL",
@@ -26,7 +29,7 @@ if _TEST_DB_URL.startswith("postgresql://"):
 elif _TEST_DB_URL.startswith("postgres://"):
     _TEST_DB_URL = _TEST_DB_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
-_engine = create_async_engine(_TEST_DB_URL, echo=False)
+_engine = create_async_engine(_TEST_DB_URL, echo=False, poolclass=NullPool)
 _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
 
