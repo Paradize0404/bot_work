@@ -4282,7 +4282,11 @@ async def read_fot_employee_rows(
         except gspread.exceptions.WorksheetNotFound:
             return ("", [])
 
-        all_rows = ws.get_all_values()
+        # UNFORMATTED_VALUE — числа приходят как числа (без «₽», пробелов),
+        # формулы — как вычисленный результат.
+        all_rows = ws.get_all_values(
+            value_render_option=gspread.utils.ValueRenderOption.unformatted
+        )
         if not all_rows:
             return ("", [])
 
@@ -4293,16 +4297,18 @@ async def read_fot_employee_rows(
         name_lower = display_name.lower()
 
         for row in all_rows:
-            cell_a = (row[0] if row else "").strip()
-            cell_b = (row[1] if len(row) > 1 else "").strip()
-            cell_d = (row[3] if len(row) > 3 else "").strip()
+            cell_a = str(row[0] if row else "").strip()
+            cell_b = str(row[1] if len(row) > 1 else "").strip()
+            # cell_d: с UNFORMATTED_VALUE числовой 0 допустим, пустая строка — нет
+            raw_d = row[3] if len(row) > 3 else ""
+            cell_d_empty = raw_d == "" or raw_d is None
 
             # Строка заголовков колонок — пропускаем
             if cell_a == _FOT_HEADERS[0]:
                 continue
 
             # Секция: A заполнена, B и D пустые, не period_label
-            if cell_a and not cell_b and not cell_d:
+            if cell_a and not cell_b and cell_d_empty:
                 sec = cell_a.split("  —  ")[0].strip()
                 if sec != period_label:
                     current_section = sec
@@ -4310,20 +4316,28 @@ async def read_fot_employee_rows(
 
             # Строка сотрудника: ищем совпадение (case-insensitive)
             if cell_a.lower() == name_lower:
+
+                def _num(idx: int) -> float:
+                    """Безопасно извлечь число из ячейки (UNFORMATTED)."""
+                    v = row[idx] if len(row) > idx else 0
+                    if isinstance(v, (int, float)):
+                        return float(v)
+                    return _parse_fot_num(str(v))
+
                 results.append(
                     {
                         "section": current_section,
                         "name": cell_a,
                         "role": cell_b,
-                        "accrued": _parse_fot_num(row[2] if len(row) > 2 else ""),
-                        "rate": _parse_fot_num(row[3] if len(row) > 3 else ""),
-                        "bonus": _parse_fot_num(row[4] if len(row) > 4 else ""),
-                        "premium": _parse_fot_num(row[5] if len(row) > 5 else ""),
-                        "deductions": _parse_fot_num(row[6] if len(row) > 6 else ""),
-                        "advance": _parse_fot_num(row[7] if len(row) > 7 else ""),
-                        "pay_25": _parse_fot_num(row[8] if len(row) > 8 else ""),
-                        "pay_10": _parse_fot_num(row[9] if len(row) > 9 else ""),
-                        "to_pay": _parse_fot_num(row[10] if len(row) > 10 else ""),
+                        "accrued": _num(2),
+                        "rate": _num(3),
+                        "bonus": _num(4),
+                        "premium": _num(5),
+                        "deductions": _num(6),
+                        "advance": _num(7),
+                        "pay_25": _num(8),
+                        "pay_10": _num(9),
+                        "to_pay": _num(10),
                     }
                 )
 
