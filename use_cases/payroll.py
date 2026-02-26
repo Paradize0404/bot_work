@@ -278,6 +278,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
     )
 
     # Объединяем мотивацию «от накладных кондитерки» в motivation_by_dept
+    pastry_dept_names: set[str] = set()
     for fn, depts in pastry_motivation.items():
         if fn not in motivation_by_dept:
             motivation_by_dept[fn] = {}
@@ -285,11 +286,13 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
             motivation_by_dept[fn][dept_name] = (
                 motivation_by_dept[fn].get(dept_name, 0.0) + amount
             )
+            pastry_dept_names.add(dept_name)
     if pastry_motivation:
         logger.info(
             "[payroll] Мотивация «от накладных кондитерки»: "
-            "%d сотрудников с ненулёвой суммой",
+            "%d сотрудников с ненулёвой суммой, подразделения: %s",
             len(pastry_motivation),
+            pastry_dept_names,
         )
     logger.info(
         "[payroll] Выручка по подразделениям: %s",
@@ -430,6 +433,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
         period_label=period_label,
         dept_revenue=dept_revenue_totals,
         pastry_revenue=pastry_revenue_total,
+        pastry_dept_names=pastry_dept_names,
     )
 
     elapsed = time.monotonic() - t0

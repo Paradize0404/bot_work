@@ -3785,6 +3785,7 @@ async def sync_fot_sheet(
     period_label: str,
     dept_revenue: dict[str, float] | None = None,
     pastry_revenue: float = 0.0,
+    pastry_dept_names: set[str] | None = None,
 ) -> int:
     """
     Записать лист ФОТ в Google Sheets.
@@ -3801,6 +3802,7 @@ async def sync_fot_sheet(
     emp_dict ключи:  name, role, rate_total, bonus.
     dept_revenue: {dept_name → total_revenue} (OLAP) — отображается в заголовке.
     pastry_revenue: общая сумма кондитерских расходных накладных (для шапки).
+    pastry_dept_names: подразделения с мотивацией «от накладных кондитерки».
     """
     t0 = time.monotonic()
 
@@ -3899,7 +3901,18 @@ async def sync_fot_sheet(
                         rev = rv
                         break
 
-            _pastry = pastry_revenue or 0.0
+            # Кондитерку показываем только в секциях, где есть
+            # сотрудники с mot_base «от накладных кондитерки»
+            _pastry_names = pastry_dept_names or set()
+            _sect_has_pastry = False
+            if _pastry_names:
+                sn_low = sect_name.lower()
+                for pdn in _pastry_names:
+                    pl = pdn.lower()
+                    if sn_low in pl or pl in sn_low or sn_low == pl:
+                        _sect_has_pastry = True
+                        break
+            _pastry = (pastry_revenue or 0.0) if _sect_has_pastry else 0.0
 
             # Сумма начислений секции (rate_total + bonus) для % ФОТ
             sect_payroll = sum(
