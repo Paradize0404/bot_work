@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any, Callable, Coroutine
 
 from adapters import fintablo_api
+from adapters.google_sheets import sync_fintab_mapping_sheet
 from db.engine import async_session_factory
 from db.models import SyncLog
 from use_cases.sync import batch_upsert, mirror_delete
@@ -564,10 +565,30 @@ async def sync_all_fintablo(
     ok = sum(1 for _, r in report if isinstance(r, int))
     total_records = sum(r for _, r in report if isinstance(r, int))
     logger.info(
-        "=== FinTablo: %d ok, %d err | %d Р·Р°РїРёСЃРµР№ | %.1f СЃРµРє ===",
+        "=== FinTablo: %d ok, %d err | %d записей | %.1f сек ===",
         ok,
         len(report) - ok,
         total_records,
         time.monotonic() - t0,
     )
+
+    # ── Обновляем дропдауны в «Маппинг FinTablo» ──
+    try:
+        today = now_kgd().date()
+        _month_names = {
+            1: "январь", 2: "февраль", 3: "март", 4: "апрель",
+            5: "май", 6: "июнь", 7: "июль", 8: "август",
+            9: "сентябрь", 10: "октябрь", 11: "ноябрь", 12: "декабрь",
+        }
+        fot_tab = f"ФОТ {_month_names[today.month]} {today.year}"
+        ft_emps = await fintablo_api.fetch_employees()
+        ft_dirs = await fintablo_api.fetch_directions()
+        await sync_fintab_mapping_sheet(
+            fot_tab_name=fot_tab,
+            ft_employees=ft_emps,
+            ft_directions=ft_dirs,
+        )
+    except Exception:
+        logger.exception("[FT] Ошибка обновления «Маппинг FinTablo»")
+
     return report
