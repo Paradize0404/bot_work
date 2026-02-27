@@ -4689,11 +4689,17 @@ async def read_fintab_employee_mapping() -> list[dict]:
                 "iiko_display": str,   # отображаемое имя (без UUID)
                 "fintab_id": int,      # числовой ID в FinTablo (из col B)
                 "fintab_name": str,    # имя в FinTablo (без ID)
+                "fot_dept": str,       # Секция ФОТ (кол. D); пусто → равномерное разбие
             },
             ...
         ]
 
-    Несколько строк с одним iiko_id = разделение зарплаты (salary ÷ N).
+    Схема распределения::
+
+        fot_dept заполнен  → берём точную сумму из этой секции ФОТ
+                           (сЬем заработано в конкретном ресторане)
+        fot_dept пустой       → общая сумма делится поровну между всеми
+                           такими записями (административный персонал)
     """
 
     def _sync() -> list[dict]:
@@ -4736,12 +4742,14 @@ async def read_fintab_employee_mapping() -> list[dict]:
                 )
                 continue
             iiko_id = m_id.group(1).lower()
+            fot_dept = str(row[3]).strip() if len(row) > 3 else ""  # col D
             results.append(
                 {
                     "iiko_id": iiko_id,
                     "iiko_display": iiko_dropdown[: m_id.start()].strip(),
                     "fintab_id": fintab_id,
                     "fintab_name": ft_name,
+                    "fot_dept": fot_dept,
                 }
             )
 
@@ -4759,22 +4767,34 @@ async def read_fot_all_employees(
     tab_name: str,
 ) -> dict[str, dict]:
     """
-    Прочитать всех сотрудников из ФОТ-вкладки, суммируя по всем секциям.
+    Прочитать всех сотрудников из ФОТ-вкладки с разбивкой по секциям.
 
     Возвращает::
 
         {
             iiko_uuid: {
-                "rate": float,        # Ставка (D)
-                "bonus": float,       # Бонус (E)
-                "premium": float,     # Премия (F)
-                "deductions": float,  # Удержания (G)
+                "total": {
+                    "rate": float,        # сумма по всем секциям
+                    "bonus": float,
+                    "premium": float,
+                    "deductions": float,
+                },
+                "by_dept": {
+                    "Клиническая": {
+                        "rate": float,    # только из этой секции
+                        "bonus": float,
+                        "premium": float,
+                        "deductions": float,
+                    },
+                    ...
+                },
             },
             ...
         }
 
-    Ключ — iiko UUID (кол. L ФОТ), уникально идентифицирует сотрудника даже при
-    одинаковых отображаемых именах (напр. две Сорокины В.).
+    Ключ — iiko UUID (кол. L ФОТ).
+    by_dept используется в fintablo_salary_sync для точного распределения
+    ЗП производственного персонала по направлениям.
     """
 
     def _sync() -> dict[str, dict]:
@@ -4789,39 +4809,55 @@ async def read_fot_all_employees(
             value_render_option=gspread.utils.ValueRenderOption.unformatted
         )
         result: dict[str, dict] = {}
+        cur_section = ""
         for row in all_rows:
             cell_a = str(row[0]).strip() if row else ""
             cell_b = str(row[1]).strip() if len(row) > 1 else ""
             raw_d = row[3] if len(row) > 3 else ""
             iiko_id = str(row[11]).strip() if len(row) > 11 else ""
-            # Пропускаем: заголовок, секции, итоги, строки без UUID
+
+            # Заголовок колонок — пропускаем
             if cell_a == _FOT_HEADERS[0]:
                 continue
+            # Строка-секция: col A заполнена, col B пуста, col D пуста
             if cell_a and not cell_b and (raw_d == "" or raw_d is None):
+                cur_section = cell_a
                 continue
+            # Строки без UUID (итоги, пустые) — пропускаем
             if not cell_a or not iiko_id:
                 continue
 
-            def _num(idx: int) -> float:
-                v = row[idx] if len(row) > idx else 0
+            def _num(idx: int, _row: list = row) -> float:  # noqa: B023
+                v = _row[idx] if len(_row) > idx else 0
                 if isinstance(v, (int, float)):
                     return float(v)
                 return _parse_fot_num(str(v))
 
+            _zero: dict[str, float] = {
+                "rate": 0.0,
+                "bonus": 0.0,
+                "premium": 0.0,
+                "deductions": 0.0,
+            }
             if iiko_id not in result:
-                result[iiko_id] = {
-                    "rate": 0.0,
-                    "bonus": 0.0,
-                    "premium": 0.0,
-                    "deductions": 0.0,
-                }
-            result[iiko_id]["rate"] += _num(3)
-            result[iiko_id]["bonus"] += _num(4)
-            result[iiko_id]["premium"] += _num(5)
-            result[iiko_id]["deductions"] += _num(6)
+                result[iiko_id] = {"total": dict(_zero), "by_dept": {}}
+
+            vals = {
+                "rate": _num(3),
+                "bonus": _num(4),
+                "premium": _num(5),
+                "deductions": _num(6),
+            }
+            for k in _zero:
+                result[iiko_id]["total"][k] += vals[k]
+            if cur_section:
+                if cur_section not in result[iiko_id]["by_dept"]:
+                    result[iiko_id]["by_dept"][cur_section] = dict(_zero)
+                for k in _zero:
+                    result[iiko_id]["by_dept"][cur_section][k] += vals[k]
 
         logger.info(
-            "[%s] read_fot_all_employees «%s»: %d сотрудников (by iiko UUID)",
+            "[%s] read_fot_all_employees «%s»: %d сотрудников (by iiko UUID + by_dept)",
             LABEL,
             tab_name,
             len(result),
