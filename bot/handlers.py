@@ -886,7 +886,7 @@ async def btn_sync_fot_combined(message: Message) -> None:
 @router.message(F.text == "📋 ID сотрудников FinTablo")
 @permission_required(PERM_SETTINGS)
 async def btn_fintablo_employee_ids(message: Message) -> None:
-    """Показать список сотрудников FinTablo с ID (каждый копируется по нажатию)."""
+    """Показать список сотрудников FinTablo — текстовым сообщением с кодовыми ID."""
     from adapters.fintablo_api import fetch_employees
 
     logger.info("[fintablo] Запрос ID сотрудников tg:%d", message.from_user.id)
@@ -906,45 +906,23 @@ async def btn_fintablo_employee_ids(message: Message) -> None:
     # Сортируем по имени
     employees.sort(key=lambda e: (e.get("name") or "").lower())
 
-    # Формируем inline-кнопки: каждая — имя + ID, копирует ID при нажатии
-    # Telegram ограничивает inline-клавиатуру 100 кнопками,
-    # поэтому разбиваем на сообщения по 50 сотрудников.
+    # Строим текстовые сообщения — разбиваем по 50 чтобы не превысить лимит 4096 символов
     _CHUNK = 50
-    for chunk_start in range(0, len(employees), _CHUNK):
+    total_pages = (len(employees) + _CHUNK - 1) // _CHUNK
+    for page, chunk_start in enumerate(range(0, len(employees), _CHUNK), start=1):
         chunk = employees[chunk_start : chunk_start + _CHUNK]
-        buttons = []
+        lines = []
         for emp in chunk:
             emp_id = emp.get("id", "?")
             emp_name = emp.get("name") or "Без имени"
-            # switch_inline_query_current_chat вставляет текст в поле ввода
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"{emp_name} — ID: {emp_id}",
-                        callback_data=f"ftid:{emp_id}",
-                    )
-                ]
-            )
-        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
-        part = ""
-        if len(employees) > _CHUNK:
-            page = chunk_start // _CHUNK + 1
-            total_pages = (len(employees) + _CHUNK - 1) // _CHUNK
-            part = f" ({page}/{total_pages})"
+            lines.append(f"{emp_name} — <code>{emp_id}</code>")
+        header = "📋 <b>Сотрудники FinTablo</b>"
+        if total_pages > 1:
+            header += f" ({page}/{total_pages})"
         await message.answer(
-            f"📋 Сотрудники FinTablo{part}\n"
-            "Нажмите на сотрудника чтобы скопировать ID:",
-            reply_markup=kb,
+            header + "\n\n" + "\n".join(lines),
+            parse_mode="HTML",
         )
-
-
-@router.callback_query(F.data.startswith("ftid:"))
-async def cb_fintablo_copy_id(callback: CallbackQuery) -> None:
-    """Отправить ID сотрудника FinTablo для копирования."""
-    ft_id = callback.data.split(":", 1)[1]
-    await callback.answer(f"ID: {ft_id}", show_alert=False)
-    # Отправляем отдельным сообщением — легко скопировать
-    await callback.message.answer(f"<code>{ft_id}</code>", parse_mode="HTML")
 
 
 @router.message(F.text == "🔑 Права доступа → GSheet")
