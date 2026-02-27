@@ -4122,7 +4122,7 @@ async def sync_fot_sheet(
             requests.append(
                 {
                     "repeatCell": {
-                        "range": _sr(sheet_id, data_start, data_end, 2, _FOT_NCOLS),
+                        "range": _sr(sheet_id, data_start, data_end, 2, 11),
                         "cell": {
                             "userEnteredFormat": {
                                 "horizontalAlignment": "RIGHT",
@@ -4136,13 +4136,31 @@ async def sync_fot_sheet(
                     }
                 }
             )
+            # Колонка L (FinTabID) — простой текст, по центру
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": _sr(sheet_id, data_start, data_end, 11, 12),
+                        "cell": {
+                            "userEnteredFormat": {
+                                "horizontalAlignment": "CENTER",
+                                "numberFormat": {
+                                    "type": "TEXT",
+                                    "pattern": "",
+                                },
+                            }
+                        },
+                        "fields": "userEnteredFormat(horizontalAlignment,numberFormat)",
+                    }
+                }
+            )
 
-        # -- Строки итогов: жирный, серый фон, формат рублей --
+        # -- Строки итогов: жирный, серый фон, формат рублей (C-K) --
         for r in total_rows:
             requests.append(
                 {
                     "repeatCell": {
-                        "range": _sr(sheet_id, r, r + 1, 0, _FOT_NCOLS),
+                        "range": _sr(sheet_id, r, r + 1, 0, 11),
                         "cell": {
                             "userEnteredFormat": {
                                 "backgroundColor": _rgb(0.91, 0.91, 0.91),
@@ -4157,6 +4175,20 @@ async def sync_fot_sheet(
                         },
                         "fields": "userEnteredFormat(backgroundColor,textFormat,"
                         "verticalAlignment,horizontalAlignment,numberFormat)",
+                    }
+                }
+            )
+            # L в строке итогов — серый фон без числового формата
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": _sr(sheet_id, r, r + 1, 11, 12),
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": _rgb(0.91, 0.91, 0.91),
+                            }
+                        },
+                        "fields": "userEnteredFormat(backgroundColor)",
                     }
                 }
             )
