@@ -4441,9 +4441,7 @@ async def sync_fintab_mapping_sheet(
             ws = spreadsheet.worksheet(_FINTAB_MAPPING_TAB)
             is_new = False
         except gspread.exceptions.WorksheetNotFound:
-            ws = spreadsheet.add_worksheet(
-                title=_FINTAB_MAPPING_TAB, rows=200, cols=6
-            )
+            ws = spreadsheet.add_worksheet(title=_FINTAB_MAPPING_TAB, rows=200, cols=6)
             is_new = True
         sheet_id = ws.id
 
@@ -4468,17 +4466,18 @@ async def sync_fintab_mapping_sheet(
             for emp in ft_employees
             if emp.get("id") and emp.get("name")
         )
-        ft_dir_options = sorted(
-            d["name"] for d in ft_directions if d.get("name")
-        )
+        ft_dir_options = sorted(d["name"] for d in ft_directions if d.get("name"))
 
         # ── Данные листа ──
         now_str = time.strftime("%d.%m.%Y %H:%M")
-        title_row  = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", ""]
+        title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", ""]
         section_row = ["👤 СОТРУДНИКИ", "", "", "🏢 ПОДРАЗДЕЛЕНИЯ", ""]
-        header_row  = [
-            "Имя в ФОТ", "Сотрудник FinTablo (ID)", "",
-            "Подразделение ФОТ", "Направление FinTablo",
+        header_row = [
+            "Имя в ФОТ",
+            "Сотрудник FinTablo (ID)",
+            "",
+            "Подразделение ФОТ",
+            "Направление FinTablo",
         ]
         n_rows = max(len(existing_emp), len(existing_dept), 1)
         data_rows: list[list[str]] = []
@@ -4488,7 +4487,9 @@ async def sync_fintab_mapping_sheet(
             data_rows.append([a, b, "", d, e])
 
         ws.clear()
-        ws.update(values=[title_row, section_row, header_row] + data_rows, range_name="A1")
+        ws.update(
+            values=[title_row, section_row, header_row] + data_rows, range_name="A1"
+        )
 
         # ── batchUpdate: форматирование + дропдауны ──
         requests: list[dict] = []
@@ -4496,82 +4497,97 @@ async def sync_fintab_mapping_sheet(
         # Объединение заголовка
         for c0, c1 in [(0, 2), (3, 5)]:
             requests.append(
-                {"mergeCells": {"range": _sr(sheet_id, 0, 1, c0, c1), "mergeType": "MERGE_ALL"}}
+                {
+                    "mergeCells": {
+                        "range": _sr(sheet_id, 0, 1, c0, c1),
+                        "mergeType": "MERGE_ALL",
+                    }
+                }
             )
 
         # Стиль строки 1 (заголовок)
-        requests.append({
-            "repeatCell": {
-                "range": _sr(sheet_id, 0, 1, 0, 5),
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": _rgb(0.20, 0.40, 0.78),
-                        "textFormat": {
-                            "bold": True,
-                            "foregroundColor": _rgb(1.0, 1.0, 1.0),
-                            "fontSize": 11,
-                        },
-                        "horizontalAlignment": "CENTER",
-                    }
-                },
-                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": _sr(sheet_id, 0, 1, 0, 5),
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": _rgb(0.20, 0.40, 0.78),
+                            "textFormat": {
+                                "bold": True,
+                                "foregroundColor": _rgb(1.0, 1.0, 1.0),
+                                "fontSize": 11,
+                            },
+                            "horizontalAlignment": "CENTER",
+                        }
+                    },
+                    "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+                }
             }
-        })
+        )
 
         # Стиль строки 2 (секции)
-        requests.append({
-            "repeatCell": {
-                "range": _sr(sheet_id, 1, 2, 0, 5),
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": _rgb(0.85, 0.91, 0.98),
-                        "textFormat": {"bold": True, "fontSize": 10},
-                    }
-                },
-                "fields": "userEnteredFormat(backgroundColor,textFormat)",
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": _sr(sheet_id, 1, 2, 0, 5),
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": _rgb(0.85, 0.91, 0.98),
+                            "textFormat": {"bold": True, "fontSize": 10},
+                        }
+                    },
+                    "fields": "userEnteredFormat(backgroundColor,textFormat)",
+                }
             }
-        })
+        )
 
         # Стиль строки 3 (заголовки колонок)
-        requests.append({
-            "repeatCell": {
-                "range": _sr(sheet_id, 2, 3, 0, 5),
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": _rgb(0.90, 0.90, 0.90),
-                        "textFormat": {"bold": True},
-                        "horizontalAlignment": "CENTER",
-                    }
-                },
-                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": _sr(sheet_id, 2, 3, 0, 5),
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": _rgb(0.90, 0.90, 0.90),
+                            "textFormat": {"bold": True},
+                            "horizontalAlignment": "CENTER",
+                        }
+                    },
+                    "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+                }
             }
-        })
+        )
 
         # Заморозить 3 строки
-        requests.append({
-            "updateSheetProperties": {
-                "properties": {
-                    "sheetId": sheet_id,
-                    "gridProperties": {"frozenRowCount": 3},
-                },
-                "fields": "gridProperties.frozenRowCount",
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": sheet_id,
+                        "gridProperties": {"frozenRowCount": 3},
+                    },
+                    "fields": "gridProperties.frozenRowCount",
+                }
             }
-        })
+        )
 
         # Ширины колонок: A=200, B=220, C=30, D=200, E=200
         for ci, px in enumerate([200, 220, 30, 200, 200]):
-            requests.append({
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "dimension": "COLUMNS",
-                        "startIndex": ci,
-                        "endIndex": ci + 1,
-                    },
-                    "properties": {"pixelSize": px},
-                    "fields": "pixelSize",
+            requests.append(
+                {
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": ci,
+                            "endIndex": ci + 1,
+                        },
+                        "properties": {"pixelSize": px},
+                        "fields": "pixelSize",
+                    }
                 }
-            })
+            )
 
         # ── Дропдауны для строк данных (4..200) ──
         data_start, data_end = 3, 200
@@ -4587,33 +4603,41 @@ async def sync_fintab_mapping_sheet(
             }
 
         if fot_emp_names:
-            requests.append({
-                "setDataValidation": {
-                    "range": _sr(sheet_id, data_start, data_end, 0, 1),
-                    "rule": _dv_list(sorted(fot_emp_names)),
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 0, 1),
+                        "rule": _dv_list(sorted(fot_emp_names)),
+                    }
                 }
-            })
+            )
         if ft_emp_options:
-            requests.append({
-                "setDataValidation": {
-                    "range": _sr(sheet_id, data_start, data_end, 1, 2),
-                    "rule": _dv_list(ft_emp_options),
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 1, 2),
+                        "rule": _dv_list(ft_emp_options),
+                    }
                 }
-            })
+            )
         if fot_dept_names:
-            requests.append({
-                "setDataValidation": {
-                    "range": _sr(sheet_id, data_start, data_end, 3, 4),
-                    "rule": _dv_list(sorted(fot_dept_names)),
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 3, 4),
+                        "rule": _dv_list(sorted(fot_dept_names)),
+                    }
                 }
-            })
+            )
         if ft_dir_options:
-            requests.append({
-                "setDataValidation": {
-                    "range": _sr(sheet_id, data_start, data_end, 4, 5),
-                    "rule": _dv_list(ft_dir_options),
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 4, 5),
+                        "rule": _dv_list(ft_dir_options),
+                    }
                 }
-            })
+            )
 
         if requests:
             spreadsheet.batch_update({"requests": requests})
@@ -4652,7 +4676,7 @@ async def read_fintab_employee_mapping() -> list[dict]:
         results: list[dict] = []
         for row in all_rows[3:]:  # пропускаем 3 строки шапки
             iiko_name = str(row[0]).strip() if len(row) > 0 else ""
-            ft_label  = str(row[1]).strip() if len(row) > 1 else ""
+            ft_label = str(row[1]).strip() if len(row) > 1 else ""
             if not iiko_name or not ft_label:
                 continue
             # Парсим ID из последних скобок: "Иванов Иван (160005)"
@@ -4665,11 +4689,11 @@ async def read_fintab_employee_mapping() -> list[dict]:
                 )
                 continue
             fintab_id = int(m.group(1))
-            ft_name   = ft_label[: m.start()].strip()
+            ft_name = ft_label[: m.start()].strip()
             results.append(
                 {
-                    "iiko_name":   iiko_name,
-                    "fintab_id":   fintab_id,
+                    "iiko_name": iiko_name,
+                    "fintab_id": fintab_id,
                     "fintab_name": ft_name,
                 }
             )
@@ -4716,7 +4740,7 @@ async def read_fot_all_employees(tab_name: str) -> dict[str, dict]:
         for row in all_rows:
             cell_a = str(row[0]).strip() if row else ""
             cell_b = str(row[1]).strip() if len(row) > 1 else ""
-            raw_d  = row[3] if len(row) > 3 else ""
+            raw_d = row[3] if len(row) > 3 else ""
             # Пропускаем: заголовок, секции, итоги
             if cell_a == _FOT_HEADERS[0]:
                 continue
@@ -4733,11 +4757,14 @@ async def read_fot_all_employees(tab_name: str) -> dict[str, dict]:
 
             if cell_a not in result:
                 result[cell_a] = {
-                    "rate": 0.0, "bonus": 0.0, "premium": 0.0, "deductions": 0.0
+                    "rate": 0.0,
+                    "bonus": 0.0,
+                    "premium": 0.0,
+                    "deductions": 0.0,
                 }
-            result[cell_a]["rate"]       += _num(3)
-            result[cell_a]["bonus"]      += _num(4)
-            result[cell_a]["premium"]    += _num(5)
+            result[cell_a]["rate"] += _num(3)
+            result[cell_a]["bonus"] += _num(4)
+            result[cell_a]["premium"] += _num(5)
             result[cell_a]["deductions"] += _num(6)
 
         logger.info(

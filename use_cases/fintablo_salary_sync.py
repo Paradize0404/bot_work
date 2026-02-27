@@ -116,9 +116,9 @@ async def sync_fot_to_fintablo(
         n = len(ft_ids)  # делитель для splitting (для admin > 1)
 
         desired_full = {
-            "fix":     round(emp_fot["rate"],       2),
-            "percent": round(emp_fot["bonus"],      2),
-            "bonus":   round(emp_fot["premium"],    2),
+            "fix": round(emp_fot["rate"], 2),
+            "percent": round(emp_fot["bonus"], 2),
+            "bonus": round(emp_fot["premium"], 2),
             "forfeit": round(emp_fot["deductions"], 2),
         }
         # Каждый FT-ID получает 1/N
@@ -200,10 +200,9 @@ def _extract_current_totalpay(
         if item.get("date") == date_mm_yyyy:
             tp = item.get("totalPay") or {}
             return {
-                "fix":     float(tp.get("fix")     or 0),
+                "fix": float(tp.get("fix") or 0),
                 "percent": float(tp.get("percent") or 0),
-                "bonus":   float(tp.get("bonus")   or 0),
+                "bonus": float(tp.get("bonus") or 0),
                 "forfeit": float(tp.get("forfeit") or 0),
             }
     return {"fix": 0.0, "percent": 0.0, "bonus": 0.0, "forfeit": 0.0}
-
