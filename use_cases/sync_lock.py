@@ -18,15 +18,13 @@ async def run_sync_with_lock(entity: str, sync_coro):
     Запуск синхронизации с гарантией единственного выполнения.
     Возвращает None, если синхронизация уже запущена.
 
-    Использует acquire(blocking=False) вместо lock.locked() + async with
-    чтобы избежать TOCTOU race condition.
+    В asyncio (single-threaded) проверка locked() + немедленный async with
+    безопасна: между ними нет await, значит нет yield и другая корутина
+    не может вклиниться.
     """
     lock = get_sync_lock(entity)
-    acquired = lock.acquire_nowait()  # atomically try to acquire, no race
-    if not acquired:
+    if lock.locked():
         logger.debug("[sync_lock] %s уже запущена, пропускаем", entity)
         return None
-    try:
+    async with lock:
         return await sync_coro
-    finally:
-        lock.release()
