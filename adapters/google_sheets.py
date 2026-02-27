@@ -4732,9 +4732,7 @@ async def read_fintab_employee_mapping() -> list[dict]:
                 re.IGNORECASE,
             )
             iiko_id = m_id.group(1).lower() if m_id else ""
-            fot_name = (
-                iiko_dropdown[: m_id.start()].strip() if m_id else iiko_dropdown
-            )
+            fot_name = iiko_dropdown[: m_id.start()].strip() if m_id else iiko_dropdown
             fot_dept = str(row[3]).strip() if len(row) > 3 else ""  # col D
             results.append(
                 {
@@ -4811,7 +4809,7 @@ async def read_fot_all_employees(
         all_rows = ws.get_all_values(
             value_render_option=gspread.utils.ValueRenderOption.unformatted
         )
-        result: dict[str, dict] = {}          # by iiko_uuid
+        result: dict[str, dict] = {}  # by iiko_uuid
         result_by_name: dict[str, dict] = {}  # by display name
         cur_section = ""
         for row in all_rows:

@@ -86,6 +86,7 @@ def _resolve_section_direction(sect_name: str) -> int | None:
             return dir_id
     return None
 
+
 # Административный персонал → 50 / 50 между этими направлениями
 _ADMIN_DIRECTIONS: list[int] = [165367, 148270]  # Московский, Клиническая
 
@@ -177,8 +178,7 @@ async def sync_fot_to_fintablo(
 
         if emp_data is None:
             logger.warning(
-                "[fintablo_sync] «%s» → FT:%d — "
-                "не найден в ФОТ (uuid=%s, name=%s)",
+                "[fintablo_sync] «%s» → FT:%d — " "не найден в ФОТ (uuid=%s, name=%s)",
                 row.get("fintab_name", ""),
                 fintab_id,
                 iiko_id or "—",
@@ -234,8 +234,7 @@ async def sync_fot_to_fintablo(
 
             if pay_changed:
                 logger.info(
-                    "[fintablo_sync] «%s» (FT:%d)"
-                    " fix: %.0f → %.0f",
+                    "[fintablo_sync] «%s» (FT:%d)" " fix: %.0f → %.0f",
                     ft_name,
                     fintab_id,
                     current_pay.get("fix", 0),
@@ -347,9 +346,7 @@ def _compute_positions(
     for dir_id in sorted(dir_accrued):
         amount = dir_accrued[dir_id]
         pct = round(amount / total * 100) if total > 0 else 0
-        pos_type = (
-            "direct-production" if dir_is_work.get(dir_id) else "administrative"
-        )
+        pos_type = "direct-production" if dir_is_work.get(dir_id) else "administrative"
         positions.append(
             {
                 "directionId": dir_id,

@@ -172,6 +172,7 @@ def _history_kb(requests: list[dict], page: int = 0) -> InlineKeyboardMarkup:
         if isinstance(created, str):
             try:
                 from datetime import datetime
+
                 created = datetime.fromisoformat(created)
             except (ValueError, TypeError):
                 created = None

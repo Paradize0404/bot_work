@@ -221,9 +221,7 @@ async def fetch_employees() -> list[dict[str, Any]]:
 
 async def get_employee(employee_id: int) -> dict[str, Any] | None:
     """GET /v1/employees/{id} — данные одного сотрудника (позиции и т.д.)."""
-    items = await _fetch_list(
-        f"employees/{employee_id}", f"employee/{employee_id}"
-    )
+    items = await _fetch_list(f"employees/{employee_id}", f"employee/{employee_id}")
     return items[0] if items else None
 
 
