@@ -572,32 +572,33 @@ async def sync_all_fintablo(
         time.monotonic() - t0,
     )
 
-    # ── Обновляем дропдауны в «Маппинг FinTablo» ──
-    try:
-        today = now_kgd().date()
-        _month_names = {
-            1: "январь",
-            2: "февраль",
-            3: "март",
-            4: "апрель",
-            5: "май",
-            6: "июнь",
-            7: "июль",
-            8: "август",
-            9: "сентябрь",
-            10: "октябрь",
-            11: "ноябрь",
-            12: "декабрь",
-        }
-        fot_tab = f"ФОТ {_month_names[today.month]} {today.year}"
-        ft_emps = await fintablo_api.fetch_employees()
-        ft_dirs = await fintablo_api.fetch_directions()
-        await sync_fintab_mapping_sheet(
-            fot_tab_name=fot_tab,
-            ft_employees=ft_emps,
-            ft_directions=ft_dirs,
-        )
-    except Exception:
-        logger.exception("[FT] Ошибка обновления «Маппинг FinTablo»")
+    # ── Обновляем дропдауны в «Маппинг FinTablo» — только при ручном запуске ──
+    if triggered_by and triggered_by != "scheduler":
+        try:
+            today = now_kgd().date()
+            _month_names = {
+                1: "январь",
+                2: "февраль",
+                3: "март",
+                4: "апрель",
+                5: "май",
+                6: "июнь",
+                7: "июль",
+                8: "август",
+                9: "сентябрь",
+                10: "октябрь",
+                11: "ноябрь",
+                12: "декабрь",
+            }
+            fot_tab = f"ФОТ {_month_names[today.month]} {today.year}"
+            ft_emps = await fintablo_api.fetch_employees()
+            ft_dirs = await fintablo_api.fetch_directions()
+            await sync_fintab_mapping_sheet(
+                fot_tab_name=fot_tab,
+                ft_employees=ft_emps,
+                ft_directions=ft_dirs,
+            )
+        except Exception:
+            logger.exception("[FT] Ошибка обновления «Маппинг FinTablo»")
 
     return report

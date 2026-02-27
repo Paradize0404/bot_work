@@ -4446,17 +4446,20 @@ async def sync_fintab_mapping_sheet(
         sheet_id = ws.id
 
         # ── Читаем существующие данные (строки 4+) ──
-        existing_emp: list[tuple[str, str]] = []
+        existing_emp: list[tuple[str, str, str]] = (
+            []
+        )  # (iiko_name, ft_label, fot_section)
         existing_dept: list[tuple[str, str]] = []
         if not is_new:
             all_rows = ws.get_all_values()
             for row in all_rows[3:]:
                 a = str(row[0]).strip() if len(row) > 0 else ""
                 b = str(row[1]).strip() if len(row) > 1 else ""
+                c = str(row[2]).strip() if len(row) > 2 else ""  # Секция ФОТ
                 d = str(row[3]).strip() if len(row) > 3 else ""
                 e = str(row[4]).strip() if len(row) > 4 else ""
                 if a or b:
-                    existing_emp.append((a, b))
+                    existing_emp.append((a, b, c))
                 if d or e:
                     existing_dept.append((d, e))
 
@@ -4475,16 +4478,16 @@ async def sync_fintab_mapping_sheet(
         header_row = [
             "Имя в ФОТ",
             "Сотрудник FinTablo (ID)",
-            "",
+            "Секция ФОТ*",
             "Подразделение ФОТ",
             "Направление FinTablo",
         ]
         n_rows = max(len(existing_emp), len(existing_dept), 1)
         data_rows: list[list[str]] = []
         for i in range(n_rows):
-            a, b = existing_emp[i] if i < len(existing_emp) else ("", "")
+            a, b, c = existing_emp[i] if i < len(existing_emp) else ("", "", "")
             d, e = existing_dept[i] if i < len(existing_dept) else ("", "")
-            data_rows.append([a, b, "", d, e])
+            data_rows.append([a, b, c, d, e])
 
         ws.clear()
         ws.update(
@@ -4494,8 +4497,8 @@ async def sync_fintab_mapping_sheet(
         # ── batchUpdate: форматирование + дропдауны ──
         requests: list[dict] = []
 
-        # Объединение заголовка
-        for c0, c1 in [(0, 2), (3, 5)]:
+        # Объединение заголовка (A-B и D-E)
+        for c0, c1 in [(0, 3), (3, 5)]:
             requests.append(
                 {
                     "mergeCells": {
@@ -4572,8 +4575,8 @@ async def sync_fintab_mapping_sheet(
             }
         )
 
-        # Ширины колонок: A=200, B=220, C=30, D=200, E=200
-        for ci, px in enumerate([200, 220, 30, 200, 200]):
+        # Ширины колонок: A=200, B=220, C=180 (секция), D=200, E=200
+        for ci, px in enumerate([200, 220, 180, 200, 200]):
             requests.append(
                 {
                     "updateDimensionProperties": {
@@ -4617,6 +4620,16 @@ async def sync_fintab_mapping_sheet(
                     "setDataValidation": {
                         "range": _sr(sheet_id, data_start, data_end, 1, 2),
                         "rule": _dv_list(ft_emp_options),
+                    }
+                }
+            )
+        # Col C — секция ФОТ (для разрешения конфликтов одинаковых имён)
+        if fot_dept_names:
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 2, 3),
+                        "rule": _dv_list(sorted(fot_dept_names)),
                     }
                 }
             )
@@ -4677,6 +4690,9 @@ async def read_fintab_employee_mapping() -> list[dict]:
         for row in all_rows[3:]:  # пропускаем 3 строки шапки
             iiko_name = str(row[0]).strip() if len(row) > 0 else ""
             ft_label = str(row[1]).strip() if len(row) > 1 else ""
+            fot_section = (
+                str(row[2]).strip() if len(row) > 2 else ""
+            )  # Секция ФОТ (необязательно)
             if not iiko_name or not ft_label:
                 continue
             # Парсим ID из последних скобок: "Иванов Иван (160005)"
@@ -4693,6 +4709,7 @@ async def read_fintab_employee_mapping() -> list[dict]:
             results.append(
                 {
                     "iiko_name": iiko_name,
+                    "fot_section": fot_section,
                     "fintab_id": fintab_id,
                     "fintab_name": ft_name,
                 }
@@ -4708,14 +4725,16 @@ async def read_fintab_employee_mapping() -> list[dict]:
     return await asyncio.to_thread(_sync)
 
 
-async def read_fot_all_employees(tab_name: str) -> dict[str, dict]:
+async def read_fot_all_employees(
+    tab_name: str,
+) -> dict[tuple[str, str], dict]:
     """
-    Прочитать всех сотрудников из ФОТ-вкладки, суммируя значения по секциям.
+    Прочитать всех сотрудников из ФОТ-вкладки с разбивкой по секциям.
 
     Возвращает::
 
         {
-            display_name: {
+            (display_name, section_name): {
                 "rate": float,        # Ставка (D)
                 "bonus": float,       # Бонус (E)
                 "premium": float,     # Премия (F)
@@ -4723,9 +4742,12 @@ async def read_fot_all_employees(tab_name: str) -> dict[str, dict]:
             },
             ...
         }
+
+    Ключ (name, section) — для разрешения дублирующихся имён сотрудников
+    в разных секциях (напр. две Сорокины В.).
     """
 
-    def _sync() -> dict[str, dict]:
+    def _sync() -> dict[tuple[str, str], dict]:
         client = _get_client()
         spreadsheet = client.open_by_key(SALARY_SHEET_ID)
         try:
@@ -4736,16 +4758,20 @@ async def read_fot_all_employees(tab_name: str) -> dict[str, dict]:
         all_rows = ws.get_all_values(
             value_render_option=gspread.utils.ValueRenderOption.unformatted
         )
-        result: dict[str, dict] = {}
+        result: dict[tuple[str, str], dict] = {}
+        cur_section = ""
         for row in all_rows:
             cell_a = str(row[0]).strip() if row else ""
             cell_b = str(row[1]).strip() if len(row) > 1 else ""
             raw_d = row[3] if len(row) > 3 else ""
-            # Пропускаем: заголовок, секции, итоги
+            # Заголовок колонок
             if cell_a == _FOT_HEADERS[0]:
                 continue
+            # Строка-секция (есть A, нет B, нет D)
             if cell_a and not cell_b and (raw_d == "" or raw_d is None):
+                cur_section = cell_a
                 continue
+            # Итоговые строки (пустая A)
             if not cell_a:
                 continue
 
@@ -4755,20 +4781,21 @@ async def read_fot_all_employees(tab_name: str) -> dict[str, dict]:
                     return float(v)
                 return _parse_fot_num(str(v))
 
-            if cell_a not in result:
-                result[cell_a] = {
+            key = (cell_a, cur_section)
+            if key not in result:
+                result[key] = {
                     "rate": 0.0,
                     "bonus": 0.0,
                     "premium": 0.0,
                     "deductions": 0.0,
                 }
-            result[cell_a]["rate"] += _num(3)
-            result[cell_a]["bonus"] += _num(4)
-            result[cell_a]["premium"] += _num(5)
-            result[cell_a]["deductions"] += _num(6)
+            result[key]["rate"] += _num(3)
+            result[key]["bonus"] += _num(4)
+            result[key]["premium"] += _num(5)
+            result[key]["deductions"] += _num(6)
 
         logger.info(
-            "[%s] read_fot_all_employees «%s»: %d сотрудников",
+            "[%s] read_fot_all_employees «%s»: %d записей (имя×секция)",
             LABEL,
             tab_name,
             len(result),

@@ -94,20 +94,42 @@ async def sync_fot_to_fintablo(
         logger.info("[fintablo_sync] Маппинг пуст — пропускаем")
         return {"total": 0, "updated": 0, "skipped": 0, "errors": 0, "no_fot": 0}
 
-    # 2. Группируем маппинг по iiko-имени: {iiko_name: [fintab_id, ...]}
-    grouped: dict[str, list[int]] = {}
+    # 2. Группируем маппинг по (iiko_name, fot_section): {key: [fintab_id, ...]}
+    #    fot_section пустая строка = суммировать по всем секциям (стандарт)
+    #    fot_section заполнена = брать только из этой секции (для однофамильцев)
+    grouped: dict[tuple[str, str], list[int]] = {}
     for row in mapping_rows:
-        grouped.setdefault(row["iiko_name"], []).append(row["fintab_id"])
+        key = (row["iiko_name"], row.get("fot_section", ""))
+        grouped.setdefault(key, []).append(row["fintab_id"])
 
     stats = {"total": 0, "updated": 0, "skipped": 0, "errors": 0, "no_fot": 0}
 
-    # 3. Обрабатываем каждого iiko-сотрудника
-    for iiko_name, ft_ids in grouped.items():
-        emp_fot = fot_data.get(iiko_name)
+    # 3. Обрабатываем каждую группу
+    for (iiko_name, fot_section), ft_ids in grouped.items():
+        # Ищем данные ФОТ
+        if fot_section:
+            # Берём только из конкретной секции
+            emp_fot = fot_data.get((iiko_name, fot_section))
+        else:
+            # Суммируем по всем секциям, где встречается это имя
+            merged: dict[str, float] = {
+                "rate": 0.0,
+                "bonus": 0.0,
+                "premium": 0.0,
+                "deductions": 0.0,
+            }
+            found = False
+            for (name, _sec), vals in fot_data.items():
+                if name == iiko_name:
+                    for k in merged:
+                        merged[k] += vals[k]
+                    found = True
+            emp_fot = merged if found else None
         if not emp_fot:
             logger.warning(
-                "[fintablo_sync] «%s» есть в маппинге, но не найден в ФОТ «%s»",
+                "[fintablo_sync] «%s» (секция: «%s») есть в маппинге, но не найден в ФОТ «%s»",
                 iiko_name,
+                fot_section or "—",
                 tab_name,
             )
             stats["no_fot"] += 1
