@@ -141,7 +141,7 @@ async def sync_fot_to_fintablo(
                 if all(abs(v) < 0.01 for v in delta.values()):
                     logger.debug(
                         "[fintablo_sync] %s (FT:%d) — без изменений",
-                        iiko_name,
+                        iiko_id,
                         fintab_id,
                     )
                     stats["skipped"] += 1
