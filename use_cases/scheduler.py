@@ -132,6 +132,24 @@ async def _daily_full_sync() -> None:
         logger.exception("[scheduler] Ошибка обновления ФОТ")
         report_lines.append("💰 ФОТ: ❌ ошибка")
 
+    # ── 8. Выгрузка ФОТ → FinTablo (дельта-синхронизация) ──
+    try:
+        from use_cases.fintablo_salary_sync import sync_fot_to_fintablo
+
+        ft_stats = await sync_fot_to_fintablo(triggered_by=TRIGGERED_BY)
+        ft_upd = ft_stats.get("updated", 0)
+        ft_err = ft_stats.get("errors", 0)
+        ft_total = ft_stats.get("total", 0)
+        if ft_err:
+            report_lines.append(
+                f"📊 FinTablo: ⚠️ {ft_upd}/{ft_total} обновлено, {ft_err} ошибок"
+            )
+        else:
+            report_lines.append(f"📊 FinTablo: ✅ {ft_upd}/{ft_total} обновлено")
+    except Exception:
+        logger.exception("[scheduler] Ошибка выгрузки ФОТ в FinTablo")
+        report_lines.append("📊 FinTablo: ❌ ошибка")
+
     elapsed = time.monotonic() - t0
     report_lines.append(f"\n⏱ Время: {elapsed:.1f} сек")
     logger.info(

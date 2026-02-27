@@ -217,3 +217,123 @@ async def fetch_pnl_categories() -> list[dict[str, Any]]:
 async def fetch_employees() -> list[dict[str, Any]]:
     """Сотрудники."""
     return await _fetch_list("employees", "employees")
+
+
+# ═══════════════════════════════════════════════════════
+# Generic PUT — для обновления записей (salary и др.)
+# ═══════════════════════════════════════════════════════
+
+
+async def _put(endpoint: str, label: str, body: dict[str, Any]) -> dict[str, Any]:
+    """
+    PUT /v1/{endpoint} с retry и backoff.
+    Возвращает полный JSON-ответ.
+    """
+    client = await _get_client()
+
+    logger.info("[FT-API] PUT %s — отправляю запрос...", endpoint)
+    t0 = time.monotonic()
+
+    async with _semaphore:
+        resp = None
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
+                resp = await client.put(
+                    f"/v1/{endpoint}",
+                    json=body,
+                )
+                resp.raise_for_status()
+                break
+            except httpx.TimeoutException as exc:
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "[FT-API] PUT %s — %s (attempt %d/%d), retry через %.0f сек",
+                        endpoint,
+                        type(exc).__name__,
+                        attempt,
+                        _MAX_RETRIES,
+                        delay,
+                    )
+                    await close_client()
+                    client = await _get_client()
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "[FT-API] PUT %s — %s после %d попыток, сдаёмся",
+                        endpoint,
+                        type(exc).__name__,
+                        _MAX_RETRIES,
+                    )
+                    raise
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429 and attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "[FT-API] PUT %s — 429, retry %d/%d через %.0f сек",
+                        endpoint,
+                        attempt,
+                        _MAX_RETRIES,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+        else:
+            raise httpx.HTTPStatusError(
+                f"[FT-API] PUT {endpoint} — 429 после {_MAX_RETRIES} попыток",
+                request=resp.request,
+                response=resp,
+            )
+
+    data = resp.json()
+    elapsed = time.monotonic() - t0
+    logger.info("[FT-API] PUT %s — OK, %.1f сек", label, elapsed)
+    return data
+
+
+# ═══════════════════════════════════════════════════════
+# Salary (Ведомость месяца)
+# ═══════════════════════════════════════════════════════
+
+
+async def get_salary(
+    employee_id: int | None = None,
+    date_mm_yyyy: str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    GET /v1/salary — список начислений.
+    Фильтры: employeeId, date (формат мм.гггг).
+    """
+    params: dict[str, Any] = {}
+    if employee_id is not None:
+        params["employeeId"] = employee_id
+    if date_mm_yyyy:
+        params["date"] = date_mm_yyyy
+    return await _fetch_list("salary", "salary", **params)
+
+
+async def get_salary_by_id(employee_id: int) -> list[dict[str, Any]]:
+    """GET /v1/salary/{id} — начисления конкретного сотрудника."""
+    return await _fetch_list(f"salary/{employee_id}", f"salary/{employee_id}")
+
+
+async def update_salary(
+    employee_id: int,
+    date_mm_yyyy: str,
+    total_pay: dict[str, float | None],
+) -> dict[str, Any]:
+    """
+    PUT /v1/salary/{id} — обновить начисления сотруднику.
+
+    total_pay: {"fix": ..., "bonus": ..., "percent": ..., "forfeit": ...}
+    """
+    body: dict[str, Any] = {
+        "date": date_mm_yyyy,
+        "totalPay": total_pay,
+    }
+    return await _put(
+        f"salary/{employee_id}",
+        f"salary/{employee_id}",
+        body,
+    )

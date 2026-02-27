@@ -3739,6 +3739,7 @@ _FOT_HEADERS = [
     "25 Выплата",  # I (8) green
     "10 Выплата",  # J (9) green
     "К выплате, р.",  # K (10) green formula
+    "FinTabID",  # L (11) grey — ID сотрудника в FinTablo
 ]
 _FOT_NCOLS = len(_FOT_HEADERS)
 
@@ -3746,6 +3747,7 @@ _FOT_NCOLS = len(_FOT_HEADERS)
 _FOT_RED_COLS = [0, 1, 2, 3, 4]  # A-E  (бот-only)
 _FOT_YELLOW_COLS = [5, 6]  # F-G  (руч. корректировки)
 _FOT_GREEN_COLS = [7, 8, 9, 10]  # H-K  (выплаты + формула)
+_FOT_GREY_COLS = [11]  # L  (FinTabID)
 _FOT_EDITABLE_COLS = (5, 10)  # F-J  startCol..endCol (exclusive)
 
 
@@ -3814,6 +3816,7 @@ async def sync_fot_sheet(
 
         # ── 0. Прочитать существующие user-editable значения (F-J) ──
         saved: dict[tuple[str, str], list[float]] = {}
+        saved_fintab: dict[tuple[str, str], str] = {}  # FinTabID (col L)
         if not is_new:
             try:
                 existing = ws.get_all_values()
@@ -3844,8 +3847,12 @@ async def sync_fot_sheet(
                         _parse_fot_num(row[i] if len(row) > i else "")
                         for i in range(5, 10)
                     ]
-                    if any(v != 0 for v in vals):
+                    # FinTabID в колонке L (index 11)
+                    fintab_id = str(row[11]).strip() if len(row) > 11 else ""
+                    if any(v != 0 for v in vals) or fintab_id:
                         saved[(cur_section, cell_a)] = vals
+                    if fintab_id:
+                        saved_fintab[(cur_section, cell_a)] = fintab_id
             except Exception:
                 logger.debug(
                     "[%s] Не удалось прочитать существующие данные ФОТ",
@@ -3950,6 +3957,7 @@ async def sync_fot_sheet(
 
                 sv = saved.get((sect_name, name), [0, 0, 0, 0, 0])
                 nach, uderz, avans, v25, v10 = sv
+                fintab_id = saved_fintab.get((sect_name, name), "")
 
                 all_values.append(
                     [
@@ -3964,6 +3972,7 @@ async def sync_fot_sheet(
                         v25,
                         v10,
                         f"=C{r}-I{r}-J{r}",
+                        fintab_id,
                     ]
                 )
                 total_emp_count += 1
@@ -3987,6 +3996,7 @@ async def sync_fot_sheet(
                     f"=SUM(I{ds1}:I{de1})",
                     f"=SUM(J{ds1}:J{de1})",
                     f"=SUM(K{ds1}:K{de1})",
+                    "",
                 ]
             )
 
@@ -4043,15 +4053,17 @@ async def sync_fot_sheet(
                 }
             )
 
-        # -- Заголовки колонок: красные / жёлтые / зелёные --
+        # -- Заголовки колонок: красные / жёлтые / зелёные / серые --
         _hdr_red = _rgb(0.92, 0.73, 0.73)
         _hdr_yel = _rgb(1.0, 0.95, 0.6)
         _hdr_grn = _rgb(0.71, 0.88, 0.70)
+        _hdr_gry = _rgb(0.85, 0.85, 0.85)
         for r in col_header_rows:
             for cols, bg in [
                 (_FOT_RED_COLS, _hdr_red),
                 (_FOT_YELLOW_COLS, _hdr_yel),
                 (_FOT_GREEN_COLS, _hdr_grn),
+                (_FOT_GREY_COLS, _hdr_gry),
             ]:
                 for ci in cols:
                     requests.append(
@@ -4078,11 +4090,13 @@ async def sync_fot_sheet(
         _bg_red = _rgb(0.98, 0.87, 0.87)
         _bg_yel = _rgb(1.0, 0.98, 0.80)
         _bg_grn = _rgb(0.85, 0.95, 0.85)
+        _bg_gry = _rgb(0.93, 0.93, 0.93)
         for data_start, data_end in data_row_ranges:
             for ci_list, bg in [
                 (_FOT_RED_COLS, _bg_red),
                 (_FOT_YELLOW_COLS, _bg_yel),
                 (_FOT_GREEN_COLS, _bg_grn),
+                (_FOT_GREY_COLS, _bg_gry),
             ]:
                 for ci in ci_list:
                     requests.append(
@@ -4148,7 +4162,7 @@ async def sync_fot_sheet(
             )
 
         # -- Ширины колонок --
-        col_widths = [160, 160, 110, 100, 90, 100, 100, 100, 100, 100, 110]
+        col_widths = [160, 160, 110, 100, 90, 100, 100, 100, 100, 100, 110, 80]
         for i, px in enumerate(col_widths):
             requests.append(
                 {
@@ -4194,7 +4208,7 @@ async def sync_fot_sheet(
             }
         )
 
-        # ── 3. Защита: весь лист, кроме F-J в данных ──
+        # ── 3. Защита: весь лист, кроме F-J и L в данных ──
         bot_email = ""
         try:
             bot_email = spreadsheet.client.auth.service_account_email
@@ -4204,6 +4218,7 @@ async def sync_fot_sheet(
         prot_reqs = _get_protection_delete_requests(sheet_id, spreadsheet)
         unprotected = []
         for ds, de in data_row_ranges:
+            # F-J (cols 5-9)
             unprotected.append(
                 {
                     "sheetId": sheet_id,
@@ -4211,6 +4226,16 @@ async def sync_fot_sheet(
                     "endRowIndex": de,
                     "startColumnIndex": 5,
                     "endColumnIndex": 10,
+                }
+            )
+            # L — FinTabID (col 11)
+            unprotected.append(
+                {
+                    "sheetId": sheet_id,
+                    "startRowIndex": ds,
+                    "endRowIndex": de,
+                    "startColumnIndex": 11,
+                    "endColumnIndex": 12,
                 }
             )
         prot_reqs.append(
@@ -4342,6 +4367,100 @@ async def read_fot_employee_rows(
                 )
 
         return (period_label, results)
+
+    return await asyncio.to_thread(_sync_read)
+
+
+# ─────────────────────────────────────────────────────
+# Чтение ФОТ → маппинг для синхронизации с FinTablo
+# ─────────────────────────────────────────────────────
+
+
+async def read_fot_fintab_mapping(
+    tab_name: str,
+) -> list[dict]:
+    """
+    Прочитать лист ФОТ и вернуть все строки сотрудников с заполненным FinTabID.
+
+    Возвращает список::
+
+        [
+            {
+                "name": str,
+                "fintab_id": int,
+                "rate": float,        # D — Ставка
+                "bonus": float,       # E — Бонус
+                "premium": float,     # F — Премия
+                "deductions": float,  # G — Удержания
+            },
+            ...
+        ]
+    """
+
+    def _sync_read() -> list[dict]:
+        client = _get_client()
+        spreadsheet = client.open_by_key(SALARY_SHEET_ID)
+        try:
+            ws = spreadsheet.worksheet(tab_name)
+        except gspread.exceptions.WorksheetNotFound:
+            return []
+
+        all_rows = ws.get_all_values(
+            value_render_option=gspread.utils.ValueRenderOption.unformatted
+        )
+        if not all_rows:
+            return []
+
+        results: list[dict] = []
+        for row in all_rows:
+            cell_a = str(row[0] if row else "").strip()
+            cell_b = str(row[1] if len(row) > 1 else "").strip()
+            raw_d = row[3] if len(row) > 3 else ""
+            cell_d_empty = raw_d == "" or raw_d is None
+
+            # Пропустить заголовки колонок
+            if cell_a == _FOT_HEADERS[0]:
+                continue
+            # Пропустить секции / period_label
+            if cell_a and not cell_b and cell_d_empty:
+                continue
+            # Пропустить итоговые строки (пустая A)
+            if not cell_a:
+                continue
+
+            # FinTabID (колонка L, index 11)
+            fintab_raw = str(row[11]).strip() if len(row) > 11 else ""
+            if not fintab_raw:
+                continue
+            try:
+                fintab_id = int(float(fintab_raw))
+            except (ValueError, TypeError):
+                continue
+
+            def _num(idx: int) -> float:
+                v = row[idx] if len(row) > idx else 0
+                if isinstance(v, (int, float)):
+                    return float(v)
+                return _parse_fot_num(str(v))
+
+            results.append(
+                {
+                    "name": cell_a,
+                    "fintab_id": fintab_id,
+                    "rate": _num(3),
+                    "bonus": _num(4),
+                    "premium": _num(5),
+                    "deductions": _num(6),
+                }
+            )
+
+        logger.info(
+            "[%s] read_fot_fintab_mapping «%s»: %d сотрудников с FinTabID",
+            LABEL,
+            tab_name,
+            len(results),
+        )
+        return results
 
     return await asyncio.to_thread(_sync_read)
 
