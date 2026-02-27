@@ -219,6 +219,30 @@ async def fetch_employees() -> list[dict[str, Any]]:
     return await _fetch_list("employees", "employees")
 
 
+async def get_employee(employee_id: int) -> dict[str, Any] | None:
+    """GET /v1/employees/{id} — данные одного сотрудника (позиции и т.д.)."""
+    items = await _fetch_list(
+        f"employees/{employee_id}", f"employee/{employee_id}"
+    )
+    return items[0] if items else None
+
+
+async def update_employee(
+    employee_id: int,
+    body: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    PUT /v1/employees/{id} — обновить данные сотрудника (позиции и т.д.).
+
+    body может содержать: positions, date, name, hired, fired, comment и пр.
+    """
+    return await _put(
+        f"employees/{employee_id}",
+        f"employees/{employee_id}",
+        body,
+    )
+
+
 # ═══════════════════════════════════════════════════════
 # Generic PUT — для обновления записей (salary и др.)
 # ═══════════════════════════════════════════════════════

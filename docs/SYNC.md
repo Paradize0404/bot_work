@@ -26,7 +26,7 @@
 
 `misfire_grace_time = 3600с` (1 час) — если бот был недоступен, задача выполнится.
 
-## 07:00 Sync — 6 шагов
+## 07:00 Sync — 8 шагов
 
 1. iiko → БД (справочники, подразделения, номенклатура)
 2. FinTablo → БД (13 таблиц)
@@ -34,6 +34,8 @@
 4. GSheet мин/макс → БД
 5. БД номенклатура → GSheet «Мин остатки»
 6. БД GOODS display-имена → GSheet «Маппинг Справочник»
+7. ФОТ GSheet → обновление месячного листа
+8. ФОТ → FinTablo salary + positions (delta-sync)
 
 ## 23:00 Авто-перемещение расходных материалов
 
@@ -109,6 +111,7 @@ async def _run_sync(entity_name, fetch_fn, Model, mapping_fn, session):
 | `use_cases/negative_transfer.py` | OLAP → отрицательные → internalTransfer |
 | `adapters/iiko_api.py` | 11 fetch_* + send_writeoff + fetch_olap_* + send_internal_transfer |
 | `adapters/fintablo_api.py` | FinTablo sync (persistent httpx) |
+| `use_cases/fintablo_salary_sync.py` | ФОТ → FinTablo: salary + positions v2 |
 
 ## Таблицы (ключевые для sync)
 

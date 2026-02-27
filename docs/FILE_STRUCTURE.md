@@ -44,6 +44,7 @@
 | `user_context.py` | use_case | In-memory кеш контекста (TTL 30 мин) |
 | `sync.py` | use_case | Generic sync iiko: _run_sync + _batch_upsert |
 | `sync_fintablo.py` | use_case | Sync FinTablo (13 таблиц ft_*) |
+| `fintablo_salary_sync.py` | use_case | ФОТ → FinTablo: salary + positions (v2, delta-sync) |
 | `sync_stock_balances.py` | use_case | Full-replace остатков |
 | `sync_min_stock.py` | use_case | GSheet ↔ БД мин. остатков |
 | `sync_lock.py` | use_case | asyncio.Lock per entity |
@@ -474,6 +475,13 @@ test/
 │   │                         #   _batch_upsert(), _mirror_delete(), _safe_decimal() из sync.py (DRY)
 │   │                         #   13 sync_ft_*() — по одной на каждый справочник
 │   │                         #   sync_all_fintablo() — параллельный asyncio.gather ×13
+│   ├── fintablo_salary_sync.py  # ФОТ → FinTablo salary sync (v2)
+│   │                         #   sync_fot_to_fintablo() — главная функция (шаг 8 scheduler)
+│   │                         #   Маппинг: GSheet «Маппинг FinTablo» → employee names ↔ FT IDs
+│   │                         #   Начисления: ФОТ col «Начислено» → totalPay.fix (delta-sync)
+│   │                         #   Позиции: секции ФОТ → direction % (substring-matching)
+│   │                         #   Администрация → 50/50 Московский + Клиническая
+│   │                         #   API workaround: dummy 0% position for single-position employees
 │   ├── scheduler.py         # Ежедневная авто-синхронизация по расписанию
 │   │                         #   APScheduler AsyncIOScheduler + CronTrigger
 │   │                         #   _daily_full_sync() — iiko + FinTablo + остатки + min/max
@@ -594,6 +602,7 @@ test/
 | Кнопка                    | Функция                      | Таблица               |
 |---------------------------|------------------------------|-----------------------|
 | 💹 FT: Синхр. ВСЁ         | `sync_all_fintablo()`        | все 13 ft_* таблиц    |
+| 💰 Синхр. зарплату        | `sync_fot_to_fintablo()`     | FinTablo salary API   |
 
 #### Мега-кнопки
 

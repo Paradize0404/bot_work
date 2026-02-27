@@ -4685,8 +4685,8 @@ async def read_fintab_employee_mapping() -> list[dict]:
 
         [
             {
-                "iiko_id": str,        # UUID сотрудника в iiko (из col A)
-                "iiko_display": str,   # отображаемое имя (без UUID)
+                "iiko_id": str,        # UUID сотрудника в iiko (из col A) — может быть ""
+                "fot_name": str,       # отображаемое имя в ФОТ (col A без UUID)
                 "fintab_id": int,      # числовой ID в FinTablo (из col B)
                 "fintab_name": str,    # имя в FinTablo (без ID)
                 "fot_dept": str,       # Секция ФОТ (кол. D); пусто → равномерное разбие
@@ -4694,12 +4694,9 @@ async def read_fintab_employee_mapping() -> list[dict]:
             ...
         ]
 
-    Схема распределения::
-
-        fot_dept заполнен  → берём точную сумму из этой секции ФОТ
-                           (сЬем заработано в конкретном ресторане)
-        fot_dept пустой       → общая сумма делится поровну между всеми
-                           такими записями (административный персонал)
+    Col A может содержать:
+      - «Имя (uuid)» — извлечём UUID
+      - «Имя»         — UUID будет пустым, связь через имя ФОТ
     """
 
     def _sync() -> list[dict]:
@@ -4728,25 +4725,22 @@ async def read_fintab_employee_mapping() -> list[dict]:
                 continue
             fintab_id = int(m_ft.group(1))
             ft_name = ft_label[: m_ft.start()].strip()
-            # Парсим iiko UUID из col A: "Сорокина В. (550e8400-e29b-41d4-a716-446655440000)"
+            # Пытаемся извлечь iiko UUID из col A: "Сорокина В. (550e8400-...)"
             m_id = re.search(
                 r"\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)\s*$",
                 iiko_dropdown,
                 re.IGNORECASE,
             )
-            if not m_id:
-                logger.warning(
-                    "[%s] read_fintab_employee_mapping: не удалось распарсить iiko UUID из «%s»",
-                    LABEL,
-                    iiko_dropdown,
-                )
-                continue
-            iiko_id = m_id.group(1).lower()
+            iiko_id = m_id.group(1).lower() if m_id else ""
+            fot_name = (
+                iiko_dropdown[: m_id.start()].strip() if m_id else iiko_dropdown
+            )
             fot_dept = str(row[3]).strip() if len(row) > 3 else ""  # col D
             results.append(
                 {
                     "iiko_id": iiko_id,
-                    "iiko_display": iiko_dropdown[: m_id.start()].strip(),
+                    "fot_name": fot_name,
+                    "iiko_display": fot_name,  # обратная совместимость
                     "fintab_id": fintab_id,
                     "fintab_name": ft_name,
                     "fot_dept": fot_dept,
@@ -4778,6 +4772,7 @@ async def read_fot_all_employees(
                     "bonus": float,
                     "premium": float,
                     "deductions": float,
+                    "accrued": float,     # «Начислено» (col C)
                 },
                 "by_dept": {
                     "Клиническая": {
@@ -4785,6 +4780,7 @@ async def read_fot_all_employees(
                         "bonus": float,
                         "premium": float,
                         "deductions": float,
+                        "accrued": float, # «Начислено» (col C)
                     },
                     ...
                 },
@@ -4795,20 +4791,28 @@ async def read_fot_all_employees(
     Ключ — iiko UUID (кол. L ФОТ).
     by_dept используется в fintablo_salary_sync для точного распределения
     ЗП производственного персонала по направлениям.
+
+    Имена секций нормализуются: суффикс ``«  —  Выручка: ...»`` отсекается.
+
+    Возвращает кортеж:
+      (fot_by_uuid, fot_by_name)
+      - fot_by_uuid: данные выше (ключ — iiko UUID, если есть в col L)
+      - fot_by_name: данные выше (ключ — display name из col A)
     """
 
-    def _sync() -> dict[str, dict]:
+    def _sync() -> tuple[dict[str, dict], dict[str, dict]]:
         client = _get_client()
         spreadsheet = client.open_by_key(SALARY_SHEET_ID)
         try:
             ws = spreadsheet.worksheet(tab_name)
         except gspread.exceptions.WorksheetNotFound:
-            return {}
+            return {}, {}
 
         all_rows = ws.get_all_values(
             value_render_option=gspread.utils.ValueRenderOption.unformatted
         )
-        result: dict[str, dict] = {}
+        result: dict[str, dict] = {}          # by iiko_uuid
+        result_by_name: dict[str, dict] = {}  # by display name
         cur_section = ""
         for row in all_rows:
             cell_a = str(row[0]).strip() if row else ""
@@ -4821,10 +4825,11 @@ async def read_fot_all_employees(
                 continue
             # Строка-секция: col A заполнена, col B пуста, col D пуста
             if cell_a and not cell_b and (raw_d == "" or raw_d is None):
-                cur_section = cell_a
+                # Отсекаем суффикс «  —  Выручка: ...» из заголовка секции
+                cur_section = cell_a.split("  \u2014  ")[0].split("  —  ")[0].strip()
                 continue
-            # Строки без UUID (итоги, пустые) — пропускаем
-            if not cell_a or not iiko_id:
+            # Строка сотрудника: нужна A (имя) + B (роль)
+            if not cell_a or not cell_b:
                 continue
 
             def _num(idx: int, _row: list = row) -> float:  # noqa: B023
@@ -4838,31 +4843,48 @@ async def read_fot_all_employees(
                 "bonus": 0.0,
                 "premium": 0.0,
                 "deductions": 0.0,
+                "accrued": 0.0,
             }
-            if iiko_id not in result:
-                result[iiko_id] = {"total": dict(_zero), "by_dept": {}}
 
             vals = {
                 "rate": _num(3),
                 "bonus": _num(4),
                 "premium": _num(5),
                 "deductions": _num(6),
+                "accrued": _num(2),
             }
-            for k in _zero:
-                result[iiko_id]["total"][k] += vals[k]
-            if cur_section:
-                if cur_section not in result[iiko_id]["by_dept"]:
-                    result[iiko_id]["by_dept"][cur_section] = dict(_zero)
+
+            def _accum(target: dict) -> None:
+                if "total" not in target:
+                    target["total"] = dict(_zero)
+                    target["by_dept"] = {}
                 for k in _zero:
-                    result[iiko_id]["by_dept"][cur_section][k] += vals[k]
+                    target["total"][k] += vals[k]
+                if cur_section:
+                    if cur_section not in target["by_dept"]:
+                        target["by_dept"][cur_section] = dict(_zero)
+                    for k in _zero:
+                        target["by_dept"][cur_section][k] += vals[k]
+
+            # Индексируем по UUID (если есть)
+            if iiko_id:
+                if iiko_id not in result:
+                    result[iiko_id] = {}
+                _accum(result[iiko_id])
+
+            # Индексируем по имени (всегда)
+            if cell_a not in result_by_name:
+                result_by_name[cell_a] = {}
+            _accum(result_by_name[cell_a])
 
         logger.info(
-            "[%s] read_fot_all_employees «%s»: %d сотрудников (by iiko UUID + by_dept)",
+            "[%s] read_fot_all_employees «%s»: %d by_uuid, %d by_name",
             LABEL,
             tab_name,
             len(result),
+            len(result_by_name),
         )
-        return result
+        return result, result_by_name
 
     return await asyncio.to_thread(_sync)
 

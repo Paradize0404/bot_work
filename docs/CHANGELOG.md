@@ -5,6 +5,28 @@
 
 ---
 
+### 2026-02-27 — ФОТ → FinTablo salary sync v2
+
+**Новые модули:**
+- `use_cases/fintablo_salary_sync.py` — ежедневная синхронизация зарплат из ФОТ (GSheet) в FinTablo.  
+  Логика: GSheet «Маппинг FinTablo» (имя ↔ FT ID) + GSheet «ФОТ {месяц}» → delta-sync salary + positions.  
+  Начисления: колонка «Начислено» → `totalPay.fix`, остальные поля = 0.  
+  Позиции: секции ФОТ → направления FinTablo (substring-matching), Администрация → 50/50 Московский + Клиническая.  
+  API workaround: dummy 0% position для single-position сотрудников (баг API: 1 позиция без positionId удаляет все).
+
+**Изменённые модули:**
+- `adapters/fintablo_api.py` — добавлены `get_employee(id)` и `update_employee(id, body)` (GET/PUT /v1/employees/{id}).
+- `adapters/google_sheets.py`:
+  - `read_fintab_employee_mapping()` — UUID в col A теперь опционален (fallback на plain name).
+  - `read_fot_all_employees()` — возвращает `(fot_by_uuid, fot_by_name)`, добавлено поле `accrued` (col C), секция-суффиксы стрипаются.
+
+**Документация:**
+- `docs/FILE_STRUCTURE.md` — добавлен `fintablo_salary_sync.py`.
+- `docs/SYNC.md` — обновлены шаги 07:00 (6 → 8), добавлен модуль в таблицу.
+- `docs/CHANGELOG.md` — эта запись.
+
+---
+
 ### 2026-02-26 — [AUDIT] Полный аудит проекта (Фазы 1-5 по PROJECT_MAP.md)
 
 **Код — исправления:**

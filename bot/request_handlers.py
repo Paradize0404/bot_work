@@ -169,6 +169,12 @@ def _history_kb(requests: list[dict], page: int = 0) -> InlineKeyboardMarkup:
     buttons = []
     for r in page_items:
         created = r.get("created_at")
+        if isinstance(created, str):
+            try:
+                from datetime import datetime
+                created = datetime.fromisoformat(created)
+            except (ValueError, TypeError):
+                created = None
         date_str = created.strftime("%d.%m") if created else "?"
         status_icon = {"approved": "✅", "pending": "⏳", "cancelled": "❌"}.get(
             r.get("status", ""), "?"
