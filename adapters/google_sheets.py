@@ -3739,6 +3739,7 @@ _FOT_HEADERS = [
     "25 Выплата",  # I (8) green
     "10 Выплата",  # J (9) green
     "К выплате, р.",  # K (10) green formula
+    "iiko_id",  # L (11) скрытая, системный UUID сотрудника в iiko
 ]
 _FOT_NCOLS = len(_FOT_HEADERS)
 
@@ -3964,6 +3965,7 @@ async def sync_fot_sheet(
                         v25,
                         v10,
                         f"=C{r}-I{r}-J{r}",
+                        emp.get("iiko_id", ""),
                     ]
                 )
                 total_emp_count += 1
@@ -3987,6 +3989,7 @@ async def sync_fot_sheet(
                     f"=SUM(I{ds1}:I{de1})",
                     f"=SUM(J{ds1}:J{de1})",
                     f"=SUM(K{ds1}:K{de1})",
+                    "",
                 ]
             )
 
@@ -4180,7 +4183,7 @@ async def sync_fot_sheet(
             )
 
         # -- Ширины колонок --
-        col_widths = [160, 160, 110, 100, 90, 100, 100, 100, 100, 100, 110]
+        col_widths = [160, 160, 110, 100, 90, 100, 100, 100, 100, 100, 110, 1]
         for i, px in enumerate(col_widths):
             requests.append(
                 {
@@ -4196,6 +4199,21 @@ async def sync_fot_sheet(
                     }
                 }
             )
+        # Скрыть колонку L (iiko_id)
+        requests.append(
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 11,
+                        "endIndex": 12,
+                    },
+                    "properties": {"hiddenByUser": True},
+                    "fields": "hiddenByUser",
+                }
+            }
+        )
 
         # Высота строк
         requests.append(
@@ -4404,18 +4422,20 @@ async def sync_fintab_mapping_sheet(
         client = _get_client()
         spreadsheet = client.open_by_key(SALARY_SHEET_ID)
 
-        # ── Читаем имена сотрудников и секций из ФОТ ──
-        fot_emp_names: list[str] = []
+        # ── Читаем имена сотрудников и iiko UUID из ФОТ ──
+        fot_emp_pairs: list[tuple[str, str]] = []  # ("Имя (uuid)", section)
         fot_dept_names: list[str] = []
         try:
             fot_ws = spreadsheet.worksheet(fot_tab_name)
             fot_rows = fot_ws.get_all_values(
                 value_render_option=gspread.utils.ValueRenderOption.unformatted
             )
+            seen_uuids: set[str] = set()
             for row in fot_rows:
                 cell_a = str(row[0]).strip() if row else ""
                 cell_b = str(row[1]).strip() if len(row) > 1 else ""
                 raw_d = row[3] if len(row) > 3 else ""
+                iiko_id = str(row[11]).strip() if len(row) > 11 else ""
                 if not cell_a:
                     continue
                 if cell_a == _FOT_HEADERS[0]:
@@ -4426,9 +4446,9 @@ async def sync_fintab_mapping_sheet(
                         fot_dept_names.append(cell_a)
                     continue
                 # Сотрудник
-                if cell_a and cell_b:
-                    if cell_a not in fot_emp_names:
-                        fot_emp_names.append(cell_a)
+                if cell_a and cell_b and iiko_id and iiko_id not in seen_uuids:
+                    seen_uuids.add(iiko_id)
+                    fot_emp_pairs.append((f"{cell_a} ({iiko_id})", iiko_id))
         except gspread.exceptions.WorksheetNotFound:
             logger.warning(
                 "[%s] sync_fintab_mapping_sheet: вкладка «%s» не найдена",
@@ -4446,16 +4466,14 @@ async def sync_fintab_mapping_sheet(
         sheet_id = ws.id
 
         # ── Читаем существующие данные (строки 4+) ──
-        existing_emp: list[tuple[str, str, str]] = (
-            []
-        )  # (iiko_name, ft_label, fot_section)
+        existing_emp: list[tuple[str, str, str]] = []  # (iiko_dropdown, ft_label, note)
         existing_dept: list[tuple[str, str]] = []
         if not is_new:
             all_rows = ws.get_all_values()
             for row in all_rows[3:]:
                 a = str(row[0]).strip() if len(row) > 0 else ""
                 b = str(row[1]).strip() if len(row) > 1 else ""
-                c = str(row[2]).strip() if len(row) > 2 else ""  # Секция ФОТ
+                c = str(row[2]).strip() if len(row) > 2 else ""  # Примечание
                 d = str(row[3]).strip() if len(row) > 3 else ""
                 e = str(row[4]).strip() if len(row) > 4 else ""
                 if a or b:
@@ -4464,6 +4482,8 @@ async def sync_fintab_mapping_sheet(
                     existing_dept.append((d, e))
 
         # ── Опции для дропдаунов ──
+        # Кол. A: "Имя (иико_uuid)" — уникальный идентификатор сотрудника
+        fot_emp_options = sorted(label for label, _uuid in fot_emp_pairs)
         ft_emp_options = sorted(
             f"{emp['name']} ({emp['id']})"
             for emp in ft_employees
@@ -4476,9 +4496,9 @@ async def sync_fintab_mapping_sheet(
         title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", ""]
         section_row = ["👤 СОТРУДНИКИ", "", "", "🏢 ПОДРАЗДЕЛЕНИЯ", ""]
         header_row = [
-            "Имя в ФОТ",
+            "Имя в FinTablo (iiko ID)",
             "Сотрудник FinTablo (ID)",
-            "Секция ФОТ*",
+            "Примечание",
             "Подразделение ФОТ",
             "Направление FinTablo",
         ]
@@ -4605,12 +4625,12 @@ async def sync_fintab_mapping_sheet(
                 "strict": False,
             }
 
-        if fot_emp_names:
+        if fot_emp_options:
             requests.append(
                 {
                     "setDataValidation": {
                         "range": _sr(sheet_id, data_start, data_end, 0, 1),
-                        "rule": _dv_list(sorted(fot_emp_names)),
+                        "rule": _dv_list(fot_emp_options),
                     }
                 }
             )
@@ -4623,16 +4643,7 @@ async def sync_fintab_mapping_sheet(
                     }
                 }
             )
-        # Col C — секция ФОТ (для разрешения конфликтов одинаковых имён)
-        if fot_dept_names:
-            requests.append(
-                {
-                    "setDataValidation": {
-                        "range": _sr(sheet_id, data_start, data_end, 2, 3),
-                        "rule": _dv_list(sorted(fot_dept_names)),
-                    }
-                }
-            )
+        # Col C — примечание (свободный текст, без дропдауна)
         if fot_dept_names:
             requests.append(
                 {
@@ -4672,9 +4683,17 @@ async def read_fintab_employee_mapping() -> list[dict]:
 
     Возвращает::
 
-        [{"iiko_name": str, "fintab_id": int, "fintab_name": str}, ...]
+        [
+            {
+                "iiko_id": str,        # UUID сотрудника в iiko (из col A)
+                "iiko_display": str,   # отображаемое имя (без UUID)
+                "fintab_id": int,      # числовой ID в FinTablo (из col B)
+                "fintab_name": str,    # имя в FinTablo (без ID)
+            },
+            ...
+        ]
 
-    Несколько строк с одним iiko_name = разделение зарплаты (salary ÷ N).
+    Несколько строк с одним iiko_id = разделение зарплаты (salary ÷ N).
     """
 
     def _sync() -> list[dict]:
@@ -4688,28 +4707,39 @@ async def read_fintab_employee_mapping() -> list[dict]:
         all_rows = ws.get_all_values()
         results: list[dict] = []
         for row in all_rows[3:]:  # пропускаем 3 строки шапки
-            iiko_name = str(row[0]).strip() if len(row) > 0 else ""
+            iiko_dropdown = str(row[0]).strip() if len(row) > 0 else ""
             ft_label = str(row[1]).strip() if len(row) > 1 else ""
-            fot_section = (
-                str(row[2]).strip() if len(row) > 2 else ""
-            )  # Секция ФОТ (необязательно)
-            if not iiko_name or not ft_label:
+            if not iiko_dropdown or not ft_label:
                 continue
-            # Парсим ID из последних скобок: "Иванов Иван (160005)"
-            m = re.search(r"\((\d+)\)\s*$", ft_label)
-            if not m:
+            # Парсим FinTablo ID из col B: "Иванов Иван (160005)"
+            m_ft = re.search(r"\((\d+)\)\s*$", ft_label)
+            if not m_ft:
                 logger.warning(
-                    "[%s] read_fintab_employee_mapping: не удалось распарсить ID из «%s»",
+                    "[%s] read_fintab_employee_mapping: не удалось распарсить FT ID из «%s»",
                     LABEL,
                     ft_label,
                 )
                 continue
-            fintab_id = int(m.group(1))
-            ft_name = ft_label[: m.start()].strip()
+            fintab_id = int(m_ft.group(1))
+            ft_name = ft_label[: m_ft.start()].strip()
+            # Парсим iiko UUID из col A: "Сорокина В. (550e8400-e29b-41d4-a716-446655440000)"
+            m_id = re.search(
+                r"\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)\s*$",
+                iiko_dropdown,
+                re.IGNORECASE,
+            )
+            if not m_id:
+                logger.warning(
+                    "[%s] read_fintab_employee_mapping: не удалось распарсить iiko UUID из «%s»",
+                    LABEL,
+                    iiko_dropdown,
+                )
+                continue
+            iiko_id = m_id.group(1).lower()
             results.append(
                 {
-                    "iiko_name": iiko_name,
-                    "fot_section": fot_section,
+                    "iiko_id": iiko_id,
+                    "iiko_display": iiko_dropdown[: m_id.start()].strip(),
                     "fintab_id": fintab_id,
                     "fintab_name": ft_name,
                 }
@@ -4727,14 +4757,14 @@ async def read_fintab_employee_mapping() -> list[dict]:
 
 async def read_fot_all_employees(
     tab_name: str,
-) -> dict[tuple[str, str], dict]:
+) -> dict[str, dict]:
     """
-    Прочитать всех сотрудников из ФОТ-вкладки с разбивкой по секциям.
+    Прочитать всех сотрудников из ФОТ-вкладки, суммируя по всем секциям.
 
     Возвращает::
 
         {
-            (display_name, section_name): {
+            iiko_uuid: {
                 "rate": float,        # Ставка (D)
                 "bonus": float,       # Бонус (E)
                 "premium": float,     # Премия (F)
@@ -4743,11 +4773,11 @@ async def read_fot_all_employees(
             ...
         }
 
-    Ключ (name, section) — для разрешения дублирующихся имён сотрудников
-    в разных секциях (напр. две Сорокины В.).
+    Ключ — iiko UUID (кол. L ФОТ), уникально идентифицирует сотрудника даже при
+    одинаковых отображаемых именах (напр. две Сорокины В.).
     """
 
-    def _sync() -> dict[tuple[str, str], dict]:
+    def _sync() -> dict[str, dict]:
         client = _get_client()
         spreadsheet = client.open_by_key(SALARY_SHEET_ID)
         try:
@@ -4758,21 +4788,18 @@ async def read_fot_all_employees(
         all_rows = ws.get_all_values(
             value_render_option=gspread.utils.ValueRenderOption.unformatted
         )
-        result: dict[tuple[str, str], dict] = {}
-        cur_section = ""
+        result: dict[str, dict] = {}
         for row in all_rows:
             cell_a = str(row[0]).strip() if row else ""
             cell_b = str(row[1]).strip() if len(row) > 1 else ""
             raw_d = row[3] if len(row) > 3 else ""
-            # Заголовок колонок
+            iiko_id = str(row[11]).strip() if len(row) > 11 else ""
+            # Пропускаем: заголовок, секции, итоги, строки без UUID
             if cell_a == _FOT_HEADERS[0]:
                 continue
-            # Строка-секция (есть A, нет B, нет D)
             if cell_a and not cell_b and (raw_d == "" or raw_d is None):
-                cur_section = cell_a
                 continue
-            # Итоговые строки (пустая A)
-            if not cell_a:
+            if not cell_a or not iiko_id:
                 continue
 
             def _num(idx: int) -> float:
@@ -4781,21 +4808,20 @@ async def read_fot_all_employees(
                     return float(v)
                 return _parse_fot_num(str(v))
 
-            key = (cell_a, cur_section)
-            if key not in result:
-                result[key] = {
+            if iiko_id not in result:
+                result[iiko_id] = {
                     "rate": 0.0,
                     "bonus": 0.0,
                     "premium": 0.0,
                     "deductions": 0.0,
                 }
-            result[key]["rate"] += _num(3)
-            result[key]["bonus"] += _num(4)
-            result[key]["premium"] += _num(5)
-            result[key]["deductions"] += _num(6)
+            result[iiko_id]["rate"] += _num(3)
+            result[iiko_id]["bonus"] += _num(4)
+            result[iiko_id]["premium"] += _num(5)
+            result[iiko_id]["deductions"] += _num(6)
 
         logger.info(
-            "[%s] read_fot_all_employees «%s»: %d записей (имя×секция)",
+            "[%s] read_fot_all_employees «%s»: %d сотрудников (by iiko UUID)",
             LABEL,
             tab_name,
             len(result),

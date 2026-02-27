@@ -365,6 +365,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
                     "role": role_name,
                     "rate_total": earnings,
                     "bonus": bonus,
+                    "iiko_id": str(emp.id),
                 }
             )
 
@@ -406,6 +407,7 @@ async def update_fot_sheet(triggered_by: str | None = None) -> int:
                 "role": role_name,
                 "rate_total": round(total, 2),
                 "bonus": bonus,
+                "iiko_id": str(emp.id),
             }
         )
 
