@@ -22,12 +22,13 @@ import time
 from collections import defaultdict
 from datetime import datetime
 
-from sqlalchemy import select, delete as sa_delete
+from sqlalchemy import select
 
 from adapters import fintablo_api
 from adapters import iiko_api
+from adapters.google_sheets import read_fintab_opiu_mapping
 from db.engine import async_session_factory as async_session
-from db.ft_models import FTPnlCategory, PnlAccountMapping
+from db.ft_models import FTPnlCategory
 from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
@@ -45,53 +46,8 @@ BOT_COMMENT = "iiko-bot-auto"
 
 
 async def get_all_mappings() -> list[dict]:
-    """Вернуть все активные маппинги из БД."""
-    async with async_session() as session:
-        stmt = (
-            select(PnlAccountMapping)
-            .where(PnlAccountMapping.is_active.is_(True))
-            .order_by(
-                PnlAccountMapping.ft_pnl_category_name,
-                PnlAccountMapping.iiko_account_name,
-            )
-        )
-        rows = (await session.execute(stmt)).scalars().all()
-        return [
-            {
-                "id": r.id,
-                "iiko_account_name": r.iiko_account_name,
-                "ft_pnl_category_id": r.ft_pnl_category_id,
-                "ft_pnl_category_name": r.ft_pnl_category_name,
-            }
-            for r in rows
-        ]
-
-
-async def save_mapping(iiko_account_name: str, ft_pnl_category_id: int) -> int:
-    """Создать новый маппинг. Возвращает id записи."""
-    # Получаем имя FT-категории для кэша
-    async with async_session() as session:
-        cat = await session.get(FTPnlCategory, ft_pnl_category_id)
-        ft_name = cat.name if cat else f"ID:{ft_pnl_category_id}"
-
-        obj = PnlAccountMapping(
-            iiko_account_name=iiko_account_name,
-            ft_pnl_category_id=ft_pnl_category_id,
-            ft_pnl_category_name=ft_name,
-        )
-        session.add(obj)
-        await session.commit()
-        await session.refresh(obj)
-        return obj.id
-
-
-async def delete_mapping(mapping_id: int) -> bool:
-    """Удалить маппинг по id. Возвращает True если удалён."""
-    async with async_session() as session:
-        stmt = sa_delete(PnlAccountMapping).where(PnlAccountMapping.id == mapping_id)
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount > 0
+    """Вернуть все активные маппинги из листа «Маппинг FinTablo» (колонки F-G)."""
+    return await read_fintab_opiu_mapping()
 
 
 async def get_available_ft_categories() -> list[dict]:

@@ -593,10 +593,23 @@ async def sync_all_fintablo(
             fot_tab = f"ФОТ {_month_names[today.month]} {today.year}"
             ft_emps = await fintablo_api.fetch_employees()
             ft_dirs = await fintablo_api.fetch_directions()
+            # Получаем статьи ПиУ из БД для дропдауна G в маппинге
+            from sqlalchemy import select as _select
+
+            async with async_session_factory() as _sess:
+                _pnl_rows = (
+                    await _sess.execute(
+                        _select(FTPnlCategory).order_by(FTPnlCategory.name)
+                    )
+                ).scalars().all()
+                ft_pnl_cats = [
+                    {"id": r.id, "name": r.name} for r in _pnl_rows
+                ]
             await sync_fintab_mapping_sheet(
                 fot_tab_name=fot_tab,
                 ft_employees=ft_emps,
                 ft_directions=ft_dirs,
+                ft_pnl_categories=ft_pnl_cats,
             )
         except Exception:
             logger.exception("[FT] Ошибка обновления «Маппинг FinTablo»")

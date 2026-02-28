@@ -4433,6 +4433,7 @@ async def sync_fintab_mapping_sheet(
     fot_tab_name: str,
     ft_employees: list[dict],
     ft_directions: list[dict],
+    ft_pnl_categories: list[dict] | None = None,
 ) -> int:
     """
     Создать/обновить вкладку «Маппинг FinTablo» в SALARY_SHEET_ID.
@@ -4492,6 +4493,7 @@ async def sync_fintab_mapping_sheet(
         # ── Читаем существующие данные (строки 4+) ──
         existing_emp: list[tuple[str, str, str]] = []  # (iiko_dropdown, ft_label, note)
         existing_dept: list[tuple[str, str]] = []
+        existing_opiu: list[tuple[str, str]] = []  # (iiko_account, ft_pnl_category)
         if not is_new:
             all_rows = ws.get_all_values()
             for row in all_rows[3:]:
@@ -4500,10 +4502,14 @@ async def sync_fintab_mapping_sheet(
                 c = str(row[2]).strip() if len(row) > 2 else ""  # Примечание
                 d = str(row[3]).strip() if len(row) > 3 else ""
                 e = str(row[4]).strip() if len(row) > 4 else ""
+                f_val = str(row[5]).strip() if len(row) > 5 else ""
+                g_val = str(row[6]).strip() if len(row) > 6 else ""
                 if a or b:
                     existing_emp.append((a, b, c))
                 if d or e:
                     existing_dept.append((d, e))
+                if f_val or g_val:
+                    existing_opiu.append((f_val, g_val))
 
         # ── Опции для дропдаунов ──
         # Кол. A: "Имя (иико_uuid)" — уникальный идентификатор сотрудника
@@ -4514,6 +4520,11 @@ async def sync_fintab_mapping_sheet(
             if emp.get("id") and emp.get("name")
         )
         ft_dir_options = sorted(d["name"] for d in ft_directions if d.get("name"))
+        ft_pnl_options = sorted(
+            f"{cat['name']} ({cat['id']})"
+            for cat in (ft_pnl_categories or [])
+            if cat.get("id") and cat.get("name")
+        )
 
         # ── Очищаем некорректные старые значения подразделений ──
         # Сохраняем только те строки D/E, где оба значения соответствуют
@@ -4530,21 +4541,24 @@ async def sync_fintab_mapping_sheet(
 
         # ── Данные листа ──
         now_str = time.strftime("%d.%m.%Y %H:%M")
-        title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", ""]
-        section_row = ["👤 СОТРУДНИКИ", "", "", "🏢 ПОДРАЗДЕЛЕНИЯ", ""]
+        title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", "", "", ""]
+        section_row = ["👤 СОТРУДНИКИ", "", "", "🏢 ПОДРАЗДЕЛЕНИЯ", "", "📈 ОПИУ", ""]
         header_row = [
             "Имя в ФОТ (iiko UUID)",
             "Сотрудник FinTablo (ID)",
             "Примечание",
             "Подразделение ФОТ",
             "Направление FinTablo",
+            "Счет iiko (ОПИУ)",
+            "Статья FinTablo (ОПИУ)",
         ]
-        n_rows = max(len(existing_emp), len(existing_dept), 1)
+        n_rows = max(len(existing_emp), len(existing_dept), len(existing_opiu), 1)
         data_rows: list[list[str]] = []
         for i in range(n_rows):
             a, b, c = existing_emp[i] if i < len(existing_emp) else ("", "", "")
             d, e = existing_dept[i] if i < len(existing_dept) else ("", "")
-            data_rows.append([a, b, c, d, e])
+            f_val, g_val = existing_opiu[i] if i < len(existing_opiu) else ("", "")
+            data_rows.append([a, b, c, d, e, f_val, g_val])
 
         ws.clear()
         ws.update(
@@ -4554,12 +4568,21 @@ async def sync_fintab_mapping_sheet(
         # ── batchUpdate: форматирование + дропдауны ──
         requests: list[dict] = []
 
-        # Объединение заголовка (A-B и D-E)
-        for c0, c1 in [(0, 3), (3, 5)]:
+        # Объединение строки 1 (заголовок) — одна ячейка A-G
+        requests.append(
+            {
+                "mergeCells": {
+                    "range": _sr(sheet_id, 0, 1, 0, 7),
+                    "mergeType": "MERGE_ALL",
+                }
+            }
+        )
+        # Объединение строки 2 (секции): A-C, D-E, F-G
+        for c0, c1 in [(0, 3), (3, 5), (5, 7)]:
             requests.append(
                 {
                     "mergeCells": {
-                        "range": _sr(sheet_id, 0, 1, c0, c1),
+                        "range": _sr(sheet_id, 1, 2, c0, c1),
                         "mergeType": "MERGE_ALL",
                     }
                 }
@@ -4569,7 +4592,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 0, 1, 0, 5),
+                    "range": _sr(sheet_id, 0, 1, 0, 7),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.20, 0.40, 0.78),
@@ -4590,7 +4613,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 1, 2, 0, 5),
+                    "range": _sr(sheet_id, 1, 2, 0, 7),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.85, 0.91, 0.98),
@@ -4606,7 +4629,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 2, 3, 0, 5),
+                    "range": _sr(sheet_id, 2, 3, 0, 7),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.90, 0.90, 0.90),
@@ -4632,8 +4655,8 @@ async def sync_fintab_mapping_sheet(
             }
         )
 
-        # Ширины колонок: A=200, B=220, C=180 (секция), D=200, E=200
-        for ci, px in enumerate([200, 220, 180, 200, 200]):
+        # Ширины колонок: A=200, B=220, C=180, D=200, E=200, F=220, G=220
+        for ci, px in enumerate([200, 220, 180, 200, 200, 220, 220]):
             requests.append(
                 {
                     "updateDimensionProperties": {
@@ -4696,6 +4719,16 @@ async def sync_fintab_mapping_sheet(
                     "setDataValidation": {
                         "range": _sr(sheet_id, data_start, data_end, 4, 5),
                         "rule": _dv_list(ft_dir_options),
+                    }
+                }
+            )
+        # Col F — счет iiko (свободный текст, без дропдауна)
+        if ft_pnl_options:
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 6, 7),
+                        "rule": _dv_list(ft_pnl_options),
                     }
                 }
             )
@@ -4790,6 +4823,69 @@ async def read_fintab_employee_mapping() -> list[dict]:
 
         logger.info(
             "[%s] read_fintab_employee_mapping: %d строк маппинга",
+            LABEL,
+            len(results),
+        )
+        return results
+
+    return await asyncio.to_thread(_sync)
+
+
+async def read_fintab_opiu_mapping() -> list[dict]:
+    """
+    Прочитать маппинг ОПИУ из вкладки «Маппинг FinTablo» (колонки F-G).
+
+    Возвращает::
+
+        [
+            {
+                "iiko_account_name": str,    # col F — название счета iiko
+                "ft_pnl_category_id": int,   # числовой ID статьи FinTablo (из col G)
+                "ft_pnl_category_name": str, # название статьи (без ID)
+            },
+            ...
+        ]
+
+    Col G формат: «Название статьи (123456)».
+    Строки с пустой F или нечитаемой G пропускаются.
+    """
+
+    def _sync() -> list[dict]:
+        client = _get_client()
+        spreadsheet = client.open_by_key(SALARY_SHEET_ID)
+        try:
+            ws = spreadsheet.worksheet(_FINTAB_MAPPING_TAB)
+        except gspread.exceptions.WorksheetNotFound:
+            return []
+
+        all_rows = ws.get_all_values()
+        results: list[dict] = []
+        for row in all_rows[3:]:  # пропускаем 3 строки шапки
+            f_val = str(row[5]).strip() if len(row) > 5 else ""
+            g_val = str(row[6]).strip() if len(row) > 6 else ""
+            if not f_val or not g_val:
+                continue
+            # Парсим FT ID из col G: "Название статьи (123456)"
+            m = re.search(r"\((\d+)\)\s*$", g_val)
+            if not m:
+                logger.warning(
+                    "[%s] read_fintab_opiu_mapping: не удалось распарсить FT ID из «%s»",
+                    LABEL,
+                    g_val,
+                )
+                continue
+            ft_id = int(m.group(1))
+            ft_name = g_val[: m.start()].strip()
+            results.append(
+                {
+                    "iiko_account_name": f_val,
+                    "ft_pnl_category_id": ft_id,
+                    "ft_pnl_category_name": ft_name,
+                }
+            )
+
+        logger.info(
+            "[%s] read_fintab_opiu_mapping: %d связей ОПИУ",
             LABEL,
             len(results),
         )
