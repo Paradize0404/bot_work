@@ -29,6 +29,7 @@ from adapters import iiko_api
 from adapters.google_sheets import read_fintab_opiu_mapping
 from db.engine import async_session_factory as async_session
 from db.ft_models import FTPnlCategory
+from db.models import Entity
 from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
@@ -103,32 +104,22 @@ async def fetch_iiko_accounts_from_preset(
     ]
 
 
-async def get_distinct_iiko_accounts(
-    date_from: str | None = None,
-    date_to: str | None = None,
-) -> list[str]:
+async def get_distinct_iiko_accounts() -> list[str]:
     """
-    Получить уникальные имена iiko-счетов из OLAP-пресета.
-    Если даты не указаны — запрашиваем последние 24 месяца, чтобы
-    получить полный список счетов вне зависимости от сезонности.
+    Получить уникальные имена iiko-счетов из таблицы iiko_entity
+    (root_type='Account', deleted=False) — полный справочник без
+    зависимости от периода.
     """
-    if not date_from or not date_to:
-        now = now_kgd()
-        # Начало: 24 месяца назад, первое число месяца
-        start_month = now.month - 24
-        start_year = now.year
-        while start_month <= 0:
-            start_month += 12
-            start_year -= 1
-        date_from = f"{start_year}-{start_month:02d}-01T00:00:00"
-        # Конец: начало следующего месяца
-        if now.month == 12:
-            date_to = f"{now.year + 1}-01-01T00:00:00"
-        else:
-            date_to = f"{now.year}-{now.month + 1:02d}-01T00:00:00"
-
-    data = await fetch_iiko_accounts_from_preset(date_from, date_to)
-    return [d["account_name"] for d in data]
+    async with async_session() as session:
+        stmt = (
+            select(Entity.name)
+            .where(Entity.root_type == "Account")
+            .where(Entity.deleted.is_(False))
+            .where(Entity.name.isnot(None))
+            .order_by(Entity.name)
+        )
+        rows = (await session.execute(stmt)).scalars().all()
+    return sorted(set(rows))
 
 
 # ═══════════════════════════════════════════════════════

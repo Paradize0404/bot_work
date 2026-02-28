@@ -593,7 +593,7 @@ async def sync_all_fintablo(
             fot_tab = f"ФОТ {_month_names[today.month]} {today.year}"
             ft_emps = await fintablo_api.fetch_employees()
             ft_dirs = await fintablo_api.fetch_directions()
-            # Получаем статьи ПиУ из БД для дропдауна G в маппинге
+            # Получаем статьи ПиУ и счета iiko из БД для дропдаунов G и F
             from sqlalchemy import select as _select
             from use_cases.pnl_sync import get_distinct_iiko_accounts
 
