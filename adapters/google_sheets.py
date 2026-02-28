@@ -4515,6 +4515,19 @@ async def sync_fintab_mapping_sheet(
         )
         ft_dir_options = sorted(d["name"] for d in ft_directions if d.get("name"))
 
+        # ── Очищаем некорректные старые значения подразделений ──
+        # Сохраняем только те строки D/E, где оба значения соответствуют
+        # актуальным спискам (или пусты). Это защищает от «мусора» при
+        # смене структуры листа.
+        valid_fot_depts = set(fot_dept_names)
+        valid_ft_dirs = set(ft_dir_options)
+        existing_dept = [
+            (d_val, e_val)
+            for d_val, e_val in existing_dept
+            if (not d_val or d_val in valid_fot_depts)
+            and (not e_val or e_val in valid_ft_dirs)
+        ]
+
         # ── Данные листа ──
         now_str = time.strftime("%d.%m.%Y %H:%M")
         title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", ""]
