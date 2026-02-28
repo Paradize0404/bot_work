@@ -108,18 +108,24 @@ async def get_distinct_iiko_accounts(
     date_to: str | None = None,
 ) -> list[str]:
     """
-    Получить уникальные имена iiko-счетов из OLAP-пресета за период.
-    Если даты не указаны — берём текущий месяц.
+    Получить уникальные имена iiko-счетов из OLAP-пресета.
+    Если даты не указаны — запрашиваем последние 24 месяца, чтобы
+    получить полный список счетов вне зависимости от сезонности.
     """
     if not date_from or not date_to:
         now = now_kgd()
-        date_from = now.replace(day=1).strftime("%Y-%m-%dT00:00:00")
-        # Конец месяца: начало следующего
+        # Начало: 24 месяца назад, первое число месяца
+        start_month = now.month - 24
+        start_year = now.year
+        while start_month <= 0:
+            start_month += 12
+            start_year -= 1
+        date_from = f"{start_year}-{start_month:02d}-01T00:00:00"
+        # Конец: начало следующего месяца
         if now.month == 12:
-            next_month = now.replace(year=now.year + 1, month=1, day=1)
+            date_to = f"{now.year + 1}-01-01T00:00:00"
         else:
-            next_month = now.replace(month=now.month + 1, day=1)
-        date_to = next_month.strftime("%Y-%m-%dT00:00:00")
+            date_to = f"{now.year}-{now.month + 1:02d}-01T00:00:00"
 
     data = await fetch_iiko_accounts_from_preset(date_from, date_to)
     return [d["account_name"] for d in data]
