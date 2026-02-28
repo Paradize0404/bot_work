@@ -3814,43 +3814,57 @@ async def sync_fot_sheet(
         sheet_id = ws.id
 
         # ── 0. Прочитать существующие user-editable значения (F-J) ──
+        #   Используем UNFORMATTED_VALUE чтобы получить сырые числа (float/int)
+        #   и не терять точность при парсинге форматированных строк.
+        #   Храним по ключу (sect_name, name) + fallback по name-only.
         saved: dict[tuple[str, str], list[float]] = {}
+        saved_by_name: dict[str, list[float]] = {}
         if not is_new:
             try:
-                existing = ws.get_all_values()
+                existing = ws.get_all_values(
+                    value_render_option=gspread.utils.ValueRenderOption.unformatted,
+                )
                 cur_section = ""
                 format_valid = False  # флаг: заголовки нового формата
                 for row in existing:
-                    cell_a = (row[0] if row else "").strip()
-                    cell_b = (row[1] if len(row) > 1 else "").strip()
+                    cell_a = str(row[0]).strip() if row else ""
+                    cell_b = str(row[1]).strip() if len(row) > 1 else ""
                     # Строка-заголовок колонок: проверяем формат
                     if cell_a == _FOT_HEADERS[0]:
-                        hdr_f = (row[5] if len(row) > 5 else "").strip()
+                        hdr_f = str(row[5]).strip() if len(row) > 5 else ""
                         format_valid = hdr_f == _FOT_HEADERS[5]
                         continue
                     # Секция: заполнена A, но B и D пустые
+                    raw_d = row[3] if len(row) > 3 else ""
                     if (
                         cell_a
                         and not cell_b
-                        and (len(row) < 4 or not str(row[3]).strip())
+                        and (raw_d == "" or raw_d is None)
                     ):
                         if cell_a != period_label:
                             # Отсечь суффикс «  —  Выручка: ...» или «  —  Кондитерка: ...»
-                            sec = cell_a.split("  —  ")[0].strip()
+                            sec = cell_a.split("  \u2014  ")[0].split("  —  ")[0].strip()
                             cur_section = sec
                         continue
                     if not cell_a or not format_valid:
                         continue
-                    vals = [
-                        _parse_fot_num(row[i] if len(row) > i else "")
-                        for i in range(5, 10)
-                    ]
+
+                    def _raw_fj(idx: int, _row: list = row) -> float:
+                        v = _row[idx] if len(_row) > idx else 0
+                        if isinstance(v, (int, float)):
+                            return float(v)
+                        return _parse_fot_num(str(v))
+
+                    vals = [_raw_fj(i) for i in range(5, 10)]
                     if any(v != 0 for v in vals):
                         saved[(cur_section, cell_a)] = vals
+                        saved_by_name[cell_a] = vals
             except Exception:
-                logger.debug(
-                    "[%s] Не удалось прочитать существующие данные ФОТ",
+                logger.warning(
+                    "[%s] Не удалось прочитать существующие данные ФОТ — "
+                    "пользовательские значения F-J могут быть потеряны!",
                     LABEL,
+                    exc_info=True,
                 )
 
         # Очистка значений + форматирования
@@ -3949,7 +3963,19 @@ async def sync_fot_sheet(
                 rate_total = emp.get("rate_total", 0)
                 bonus = emp.get("bonus", 0)
 
-                sv = saved.get((sect_name, name), [0, 0, 0, 0, 0])
+                sv = saved.get((sect_name, name))
+                if sv is None:
+                    sv = saved_by_name.get(name)
+                    if sv is not None:
+                        logger.info(
+                            "[%s] F-J восстановлены по имени (без секции) для «%s» "
+                            "(секция «%s»)",
+                            LABEL,
+                            name,
+                            sect_name,
+                        )
+                if sv is None:
+                    sv = [0, 0, 0, 0, 0]
                 nach, uderz, avans, v25, v10 = sv
 
                 all_values.append(

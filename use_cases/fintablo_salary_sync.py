@@ -222,6 +222,10 @@ async def sync_fot_to_fintablo(
 
         try:
             # ── Salary delta-sync ──
+            #   PUT /v1/salary/{id} — полная перезапись totalPay,
+            #   не аддитивная, все поля (fix/percent/bonus/forfeit)
+            #   передаются явно.  Delta-check лишь оптимизация
+            #   (пропуск PUT когда данные не изменились).
             salary_items = await fintablo_api.get_salary(
                 employee_id=fintab_id,
                 date_mm_yyyy=date_mm_yyyy,
