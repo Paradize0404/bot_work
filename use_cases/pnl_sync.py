@@ -26,7 +26,10 @@ from sqlalchemy import select
 
 from adapters import fintablo_api
 from adapters import iiko_api
-from adapters.google_sheets import read_fintab_opiu_mapping
+from adapters.google_sheets import (
+    read_fintab_dept_direction_mapping,
+    read_fintab_opiu_mapping,
+)
 from db.engine import async_session_factory as async_session
 from db.ft_models import FTDirection, FTPnlCategory
 from db.models import Entity, ProductGroup
@@ -42,16 +45,6 @@ BOT_COMMENT = "iiko-bot-auto"
 
 # Название FT PnL-категории, куда попадают списания (WRITEOFF)
 WRITEOFF_FT_CATEGORY_NAME = "Списания продуктов"
-
-# Маппинг Department (OLAP) → FT direction name (подстрочное сравнение)
-# Используется для разбивки WRITEOFF-сумм по направлениям FinTablo.
-_DEPT_KEYWORDS_TO_DIRECTION: dict[str, str] = {
-    "Московский": "Московский",
-    "Клиническая": "Клиническая",
-    "Производство": "Производство",
-    "Аксакова": "Аксакова",
-    "Сельма": "Сельма",
-}
 
 
 # ═══════════════════════════════════════════════════════
@@ -85,12 +78,25 @@ async def get_available_ft_categories() -> list[dict]:
 # ═══════════════════════════════════════════════════════
 
 
-def _resolve_department_direction(dept_name: str) -> str | None:
-    """Определить название FT-направления по Department из OLAP (подстрока)."""
+def _resolve_department_direction(
+    dept_name: str,
+    dept_dir_map: list[dict],
+) -> str | None:
+    """Определить название FT-направления по Department из OLAP.
+
+    Сначала пробует точное совпадение dept_name == mapping["dept_name"],
+    затем подстрочное (dept_name содержится в mapping или наоборот).
+    """
     lower = dept_name.lower()
-    for keyword, direction_name in _DEPT_KEYWORDS_TO_DIRECTION.items():
-        if keyword.lower() in lower:
-            return direction_name
+    # точное
+    for m in dept_dir_map:
+        if m["dept_name"].lower() == lower:
+            return m["ft_direction_name"]
+    # подстрочное: OLAP dept содержит ключ из таблицы или наоборот
+    for m in dept_dir_map:
+        key = m["dept_name"].lower()
+        if key in lower or lower in key:
+            return m["ft_direction_name"]
     return None
 
 
@@ -228,11 +234,13 @@ async def update_opiu(
     Алгоритм:
       1. Определить месяц (target_date или текущий)
       2. Загрузить OLAP-отчёт из iiko за весь месяц
-      3. Считать маппинг из Google Sheets
+      3. Считать маппинг из Google Sheets (F-G для категорий, D-E для направлений)
       4. Агрегировать по FT PnL-категориям:
-         - WRITEOFF → хардкод «Списания продуктов», разбивка по direction
-         - Остальные → приоритет группа > счёт
-      5. Создать / обновить бот-записи в FinTablo
+         - ВСЕ транзакции разбиваются по department → FT direction (из D-E)
+         - WRITEOFF → хардкод «Списания продуктов»
+         - Остальные → приоритет группа > счёт (из F-G)
+      5. Зачистить устаревшие бот-записи без direction
+      6. Создать / обновить бот-записи в FinTablo
 
     Возвращает::
 
@@ -275,6 +283,7 @@ async def update_opiu(
     mappings = await get_all_mappings()
     writeoff_cat_id = await _get_writeoff_category_id()
     direction_map = await _get_direction_map()  # name → id
+    dept_dir_map = await read_fintab_dept_direction_mapping()  # sheets D-E
 
     if not mappings and writeoff_cat_id is None:
         logger.warning("[pnl_sync] Маппинг пуст и нет категории списаний")
@@ -294,10 +303,10 @@ async def update_opiu(
     }
 
     # ── 4. Агрегация ──
-    #   WRITEOFF → «Списания продуктов» с direction_id по Department
-    #   Остальные → приоритет: [Группа] > Account.Name
-    # Ключ для обычных записей: (cat_id, None)
-    # Ключ для WRITEOFF: (cat_id, direction_id)
+    #   ВСЕ транзакции разбиваются по department → direction (из D-E)
+    #   WRITEOFF → «Списания продуктов» (хардкод категории)
+    #   Остальные → приоритет: [Группа] > Account.Name (маппинг F-G)
+    #   Ключ: (cat_id, direction_id | None)
     ft_totals: dict[tuple[int, int | None], float] = defaultdict(float)
     ft_names: dict[int, str] = {}
     unmapped_keys: set[str] = set()
@@ -309,6 +318,16 @@ async def update_opiu(
         department = row["department"]
         tx_type = (row["transaction_type"] or "").upper()
 
+        # ── Определяем direction для ВСЕХ транзакций ──
+        dir_name = (
+            _resolve_department_direction(department, dept_dir_map)
+            if department
+            else None
+        )
+        dir_id = direction_map.get(dir_name) if dir_name else None
+        if department and dir_id is None:
+            unmapped_keys.add(f"dept={department} (нет направления)")
+
         # ── WRITEOFF → хардкод ──
         if tx_type == "WRITEOFF":
             if writeoff_cat_id is None:
@@ -316,10 +335,6 @@ async def update_opiu(
                     f"WRITEOFF (нет категории «{WRITEOFF_FT_CATEGORY_NAME}»)"
                 )
                 continue
-            dir_name = _resolve_department_direction(department) if department else None
-            dir_id = direction_map.get(dir_name) if dir_name else None
-            if department and dir_id is None:
-                unmapped_keys.add(f"WRITEOFF dept={department} (нет направления)")
             ft_totals[(writeoff_cat_id, dir_id)] += value
             ft_names[writeoff_cat_id] = WRITEOFF_FT_CATEGORY_NAME
             continue
@@ -342,7 +357,7 @@ async def update_opiu(
             unmapped_keys.add(account_name)
             continue
 
-        ft_totals[(cat_id, None)] += value
+        ft_totals[(cat_id, dir_id)] += value
         ft_names[cat_id] = cat_name
 
     # Округлить
@@ -357,7 +372,36 @@ async def update_opiu(
         len(unmapped_keys),
     )
 
-    # ── 5. Обновить каждую FT-категорию (с direction_id, если есть) ──
+    # ── 5. Зачистка старых бот-записей без direction ──
+    # Если категория теперь разбивается по направлениям, удалить
+    # устаревшие записи с direction_id=None.
+    cats_with_dir = {cat_id for cat_id, d_id in ft_totals if d_id is not None}
+    for cat_id in cats_with_dir:
+        if (cat_id, None) not in ft_totals:
+            # старые записи без direction — зачищаем
+            try:
+                all_items = await fintablo_api.fetch_pnl_items(
+                    category_id=cat_id,
+                    date_mm_yyyy=date_mm_yyyy,
+                )
+                for it in all_items:
+                    if not (it.get("comment") or "").startswith(BOT_COMMENT):
+                        continue
+                    # Удаляем только записи БЕЗ direction
+                    if it.get("directionId") or it.get("direction_id"):
+                        continue
+                    await fintablo_api.delete_pnl_item(int(it["id"]))
+                    logger.info(
+                        "[pnl_sync] Зачищена старая запись без direction: cat=%d id=%s",
+                        cat_id,
+                        it["id"],
+                    )
+            except Exception:
+                logger.exception(
+                    "[pnl_sync] Ошибка зачистки directionless для cat=%d", cat_id
+                )
+
+    # ── 6. Обновить каждую FT-категорию (с direction_id, если есть) ──
     updated = 0
     skipped = 0
     errors = 0

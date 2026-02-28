@@ -4843,6 +4843,55 @@ async def read_fintab_employee_mapping() -> list[dict]:
     return await asyncio.to_thread(_sync)
 
 
+async def read_fintab_dept_direction_mapping() -> list[dict]:
+    """
+    Прочитать маппинг подразделений → направлений из «Маппинг FinTablo» (колонки D-E).
+
+    Возвращает::
+
+        [
+            {
+                "dept_name": str,          # col D — Подразделение ФОТ
+                "ft_direction_name": str,   # col E — Направление FinTablo
+            },
+            ...
+        ]
+
+    Строки с пустой D или E пропускаются.
+    """
+
+    def _sync() -> list[dict]:
+        client = _get_client()
+        spreadsheet = client.open_by_key(SALARY_SHEET_ID)
+        try:
+            ws = spreadsheet.worksheet(_FINTAB_MAPPING_TAB)
+        except gspread.exceptions.WorksheetNotFound:
+            return []
+
+        all_rows = ws.get_all_values()
+        results: list[dict] = []
+        for row in all_rows[3:]:  # пропускаем 3 строки шапки
+            d_val = str(row[3]).strip() if len(row) > 3 else ""
+            e_val = str(row[4]).strip() if len(row) > 4 else ""
+            if not d_val or not e_val:
+                continue
+            results.append(
+                {
+                    "dept_name": d_val,
+                    "ft_direction_name": e_val,
+                }
+            )
+
+        logger.info(
+            "[%s] read_fintab_dept_direction_mapping: %d связей подразделение→направление",
+            LABEL,
+            len(results),
+        )
+        return results
+
+    return await asyncio.to_thread(_sync)
+
+
 async def read_fintab_opiu_mapping() -> list[dict]:
     """
     Прочитать маппинг ОПИУ из вкладки «Маппинг FinTablo» (колонки F-G).
