@@ -138,7 +138,7 @@ async def fetch_iiko_accounts_from_preset(
 
     result: list[dict] = []
     for row in rows:
-        account_name = row.get("Account.Name") or row.get("AccountName")
+        account_name = (row.get("Account.Name") or row.get("AccountName") or "").strip()
         if not account_name:
             continue
         try:
@@ -147,12 +147,15 @@ async def fetch_iiko_accounts_from_preset(
             value = 0.0
         if value <= 0:
             continue
+        pg = (row.get("Product.SecondParent") or "").strip() or None
+        dept = (row.get("Department") or "").strip() or None
+        tt = (row.get("TransactionType") or "").strip() or None
         result.append(
             {
                 "account_name": account_name,
-                "product_group": row.get("Product.SecondParent") or None,
-                "department": row.get("Department") or None,
-                "transaction_type": row.get("TransactionType") or None,
+                "product_group": pg,
+                "department": dept,
+                "transaction_type": tt,
                 "sum": value,
             }
         )
