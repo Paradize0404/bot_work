@@ -105,6 +105,10 @@ async def sync_fot_to_fintablo(
     """
     Синхронизировать начисления из листа ФОТ в FinTablo.
 
+    ФОТ — единственный источник истины.
+    Все сотрудники из маппинга получают начисления из ФОТ.
+    Все остальные записи за этот месяц в FinTablo обнуляются.
+
     Возвращает статистику::
 
         {
@@ -114,6 +118,7 @@ async def sync_fot_to_fintablo(
             "errors": int,        # ошибки API
             "no_fot": int,        # iiko_id не найден в ФОТ
             "pos_updated": int,   # позиции обновлены
+            "zeroed": int,        # лишних записей обнулено
         }
     """
     t0 = time.monotonic()
@@ -147,7 +152,11 @@ async def sync_fot_to_fintablo(
             "errors": 0,
             "no_fot": 0,
             "pos_updated": 0,
+            "zeroed": 0,
         }
+
+    # 1b. Все salary-записи за месяц (для обнуления лишних)
+    all_salary_entries = await fintablo_api.get_salary(date_mm_yyyy=date_mm_yyyy)
 
     # 2. Строим mapping → fintab + fot_data (1:1 маппинг, строго по iiko UUID)
     stats = {
@@ -157,6 +166,7 @@ async def sync_fot_to_fintablo(
         "errors": 0,
         "no_fot": 0,
         "pos_updated": 0,
+        "zeroed": 0,
     }
 
     employees_to_sync: list[dict] = []  # [{fintab_id, fintab_name, emp_data}]
@@ -275,10 +285,53 @@ async def sync_fot_to_fintablo(
             )
             stats["errors"] += 1
 
+    # 4. Обнулить лишние salary-записи (не из маппинга)
+    #    ФОТ — единственный источник истины.
+    synced_ft_ids = {e["fintab_id"] for e in employees_to_sync}
+    _ZERO_PAY: dict[str, float] = {
+        "fix": 0.0,
+        "percent": 0.0,
+        "bonus": 0.0,
+        "forfeit": 0.0,
+    }
+    for sal_entry in all_salary_entries:
+        ft_id = sal_entry.get("id")
+        if ft_id is None or ft_id in synced_ft_ids:
+            continue
+        # Проверяем, что totalPay не нулевой (нет смысла обнулять нули)
+        tp = sal_entry.get("totalPay") or {}
+        current_amount = sum(
+            abs(float(tp.get(k) or 0)) for k in ("fix", "percent", "bonus", "forfeit")
+        )
+        if current_amount < 0.01:
+            continue
+        ft_name = sal_entry.get("name", str(ft_id))
+        try:
+            logger.info(
+                "[fintablo_sync] Обнуление лишней записи: «%s» (FT:%d) " "fix=%.0f → 0",
+                ft_name,
+                ft_id,
+                float(tp.get("fix") or 0),
+            )
+            await fintablo_api.update_salary(
+                employee_id=ft_id,
+                date_mm_yyyy=date_mm_yyyy,
+                total_pay=_ZERO_PAY,
+            )
+            stats["zeroed"] += 1
+        except Exception:
+            logger.exception(
+                "[fintablo_sync] Ошибка обнуления: «%s» (FT:%d)",
+                ft_name,
+                ft_id,
+            )
+            stats["errors"] += 1
+
     elapsed = time.monotonic() - t0
     logger.info(
         "[fintablo_sync] Завершено за %.1f сек: "
-        "total=%d updated=%d skipped=%d errors=%d no_fot=%d pos_updated=%d",
+        "total=%d updated=%d skipped=%d errors=%d no_fot=%d "
+        "pos_updated=%d zeroed=%d",
         elapsed,
         stats["total"],
         stats["updated"],
@@ -286,6 +339,7 @@ async def sync_fot_to_fintablo(
         stats["errors"],
         stats["no_fot"],
         stats["pos_updated"],
+        stats["zeroed"],
     )
     return stats
 
