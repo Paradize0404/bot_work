@@ -77,42 +77,37 @@ async def fetch_iiko_accounts_from_preset(
     date_to: str,
 ) -> list[dict]:
     """
-    Загрузить OLAP-отчёт по пресету и вернуть список уникальных
-    iiko Account.Name с суммами (TransactionType=INCOMING_SERVICE + INVOICE),
-    а также суммы по Product.SecondParent (товарным группам).
+    Загрузить OLAP-отчёт по пресету и вернуть сырые строки.
 
     date_from, date_to — формат YYYY-MM-DDTHH:MM:SS (ISO).
-    Возвращает: [{"account_name": ..., "sum": ...}, ...]
+    Возвращает: [{"account_name": str, "product_group": str|None, "sum": float}, ...]
 
-    Записи по счетам имеют обычные имена («Бар (Клиническая)»),
-    записи по группам — с префиксом «[Группа] Алкоголь».
+    Каждая строка = одна комбинация счёт × товарная группа.
+    В update_opiu применяется приоритетный маппинг:
+      - сначала проверяется наличие маппинга для product_group,
+      - при отсутствии — fallback на account_name.
     """
     rows = await iiko_api.fetch_olap_by_preset(OPIU_PRESET_ID, date_from, date_to)
 
-    # Группируем по Account.Name, суммируем Sum.Incoming
-    account_sums: dict[str, float] = defaultdict(float)
-    group_sums: dict[str, float] = defaultdict(float)
+    result: list[dict] = []
     for row in rows:
         account_name = row.get("Account.Name") or row.get("AccountName")
-        product_group = row.get("Product.SecondParent")
         if not account_name:
             continue
         try:
             value = float(row.get("Sum.Incoming", 0) or 0)
         except (ValueError, TypeError):
             value = 0.0
-        if value > 0:
-            account_sums[account_name] += value
-            if product_group:
-                group_sums[product_group] += value
-
-    result = [
-        {"account_name": name, "sum": round(total, 2)}
-        for name, total in sorted(account_sums.items())
-    ]
-    # Группы товаров с префиксом [Группа] — для маппинга по Product.SecondParent
-    for grp_name, total in sorted(group_sums.items()):
-        result.append({"account_name": f"[Группа] {grp_name}", "sum": round(total, 2)})
+        if value <= 0:
+            continue
+        product_group = row.get("Product.SecondParent") or None
+        result.append(
+            {
+                "account_name": account_name,
+                "product_group": product_group,
+                "sum": value,
+            }
+        )
 
     return result
 
@@ -213,13 +208,12 @@ async def update_opiu(
     date_from = first_day.strftime("%Y-%m-%dT00:00:00")
     date_to = next_month.strftime("%Y-%m-%dT00:00:00")
 
-    # ── 2. Загрузить данные из iiko ──
-    iiko_data = await fetch_iiko_accounts_from_preset(date_from, date_to)
-    iiko_by_account = {d["account_name"]: d["sum"] for d in iiko_data}
+    # ── 2. Загрузить данные из iiko (сырые строки) ──
+    iiko_rows = await fetch_iiko_accounts_from_preset(date_from, date_to)
     logger.info(
-        "[pnl_sync] iiko: %d счетов с данными, total=%.2f",
-        len(iiko_by_account),
-        sum(iiko_by_account.values()),
+        "[pnl_sync] iiko: %d строк, total=%.2f",
+        len(iiko_rows),
+        sum(r["sum"] for r in iiko_rows),
     )
 
     # ── 3. Считать маппинг ──
@@ -228,27 +222,61 @@ async def update_opiu(
         logger.warning("[pnl_sync] Маппинг пуст — нечего обновлять")
         return {"updated": 0, "skipped": 0, "errors": 0, "details": ["Маппинг пуст"]}
 
-    # ── 4. Агрегация: FT category_id → сумма iiko-счетов ──
+    # Индекс маппинга: ключ iiko → (cat_id, cat_name)
+    mapping_index: dict[str, tuple[int, str]] = {
+        m["iiko_account_name"]: (m["ft_pnl_category_id"], m["ft_pnl_category_name"])
+        for m in mappings
+    }
+
+    # ── 4. Агрегация с приоритетом группы над счётом ──
+    # Для каждой сырой строки:
+    #   1. Если Product.SecondParent есть и «[Группа] <group>» замаплен → эта FT-категория
+    #   2. Иначе если Account.Name замаплен → эта FT-категория
+    #   3. Иначе → пропускаем (немаппированная строка)
     ft_totals: dict[int, float] = defaultdict(float)
     ft_names: dict[int, str] = {}
-    unmapped_accounts: list[str] = []
+    unmapped_rows: int = 0
 
-    for m in mappings:
-        cat_id = m["ft_pnl_category_id"]
-        ft_names[cat_id] = m["ft_pnl_category_name"]
-        iiko_sum = iiko_by_account.get(m["iiko_account_name"], 0.0)
-        ft_totals[cat_id] += iiko_sum
-        if m["iiko_account_name"] not in iiko_by_account:
-            unmapped_accounts.append(m["iiko_account_name"])
+    for row in iiko_rows:
+        value = row["sum"]
+        account_name = row["account_name"]
+        product_group = row["product_group"]
+
+        cat_id: int | None = None
+        cat_name: str = ""
+
+        # Приоритет 1: маппинг по группе товаров
+        if product_group:
+            group_key = f"[Группа] {product_group}"
+            if group_key in mapping_index:
+                cat_id, cat_name = mapping_index[group_key]
+
+        # Приоритет 2: fallback на маппинг по счёту
+        if cat_id is None and account_name in mapping_index:
+            cat_id, cat_name = mapping_index[account_name]
+
+        if cat_id is None:
+            unmapped_rows += 1
+            logger.debug(
+                "[pnl_sync] Нет маппинга: account=%s group=%s sum=%.2f",
+                account_name,
+                product_group,
+                value,
+            )
+            continue
+
+        ft_totals[cat_id] += value
+        ft_names[cat_id] = cat_name
 
     # Округлить
     for cat_id in ft_totals:
         ft_totals[cat_id] = round(ft_totals[cat_id], 2)
 
     logger.info(
-        "[pnl_sync] Агрегация: %d FT-категорий, total=%.2f",
+        "[pnl_sync] Агрегация: %d FT-категорий, total=%.2f, unmapped_rows=%d",
         len(ft_totals),
         sum(ft_totals.values()),
+        unmapped_rows,
     )
 
     # ── 5. Обновить каждую FT-категорию ──
