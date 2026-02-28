@@ -128,6 +128,44 @@ PROJECT_MAP.md (ЭТОТ ФАЙЛ, ~10k) — ВСЕГДА загружать
 | `JSON` в PostgreSQL | `JSONB` |
 | `lock.locked()` + `async with` | `lock.acquire_nowait()` |
 | BFS / hash / stores вручную | `bfs_allowed_groups` / `compute_hash` / `load_stores_for_department` |
+| Угадывать имена из `db.engine` | Смотреть в таблицу **Public API** ниже или в `__all__` файла |
+
+---
+
+## 🔌 Public API ключевых модулей
+
+> Используй **точно эти имена**. Неверное имя = `ImportError` в проде.  
+> Источник истины — `__all__` каждого файла + эта таблица.
+
+### `db/engine.py`
+| Имя | Тип | Назначение |
+|-----|-----|------------|
+| `engine` | `AsyncEngine` | Передавать в тесты, `Base.metadata.create_all` |
+| `async_session_factory` | `async_sessionmaker` | **Создавать сессии** — `async with async_session_factory() as s:` |
+| `get_session` | async context manager | DI / FastAPI-style |
+| `dispose_engine` | coroutine | Graceful shutdown |
+
+### `use_cases/_helpers.py`
+| Имя | Назначение |
+|-----|------------|
+| `now_kgd()` | Текущее время Калининград (naive) — ВСЕГДА вместо `datetime.now()` |
+| `KGD_TZ` | `ZoneInfo("Europe/Kaliningrad")` — для APScheduler |
+| `safe_uuid(v)` | `str → UUID \| None` |
+| `safe_int(v)` | `Any → int \| None` |
+| `safe_decimal(v)` | `Any → Decimal \| None` |
+| `compute_hash(d)` | SHA-256 dict → str |
+| `mask_secrets(s)` | Маскировка токенов в строках перед логированием |
+
+### `adapters/fintablo_api.py` — write-методы
+| Имя | HTTP | Назначение |
+|-----|------|------------|
+| `_post(endpoint, label, body)` | POST | Создание записи |
+| `_put(endpoint, label, body)` | PUT | Обновление записи |
+| `_delete(endpoint, label)` | DELETE | Удаление записи |
+| `create_pnl_item(cat_id, value, date_mm_yyyy)` | POST /pnl-item | Создать запись ОПИУ |
+| `delete_pnl_item(item_id)` | DELETE /pnl-item/{id} | Удалить запись ОПИУ |
+| `update_salary(emp_id, date_mm_yyyy, total_pay)` | PUT /salary/{id} | Зарплата |
+| `update_employee(emp_id, body)` | PUT /employees/{id} | Обновить сотрудника |
 
 ---
 
@@ -302,6 +340,7 @@ AI выполняет **полный** чеклист ниже, последов
 - [ ] Документация обновлена (docs/ + CHANGELOG)
 - [ ] Нет утечек секретов в логах
 - [ ] Нет лишних round-trips к БД (Railway latency!)
+- [ ] Имена импортов из `db.engine` / `_helpers` сверены с таблицей **Public API** выше
 
 ### Кеширование — 4 уровня
 | Уровень | Пример | TTL |
