@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     BigInteger,
+    Boolean,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -331,3 +332,47 @@ class FTEmployee(Base, FTSyncMixin):
 #   ft_pnl_category      — статьи ПиУ
 #   ft_employee          — сотрудники
 # ─────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────
+# 14. Маппинг iiko Account.Name → FinTablo PnL category
+#     (для загрузки ОПИУ из отчёта по проводкам)
+# ─────────────────────────────────────────────────────
+
+
+class PnlAccountMapping(Base):
+    """Связь iiko-счёта (Account.Name) с категорией ОПИУ FinTablo.
+
+    Несколько iiko-счетов могут быть привязаны к одной FT-категории —
+    суммы будут складываться при загрузке.
+    """
+
+    __tablename__ = "pnl_account_mapping"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    iiko_account_name = Column(
+        String(500),
+        nullable=False,
+        index=True,
+        comment="Имя счёта в iiko (Account.Name из OLAP TRANSACTIONS)",
+    )
+    ft_pnl_category_id = Column(
+        BigInteger,
+        nullable=False,
+        index=True,
+        comment="ID статьи ПиУ в FinTablo",
+    )
+    ft_pnl_category_name = Column(
+        String(500),
+        nullable=True,
+        comment="Имя статьи ПиУ (кэш для UI, обновляется при синхронизации)",
+    )
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="Активна ли привязка",
+    )
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)

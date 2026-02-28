@@ -45,6 +45,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.pending_docs_handlers import router as pending_docs_router
     from bot.invoice_edit_handlers import router as invoice_edit_router
     from bot.salary_handlers import router as salary_router
+    from bot.pnl_handlers import router as pnl_router
     from bot.retry_session import RetryAiohttpSession
 
     from aiogram.fsm.storage.redis import RedisStorage
@@ -70,6 +71,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp.include_router(pending_docs_router)  # Ожидают отправки — сводный список
     dp.include_router(invoice_edit_router)  # Редактирование pending накладных
     dp.include_router(salary_router)  # Управление списком ФОТ
+    dp.include_router(pnl_router)  # Маппинг ОПИУ iiko→FinTablo
     dp.include_router(router)
 
     # Error handler: ловим оставшиеся сетевые ошибки (после retry)

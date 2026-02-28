@@ -149,6 +149,7 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
     buttons = [
         [KeyboardButton(text="🔄 Синхронизация")],
         [KeyboardButton(text="📤 Google Таблицы")],
+        [KeyboardButton(text="📊 ОПИУ (iiko→FT)")],
         [KeyboardButton(text="🔑 Права доступа → GSheet")],
         [KeyboardButton(text="☁️ iikoCloud вебхук")],
         [KeyboardButton(text="📋 ID сотрудников FinTablo")],

@@ -315,6 +315,207 @@ async def _put(endpoint: str, label: str, body: dict[str, Any]) -> dict[str, Any
 
 
 # ═══════════════════════════════════════════════════════
+# Generic POST — для создания записей (pnl-item и др.)
+# ═══════════════════════════════════════════════════════
+
+
+async def _post(endpoint: str, label: str, body: dict[str, Any]) -> dict[str, Any]:
+    """
+    POST /v1/{endpoint} с retry и backoff.
+    Возвращает полный JSON-ответ.
+    """
+    client = await _get_client()
+
+    logger.info("[FT-API] POST %s — отправляю запрос...", endpoint)
+    t0 = time.monotonic()
+
+    async with _semaphore:
+        resp = None
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
+                resp = await client.post(
+                    f"/v1/{endpoint}",
+                    json=body,
+                )
+                resp.raise_for_status()
+                break
+            except httpx.TimeoutException as exc:
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "[FT-API] POST %s — %s (attempt %d/%d), retry через %.0f сек",
+                        endpoint,
+                        type(exc).__name__,
+                        attempt,
+                        _MAX_RETRIES,
+                        delay,
+                    )
+                    await close_client()
+                    client = await _get_client()
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "[FT-API] POST %s — %s после %d попыток, сдаёмся",
+                        endpoint,
+                        type(exc).__name__,
+                        _MAX_RETRIES,
+                    )
+                    raise
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429 and attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "[FT-API] POST %s — 429, retry %d/%d через %.0f сек",
+                        endpoint,
+                        attempt,
+                        _MAX_RETRIES,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+        else:
+            raise httpx.HTTPStatusError(
+                f"[FT-API] POST {endpoint} — 429 после {_MAX_RETRIES} попыток",
+                request=resp.request,
+                response=resp,
+            )
+
+    data = resp.json()
+    elapsed = time.monotonic() - t0
+    logger.info("[FT-API] POST %s — OK, %.1f сек", label, elapsed)
+    return data
+
+
+# ═══════════════════════════════════════════════════════
+# Generic DELETE — для удаления записей (pnl-item и др.)
+# ═══════════════════════════════════════════════════════
+
+
+async def _delete(endpoint: str, label: str) -> dict[str, Any]:
+    """
+    DELETE /v1/{endpoint} с retry и backoff.
+    Возвращает полный JSON-ответ.
+    """
+    client = await _get_client()
+
+    logger.info("[FT-API] DELETE %s — отправляю запрос...", endpoint)
+    t0 = time.monotonic()
+
+    async with _semaphore:
+        resp = None
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
+                resp = await client.delete(f"/v1/{endpoint}")
+                resp.raise_for_status()
+                break
+            except httpx.TimeoutException as exc:
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "[FT-API] DELETE %s — %s (attempt %d/%d), retry через %.0f сек",
+                        endpoint,
+                        type(exc).__name__,
+                        attempt,
+                        _MAX_RETRIES,
+                        delay,
+                    )
+                    await close_client()
+                    client = await _get_client()
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "[FT-API] DELETE %s — %s после %d попыток, сдаёмся",
+                        endpoint,
+                        type(exc).__name__,
+                        _MAX_RETRIES,
+                    )
+                    raise
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429 and attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        "[FT-API] DELETE %s — 429, retry %d/%d через %.0f сек",
+                        endpoint,
+                        attempt,
+                        _MAX_RETRIES,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+        else:
+            raise httpx.HTTPStatusError(
+                f"[FT-API] DELETE {endpoint} — 429 после {_MAX_RETRIES} попыток",
+                request=resp.request,
+                response=resp,
+            )
+
+    data = resp.json()
+    elapsed = time.monotonic() - t0
+    logger.info("[FT-API] DELETE %s — OK, %.1f сек", label, elapsed)
+    return data
+
+
+# ═══════════════════════════════════════════════════════
+# PnL Items (Записи ОПИУ — свободный ввод)
+# ═══════════════════════════════════════════════════════
+
+
+async def fetch_pnl_items(
+    category_id: int | None = None,
+    date_mm_yyyy: str | None = None,
+    direction_id: int | None = None,
+) -> list[dict[str, Any]]:
+    """
+    GET /v1/pnl-item — записи Прибылей и Убытков.
+    Фильтры: categoryId, date (мм.гггг), directionId.
+    """
+    params: dict[str, Any] = {}
+    if category_id is not None:
+        params["categoryId"] = category_id
+    if date_mm_yyyy:
+        params["date"] = date_mm_yyyy
+    if direction_id is not None:
+        params["directionId"] = direction_id
+    return await _fetch_list("pnl-item", "pnl_items", **params)
+
+
+async def create_pnl_item(
+    category_id: int,
+    value: float,
+    date_mm_yyyy: str,
+    *,
+    comment: str | None = None,
+    direction_id: int | None = None,
+    nds: float | None = None,
+) -> dict[str, Any]:
+    """
+    POST /v1/pnl-item — создать запись ОПИУ.
+
+    Обязательные: categoryId, value (сумма без НДС), date (мм.гггг).
+    Опциональные: comment, directionId, nds.
+    """
+    body: dict[str, Any] = {
+        "categoryId": category_id,
+        "value": value,
+        "date": date_mm_yyyy,
+    }
+    if comment:
+        body["comment"] = comment
+    if direction_id is not None:
+        body["directionId"] = direction_id
+    if nds is not None:
+        body["nds"] = nds
+    return await _post("pnl-item", f"pnl-item(cat={category_id})", body)
+
+
+async def delete_pnl_item(item_id: int) -> dict[str, Any]:
+    """DELETE /v1/pnl-item/{id} — удалить запись ОПИУ."""
+    return await _delete(f"pnl-item/{item_id}", f"pnl-item/{item_id}")
+
+
+# ═══════════════════════════════════════════════════════
 # Salary (Ведомость месяца)
 # ═══════════════════════════════════════════════════════
 

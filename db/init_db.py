@@ -125,6 +125,18 @@ MIGRATIONS: list[str] = [
     "ALTER TABLE salary_history ADD COLUMN IF NOT EXISTS mot_base VARCHAR(200)",
     # salary_exclusions — ручное исключение сотрудников из ведомости
     "CREATE TABLE IF NOT EXISTS salary_exclusions (employee_id VARCHAR(36) PRIMARY KEY, excluded_by VARCHAR(500), excluded_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now())",
+    # pnl_account_mapping — маппинг iiko Account.Name → FinTablo PnL category (ОПИУ)
+    """CREATE TABLE IF NOT EXISTS pnl_account_mapping (
+        id SERIAL PRIMARY KEY,
+        iiko_account_name VARCHAR(500) NOT NULL,
+        ft_pnl_category_id BIGINT NOT NULL,
+        ft_pnl_category_name VARCHAR(500),
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+        updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now()
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_pnl_account_map_iiko ON pnl_account_mapping (iiko_account_name)",
+    "CREATE INDEX IF NOT EXISTS ix_pnl_account_map_ft ON pnl_account_mapping (ft_pnl_category_id)",
 ]
 
 

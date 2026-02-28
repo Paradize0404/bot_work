@@ -167,6 +167,7 @@ TEXT_PERMISSIONS: dict[str, str] = {
     "🔄 Синхронизация": PERM_SETTINGS,
     "📤 Google Таблицы": PERM_SETTINGS,
     "☁️ iikoCloud вебхук": PERM_SETTINGS,
+    "📊 ОПИУ (iiko→FT)": PERM_SETTINGS,
     "🍰 Группы кондитеров": PERM_PASTRY_MANAGE,
     # ── GSheet / Sync (admin-only через PERM_SETTINGS + admin_required) ──
     "📤 Номенклатура → GSheet": PERM_SETTINGS,
@@ -210,4 +211,6 @@ CALLBACK_PERMISSIONS: dict[str, str] = {
     "req_reject:": PERM_REQUEST_APPROVE,
     # Кондитерка: управление группами
     "pastry_": PERM_PASTRY_MANAGE,
+    # ОПИУ: маппинг iiko→FinTablo
+    "pnl_": PERM_SETTINGS,
 }

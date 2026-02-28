@@ -150,6 +150,26 @@ async def _daily_full_sync() -> None:
         logger.exception("[scheduler] Ошибка выгрузки ФОТ в FinTablo")
         report_lines.append("📊 FinTablo: ❌ ошибка")
 
+    # ── 9. ОПИУ → FinTablo (маппинг iiko Account → FT PnL) ──
+    try:
+        from use_cases.pnl_sync import update_opiu
+
+        opiu_stats = await update_opiu(triggered_by=TRIGGERED_BY)
+        opiu_upd = opiu_stats.get("updated", 0)
+        opiu_err = opiu_stats.get("errors", 0)
+        opiu_skip = opiu_stats.get("skipped", 0)
+        if opiu_err:
+            report_lines.append(
+                f"📊 ОПИУ: ⚠️ {opiu_upd} обновлено, {opiu_skip} пропущено, {opiu_err} ошибок"
+            )
+        else:
+            report_lines.append(
+                f"📊 ОПИУ: ✅ {opiu_upd} обновлено, {opiu_skip} пропущено"
+            )
+    except Exception:
+        logger.exception("[scheduler] Ошибка обновления ОПИУ в FinTablo")
+        report_lines.append("📊 ОПИУ: ❌ ошибка")
+
     elapsed = time.monotonic() - t0
     report_lines.append(f"\n⏱ Время: {elapsed:.1f} сек")
     logger.info(
