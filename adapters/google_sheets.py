@@ -4685,7 +4685,7 @@ async def read_fintab_employee_mapping() -> list[dict]:
 
         [
             {
-                "iiko_id": str,        # UUID сотрудника в iiko (из col A) — может быть ""
+                "iiko_id": str,        # UUID сотрудника в iiko (из col A)
                 "fot_name": str,       # отображаемое имя в ФОТ (col A без UUID)
                 "fintab_id": int,      # числовой ID в FinTablo (из col B)
                 "fintab_name": str,    # имя в FinTablo (без ID)
@@ -4694,9 +4694,8 @@ async def read_fintab_employee_mapping() -> list[dict]:
             ...
         ]
 
-    Col A может содержать:
-      - «Имя (uuid)» — извлечём UUID
-      - «Имя»         — UUID будет пустым, связь через имя ФОТ
+    Col A: «Имя (iiko-uuid)» — UUID обязателен для однозначного маппинга.
+    Строки без UUID пропускаются с предупреждением.
     """
 
     def _sync() -> list[dict]:
@@ -4731,8 +4730,15 @@ async def read_fintab_employee_mapping() -> list[dict]:
                 iiko_dropdown,
                 re.IGNORECASE,
             )
-            iiko_id = m_id.group(1).lower() if m_id else ""
-            fot_name = iiko_dropdown[: m_id.start()].strip() if m_id else iiko_dropdown
+            if not m_id:
+                logger.warning(
+                    "[%s] read_fintab_employee_mapping: нет iiko UUID в col A «%s» — пропускаем",
+                    LABEL,
+                    iiko_dropdown,
+                )
+                continue
+            iiko_id = m_id.group(1).lower()
+            fot_name = iiko_dropdown[: m_id.start()].strip()
             fot_dept = str(row[3]).strip() if len(row) > 3 else ""  # col D
             results.append(
                 {
