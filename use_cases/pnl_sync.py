@@ -106,20 +106,26 @@ async def fetch_iiko_accounts_from_preset(
 
 async def get_distinct_iiko_accounts() -> list[str]:
     """
-    Получить уникальные имена iiko-счетов из таблицы iiko_entity
-    (root_type='Account', deleted=False) — полный справочник без
-    зависимости от периода.
+    Получить список iiko-счетов из таблицы iiko_entity
+    (root_type='Account', deleted=False) в формате «Название (uuid)».
     """
     async with async_session() as session:
         stmt = (
-            select(Entity.name)
+            select(Entity.name, Entity.id)
             .where(Entity.root_type == "Account")
             .where(Entity.deleted.is_(False))
             .where(Entity.name.isnot(None))
             .order_by(Entity.name)
         )
-        rows = (await session.execute(stmt)).scalars().all()
-    return sorted(set(rows))
+        rows = (await session.execute(stmt)).all()
+    seen: set[str] = set()
+    result: list[str] = []
+    for name, uid in rows:
+        label = f"{name} ({uid})"
+        if label not in seen:
+            seen.add(label)
+            result.append(label)
+    return result
 
 
 # ═══════════════════════════════════════════════════════

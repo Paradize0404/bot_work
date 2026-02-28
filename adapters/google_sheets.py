@@ -4877,6 +4877,14 @@ async def read_fintab_opiu_mapping() -> list[dict]:
             g_val = str(row[6]).strip() if len(row) > 6 else ""
             if not f_val or not g_val:
                 continue
+            # Col F формат: «Название (uuid)» — извлекаем только имя для
+            # сопоставления с Account.Name из OLAP-отчёта
+            m_uuid = re.search(
+                r"\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)\s*$",
+                f_val,
+                re.IGNORECASE,
+            )
+            iiko_account_name = f_val[: m_uuid.start()].strip() if m_uuid else f_val
             # Парсим FT ID из col G: "Название статьи (123456)"
             m = re.search(r"\((\d+)\)\s*$", g_val)
             if not m:
@@ -4890,7 +4898,7 @@ async def read_fintab_opiu_mapping() -> list[dict]:
             ft_name = g_val[: m.start()].strip()
             results.append(
                 {
-                    "iiko_account_name": f_val,
+                    "iiko_account_name": iiko_account_name,
                     "ft_pnl_category_id": ft_id,
                     "ft_pnl_category_name": ft_name,
                 }
