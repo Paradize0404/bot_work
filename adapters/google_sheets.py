@@ -4496,7 +4496,7 @@ async def sync_fintab_mapping_sheet(
         title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", ""]
         section_row = ["👤 СОТРУДНИКИ", "", "", "🏢 ПОДРАЗДЕЛЕНИЯ", ""]
         header_row = [
-            "Имя в FinTablo (iiko ID)",
+            "Имя в ФОТ (iiko UUID)",
             "Сотрудник FinTablo (ID)",
             "Примечание",
             "Подразделение ФОТ",
