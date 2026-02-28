@@ -26,7 +26,7 @@ from sqlalchemy import select, delete as sa_delete
 
 from adapters import fintablo_api
 from adapters import iiko_api
-from db.engine import async_session
+from db.engine import async_session_factory as async_session
 from db.ft_models import FTPnlCategory, PnlAccountMapping
 from use_cases._helpers import now_kgd
 
