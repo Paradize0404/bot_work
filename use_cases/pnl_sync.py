@@ -29,7 +29,7 @@ from adapters import iiko_api
 from adapters.google_sheets import read_fintab_opiu_mapping
 from db.engine import async_session_factory as async_session
 from db.ft_models import FTPnlCategory
-from db.models import Entity
+from db.models import Entity, ProductGroup
 from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
@@ -78,17 +78,23 @@ async def fetch_iiko_accounts_from_preset(
 ) -> list[dict]:
     """
     Загрузить OLAP-отчёт по пресету и вернуть список уникальных
-    iiko Account.Name с суммами (TransactionType=INCOMING_SERVICE + INVOICE).
+    iiko Account.Name с суммами (TransactionType=INCOMING_SERVICE + INVOICE),
+    а также суммы по Product.SecondParent (товарным группам).
 
     date_from, date_to — формат YYYY-MM-DDTHH:MM:SS (ISO).
     Возвращает: [{"account_name": ..., "sum": ...}, ...]
+
+    Записи по счетам имеют обычные имена («Бар (Клиническая)»),
+    записи по группам — с префиксом «[Группа] Алкоголь».
     """
     rows = await iiko_api.fetch_olap_by_preset(OPIU_PRESET_ID, date_from, date_to)
 
     # Группируем по Account.Name, суммируем Sum.Incoming
     account_sums: dict[str, float] = defaultdict(float)
+    group_sums: dict[str, float] = defaultdict(float)
     for row in rows:
         account_name = row.get("Account.Name") or row.get("AccountName")
+        product_group = row.get("Product.SecondParent")
         if not account_name:
             continue
         try:
@@ -97,35 +103,67 @@ async def fetch_iiko_accounts_from_preset(
             value = 0.0
         if value > 0:
             account_sums[account_name] += value
+            if product_group:
+                group_sums[product_group] += value
 
-    return [
+    result = [
         {"account_name": name, "sum": round(total, 2)}
         for name, total in sorted(account_sums.items())
     ]
+    # Группы товаров с префиксом [Группа] — для маппинга по Product.SecondParent
+    for grp_name, total in sorted(group_sums.items()):
+        result.append({"account_name": f"[Группа] {grp_name}", "sum": round(total, 2)})
+
+    return result
 
 
 async def get_distinct_iiko_accounts() -> list[str]:
     """
-    Получить список iiko-счетов из таблицы iiko_entity
-    (root_type='Account', deleted=False) в формате «Название (uuid)».
+    Получить список вариантов для колонки F (Счет iiko / Группа).
+
+    Возвращает объединённый отсортированный список:
+    - Счета из iiko_entity (root_type='Account') → «Название (uuid)»
+    - Товарные группы из iiko_product_group → «[Группа] Название»
+
+    Записи вида «[Группа] Алкоголь» используются в маппинге ОПИУ для
+    сопоставления с полем Product.SecondParent из OLAP-отчёта.
     """
     async with async_session() as session:
-        stmt = (
+        # Счета
+        stmt_acc = (
             select(Entity.name, Entity.id)
             .where(Entity.root_type == "Account")
             .where(Entity.deleted.is_(False))
             .where(Entity.name.isnot(None))
             .order_by(Entity.name)
         )
-        rows = (await session.execute(stmt)).all()
+        rows_acc = (await session.execute(stmt_acc)).all()
+
+        # Товарные группы (Product.SecondParent в OLAP)
+        stmt_grp = (
+            select(ProductGroup.name)
+            .where(ProductGroup.deleted.is_(False))
+            .where(ProductGroup.name.isnot(None))
+            .order_by(ProductGroup.name)
+        )
+        rows_grp = (await session.execute(stmt_grp)).scalars().all()
+
     seen: set[str] = set()
     result: list[str] = []
-    for name, uid in rows:
+
+    for name, uid in rows_acc:
         label = f"{name} ({uid})"
         if label not in seen:
             seen.add(label)
             result.append(label)
-    return result
+
+    for grp_name in rows_grp:
+        label = f"[Группа] {grp_name}"
+        if label not in seen:
+            seen.add(label)
+            result.append(label)
+
+    return sorted(result)
 
 
 # ═══════════════════════════════════════════════════════
