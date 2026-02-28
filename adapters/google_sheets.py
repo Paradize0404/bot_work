@@ -3836,14 +3836,12 @@ async def sync_fot_sheet(
                         continue
                     # Секция: заполнена A, но B и D пустые
                     raw_d = row[3] if len(row) > 3 else ""
-                    if (
-                        cell_a
-                        and not cell_b
-                        and (raw_d == "" or raw_d is None)
-                    ):
+                    if cell_a and not cell_b and (raw_d == "" or raw_d is None):
                         if cell_a != period_label:
                             # Отсечь суффикс «  —  Выручка: ...» или «  —  Кондитерка: ...»
-                            sec = cell_a.split("  \u2014  ")[0].split("  —  ")[0].strip()
+                            sec = (
+                                cell_a.split("  \u2014  ")[0].split("  —  ")[0].strip()
+                            )
                             cur_section = sec
                         continue
                     if not cell_a or not format_valid:
