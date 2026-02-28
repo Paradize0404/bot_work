@@ -31,13 +31,22 @@ router = Router(name="pnl_handlers")
 _BUTTON = "📊 ОПИУ (iiko→FT)"
 
 
-def _opiu_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 Обновить ОПИУ", callback_data="pnl_update")],
-            [InlineKeyboardButton(text="✖ Закрыть", callback_data="pnl_close")],
-        ]
-    )
+def _opiu_kb(*, show_retry: bool = False) -> InlineKeyboardMarkup:
+    rows = []
+    if show_retry:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🔄 Повторить синхронизацию", callback_data="pnl_update"
+                )
+            ]
+        )
+    else:
+        rows.append(
+            [InlineKeyboardButton(text="🔄 Обновить ОПИУ", callback_data="pnl_update")]
+        )
+    rows.append([InlineKeyboardButton(text="✖ Закрыть", callback_data="pnl_close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # ═══════════════════════════════════════════════════════
@@ -91,27 +100,16 @@ async def pnl_update_opiu(call: CallbackQuery, state: FSMContext) -> None:
         logger.exception("[pnl] Ошибка update_opiu")
         await call.message.edit_text(
             "❌ Ошибка обновления ОПИУ.\nПодробности в логах.",
-            reply_markup=_opiu_kb(),
+            reply_markup=_opiu_kb(show_retry=True),
         )
         return
 
-    upd = result.get("updated", 0)
-    skip = result.get("skipped", 0)
-    err = result.get("errors", 0)
-    elapsed = result.get("elapsed", 0)
-    details = result.get("details", [])
-
-    lines = [
-        "📊 <b>Обновление ОПИУ</b>",
-        f"Обновлено: {upd}  |  Пропущено: {skip}  |  Ошибок: {err}",
-        f"⏱ {elapsed} сек",
-        "",
-    ]
-    if details:
-        lines.extend(details[:20])
-
+    text = format_opiu_result(result)
+    has_problems = bool(result.get("errors") or result.get("unmapped_keys"))
     await call.message.edit_text(
-        "\n".join(lines), parse_mode="HTML", reply_markup=_opiu_kb()
+        text,
+        parse_mode="HTML",
+        reply_markup=_opiu_kb(show_retry=has_problems),
     )
 
 
@@ -126,3 +124,39 @@ async def pnl_close(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
     await state.clear()
     await call.message.delete()
+
+
+# ═══════════════════════════════════════════════════════
+# Форматирование результата (используется и хендлером и шедулером)
+# ═══════════════════════════════════════════════════════
+
+
+def format_opiu_result(result: dict) -> str:
+    """Форматировать результат update_opiu для отправки в чат."""
+    upd = result.get("updated", 0)
+    skip = result.get("skipped", 0)
+    err = result.get("errors", 0)
+    elapsed = result.get("elapsed", 0)
+    details = result.get("details", [])
+    unmapped = result.get("unmapped_keys", [])
+
+    lines = [
+        "📊 <b>Обновление ОПИУ</b>",
+        f"Обновлено: {upd}  |  Пропущено: {skip}  |  Ошибок: {err}",
+        f"⏱ {elapsed} сек",
+        "",
+    ]
+    if details:
+        lines.extend(details[:20])
+
+    if unmapped:
+        lines.append("")
+        lines.append("⚠️ <b>Не удалось разнести:</b>")
+        for key in unmapped[:15]:
+            lines.append(f"  • {key}")
+        if len(unmapped) > 15:
+            lines.append(f"  … и ещё {len(unmapped) - 15}")
+        lines.append("")
+        lines.append("Настройте соответствие в «Маппинг FinTablo» (колонки F-G)")
+
+    return "\n".join(lines)

@@ -151,6 +151,7 @@ async def _daily_full_sync() -> None:
         report_lines.append("📊 FinTablo: ❌ ошибка")
 
     # ── 9. ОПИУ → FinTablo (маппинг iiko Account → FT PnL) ──
+    opiu_stats: dict = {}
     try:
         from use_cases.pnl_sync import update_opiu
 
@@ -158,6 +159,7 @@ async def _daily_full_sync() -> None:
         opiu_upd = opiu_stats.get("updated", 0)
         opiu_err = opiu_stats.get("errors", 0)
         opiu_skip = opiu_stats.get("skipped", 0)
+        unmapped = opiu_stats.get("unmapped_keys", [])
         if opiu_err:
             report_lines.append(
                 f"📊 ОПИУ: ⚠️ {opiu_upd} обновлено, {opiu_skip} пропущено, {opiu_err} ошибок"
@@ -166,6 +168,8 @@ async def _daily_full_sync() -> None:
             report_lines.append(
                 f"📊 ОПИУ: ✅ {opiu_upd} обновлено, {opiu_skip} пропущено"
             )
+        if unmapped:
+            report_lines.append(f"   ⚠️ Не разнесено: {', '.join(unmapped[:10])}")
     except Exception:
         logger.exception("[scheduler] Ошибка обновления ОПИУ в FinTablo")
         report_lines.append("📊 ОПИУ: ❌ ошибка")
@@ -176,11 +180,17 @@ async def _daily_full_sync() -> None:
         "=== [scheduler] Ежедневная синхронизация ЗАВЕРШЕНА за %.1f сек ===", elapsed
     )
 
-    # ── 6. Уведомление админов ──
+    # ── Уведомление админов ──
     try:
         await _notify_admins_about_sync(report_lines)
     except Exception:
         logger.exception("[scheduler] Ошибка отправки уведомления админам")
+
+    # ── Отдельный детальный ОПИУ-отчёт с кнопкой повтора ──
+    try:
+        await _notify_admins_opiu(opiu_stats)
+    except Exception:
+        logger.exception("[scheduler] Ошибка отправки ОПИУ-отчёта")
 
 
 # ═══════════════════════════════════════════════════════
@@ -295,6 +305,46 @@ async def _notify_admins_negative_transfer(result: dict) -> None:
                 )
     except Exception:
         logger.exception("[scheduler] Ошибка при уведомлении о перемещении")
+
+
+async def _notify_admins_opiu(opiu_stats: dict) -> None:
+    """Отправить детальный ОПИУ-отчёт; при unmapped — с кнопкой повтора."""
+    if not opiu_stats:
+        return
+
+    from use_cases.permissions import get_sysadmin_ids
+
+    bot = _bot_ref
+    if not bot:
+        return
+
+    from bot.pnl_handlers import format_opiu_result
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+    text = format_opiu_result(opiu_stats)
+    has_problems = bool(opiu_stats.get("errors") or opiu_stats.get("unmapped_keys"))
+
+    kb = None
+    if has_problems:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Повторить синхронизацию ОПИУ",
+                        callback_data="pnl_update",
+                    )
+                ]
+            ]
+        )
+
+    admin_ids = await get_sysadmin_ids()
+    for admin_id in admin_ids:
+        try:
+            await bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            logger.warning(
+                "[scheduler] Не удалось отправить ОПИУ-отчёт tg:%d", admin_id
+            )
 
 
 async def _notify_admins_about_sync(report_lines: list[str]) -> None:
