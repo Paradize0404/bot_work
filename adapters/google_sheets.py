@@ -4434,6 +4434,7 @@ async def sync_fintab_mapping_sheet(
     ft_employees: list[dict],
     ft_directions: list[dict],
     ft_pnl_categories: list[dict] | None = None,
+    iiko_accounts: list[str] | None = None,
 ) -> int:
     """
     Создать/обновить вкладку «Маппинг FinTablo» в SALARY_SHEET_ID.
@@ -4525,6 +4526,7 @@ async def sync_fintab_mapping_sheet(
             for cat in (ft_pnl_categories or [])
             if cat.get("id") and cat.get("name")
         )
+        iiko_account_options = sorted(iiko_accounts or [])
 
         # ── Очищаем некорректные старые значения подразделений ──
         # Сохраняем только те строки D/E, где оба значения соответствуют
@@ -4722,7 +4724,17 @@ async def sync_fintab_mapping_sheet(
                     }
                 }
             )
-        # Col F — счет iiko (свободный текст, без дропдауна)
+        # Col F — счет iiko (выпадающий список)
+        if iiko_account_options:
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 5, 6),
+                        "rule": _dv_list(iiko_account_options),
+                    }
+                }
+            )
+        # Col G — статья FinTablo ПиУ (выпадающий список)
         if ft_pnl_options:
             requests.append(
                 {
