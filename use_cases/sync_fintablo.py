@@ -599,13 +599,15 @@ async def sync_all_fintablo(
 
             async with async_session_factory() as _sess:
                 _pnl_rows = (
-                    await _sess.execute(
-                        _select(FTPnlCategory).order_by(FTPnlCategory.name)
+                    (
+                        await _sess.execute(
+                            _select(FTPnlCategory).order_by(FTPnlCategory.name)
+                        )
                     )
-                ).scalars().all()
-                ft_pnl_cats = [
-                    {"id": r.id, "name": r.name} for r in _pnl_rows
-                ]
+                    .scalars()
+                    .all()
+                )
+                ft_pnl_cats = [{"id": r.id, "name": r.name} for r in _pnl_rows]
             iiko_accs = await get_distinct_iiko_accounts()
             await sync_fintab_mapping_sheet(
                 fot_tab_name=fot_tab,

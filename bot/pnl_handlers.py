@@ -34,11 +34,7 @@ _BUTTON = "📊 ОПИУ (iiko→FT)"
 def _opiu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🔄 Обновить ОПИУ", callback_data="pnl_update"
-                )
-            ],
+            [InlineKeyboardButton(text="🔄 Обновить ОПИУ", callback_data="pnl_update")],
             [InlineKeyboardButton(text="✖ Закрыть", callback_data="pnl_close")],
         ]
     )

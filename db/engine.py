@@ -8,10 +8,10 @@ SQLAlchemy async engine + сессия.
 # Если нужна сессия — используй СТРОГО эти имена.
 # ─────────────────────────────────────────────────────────────────────────────
 __all__ = [
-    "engine",                # AsyncEngine — передавать в тесты, migrate
-    "async_session_factory", # async_sessionmaker → создавать сессии везде
-    "get_session",           # @asynccontextmanager → AsyncSession (DI-style)
-    "dispose_engine",        # coroutine — graceful shutdown
+    "engine",  # AsyncEngine — передавать в тесты, migrate
+    "async_session_factory",  # async_sessionmaker → создавать сессии везде
+    "get_session",  # @asynccontextmanager → AsyncSession (DI-style)
+    "dispose_engine",  # coroutine — graceful shutdown
 ]
 
 import logging
