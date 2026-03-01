@@ -25,7 +25,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import select
 
@@ -133,14 +133,20 @@ def _days_in_month(year: int, month: int) -> int:
     return (next_month - datetime(year, month, 1)).days
 
 
-async def update_fot_sheet(triggered_by: str | None = None) -> int:
+async def update_fot_sheet(
+    triggered_by: str | None = None,
+    target_date: date | None = None,
+) -> int:
     """
     Рассчитать ФОТ за текущий месяц и записать в Google Sheets.
+
+    ``target_date`` — любая дата внутри нужного месяца.
+    По умолчанию (None) — текущий день по ``now_kgd()``.
 
     Возвращает суммарное количество строк сотрудников в листе.
     """
     t0 = time.monotonic()
-    today = now_kgd().date()
+    today = target_date or now_kgd().date()
     month_start = today.replace(day=1)
 
     date_from_str = month_start.strftime("%Y-%m-%d")

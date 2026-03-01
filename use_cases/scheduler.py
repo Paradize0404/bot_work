@@ -18,6 +18,7 @@ Use-case: автоматическая ежедневная синхрониза
 import asyncio
 import logging
 import time
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -122,11 +123,23 @@ async def _daily_full_sync() -> None:
         logger.exception("[scheduler] Ошибка синхронизации истории ставок")
         report_lines.append("📋 История ставок: ❌ ошибка")
 
-    # ── 7. ФОТ — расчёт зарплат за текущий месяц ──
+    # ── Опорная дата: вчера ──
+    # Cron запускается в 07:00 — данные «сегодня» ещё пусты.
+    # Используем вчерашний день, чтобы захватить полный предыдущий день:
+    #   1 марта 07:00 → yesterday = 28 февраля → ФОТ/ОПИУ за февраль.
+    #   2 марта 07:00 → yesterday = 1 марта   → ФОТ/ОПИУ за март.
+    yesterday = (now_kgd() - timedelta(days=1)).date()
+    yesterday_dt = datetime.combine(yesterday, datetime.min.time())
+    logger.info("[scheduler] Опорная дата: %s (yesterday)", yesterday)
+
+    # ── 7. ФОТ — расчёт зарплат ──
     try:
         from use_cases.payroll import update_fot_sheet
 
-        fot_count = await update_fot_sheet(triggered_by=TRIGGERED_BY)
+        fot_count = await update_fot_sheet(
+            triggered_by=TRIGGERED_BY,
+            target_date=yesterday,
+        )
         report_lines.append(f"💰 ФОТ: ✅ {fot_count} сотрудников")
     except Exception:
         logger.exception("[scheduler] Ошибка обновления ФОТ")
@@ -136,7 +149,10 @@ async def _daily_full_sync() -> None:
     try:
         from use_cases.fintablo_salary_sync import sync_fot_to_fintablo
 
-        ft_stats = await sync_fot_to_fintablo(triggered_by=TRIGGERED_BY)
+        ft_stats = await sync_fot_to_fintablo(
+            triggered_by=TRIGGERED_BY,
+            target_date=yesterday,
+        )
         ft_upd = ft_stats.get("updated", 0)
         ft_err = ft_stats.get("errors", 0)
         ft_total = ft_stats.get("total", 0)
@@ -155,7 +171,10 @@ async def _daily_full_sync() -> None:
     try:
         from use_cases.pnl_sync import update_opiu
 
-        opiu_stats = await update_opiu(triggered_by=TRIGGERED_BY)
+        opiu_stats = await update_opiu(
+            triggered_by=TRIGGERED_BY,
+            target_date=yesterday_dt,
+        )
         opiu_upd = opiu_stats.get("updated", 0)
         opiu_err = opiu_stats.get("errors", 0)
         opiu_skip = opiu_stats.get("skipped", 0)
