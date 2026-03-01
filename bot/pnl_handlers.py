@@ -11,6 +11,7 @@
 """
 
 import logging
+from datetime import datetime
 
 from aiogram import Router, F
 from aiogram.types import (
@@ -24,6 +25,7 @@ from aiogram.fsm.context import FSMContext
 from bot.middleware import permission_required
 from bot.permission_map import PERM_SETTINGS
 from use_cases import pnl_sync
+from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
 router = Router(name="pnl_handlers")
@@ -31,19 +33,41 @@ router = Router(name="pnl_handlers")
 _BUTTON = "📊 ОПИУ (iiko→FT)"
 
 
+def _prev_month(ref: datetime) -> datetime:
+    """Вернуть 1-е число предыдущего месяца."""
+    if ref.month == 1:
+        return ref.replace(year=ref.year - 1, month=12, day=1)
+    return ref.replace(month=ref.month - 1, day=1)
+
+
 def _opiu_kb(*, show_retry: bool = False) -> InlineKeyboardMarkup:
+    now = now_kgd()
+    prev = _prev_month(now)
+    cur_label = now.strftime("%m.%Y")
+    prev_label = prev.strftime("%m.%Y")
+
     rows = []
     if show_retry:
         rows.append(
             [
                 InlineKeyboardButton(
-                    text="🔄 Повторить синхронизацию", callback_data="pnl_update"
+                    text="🔄 Повторить синхронизацию",
+                    callback_data="pnl_update",
                 )
             ]
         )
     else:
         rows.append(
-            [InlineKeyboardButton(text="🔄 Обновить ОПИУ", callback_data="pnl_update")]
+            [
+                InlineKeyboardButton(
+                    text=f"🔄 Обновить ({cur_label})",
+                    callback_data="pnl_update",
+                ),
+                InlineKeyboardButton(
+                    text=f"📅 Прошлый ({prev_label})",
+                    callback_data="pnl_update_prev",
+                ),
+            ]
         )
     rows.append([InlineKeyboardButton(text="✖ Закрыть", callback_data="pnl_close")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -71,31 +95,30 @@ async def pnl_menu(message: Message, state: FSMContext) -> None:
         "📊 <b>ОПИУ (iiko → FinTablo)</b>\n\n"
         f"Маппинг: <b>{n}</b> связей из Google Sheets\n"
         "(«Маппинг FinTablo», колонки <b>F–G</b>)\n\n"
-        "Нажмите «🔄 Обновить ОПИУ» для загрузки данных из iiko\n"
-        "и синхронизации с FinTablo."
+        "Нажмите «Обновить» для текущего месяца\n"
+        "или «Прошлый» для синхронизации предыдущего."
     )
     await message.answer(text, parse_mode="HTML", reply_markup=_opiu_kb())
 
 
 # ═══════════════════════════════════════════════════════
-# Обновить ОПИУ
+# Обновить ОПИУ (текущий месяц)
 # ═══════════════════════════════════════════════════════
 
 
-@router.callback_query(F.data == "pnl_update")
-@permission_required(PERM_SETTINGS)
-async def pnl_update_opiu(call: CallbackQuery, state: FSMContext) -> None:
-    """Запустить обновление ОПИУ в FinTablo."""
-    await call.answer("⏳ Обновляю ОПИУ...")
-    logger.info("[pnl] update_opiu tg:%d", call.from_user.id)
-
+async def _run_opiu(call: CallbackQuery, target_date: datetime | None) -> None:
+    """Общая логика запуска ОПИУ для текущего / прошлого месяца."""
+    label = target_date.strftime("%m.%Y") if target_date else "текущий"
     await call.message.edit_text(
-        "⏳ Обновляю ОПИУ в FinTablo...\nЭто может занять до минуты."
+        f"⏳ Обновляю ОПИУ за <b>{label}</b>...\n" "Это может занять до минуты.",
+        parse_mode="HTML",
     )
 
     triggered_by = f"btn:{call.from_user.id}"
     try:
-        result = await pnl_sync.update_opiu(triggered_by=triggered_by)
+        result = await pnl_sync.update_opiu(
+            triggered_by=triggered_by, target_date=target_date
+        )
     except Exception:
         logger.exception("[pnl] Ошибка update_opiu")
         await call.message.edit_text(
@@ -111,6 +134,27 @@ async def pnl_update_opiu(call: CallbackQuery, state: FSMContext) -> None:
         parse_mode="HTML",
         reply_markup=_opiu_kb(show_retry=has_problems),
     )
+
+
+@router.callback_query(F.data == "pnl_update")
+@permission_required(PERM_SETTINGS)
+async def pnl_update_opiu(call: CallbackQuery, state: FSMContext) -> None:
+    """Запустить обновление ОПИУ за текущий месяц."""
+    await call.answer("⏳ Обновляю ОПИУ...")
+    logger.info("[pnl] update_opiu tg:%d", call.from_user.id)
+    await _run_opiu(call, target_date=None)
+
+
+@router.callback_query(F.data == "pnl_update_prev")
+@permission_required(PERM_SETTINGS)
+async def pnl_update_opiu_prev(call: CallbackQuery, state: FSMContext) -> None:
+    """Запустить обновление ОПИУ за прошлый месяц."""
+    await call.answer("⏳ Обновляю ОПИУ за прошлый месяц...")
+    prev = _prev_month(now_kgd())
+    logger.info(
+        "[pnl] update_opiu_prev tg:%d → %s", call.from_user.id, prev.strftime("%m.%Y")
+    )
+    await _run_opiu(call, target_date=prev)
 
 
 # ═══════════════════════════════════════════════════════
@@ -140,8 +184,10 @@ def format_opiu_result(result: dict) -> str:
     details = result.get("details", [])
     unmapped = result.get("unmapped_keys", [])
 
+    month = result.get("month", "")
+    month_label = f" за {month}" if month else ""
     lines = [
-        "📊 <b>Обновление ОПИУ</b>",
+        f"📊 <b>Обновление ОПИУ{month_label}</b>",
         f"Обновлено: {upd}  |  Пропущено: {skip}  |  Ошибок: {err}",
         f"⏱ {elapsed} сек",
         "",

@@ -459,6 +459,7 @@ async def update_opiu(
         "details": details,
         "unmapped_keys": sorted(unmapped_keys),
         "elapsed": round(elapsed, 1),
+        "month": date_mm_yyyy,
     }
 
 
