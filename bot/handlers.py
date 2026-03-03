@@ -625,7 +625,7 @@ async def btn_documents_menu(message: Message, state: FSMContext) -> None:
 @router.message(F.text == "💰 Моя зарплата")
 @auth_required
 async def btn_my_salary(message: Message, state: FSMContext) -> None:
-    """Показать данные ФОТ текущего пользователя за текущий месяц."""
+    """Показать данные ФОТ текущего пользователя за текущий и предыдущий месяц."""
     from use_cases.payroll import get_my_salary
 
     logger.info("[my_salary] запрос tg:%d", message.from_user.id)
@@ -649,55 +649,83 @@ async def btn_my_salary(message: Message, state: FSMContext) -> None:
         )
         return
 
-    rows = result["rows"]
-    if not rows:
+    # Проверяем, есть ли хоть какие-то данные
+    any_rows = any(m["rows"] for m in result["months"])
+    if not any_rows:
+        tab_names = " / ".join(m["tab_name"] for m in result["months"])
         await message.answer(
             f"ℹ️ Ваших данных ({result['employee_name']}) пока нет "
-            f"в листе «{result['tab_name']}».\n"
-            "Возможно, лист ещё не сформирован.",
+            f"в листах «{tab_names}».\n"
+            "Возможно, листы ещё не сформированы.",
             reply_markup=await _get_main_kb(message.from_user.id),
         )
         return
 
-    # Формируем красивое сообщение
+    # ── Вспомогательные функции ──
     def _fmt(v: float) -> str:
         return f"{v:,.0f}".replace(",", "\u00a0")
 
+    def _render_month(month_data: dict) -> list[str]:
+        """Отрисовать блок одного месяца."""
+        rows = month_data["rows"]
+        if not rows:
+            return [
+                f"📅 <b>{month_data['tab_name']}</b>",
+                "   <i>Данные ещё не сформированы</i>",
+                "",
+            ]
+        block: list[str] = [
+            f"📅 <b>{month_data['period_label'] or month_data['tab_name']}</b>",
+            "",
+        ]
+        grand_accrued = 0.0
+        grand_to_pay = 0.0
+
+        for r in rows:
+            block.append(f"🏢 <b>{r['section']}</b>")
+            if r["role"]:
+                block.append(f"   Должность: {r['role']}")
+            block.append(f"   Ставка: {_fmt(r['rate'])} ₽")
+            if r["bonus"]:
+                block.append(f"   Бонус: {_fmt(r['bonus'])} ₽")
+            if r["premium"]:
+                block.append(f"   Премия: {_fmt(r['premium'])} ₽")
+            if r["deductions"]:
+                block.append(f"   Удержания: {_fmt(r['deductions'])} ₽")
+            if r["advance"]:
+                block.append(f"   Аванс: {_fmt(r['advance'])} ₽")
+            if r["pay_25"]:
+                block.append(f"   25 Выплата: {_fmt(r['pay_25'])} ₽")
+            if r["pay_10"]:
+                block.append(f"   10 Выплата: {_fmt(r['pay_10'])} ₽")
+            block.append(f"   <b>Начислено: {_fmt(r['accrued'])} ₽</b>")
+            block.append(f"   <b>К выплате: {_fmt(r['to_pay'])} ₽</b>")
+            block.append("")
+            grand_accrued += r["accrued"]
+            grand_to_pay += r["to_pay"]
+
+        if len(rows) > 1:
+            block.append(f"📊 <b>Итого начислено: {_fmt(grand_accrued)} ₽</b>")
+            block.append(f"📊 <b>Итого к выплате: {_fmt(grand_to_pay)} ₽</b>")
+            block.append("")
+        return block
+
+    # ── Собираем сообщение ──
     lines: list[str] = [
         f"💰 <b>Моя зарплата</b>  —  {result['employee_name']}",
-        f"📅 {result['period_label']}",
         "",
     ]
 
-    grand_accrued = 0.0
-    grand_to_pay = 0.0
+    # months[0] = предыдущий, months[1] = текущий
+    prev_month, cur_month = result["months"]
 
-    for r in rows:
-        lines.append(f"🏢 <b>{r['section']}</b>")
-        if r["role"]:
-            lines.append(f"   Должность: {r['role']}")
-        lines.append(f"   Ставка: {_fmt(r['rate'])} ₽")
-        if r["bonus"]:
-            lines.append(f"   Бонус: {_fmt(r['bonus'])} ₽")
-        if r["premium"]:
-            lines.append(f"   Премия: {_fmt(r['premium'])} ₽")
-        if r["deductions"]:
-            lines.append(f"   Удержания: {_fmt(r['deductions'])} ₽")
-        if r["advance"]:
-            lines.append(f"   Аванс: {_fmt(r['advance'])} ₽")
-        if r["pay_25"]:
-            lines.append(f"   25 Выплата: {_fmt(r['pay_25'])} ₽")
-        if r["pay_10"]:
-            lines.append(f"   10 Выплата: {_fmt(r['pay_10'])} ₽")
-        lines.append(f"   <b>Начислено: {_fmt(r['accrued'])} ₽</b>")
-        lines.append(f"   <b>К выплате: {_fmt(r['to_pay'])} ₽</b>")
-        lines.append("")
-        grand_accrued += r["accrued"]
-        grand_to_pay += r["to_pay"]
+    # Предыдущий месяц
+    lines.append("━━━  Прошлый месяц  ━━━")
+    lines.extend(_render_month(prev_month))
 
-    if len(rows) > 1:
-        lines.append(f"📊 <b>Итого начислено: {_fmt(grand_accrued)} ₽</b>")
-        lines.append(f"📊 <b>Итого к выплате: {_fmt(grand_to_pay)} ₽</b>")
+    # Разделитель
+    lines.append("━━━  Текущий месяц  ━━━")
+    lines.extend(_render_month(cur_month))
 
     await message.answer(
         "\n".join(lines),

@@ -490,24 +490,26 @@ def _get_role_name(
 
 async def get_my_salary(telegram_id: int) -> dict | None:
     """
-    Вернуть данные ФОТ для сотрудника, привязанного к *telegram_id*.
+    Вернуть данные ФОТ для сотрудника за текущий и предыдущий месяц.
 
     Возвращает::
 
         {
             "employee_name": str,
-            "period_label": str,
-            "tab_name": str,
-            "rows": [
-                {section, name, role, accrued, rate, bonus,
-                 premium, deductions, advance, pay_25, pay_10, to_pay},
-                ...
+            "months": [
+                {
+                    "period_label": str,
+                    "tab_name": str,
+                    "rows": [{section, name, role, accrued, rate, bonus,
+                              premium, deductions, advance, pay_25,
+                              pay_10, to_pay}, ...],
+                },
+                ...   # 1-2 элемента (предыдущий, текущий)
             ],
         }
 
     ``None`` если сотрудник не найден в БД.
-    Пустой ``rows`` если вкладка ФОТ текущего месяца не существует
-    или сотрудника нет в ней.
+    Месяц с пустым ``rows`` включается — хэндлер решает, что показать.
     """
     # 1. Найти сотрудника по telegram_id
     async with async_session_factory() as session:
@@ -521,17 +523,38 @@ async def get_my_salary(telegram_id: int) -> dict | None:
     if not dname:
         return None
 
-    # 3. Имя вкладки текущего месяца
+    # 3. Имена вкладок: предыдущий и текущий месяц
     today = now_kgd().date()
-    month_name = _MONTH_NAMES_RU[today.month]
-    tab_name = f"ФОТ {month_name} {today.year}"
 
-    # 4. Прочитать данные из Google Sheets
-    period_label, rows = await read_fot_employee_rows(tab_name, dname)
+    cur_month_name = _MONTH_NAMES_RU[today.month]
+    cur_tab = f"ФОТ {cur_month_name} {today.year}"
+
+    if today.month == 1:
+        prev_month, prev_year = 12, today.year - 1
+    else:
+        prev_month, prev_year = today.month - 1, today.year
+    prev_month_name = _MONTH_NAMES_RU[prev_month]
+    prev_tab = f"ФОТ {prev_month_name} {prev_year}"
+
+    # 4. Прочитать данные из Google Sheets (оба месяца параллельно)
+    import asyncio as _aio
+
+    (prev_label, prev_rows), (cur_label, cur_rows) = await _aio.gather(
+        read_fot_employee_rows(prev_tab, dname),
+        read_fot_employee_rows(cur_tab, dname),
+    )
+
+    months: list[dict] = []
+    # предыдущий месяц — первым
+    months.append(
+        {"period_label": prev_label, "tab_name": prev_tab, "rows": prev_rows}
+    )
+    # текущий месяц — вторым
+    months.append(
+        {"period_label": cur_label, "tab_name": cur_tab, "rows": cur_rows}
+    )
 
     return {
         "employee_name": dname,
-        "period_label": period_label,
-        "tab_name": tab_name,
-        "rows": rows,
+        "months": months,
     }

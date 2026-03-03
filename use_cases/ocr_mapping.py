@@ -221,13 +221,34 @@ async def finalize_transfer() -> tuple[int, list[str]]:
 
     # Загружаем справочники для поиска ID.
     # Для товаров используем _load_all_iiko_products() — БЕЗ фильтра по типу/группе,
-    # чтобы PREPARED/DISH и продукты вне gsheet_export_group тоже получали свой iiko_id.
+    # чтобы PREPARED и продукты вне gsheet_export_group тоже получали свой iiko_id.
+    # ВАЖНО: при коллизии имён приоритет GOODS > PREPARED > всё остальное.
+    # DISH в приходные накладные НЕ попадает.
     iiko_suppliers = await _load_iiko_suppliers()
     iiko_products = await _load_all_iiko_products()
 
     # Нормализуем ключи: strip() + lower() — не даём пробелам в БД ломать поиск
     sup_by_name = {s["name"].strip().lower(): s for s in iiko_suppliers}
-    prd_by_name = {p["name"].strip().lower(): p for p in iiko_products}
+
+    # Приоритет типов: GOODS > PREPARED > остальные (DISH никогда не перезаписывает GOODS)
+    _TYPE_PRIORITY = {"GOODS": 3, "PREPARED": 2}
+    prd_by_name: dict[str, dict] = {}
+    for p in iiko_products:
+        key = p["name"].strip().lower()
+        ptype = (p.get("product_type") or "").upper()
+        # DISH не допускается в маппинг приходных накладных
+        if ptype == "DISH":
+            continue
+        new_prio = _TYPE_PRIORITY.get(ptype, 1)
+        existing = prd_by_name.get(key)
+        if existing is None:
+            prd_by_name[key] = p
+        else:
+            old_prio = _TYPE_PRIORITY.get(
+                (existing.get("product_type") or "").upper(), 1
+            )
+            if new_prio > old_prio:
+                prd_by_name[key] = p
 
     # Добавляем алиасы по display_name (без «т_», «п/ф» и т.д.).
     # Нужно, потому что в дропдауне теперь хранятся display_name,
@@ -487,7 +508,10 @@ async def _load_all_iiko_products() -> list[dict[str, str]]:
     """
     Загрузить ВСЕ товары без ограничений по типу или группе.
     Используется только для поиска iiko_id при финализации маппинга.
-    Так продукты типа PREPARED, DISH или вне gsheet_export_group тоже получат свой UUID.
+    Так продукты типа PREPARED или вне gsheet_export_group тоже получат свой UUID.
+
+    ВАЖНО: product_type включён в результат, чтобы при коллизии имён
+    (одно имя у GOODS и DISH) приоритет отдавался GOODS.
     """
     from db.engine import async_session_factory
     from db.models import Product
@@ -495,11 +519,19 @@ async def _load_all_iiko_products() -> list[dict[str, str]]:
     try:
         async with async_session_factory() as session:
             result = await session.execute(
-                select(Product.id, Product.name)
+                select(Product.id, Product.name, Product.product_type)
                 .where(Product.deleted.is_(False))
                 .order_by(Product.name)
             )
-            return [{"id": str(r.id), "name": r.name or ""} for r in result if r.name]
+            return [
+                {
+                    "id": str(r.id),
+                    "name": r.name or "",
+                    "product_type": r.product_type or "",
+                }
+                for r in result
+                if r.name
+            ]
     except Exception:
         logger.exception("[ocr_mapping] Ошибка загрузки всех товаров")
         return []
