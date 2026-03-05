@@ -546,13 +546,9 @@ async def get_my_salary(telegram_id: int) -> dict | None:
 
     months: list[dict] = []
     # предыдущий месяц — первым
-    months.append(
-        {"period_label": prev_label, "tab_name": prev_tab, "rows": prev_rows}
-    )
+    months.append({"period_label": prev_label, "tab_name": prev_tab, "rows": prev_rows})
     # текущий месяц — вторым
-    months.append(
-        {"period_label": cur_label, "tab_name": cur_tab, "rows": cur_rows}
-    )
+    months.append({"period_label": cur_label, "tab_name": cur_tab, "rows": cur_rows})
 
     return {
         "employee_name": dname,
