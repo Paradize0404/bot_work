@@ -1404,7 +1404,8 @@ async def approve_request(callback: CallbackQuery) -> None:
             # редактирования через навигационную кнопку). Освобождаем.
             logger.info(
                 "[request] Снимаем стухший лок pk=%d (тот же юзер tg:%d)",
-                pk, callback.from_user.id,
+                pk,
+                callback.from_user.id,
             )
             _unlock_request(pk)
     if not _try_lock_request(pk, callback.from_user.id, admin_name):
@@ -1677,7 +1678,8 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
             # Тот же пользователь — стухший лок. Освобождаем.
             logger.info(
                 "[request] Снимаем стухший лок pk=%d (тот же юзер tg:%d)",
-                pk, callback.from_user.id,
+                pk,
+                callback.from_user.id,
             )
             _unlock_request(pk)
     if not _try_lock_request(pk, callback.from_user.id, admin_name):

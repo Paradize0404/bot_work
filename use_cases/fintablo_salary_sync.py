@@ -637,7 +637,9 @@ def _build_positions_body(
     # Обходной приём: если только 1 запись — нужна хотя бы ещё одна
     if len(body) == 1:
         dummy_dir = _pick_dummy_direction(
-            used_dirs, section_to_dir or {}, dir_to_name or {},
+            used_dirs,
+            section_to_dir or {},
+            dir_to_name or {},
         )
         if dummy_dir:
             existing_dummy = cur_by_dir.get(dummy_dir)

@@ -142,6 +142,7 @@ async def _cleanup_state_messages(
     edit_pk = data.get("_edit_pk")
     if edit_pk:
         from bot.request_handlers import _unlock_request
+
         _unlock_request(edit_pk)
         logger.info("[mw:nav] снята блокировка заявки pk=%s", edit_pk)
 
