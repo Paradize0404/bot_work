@@ -1371,7 +1371,6 @@ async def _finish_request_edit_msg(
 @router.callback_query(F.data.startswith("req_approve:"))
 async def approve_request(callback: CallbackQuery) -> None:
     logger.info("[request_handlers] approve_request tg:%d", callback.from_user.id)
-    await callback.answer("⏳ Создаю накладную...")
     pk_str = callback.data.split(":", 1)[1]
     try:
         pk = int(pk_str)
@@ -1400,10 +1399,19 @@ async def approve_request(callback: CallbackQuery) -> None:
                 f"⏳ Заявку обрабатывает {owner_name}", show_alert=True
             )
             return
+        else:
+            # Тот же пользователь — стухший лок (например, после прерванного
+            # редактирования через навигационную кнопку). Освобождаем.
+            logger.info(
+                "[request] Снимаем стухший лок pk=%d (тот же юзер tg:%d)",
+                pk, callback.from_user.id,
+            )
+            _unlock_request(pk)
     if not _try_lock_request(pk, callback.from_user.id, admin_name):
         await callback.answer("⏳ Заявка уже обрабатывается", show_alert=True)
         return
 
+    await callback.answer("⏳ Создаю накладную...")
     try:
         await _do_approve_request(callback, pk)
     finally:
@@ -1665,6 +1673,13 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
         if owner_tg != callback.from_user.id:
             await callback.answer(f"⏳ Редактирует {owner_name}", show_alert=True)
             return
+        else:
+            # Тот же пользователь — стухший лок. Освобождаем.
+            logger.info(
+                "[request] Снимаем стухший лок pk=%d (тот же юзер tg:%d)",
+                pk, callback.from_user.id,
+            )
+            _unlock_request(pk)
     if not _try_lock_request(pk, callback.from_user.id, admin_name):
         await callback.answer("⏳ Заявка уже обрабатывается", show_alert=True)
         return

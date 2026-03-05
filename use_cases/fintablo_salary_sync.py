@@ -200,6 +200,13 @@ async def sync_fot_to_fintablo(
     admin_directions = [
         all_dir_by_name[n] for n in _ADMIN_DIR_NAMES if n in all_dir_by_name
     ]
+    missing_admin = [n for n in _ADMIN_DIR_NAMES if n not in all_dir_by_name]
+    if missing_admin:
+        logger.error(
+            "[fintablo_sync] В ft_direction отсутствуют админ-направления: %s. "
+            "Сплит администрации будет неполным!",
+            missing_admin,
+        )
 
     if not mapping_rows:
         logger.info("[fintablo_sync] Маппинг пуст — пропускаем")
@@ -547,6 +554,19 @@ async def _sync_positions(
         dir_to_name=dir_to_name,
     )
 
+    # ── Защита от API-бага FinTablo ──
+    # 1 позиция без positionId приводит к удалению сотрудника на стороне FT.
+    has_position_id = any(p.get("positionId") for p in positions_body)
+    if len(positions_body) == 1 and not has_position_id:
+        logger.error(
+            "[fintablo_sync] ОТМЕНА PUT employees/%d «%s»: "
+            "1 позиция без positionId — сработал бы API-баг FinTablo. "
+            "Проверьте маппинг направлений (D-E) и ft_direction.",
+            fintab_id,
+            ft_name,
+        )
+        return False
+
     await fintablo_api.update_employee(
         employee_id=fintab_id,
         body={
@@ -616,7 +636,9 @@ def _build_positions_body(
 
     # Обходной приём: если только 1 запись — нужна хотя бы ещё одна
     if len(body) == 1:
-        dummy_dir = _pick_dummy_direction(used_dirs, section_to_dir or {})
+        dummy_dir = _pick_dummy_direction(
+            used_dirs, section_to_dir or {}, dir_to_name or {},
+        )
         if dummy_dir:
             existing_dummy = cur_by_dir.get(dummy_dir)
             name_map = dir_to_name or {}
@@ -629,6 +651,12 @@ def _build_positions_body(
             if existing_dummy and existing_dummy.get("positionId"):
                 dummy["positionId"] = existing_dummy["positionId"]
             body.append(dummy)
+        else:
+            logger.warning(
+                "[fintablo_sync] Не удалось подобрать dummy-направление "
+                "для обхода API-бага (used_dirs=%s). PUT может быть опасен.",
+                used_dirs,
+            )
 
     return body
 
@@ -636,11 +664,21 @@ def _build_positions_body(
 def _pick_dummy_direction(
     used: set[int],
     section_to_dir: dict[str, int],
+    dir_to_name: dict[int, str] | None = None,
 ) -> int | None:
-    """Выбрать направление, не задействованное в реальных позициях."""
+    """Выбрать направление, не задействованное в реальных позициях.
+
+    Сначала ищем среди section_to_dir (маппинг секций),
+    затем среди всех направлений из ft_direction (fallback).
+    """
     for dir_id in section_to_dir.values():
         if dir_id not in used:
             return dir_id
+    # Fallback: любое направление из БД, не задействованное
+    if dir_to_name:
+        for dir_id in dir_to_name:
+            if dir_id not in used:
+                return dir_id
     return None
 
 

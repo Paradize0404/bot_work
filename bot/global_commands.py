@@ -137,6 +137,14 @@ async def _cleanup_state_messages(
                 await bot.delete_message(chat_id, msg_id)
             except Exception:
                 pass
+
+    # Снимаем блокировку заявки, если пользователь был в режиме редактирования
+    edit_pk = data.get("_edit_pk")
+    if edit_pk:
+        from bot.request_handlers import _unlock_request
+        _unlock_request(edit_pk)
+        logger.info("[mw:nav] снята блокировка заявки pk=%s", edit_pk)
+
     await state.clear()
 
 
