@@ -87,6 +87,14 @@ def get_telegram_handler() -> TelegramAlertHandler:
 def setup_logging() -> None:
     """Настроить корневой логгер: консоль + файл."""
 
+    # ── Гарантировать UTF-8 в stdout/stderr (Windows CP437/CP1251 → mojibake) ──
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass  # readonly / redirected — не фатально
+
     log_dir = Path(__file__).resolve().parent / "logs"
     log_dir.mkdir(exist_ok=True)
 

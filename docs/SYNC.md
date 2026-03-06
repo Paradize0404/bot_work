@@ -26,7 +26,10 @@
 
 `misfire_grace_time = 3600с` (1 час) — если бот был недоступен, задача выполнится.
 
-## 07:00 Sync — 8 шагов
+## 07:00 Sync — 10 шагов
+
+Опорная дата: **вчера** (`now_kgd() - 1 day`).  
+Cron в 07:00 — данные «сегодня» ещё пусты. 1 марта 07:00 → yesterday = 28 февраля → ФОТ/ОПИУ за февраль.
 
 1. iiko → БД (справочники, подразделения, номенклатура)
 2. FinTablo → БД (13 таблиц)
@@ -34,8 +37,10 @@
 4. GSheet мин/макс → БД
 5. БД номенклатура → GSheet «Мин остатки»
 6. БД GOODS display-имена → GSheet «Маппинг Справочник»
-7. ФОТ GSheet → обновление месячного листа
-8. ФОТ → FinTablo salary + positions (delta-sync)
+7. История ставок → БД (sync_salary_history)
+8. ФОТ GSheet → обновление месячного листа (target_date=yesterday)
+9. ФОТ → FinTablo salary + positions (delta-sync, target_date=yesterday)
+10. ОПИУ → FinTablo (маппинг iiko Account → FT PnL category, target_date=yesterday)
 
 ## 23:00 Авто-перемещение расходных материалов
 
@@ -111,7 +116,9 @@ async def _run_sync(entity_name, fetch_fn, Model, mapping_fn, session):
 | `use_cases/negative_transfer.py` | OLAP → отрицательные → internalTransfer |
 | `adapters/iiko_api.py` | 11 fetch_* + send_writeoff + fetch_olap_* + send_internal_transfer |
 | `adapters/fintablo_api.py` | FinTablo sync (persistent httpx) |
-| `use_cases/fintablo_salary_sync.py` | ФОТ → FinTablo: salary + positions v2 |
+| `use_cases/fintablo_salary_sync.py` | ФОТ → FinTablo: salary + positions v2 (3 защиты от API-бага) |
+| `use_cases/pnl_sync.py` | ОПИУ → FinTablo: iiko Account → FT PnL category |
+| `use_cases/salary_history.py` | История ставок: sync перед расчётом ФОТ |
 
 ## Таблицы (ключевые для sync)
 

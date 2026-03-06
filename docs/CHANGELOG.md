@@ -5,6 +5,26 @@
 
 ---
 
+### 2026-03-05 — Safety fix: FinTablo employee protection + encoding + docs
+
+**Исправления кода:**
+
+- **`use_cases/fintablo_salary_sync.py`** — 3 уровня защиты от API-бага FinTablo (PUT с 1 позицией без positionId удаляет сотрудника):
+  1. `_sync_positions`: abort PUT если body содержит 1 позицию без positionId.
+  2. `_pick_dummy_direction`: fallback на любое направление из `dir_to_name`.
+  3. `sync_fot_to_fintablo`: ERROR-лог при отсутствии admin directions в ft_direction.
+- **`use_cases/fintablo_salary_sync.py`** — `_ADMIN_DIR_NAMES`: «Аксакова» → «Московский» (переименование в FinTablo).
+- **`logging_config.py`** — `sys.stdout/stderr.reconfigure(encoding="utf-8")` для корректной кириллицы в Windows-консоли.
+
+**Документация:**
+
+- `docs/SYNC.md` — обновлены шаги 07:00 (8 → 10): добавлены «История ставок» (шаг 7), «ОПИУ → FinTablo» (шаг 10). Опорная дата `yesterday` задокументирована. Добавлены модули `pnl_sync.py`, `salary_history.py` в таблицу.
+- `docs/KNOWN_ISSUES.md` — добавлены: инцидент с удалением сотрудников через FinTablo API, encoding/mojibake на Windows.
+- `PROJECT_MAP.md` v2.2 → v2.3: обновлено расписание (+ ФОТ + ОПИУ), дата.
+- `docs/CHANGELOG.md` — эта запись.
+
+---
+
 ### 2026-02-27 — ФОТ → FinTablo salary sync v2
 
 **Новые модули:**

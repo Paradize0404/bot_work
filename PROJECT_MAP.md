@@ -1,6 +1,6 @@
 # 🗂 Карта проекта iiko + FinTablo Sync Bot
 
-> Версия MAP: **2.2** | Обновлено: 2026-02-26  
+> Версия MAP: **2.3** | Обновлено: 2026-03-05  
 > Язык: **русский** | Python 3.12 | asyncio + aiogram 3 + SQLAlchemy 2.0 + asyncpg + Redis  
 > Deploy: Railway (PostgreSQL ~400ms RTT, Redis FSM)
 
@@ -13,7 +13,7 @@ Telegram-бот для **PizzaYolo**: синхронизация iiko REST API +
 
 **Три слоя архитектуры:** `bot/handler` ← `use_cases/` ← `adapters/`  
 **Часовой пояс:** Europe/Kaliningrad (UTC+2) — `now_kgd()` всегда, `datetime.now()` запрещён.  
-**Авторасписание:** 07:00 full-sync | 22:00 стоп-лист отчёт | 23:00 авто-перемещение расходников.
+**Авторасписание:** 07:00 full-sync (iiko + FT + ФОТ + ОПИУ) | 22:00 стоп-лист отчёт | 23:00 авто-перемещение расходников.
 
 ---
 

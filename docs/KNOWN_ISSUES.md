@@ -6,6 +6,32 @@
 
 ---
 
+### FinTablo API: PUT /v1/employees с 1 позицией без positionId удаляет сотрудника (2026-03-05)
+- **Симптом:** 5 сотрудников исчезли из FinTablo. В логах Railway: PUT /v1/employees/{id} → 400 Bad Request. После mirror-delete сотрудники удалены из БД.
+- **Причина (цепочка):**
+  1. Направление «Аксакова» переименовано в «Московский» в FinTablo, но в коде `_ADMIN_DIR_NAMES` осталось старое имя.
+  2. `_pick_dummy_direction` не нашёл dummy-направление → positions body = 1 позиция без `positionId`.
+  3. FinTablo API **побочный эффект**: PUT с 1 позицией без positionId → 400 ответ + удаление сотрудника на стороне FT.
+  4. `sync_ft_employees` → mirror_delete → сотрудник удалён из БД.
+- **Решение (3 уровня защиты):**
+  1. `_sync_positions`: abort PUT если body содержит 1 позицию без positionId (прямая защита от API-бага).
+  2. `_pick_dummy_direction`: fallback на любое направление из `dir_to_name` вместо `None`.
+  3. `sync_fot_to_fintablo`: ERROR-лог когда admin directions отсутствуют в ft_direction.
+- **Как избежать:**
+  - При переименовании направлений в FinTablo — всегда обновлять `_ADMIN_DIR_NAMES` в коде.
+  - Никогда не отправлять PUT /v1/employees с body, содержащим позицию без `positionId`.
+  - Safety-check в `_sync_positions` — не удалять даже если API пофиксят.
+
+---
+
+### Кириллица отображается как mojibake в Windows-консоли (2026-03-05)
+- **Симптом:** Вместо кириллицы в логах: `тАФ` (вместо `—`), `╨╛╤В╨┐╤А╨░╨▓╨╗╤П╤О` (вместо русского текста).
+- **Причина:** Windows stdout использует CP437/CP1251/CP1252, а Python пишет UTF-8 → двойная интерпретация байтов.
+- **Решение:** `logging_config.py` → `sys.stdout.reconfigure(encoding="utf-8")` перед созданием StreamHandler.
+- **Как избежать:** На Railway (Linux) проблема отсутствует. Для локальной разработки на Windows — всегда reconfigure stdout/stderr на UTF-8.
+
+---
+
 ### ImportError: неверное имя при импорте из `db.engine` → краш бота (2026-02-28)
 - **Симптом:** `ImportError: cannot import name 'async_session' from 'db.engine'. Did you mean: 'AsyncSession'?` — бот не запускается.
 - **Причина:** В проекте сессия называется `async_session_factory`, а не `async_session`. Имя угадывалось по аналогии с другими проектами без проверки реального файла.
