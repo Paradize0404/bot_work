@@ -204,7 +204,9 @@ async def fetch_iiko_accounts_from_preset(
                     logger.info(
                         "[pnl_sync] WRITEOFF: использую %s=%.2f вместо Sum.Incoming=0"
                         " (account=%s)",
-                        alt_field, alt, account_name,
+                        alt_field,
+                        alt,
+                        account_name,
                     )
                     break
             # Если ВСЕ поля 0 — используем abs(Sum.Incoming) на случай отрицательного
@@ -217,7 +219,8 @@ async def fetch_iiko_accounts_from_preset(
                 logger.warning(
                     "[pnl_sync] WRITEOFF: все суммы = 0, пропускаю строку"
                     " (account=%s, row_keys=%s)",
-                    account_name, list(row.keys()),
+                    account_name,
+                    list(row.keys()),
                 )
                 continue
         elif value <= 0:
@@ -475,9 +478,7 @@ async def update_opiu(
         ft_totals[key] = round(ft_totals[key], 2)
 
     # Убираем нулевые/отрицательные  (после вычетов категория может обнулиться)
-    ft_totals = {
-        k: v for k, v in ft_totals.items() if v > 0.005
-    }
+    ft_totals = {k: v for k, v in ft_totals.items() if v > 0.005}
 
     total_allocated = sum(ft_totals.values())
     total_unmapped = sum(unmapped_sums.values())
@@ -553,7 +554,9 @@ async def update_opiu(
         tasks.append((cat_id, direction_id, iiko_total, display_name))
 
     # Параллельный запуск (asyncio.gather)
-    async def _do_sync(cat_id: int, direction_id: int | None, iiko_total: float, display_name: str) -> tuple[str, str]:
+    async def _do_sync(
+        cat_id: int, direction_id: int | None, iiko_total: float, display_name: str
+    ) -> tuple[str, str]:
         """Возвращает (status, display_name)."""
         try:
             result = await _sync_one_category(

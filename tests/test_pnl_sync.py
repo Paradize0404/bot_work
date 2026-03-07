@@ -84,10 +84,14 @@ async def test_fetch_filters_correctly():
 
         from use_cases.pnl_sync import fetch_iiko_accounts_from_preset
 
-        rows = await fetch_iiko_accounts_from_preset("2026-03-01T00:00:00", "2026-04-01T00:00:00")
+        rows = await fetch_iiko_accounts_from_preset(
+            "2026-03-01T00:00:00", "2026-04-01T00:00:00"
+        )
 
     # Должны пройти: 10000 INVOICE, 5000 INVOICE, 1500 WRITEOFF, 800 WRITEOFF(outgoing), 3000 INCOMING_SERVICE
-    assert len(rows) == 5, f"Ожидали 5 строк, получили {len(rows)}: {[r['account_name'] + '/' + str(r['transaction_type']) + '/' + str(r['sum']) for r in rows]}"
+    assert (
+        len(rows) == 5
+    ), f"Ожидали 5 строк, получили {len(rows)}: {[r['account_name'] + '/' + str(r['transaction_type']) + '/' + str(r['sum']) for r in rows]}"
 
     writeoff_rows = [r for r in rows if r["transaction_type"] == "WRITEOFF"]
     assert len(writeoff_rows) == 2, f"Должно быть 2 WRITEOFF, получили: {writeoff_rows}"
@@ -136,13 +140,29 @@ PARSED_ROWS = [
 # Маппинг: группа/счёт → FT-категория
 MOCK_MAPPINGS = [
     # Группа "Молоко/Яйца" → "Сырьевая себестоимость" (id=100)
-    {"iiko_account_name": "[Группа] Молоко/Яйца", "ft_pnl_category_id": 100, "ft_pnl_category_name": "Сырьевая себестоимость"},
-    # Счёт "Бар (Московский)" → "Сырьевая себестоимость" (id=100) 
-    {"iiko_account_name": "Бар (Московский)", "ft_pnl_category_id": 100, "ft_pnl_category_name": "Сырьевая себестоимость"},
+    {
+        "iiko_account_name": "[Группа] Молоко/Яйца",
+        "ft_pnl_category_id": 100,
+        "ft_pnl_category_name": "Сырьевая себестоимость",
+    },
+    # Счёт "Бар (Московский)" → "Сырьевая себестоимость" (id=100)
+    {
+        "iiko_account_name": "Бар (Московский)",
+        "ft_pnl_category_id": 100,
+        "ft_pnl_category_name": "Сырьевая себестоимость",
+    },
     # Группа "Алкоголь" → "Сырьевая себестоимость" (id=100)
-    {"iiko_account_name": "[Группа] Алкоголь", "ft_pnl_category_id": 100, "ft_pnl_category_name": "Сырьевая себестоимость"},
+    {
+        "iiko_account_name": "[Группа] Алкоголь",
+        "ft_pnl_category_id": 100,
+        "ft_pnl_category_name": "Сырьевая себестоимость",
+    },
     # Счёт "Доставка (курьер)" → "Доставка (курьер)" (id=200)
-    {"iiko_account_name": "Доставка (курьер)", "ft_pnl_category_id": 200, "ft_pnl_category_name": "Доставка (курьер)"},
+    {
+        "iiko_account_name": "Доставка (курьер)",
+        "ft_pnl_category_id": 200,
+        "ft_pnl_category_name": "Доставка (курьер)",
+    },
 ]
 
 
@@ -152,7 +172,7 @@ def test_aggregation_writeoff_deduction():
     1. Добавиться в «Списания продуктов» (writeoff_cat_id=999)
     2. Вычесться из «Сырьевая себестоимость» (cat_id=100) — потому что
        маппинг для [Группа] Молоко/Яйца → 100
-    
+
     Итого:
     - cat=100 (Сырьевая себест.): INVOICE 10000 + 5000 = 15000, WRITEOFF -1500 → 13500
     - cat=999 (Списания): WRITEOFF 1500
@@ -242,7 +262,9 @@ def test_aggregation_writeoff_deduction():
     #   - dir=1 (Клиническая): INVOICE 10000, WRITEOFF deducted -1500 → 8500
     #   - dir=2 (Московский): INVOICE 5000 → 5000
     assert (100, 1) in ft_totals, f"Cat 100 dir 1 не найден: {ft_totals}"
-    assert ft_totals[(100, 1)] == 8500.0, f"Cat 100 dir 1 == {ft_totals[(100, 1)]}, ожидали 8500"
+    assert (
+        ft_totals[(100, 1)] == 8500.0
+    ), f"Cat 100 dir 1 == {ft_totals[(100, 1)]}, ожидали 8500"
     assert (100, 2) in ft_totals
     assert ft_totals[(100, 2)] == 5000.0
 
@@ -285,7 +307,9 @@ def test_normalize_dept_matching():
     result_klin = _resolve_department_direction("Клиническая PizzaYolo", dept_dir_map)
     assert result_klin == "Клиническая", f"Got: {result_klin}"
 
-    result_mosk = _resolve_department_direction("PizzaYolo / Пицца Йоло (Московский)", dept_dir_map)
+    result_mosk = _resolve_department_direction(
+        "PizzaYolo / Пицца Йоло (Московский)", dept_dir_map
+    )
     assert result_mosk == "Московский", f"Got: {result_mosk}"
 
     print("✅ Department matching работает!")
@@ -300,7 +324,7 @@ def test_normalize_dept_matching():
 async def test_writeoff_sum_fields():
     """
     Проверяем что WRITEOFF строки корректно парсятся.
-    
+
     OLAP может вернуть сумму в разных полях. Нас интересует Sum.Incoming.
     Для списаний (WRITEOFF) Sum.Incoming это сумма списания — она должна быть > 0.
     """
@@ -335,13 +359,18 @@ async def test_writeoff_sum_fields():
         mock_iiko.fetch_olap_by_preset = AsyncMock(return_value=writeoff_rows)
 
         from use_cases.pnl_sync import fetch_iiko_accounts_from_preset
-        rows = await fetch_iiko_accounts_from_preset("2026-03-01T00:00:00", "2026-04-01T00:00:00")
+
+        rows = await fetch_iiko_accounts_from_preset(
+            "2026-03-01T00:00:00", "2026-04-01T00:00:00"
+        )
 
     # Должны пройти: 2500.50 (Sum.Incoming) и 1200 (Sum.Outgoing фолбэк)
     assert len(rows) == 2, f"Ожидали 2 строки, получили {len(rows)}: {rows}"
     assert rows[0]["transaction_type"] == "WRITEOFF"
     assert rows[0]["sum"] == 2500.50
-    assert rows[1]["sum"] == 1200.0, f"Sum.Outgoing фолбэк: ожидали 1200, получили {rows[1]['sum']}"
+    assert (
+        rows[1]["sum"] == 1200.0
+    ), f"Sum.Outgoing фолбэк: ожидали 1200, получили {rows[1]['sum']}"
 
     print("✅ WRITEOFF sum parsing OK!")
 
@@ -394,21 +423,37 @@ async def test_update_opiu_writeoff_e2e():
 
     created_items = []
 
-    async def mock_create_pnl_item(category_id, value, date_mm_yyyy, *, comment=None, direction_id=None, nds=None):
-        created_items.append({
-            "category_id": category_id,
-            "value": value,
-            "date": date_mm_yyyy,
-            "comment": comment,
-            "direction_id": direction_id,
-        })
+    async def mock_create_pnl_item(
+        category_id, value, date_mm_yyyy, *, comment=None, direction_id=None, nds=None
+    ):
+        created_items.append(
+            {
+                "category_id": category_id,
+                "value": value,
+                "date": date_mm_yyyy,
+                "comment": comment,
+                "direction_id": direction_id,
+            }
+        )
         return {"id": len(created_items)}
 
     with (
         patch("use_cases.pnl_sync.iiko_api") as mock_iiko,
-        patch("use_cases.pnl_sync.read_fintab_all_mappings", new_callable=AsyncMock, return_value=mock_mappings),
-        patch("use_cases.pnl_sync._get_writeoff_category_id", new_callable=AsyncMock, return_value=999),
-        patch("use_cases.pnl_sync._get_direction_map", new_callable=AsyncMock, return_value={"Клиническая": 1}),
+        patch(
+            "use_cases.pnl_sync.read_fintab_all_mappings",
+            new_callable=AsyncMock,
+            return_value=mock_mappings,
+        ),
+        patch(
+            "use_cases.pnl_sync._get_writeoff_category_id",
+            new_callable=AsyncMock,
+            return_value=999,
+        ),
+        patch(
+            "use_cases.pnl_sync._get_direction_map",
+            new_callable=AsyncMock,
+            return_value={"Клиническая": 1},
+        ),
         patch("use_cases.pnl_sync.fintablo_api") as mock_ft,
     ):
         mock_iiko.fetch_olap_by_preset = AsyncMock(return_value=olap_rows)
@@ -417,6 +462,7 @@ async def test_update_opiu_writeoff_e2e():
         mock_ft.create_pnl_item = mock_create_pnl_item
 
         from use_cases.pnl_sync import update_opiu
+
         result = await update_opiu(
             triggered_by="test",
             target_date=datetime(2026, 3, 15),
@@ -430,16 +476,22 @@ async def test_update_opiu_writeoff_e2e():
     # 2. Списания продуктов (cat=999) = 2000
     assert result["errors"] == 0, f"Errors: {result['errors']}"
     assert result["updated"] == 2, f"Expected 2 updates, got {result['updated']}"
-    assert result["writeoff_deducted"] == 2000.0, f"writeoff_deducted = {result['writeoff_deducted']}"
+    assert (
+        result["writeoff_deducted"] == 2000.0
+    ), f"writeoff_deducted = {result['writeoff_deducted']}"
 
     cat_100_items = [it for it in created_items if it["category_id"] == 100]
     cat_999_items = [it for it in created_items if it["category_id"] == 999]
 
     assert len(cat_100_items) == 1, f"Expected 1 item for cat=100, got {cat_100_items}"
-    assert cat_100_items[0]["value"] == 8000.0, f"Сырьевая = {cat_100_items[0]['value']}, ожидали 8000"
+    assert (
+        cat_100_items[0]["value"] == 8000.0
+    ), f"Сырьевая = {cat_100_items[0]['value']}, ожидали 8000"
 
     assert len(cat_999_items) == 1, f"Expected 1 item for cat=999, got {cat_999_items}"
-    assert cat_999_items[0]["value"] == 2000.0, f"Списания = {cat_999_items[0]['value']}, ожидали 2000"
+    assert (
+        cat_999_items[0]["value"] == 2000.0
+    ), f"Списания = {cat_999_items[0]['value']}, ожидали 2000"
 
     print("\n✅ E2E: WRITEOFF записан в Списания и вычтен из Сырьевой!")
 

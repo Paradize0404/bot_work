@@ -4502,7 +4502,9 @@ async def sync_fintab_mapping_sheet(
         existing_emp: list[tuple[str, str, str]] = []  # (iiko_dropdown, ft_label, note)
         existing_dept: list[tuple[str, str]] = []
         existing_opiu: list[tuple[str, str]] = []  # (iiko_account, ft_pnl_category)
-        existing_revenue: list[tuple[str, str]] = []  # (cooking_place_type, ft_pnl_category)
+        existing_revenue: list[tuple[str, str]] = (
+            []
+        )  # (cooking_place_type, ft_pnl_category)
         if not is_new:
             all_rows = ws.get_all_values()
             for row in all_rows[3:]:
@@ -4556,8 +4558,28 @@ async def sync_fintab_mapping_sheet(
 
         # ── Данные листа ──
         now_str = time.strftime("%d.%m.%Y %H:%M")
-        title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", "", "", "", "", ""]
-        section_row = ["👤 СОТРУДНИКИ", "", "", "🏢 ПОДРАЗДЕЛЕНИЯ", "", "📈 ОПИУ", "", "💰 ВЫРУЧКА", ""]
+        title_row = [
+            f"Маппинг FinTablo — обновлено {now_str}",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]
+        section_row = [
+            "👤 СОТРУДНИКИ",
+            "",
+            "",
+            "🏢 ПОДРАЗДЕЛЕНИЯ",
+            "",
+            "📈 ОПИУ",
+            "",
+            "💰 ВЫРУЧКА",
+            "",
+        ]
         header_row = [
             "Имя в ФОТ (iiko UUID)",
             "Сотрудник FinTablo (ID)",
@@ -4569,13 +4591,21 @@ async def sync_fintab_mapping_sheet(
             "Место приготовления (iiko)",
             "Статья FinTablo (Выручка)",
         ]
-        n_rows = max(len(existing_emp), len(existing_dept), len(existing_opiu), len(existing_revenue), 1)
+        n_rows = max(
+            len(existing_emp),
+            len(existing_dept),
+            len(existing_opiu),
+            len(existing_revenue),
+            1,
+        )
         data_rows: list[list[str]] = []
         for i in range(n_rows):
             a, b, c = existing_emp[i] if i < len(existing_emp) else ("", "", "")
             d, e = existing_dept[i] if i < len(existing_dept) else ("", "")
             f_val, g_val = existing_opiu[i] if i < len(existing_opiu) else ("", "")
-            h_val, i_val = existing_revenue[i] if i < len(existing_revenue) else ("", "")
+            h_val, i_val = (
+                existing_revenue[i] if i < len(existing_revenue) else ("", "")
+            )
             data_rows.append([a, b, c, d, e, f_val, g_val, h_val, i_val])
 
         ws.clear()
@@ -5105,7 +5135,11 @@ async def read_fintab_all_mappings() -> dict[str, list[dict]]:
             len(dept_results),
             len(revenue_results),
         )
-        return {"opiu": opiu_results, "dept_direction": dept_results, "revenue": revenue_results}
+        return {
+            "opiu": opiu_results,
+            "dept_direction": dept_results,
+            "revenue": revenue_results,
+        }
 
     return await asyncio.to_thread(_sync)
 
