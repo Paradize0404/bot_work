@@ -4435,12 +4435,19 @@ async def sync_fintab_mapping_sheet(
     ft_directions: list[dict],
     ft_pnl_categories: list[dict] | None = None,
     iiko_accounts: list[str] | None = None,
+    cooking_place_types: list[str] | None = None,
 ) -> int:
     """
     Создать/обновить вкладку «Маппинг FinTablo» в SALARY_SHEET_ID.
 
-    Читает текущий ФОТ-лист для формирования выпадающих списков сотрудников
-    и подразделений. Сохраняет существующие пользовательские данные (A-B, D-E).
+    Колонки:
+      A-B-C  — Сотрудники (iiko <-> FinTablo + примечание)
+      D-E    — Подразделения ФОТ <-> Направление FinTablo
+      F-G    — Счет iiko (ОПИУ) <-> Статья FinTablo (ОПИУ)
+      H-I    — Место приготовления (iiko) <-> Статья FinTablo (Выручка)
+
+    Читает текущий ФОТ-лист для формирования выпадающих списков.
+    Сохраняет существующие пользовательские данные (A-C, D-E, F-G, H-I).
     Возвращает количество строк с данными.
     """
 
@@ -4487,7 +4494,7 @@ async def sync_fintab_mapping_sheet(
             ws = spreadsheet.worksheet(_FINTAB_MAPPING_TAB)
             is_new = False
         except gspread.exceptions.WorksheetNotFound:
-            ws = spreadsheet.add_worksheet(title=_FINTAB_MAPPING_TAB, rows=200, cols=6)
+            ws = spreadsheet.add_worksheet(title=_FINTAB_MAPPING_TAB, rows=200, cols=9)
             is_new = True
         sheet_id = ws.id
 
@@ -4495,6 +4502,7 @@ async def sync_fintab_mapping_sheet(
         existing_emp: list[tuple[str, str, str]] = []  # (iiko_dropdown, ft_label, note)
         existing_dept: list[tuple[str, str]] = []
         existing_opiu: list[tuple[str, str]] = []  # (iiko_account, ft_pnl_category)
+        existing_revenue: list[tuple[str, str]] = []  # (cooking_place_type, ft_pnl_category)
         if not is_new:
             all_rows = ws.get_all_values()
             for row in all_rows[3:]:
@@ -4505,12 +4513,16 @@ async def sync_fintab_mapping_sheet(
                 e = str(row[4]).strip() if len(row) > 4 else ""
                 f_val = str(row[5]).strip() if len(row) > 5 else ""
                 g_val = str(row[6]).strip() if len(row) > 6 else ""
+                h_val = str(row[7]).strip() if len(row) > 7 else ""
+                i_val = str(row[8]).strip() if len(row) > 8 else ""
                 if a or b:
                     existing_emp.append((a, b, c))
                 if d or e:
                     existing_dept.append((d, e))
                 if f_val or g_val:
                     existing_opiu.append((f_val, g_val))
+                if h_val or i_val:
+                    existing_revenue.append((h_val, i_val))
 
         # ── Опции для дропдаунов ──
         # Кол. A: "Имя (иико_uuid)" — уникальный идентификатор сотрудника
@@ -4527,6 +4539,7 @@ async def sync_fintab_mapping_sheet(
             if cat.get("id") and cat.get("name")
         )
         iiko_account_options = sorted(iiko_accounts or [])
+        cooking_place_options = sorted(cooking_place_types or [])
 
         # ── Очищаем некорректные старые значения подразделений ──
         # Сохраняем только те строки D/E, где оба значения соответствуют
@@ -4543,8 +4556,8 @@ async def sync_fintab_mapping_sheet(
 
         # ── Данные листа ──
         now_str = time.strftime("%d.%m.%Y %H:%M")
-        title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", "", "", ""]
-        section_row = ["👤 СОТРУДНИКИ", "", "", "🏢 ПОДРАЗДЕЛЕНИЯ", "", "📈 ОПИУ", ""]
+        title_row = [f"Маппинг FinTablo — обновлено {now_str}", "", "", "", "", "", "", "", ""]
+        section_row = ["👤 СОТРУДНИКИ", "", "", "🏢 ПОДРАЗДЕЛЕНИЯ", "", "📈 ОПИУ", "", "💰 ВЫРУЧКА", ""]
         header_row = [
             "Имя в ФОТ (iiko UUID)",
             "Сотрудник FinTablo (ID)",
@@ -4553,16 +4566,22 @@ async def sync_fintab_mapping_sheet(
             "Направление FinTablo",
             "Счет iiko (ОПИУ)",
             "Статья FinTablo (ОПИУ)",
+            "Место приготовления (iiko)",
+            "Статья FinTablo (Выручка)",
         ]
-        n_rows = max(len(existing_emp), len(existing_dept), len(existing_opiu), 1)
+        n_rows = max(len(existing_emp), len(existing_dept), len(existing_opiu), len(existing_revenue), 1)
         data_rows: list[list[str]] = []
         for i in range(n_rows):
             a, b, c = existing_emp[i] if i < len(existing_emp) else ("", "", "")
             d, e = existing_dept[i] if i < len(existing_dept) else ("", "")
             f_val, g_val = existing_opiu[i] if i < len(existing_opiu) else ("", "")
-            data_rows.append([a, b, c, d, e, f_val, g_val])
+            h_val, i_val = existing_revenue[i] if i < len(existing_revenue) else ("", "")
+            data_rows.append([a, b, c, d, e, f_val, g_val, h_val, i_val])
 
         ws.clear()
+        # Убедимся что лист имеет достаточно колонок (9: A-I)
+        if ws.col_count < 9:
+            ws.resize(cols=9)
         ws.update(
             values=[title_row, section_row, header_row] + data_rows, range_name="A1"
         )
@@ -4570,17 +4589,17 @@ async def sync_fintab_mapping_sheet(
         # ── batchUpdate: форматирование + дропдауны ──
         requests: list[dict] = []
 
-        # Объединение строки 1 (заголовок) — одна ячейка A-G
+        # Объединение строки 1 (заголовок) — одна ячейка A-I
         requests.append(
             {
                 "mergeCells": {
-                    "range": _sr(sheet_id, 0, 1, 0, 7),
+                    "range": _sr(sheet_id, 0, 1, 0, 9),
                     "mergeType": "MERGE_ALL",
                 }
             }
         )
-        # Объединение строки 2 (секции): A-C, D-E, F-G
-        for c0, c1 in [(0, 3), (3, 5), (5, 7)]:
+        # Объединение строки 2 (секции): A-C, D-E, F-G, H-I
+        for c0, c1 in [(0, 3), (3, 5), (5, 7), (7, 9)]:
             requests.append(
                 {
                     "mergeCells": {
@@ -4594,7 +4613,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 0, 1, 0, 7),
+                    "range": _sr(sheet_id, 0, 1, 0, 9),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.20, 0.40, 0.78),
@@ -4615,7 +4634,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 1, 2, 0, 7),
+                    "range": _sr(sheet_id, 1, 2, 0, 9),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.85, 0.91, 0.98),
@@ -4631,7 +4650,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 2, 3, 0, 7),
+                    "range": _sr(sheet_id, 2, 3, 0, 9),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.90, 0.90, 0.90),
@@ -4657,8 +4676,8 @@ async def sync_fintab_mapping_sheet(
             }
         )
 
-        # Ширины колонок: A=200, B=220, C=180, D=200, E=200, F=220, G=220
-        for ci, px in enumerate([200, 220, 180, 200, 200, 220, 220]):
+        # Ширины колонок: A=200, B=220, C=180, D=200, E=200, F=220, G=220, H=220, I=220
+        for ci, px in enumerate([200, 220, 180, 200, 200, 220, 220, 220, 220]):
             requests.append(
                 {
                     "updateDimensionProperties": {
@@ -4740,6 +4759,26 @@ async def sync_fintab_mapping_sheet(
                 {
                     "setDataValidation": {
                         "range": _sr(sheet_id, data_start, data_end, 6, 7),
+                        "rule": _dv_list(ft_pnl_options),
+                    }
+                }
+            )
+        # Col H — место приготовления iiko (выпадающий список)
+        if cooking_place_options:
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 7, 8),
+                        "rule": _dv_list(cooking_place_options),
+                    }
+                }
+            )
+        # Col I — статья FinTablo (Выручка) — тот же список ПиУ-категорий
+        if ft_pnl_options:
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 8, 9),
                         "rule": _dv_list(ft_pnl_options),
                     }
                 }
@@ -4959,6 +4998,114 @@ async def read_fintab_opiu_mapping() -> list[dict]:
             len(results),
         )
         return results
+
+    return await asyncio.to_thread(_sync)
+
+
+async def read_fintab_all_mappings() -> dict[str, list[dict]]:
+    """
+    Считать все маппинги (ОПИУ, подразделения, выручка) за один вызов GSheets.
+
+    Возвращает::
+
+        {
+            "opiu": [{"iiko_account_name": str, "ft_pnl_category_id": int, "ft_pnl_category_name": str}],
+            "dept_direction": [{"dept_name": str, "ft_direction_name": str}],
+            "revenue": [{"cooking_place_type": str, "ft_pnl_category_id": int, "ft_pnl_category_name": str}],
+        }
+
+    Один запрос к Google Sheets вместо нескольких.
+    """
+
+    def _sync() -> dict[str, list[dict]]:
+        client = _get_client()
+        spreadsheet = client.open_by_key(SALARY_SHEET_ID)
+        try:
+            ws = spreadsheet.worksheet(_FINTAB_MAPPING_TAB)
+        except gspread.exceptions.WorksheetNotFound:
+            logger.warning("[%s] read_fintab_all_mappings: вкладка не найдена", LABEL)
+            return {"opiu": [], "dept_direction": [], "revenue": []}
+
+        all_rows = ws.get_all_values()
+
+        # ── Маппинг ОПИУ (F-G) ──
+        opiu_results: list[dict] = []
+        for row in all_rows[3:]:
+            f_val = str(row[5]).strip() if len(row) > 5 else ""
+            g_val = str(row[6]).strip() if len(row) > 6 else ""
+            if not f_val or not g_val:
+                continue
+            m_uuid = re.search(
+                r"\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)\s*$",
+                f_val,
+                re.IGNORECASE,
+            )
+            iiko_account_name = f_val[: m_uuid.start()].strip() if m_uuid else f_val
+            m = re.search(r"\((\d+)\)\s*$", g_val)
+            if not m:
+                logger.warning(
+                    "[%s] read_fintab_all_mappings: не удалось распарсить FT ID из «%s»",
+                    LABEL,
+                    g_val,
+                )
+                continue
+            ft_id = int(m.group(1))
+            ft_name = g_val[: m.start()].strip()
+            opiu_results.append(
+                {
+                    "iiko_account_name": iiko_account_name,
+                    "ft_pnl_category_id": ft_id,
+                    "ft_pnl_category_name": ft_name,
+                }
+            )
+
+        # ── Маппинг подразделений→направлений (D-E) ──
+        dept_results: list[dict] = []
+        for row in all_rows[3:]:
+            d_val = str(row[3]).strip() if len(row) > 3 else ""
+            e_val = str(row[4]).strip() if len(row) > 4 else ""
+            if not d_val or not e_val:
+                continue
+            dept_results.append(
+                {
+                    "dept_name": d_val,
+                    "ft_direction_name": e_val,
+                }
+            )
+
+        # ── Маппинг выручки (H-I): Место приготовления → Статья FinTablo ──
+        revenue_results: list[dict] = []
+        for row in all_rows[3:]:
+            h_val = str(row[7]).strip() if len(row) > 7 else ""
+            i_val = str(row[8]).strip() if len(row) > 8 else ""
+            if not h_val or not i_val:
+                continue
+            m = re.search(r"\((\d+)\)\s*$", i_val)
+            if not m:
+                logger.warning(
+                    "[%s] read_fintab_all_mappings: не удалось распарсить FT ID выручки из «%s»",
+                    LABEL,
+                    i_val,
+                )
+                continue
+            ft_id = int(m.group(1))
+            ft_name = i_val[: m.start()].strip()
+            revenue_results.append(
+                {
+                    "cooking_place_type": h_val,
+                    "ft_pnl_category_id": ft_id,
+                    "ft_pnl_category_name": ft_name,
+                }
+            )
+
+        logger.info(
+            "[%s] read_fintab_all_mappings: %d ОПИУ + %d подразделение→направление + %d выручка",
+            LABEL,
+            len(opiu_results),
+            len(dept_results),
+            len(revenue_results),
+        )
+        return {"opiu": opiu_results, "dept_direction": dept_results, "revenue": revenue_results}
 
     return await asyncio.to_thread(_sync)
 

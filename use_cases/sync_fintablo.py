@@ -596,6 +596,7 @@ async def sync_all_fintablo(
             # Получаем статьи ПиУ и счета iiko из БД для дропдаунов G и F
             from sqlalchemy import select as _select
             from use_cases.pnl_sync import get_distinct_iiko_accounts
+            from use_cases.day_report import get_distinct_cooking_place_types
 
             async with async_session_factory() as _sess:
                 _pnl_rows = (
@@ -609,12 +610,14 @@ async def sync_all_fintablo(
                 )
                 ft_pnl_cats = [{"id": r.id, "name": r.name} for r in _pnl_rows]
             iiko_accs = await get_distinct_iiko_accounts()
+            cooking_places = await get_distinct_cooking_place_types()
             await sync_fintab_mapping_sheet(
                 fot_tab_name=fot_tab,
                 ft_employees=ft_emps,
                 ft_directions=ft_dirs,
                 ft_pnl_categories=ft_pnl_cats,
                 iiko_accounts=iiko_accs,
+                cooking_place_types=cooking_places,
             )
         except Exception:
             logger.exception("[FT] Ошибка обновления «Маппинг FinTablo»")

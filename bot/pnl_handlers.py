@@ -183,6 +183,11 @@ def format_opiu_result(result: dict) -> str:
     elapsed = result.get("elapsed", 0)
     details = result.get("details", [])
     unmapped = result.get("unmapped_keys", [])
+    unmapped_sums = result.get("unmapped_sums", {})
+    total_incoming = result.get("total_incoming", 0)
+    total_allocated = result.get("total_allocated", 0)
+    total_unmapped = result.get("total_unmapped", 0)
+    writeoff_ded = result.get("writeoff_deducted", 0)
 
     month = result.get("month", "")
     month_label = f" за {month}" if month else ""
@@ -192,6 +197,17 @@ def format_opiu_result(result: dict) -> str:
         f"⏱ {elapsed} сек",
         "",
     ]
+
+    # Сводка по суммам
+    if total_incoming:
+        lines.append(f"💰 iiko итого: <b>{total_incoming:,.2f}</b>")
+        lines.append(f"   → в FT: {total_allocated:,.2f}")
+        if writeoff_ded:
+            lines.append(f"   → списания (вычтено из себеcт.): {writeoff_ded:,.2f}")
+        if total_unmapped:
+            lines.append(f"   → не разнесено: {total_unmapped:,.2f}")
+        lines.append("")
+
     if details:
         lines.extend(details[:20])
 
@@ -199,7 +215,9 @@ def format_opiu_result(result: dict) -> str:
         lines.append("")
         lines.append("⚠️ <b>Не удалось разнести:</b>")
         for key in unmapped[:15]:
-            lines.append(f"  • {key}")
+            amount = unmapped_sums.get(key)
+            suffix = f"  ({amount:,.2f})" if amount else ""
+            lines.append(f"  • {key}{suffix}")
         if len(unmapped) > 15:
             lines.append(f"  … и ещё {len(unmapped) - 15}")
         lines.append("")

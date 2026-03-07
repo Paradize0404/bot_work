@@ -76,6 +76,40 @@ class DayReportData:
 # ═══════════════════════════════════════════════════════
 
 
+async def get_distinct_cooking_place_types() -> list[str]:
+    """
+    Получить уникальные значения CookingPlaceType из пресета выручки.
+
+    Запрашивает текущий месяц (1-е число → следующий месяц).
+    Используется для формирования выпадающего списка в колонке H маппинга.
+    """
+    now = now_kgd()
+    first_day = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if now.month == 12:
+        next_month = first_day.replace(year=now.year + 1, month=1)
+    else:
+        next_month = first_day.replace(month=now.month + 1)
+
+    date_from = first_day.strftime("%Y-%m-%dT00:00:00")
+    date_to = next_month.strftime("%Y-%m-%dT00:00:00")
+
+    try:
+        rows = await fetch_olap_by_preset(SALES_PRESET, date_from, date_to)
+    except Exception:
+        logger.exception("[day_report] Ошибка получения CookingPlaceType из iiko")
+        return []
+
+    types: set[str] = set()
+    for row in rows:
+        cpt = (row.get("CookingPlaceType") or "").strip()
+        if cpt:
+            types.add(cpt)
+
+    result = sorted(types)
+    logger.info("[day_report] CookingPlaceType: %d значений: %s", len(result), result)
+    return result
+
+
 async def fetch_day_report_data(
     department_id: str | None = None,
     department_name: str | None = None,

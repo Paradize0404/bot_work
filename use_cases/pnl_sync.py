@@ -6,17 +6,22 @@ Use-case: синхронизация ОПИУ (Отчёт о прибылях и
   2. Считать маппинг iiko Account.Name → FT PnL category из Google Sheets
   3. Агрегировать суммы по FT PnL-категориям:
      - Приоритет: Product.SecondParent (группа) > Account.Name (счёт)
-     - WRITEOFF — хардкод в «Списания продуктов», разбивка по подразделениям
-  4. Для каждой FT-категории:
-     - GET текущие PnL-записи за месяц
-     - Рассчитать дельту
-     - Создать / обновить / удалить бот-записи
+     - WRITEOFF → «Списания продуктов» + вычет из исходной категории
+  4. Для каждой FT-категории — параллельная синхронизация через asyncio.gather
   5. Ежедневный запуск в 07:00 по расписанию
 
 Маппинг хранится в Google Sheets (лист «Маппинг FinTablo», колонки F–G).
 Бот-записи в FinTablo помечаются comment="iiko-bot-auto".
+
+WRITEOFF-логика:
+  - Списания пишутся в отдельную категорию «Списания продуктов».
+  - Одновременно сумма WRITEOFF вычитается из той FT-категории,
+    куда попала бы строка по стандартному маппингу (группа > счёт).
+    Это предотвращает задвоение: «Сырьевая себестоимость» учитывает
+    закуп-минус-списания, а «Списания» — отдельная статья расхода.
 """
 
+import asyncio
 import logging
 import time
 from collections import defaultdict
@@ -26,10 +31,7 @@ from sqlalchemy import select
 
 from adapters import fintablo_api
 from adapters import iiko_api
-from adapters.google_sheets import (
-    read_fintab_dept_direction_mapping,
-    read_fintab_opiu_mapping,
-)
+from adapters.google_sheets import read_fintab_all_mappings
 from db.engine import async_session_factory as async_session
 from db.ft_models import FTDirection, FTPnlCategory
 from db.models import Entity, ProductGroup
@@ -54,7 +56,8 @@ WRITEOFF_FT_CATEGORY_NAME = "Списания продуктов"
 
 async def get_all_mappings() -> list[dict]:
     """Вернуть все активные маппинги из листа «Маппинг FinTablo» (колонки F-G)."""
-    return await read_fintab_opiu_mapping()
+    both = await read_fintab_all_mappings()
+    return both["opiu"]
 
 
 async def get_available_ft_categories() -> list[dict]:
@@ -78,25 +81,56 @@ async def get_available_ft_categories() -> list[dict]:
 # ═══════════════════════════════════════════════════════
 
 
+def _normalize_dept(name: str) -> str:
+    """Нормализовать имя подразделения для сравнения.
+
+    OLAP отдаёт имена вида 'PizzaYolo / Пицца Йоло (Московский)' или
+    'Клиническая PizzaYolo', а маппинг содержит 'Клиническая' / 'Московский'.
+    Удаляем шум: 'PizzaYolo', 'Пицца Йоло', спец-символы, лишние пробелы.
+    """
+    s = name.lower()
+    # удаляем бренд-суффиксы
+    for noise in ("pizzayolo", "пицца йоло", "pizza yolo"):
+        s = s.replace(noise, "")
+    # удаляем спец-символы и скобки
+    s = s.replace("/", " ").replace("(", " ").replace(")", " ")
+    return " ".join(s.split()).strip()
+
+
 def _resolve_department_direction(
     dept_name: str,
     dept_dir_map: list[dict],
 ) -> str | None:
     """Определить название FT-направления по Department из OLAP.
 
-    Сначала пробует точное совпадение dept_name == mapping["dept_name"],
-    затем подстрочное (dept_name содержится в mapping или наоборот).
+    Порядок:
+      1. Точное совпадение (lower)
+      2. Нормализованное совпадение (убрано PizzaYolo и т.п.)
+      3. Подстрочное (маппинг-ключ ⊂ department или наоборот)
     """
     lower = dept_name.lower()
-    # точное
+    norm = _normalize_dept(dept_name)
+
+    # 1  точное
     for m in dept_dir_map:
         if m["dept_name"].lower() == lower:
             return m["ft_direction_name"]
-    # подстрочное: OLAP dept содержит ключ из таблицы или наоборот
+
+    # 2  нормализованное
+    for m in dept_dir_map:
+        if _normalize_dept(m["dept_name"]) == norm:
+            return m["ft_direction_name"]
+        # маппинг-ключ содержится в нормализованном OLAP dept
+        m_norm = _normalize_dept(m["dept_name"])
+        if m_norm and (m_norm in norm or norm in m_norm):
+            return m["ft_direction_name"]
+
+    # 3  подстрочное (как было)
     for m in dept_dir_map:
         key = m["dept_name"].lower()
         if key in lower or lower in key:
             return m["ft_direction_name"]
+
     return None
 
 
@@ -147,15 +181,50 @@ async def fetch_iiko_accounts_from_preset(
         account_name = (row.get("Account.Name") or row.get("AccountName") or "").strip()
         if not account_name:
             continue
+
+        # Определяем тип транзакции ДО фильтрации по сумме
+        tt = (row.get("TransactionType") or "").strip() or None
+        is_writeoff = (tt or "").upper() == "WRITEOFF"
+
+        # Для WRITEOFF: Sum.Incoming может быть 0 (расход, не приход).
+        # Пробуем Sum.Outgoing, Sum.Amount, Sum.Cost как фолбэки.
         try:
             value = float(row.get("Sum.Incoming", 0) or 0)
         except (ValueError, TypeError):
             value = 0.0
-        if value <= 0:
+
+        if is_writeoff and value <= 0:
+            for alt_field in ("Sum.Outgoing", "Sum.Amount", "Sum.Cost"):
+                try:
+                    alt = float(row.get(alt_field, 0) or 0)
+                except (ValueError, TypeError):
+                    alt = 0.0
+                if alt > 0:
+                    value = alt
+                    logger.info(
+                        "[pnl_sync] WRITEOFF: использую %s=%.2f вместо Sum.Incoming=0"
+                        " (account=%s)",
+                        alt_field, alt, account_name,
+                    )
+                    break
+            # Если ВСЕ поля 0 — используем abs(Sum.Incoming) на случай отрицательного
+            if value <= 0:
+                try:
+                    value = abs(float(row.get("Sum.Incoming", 0) or 0))
+                except (ValueError, TypeError):
+                    value = 0.0
+            if value <= 0:
+                logger.warning(
+                    "[pnl_sync] WRITEOFF: все суммы = 0, пропускаю строку"
+                    " (account=%s, row_keys=%s)",
+                    account_name, list(row.keys()),
+                )
+                continue
+        elif value <= 0:
             continue
+
         pg = (row.get("Product.SecondParent") or "").strip() or None
         dept = (row.get("Department") or "").strip() or None
-        tt = (row.get("TransactionType") or "").strip() or None
         result.append(
             {
                 "account_name": account_name,
@@ -279,11 +348,13 @@ async def update_opiu(
         sum(r["sum"] for r in iiko_rows),
     )
 
-    # ── 3. Считать маппинг + справочные данные ──
-    mappings = await get_all_mappings()
+    # ── 3. Считать маппинг + справочные данные (один вызов GSheets) ──
+    all_maps = await read_fintab_all_mappings()
+    mappings = all_maps["opiu"]
+    dept_dir_map = all_maps["dept_direction"]
+
     writeoff_cat_id = await _get_writeoff_category_id()
     direction_map = await _get_direction_map()  # name → id
-    dept_dir_map = await read_fintab_dept_direction_mapping()  # sheets D-E
 
     if not mappings and writeoff_cat_id is None:
         logger.warning("[pnl_sync] Маппинг пуст и нет категории списаний")
@@ -304,12 +375,16 @@ async def update_opiu(
 
     # ── 4. Агрегация ──
     #   ВСЕ транзакции разбиваются по department → direction (из D-E)
-    #   WRITEOFF → «Списания продуктов» (хардкод категории)
+    #   WRITEOFF → «Списания продуктов» + вычет из исходной категории
     #   Остальные → приоритет: [Группа] > Account.Name (маппинг F-G)
     #   Ключ: (cat_id, direction_id | None)
     ft_totals: dict[tuple[int, int | None], float] = defaultdict(float)
     ft_names: dict[int, str] = {}
     unmapped_keys: set[str] = set()
+    unmapped_sums: dict[str, float] = defaultdict(float)  # ключ → сумма
+
+    # WRITEOFF-вычеты: сколько списаний вычесть из каждой (cat_id, dir_id)
+    writeoff_deductions: dict[tuple[int, int | None], float] = defaultdict(float)
 
     for row in iiko_rows:
         value = row["sum"]
@@ -326,51 +401,109 @@ async def update_opiu(
         )
         dir_id = direction_map.get(dir_name) if dir_name else None
         if department and dir_id is None:
-            unmapped_keys.add(f"dept={department} (нет направления)")
+            ukey = f"dept={department} (нет направления)"
+            unmapped_keys.add(ukey)
 
-        # ── WRITEOFF → хардкод ──
-        if tx_type == "WRITEOFF":
-            if writeoff_cat_id is None:
-                unmapped_keys.add(
-                    f"WRITEOFF (нет категории «{WRITEOFF_FT_CATEGORY_NAME}»)"
-                )
-                continue
-            ft_totals[(writeoff_cat_id, dir_id)] += value
-            ft_names[writeoff_cat_id] = WRITEOFF_FT_CATEGORY_NAME
-            continue
-
-        # ── INVOICE / INCOMING_SERVICE → маппинг ──
-        cat_id: int | None = None
-        cat_name: str = ""
-
-        # Приоритет 1: маппинг по группе товаров
+        # ── Определяем FT-категорию по стандартному маппингу ──
+        mapped_cat_id: int | None = None
+        mapped_cat_name: str = ""
         if product_group:
             group_key = f"[Группа] {product_group}"
             if group_key in mapping_index:
-                cat_id, cat_name = mapping_index[group_key]
+                mapped_cat_id, mapped_cat_name = mapping_index[group_key]
+        if mapped_cat_id is None and account_name in mapping_index:
+            mapped_cat_id, mapped_cat_name = mapping_index[account_name]
 
-        # Приоритет 2: fallback на маппинг по счёту
-        if cat_id is None and account_name in mapping_index:
-            cat_id, cat_name = mapping_index[account_name]
-
-        if cat_id is None:
-            unmapped_keys.add(account_name)
+        # ── WRITEOFF → «Списания продуктов» + вычет из исходной категории ──
+        if tx_type == "WRITEOFF":
+            if writeoff_cat_id is None:
+                ukey = f"WRITEOFF (нет категории «{WRITEOFF_FT_CATEGORY_NAME}»)"
+                unmapped_keys.add(ukey)
+                unmapped_sums[ukey] += value
+                continue
+            # Записываем в «Списания продуктов»
+            ft_totals[(writeoff_cat_id, dir_id)] += value
+            ft_names[writeoff_cat_id] = WRITEOFF_FT_CATEGORY_NAME
+            # Трекаем вычет из исходной категории
+            if mapped_cat_id is not None:
+                writeoff_deductions[(mapped_cat_id, dir_id)] += value
+                ft_names[mapped_cat_id] = mapped_cat_name
+            else:
+                logger.warning(
+                    "[pnl_sync] WRITEOFF без маппинга: account=%s group=%s sum=%.2f"
+                    " — не вычтено из категории",
+                    account_name,
+                    product_group,
+                    value,
+                )
             continue
 
-        ft_totals[(cat_id, dir_id)] += value
-        ft_names[cat_id] = cat_name
+        # ── INVOICE / INCOMING_SERVICE → маппинг ──
+        if mapped_cat_id is None:
+            unmapped_keys.add(account_name)
+            unmapped_sums[account_name] += value
+            continue
+
+        ft_totals[(mapped_cat_id, dir_id)] += value
+        ft_names[mapped_cat_id] = mapped_cat_name
+
+    # ── Применяем WRITEOFF-вычеты ──
+    for key, deduction in writeoff_deductions.items():
+        if key in ft_totals:
+            old = ft_totals[key]
+            ft_totals[key] = old - deduction
+            cat_id_d, dir_id_d = key
+            logger.info(
+                "[pnl_sync] WRITEOFF-вычет: cat=%s dir=%s  %.2f → %.2f (-%0.2f)",
+                ft_names.get(cat_id_d, str(cat_id_d)),
+                dir_id_d,
+                old,
+                ft_totals[key],
+                deduction,
+            )
+        else:
+            # Есть списания но нет прихода — вычитать неоткуда, логируем
+            logger.warning(
+                "[pnl_sync] WRITEOFF-вычет: cat=%d dir=%s — нет прихода, вычет %.2f проигнорирован",
+                key[0],
+                key[1],
+                deduction,
+            )
 
     # Округлить
     for key in ft_totals:
         ft_totals[key] = round(ft_totals[key], 2)
 
-    total_sum = sum(ft_totals.values())
+    # Убираем нулевые/отрицательные  (после вычетов категория может обнулиться)
+    ft_totals = {
+        k: v for k, v in ft_totals.items() if v > 0.005
+    }
+
+    total_allocated = sum(ft_totals.values())
+    total_unmapped = sum(unmapped_sums.values())
+    total_incoming = sum(r["sum"] for r in iiko_rows)
+    total_writeoff_ded = sum(writeoff_deductions.values())
+
     logger.info(
-        "[pnl_sync] Агрегация: %d записей FT, total=%.2f, unmapped=%d",
+        "[pnl_sync] Агрегация: %d записей FT, allocated=%.2f, unmapped=%.2f (%d keys), writeoff_deducted=%.2f",
         len(ft_totals),
-        total_sum,
+        total_allocated,
+        total_unmapped,
         len(unmapped_keys),
+        total_writeoff_ded,
     )
+
+    # ── Контроль целостности ──
+    # total_incoming = allocated + unmapped + writeoff_deductions (writeoff вычтено)
+    expected = total_allocated + total_unmapped + total_writeoff_ded
+    discrepancy = abs(total_incoming - expected)
+    if discrepancy > 1.0:
+        logger.warning(
+            "[pnl_sync] ⚠️ Расхождение целостности: iiko=%.2f, FT+unmapped+ded=%.2f, delta=%.2f",
+            total_incoming,
+            expected,
+            discrepancy,
+        )
 
     # ── 5. Зачистка старых бот-записей без direction ──
     # Если категория теперь разбивается по направлениям, удалить
@@ -401,21 +534,27 @@ async def update_opiu(
                     "[pnl_sync] Ошибка зачистки directionless для cat=%d", cat_id
                 )
 
-    # ── 6. Обновить каждую FT-категорию (с direction_id, если есть) ──
+    # ── 6. Обновить каждую FT-категорию параллельно ──
     updated = 0
     skipped = 0
     errors = 0
     details: list[str] = []
 
+    # Подготовка задач
+    tasks: list[tuple[int, int | None, float, str]] = []
     for (cat_id, direction_id), iiko_total in ft_totals.items():
         cat_name = ft_names.get(cat_id, f"ID:{cat_id}")
         dir_label = ""
         if direction_id:
-            # обратный маппинг id → name
             dir_label = next(
                 (n for n, d in direction_map.items() if d == direction_id), ""
             )
         display_name = f"{cat_name} / {dir_label}" if dir_label else cat_name
+        tasks.append((cat_id, direction_id, iiko_total, display_name))
+
+    # Параллельный запуск (asyncio.gather)
+    async def _do_sync(cat_id: int, direction_id: int | None, iiko_total: float, display_name: str) -> tuple[str, str]:
+        """Возвращает (status, display_name)."""
         try:
             result = await _sync_one_category(
                 cat_id,
@@ -424,22 +563,31 @@ async def update_opiu(
                 date_mm_yyyy,
                 direction_id=direction_id,
             )
-            if result == "updated":
-                updated += 1
-                details.append(f"✅ {display_name}: {iiko_total:.2f}")
-            elif result == "skipped":
-                skipped += 1
-            else:
-                details.append(f"ℹ️ {display_name}: {result}")
+            return (result, display_name if result != "skipped" else "")
         except Exception:
-            errors += 1
             logger.exception(
                 "[pnl_sync] Ошибка для %s (id=%d, dir=%s)",
                 display_name,
                 cat_id,
                 direction_id,
             )
-            details.append(f"❌ {display_name}: ошибка")
+            return ("error", display_name)
+
+    results = await asyncio.gather(
+        *[_do_sync(cid, did, total, dn) for cid, did, total, dn in tasks]
+    )
+
+    for (cid, did, total, dn), (status, _) in zip(tasks, results):
+        if status == "updated":
+            updated += 1
+            details.append(f"✅ {dn}: {total:.2f}")
+        elif status == "skipped":
+            skipped += 1
+        elif status == "error":
+            errors += 1
+            details.append(f"❌ {dn}: ошибка")
+        else:
+            details.append(f"ℹ️ {dn}: {status}")
 
     elapsed = time.monotonic() - t0
 
@@ -458,6 +606,11 @@ async def update_opiu(
         "errors": errors,
         "details": details,
         "unmapped_keys": sorted(unmapped_keys),
+        "unmapped_sums": dict(unmapped_sums),
+        "total_incoming": round(total_incoming, 2),
+        "total_allocated": round(total_allocated, 2),
+        "total_unmapped": round(total_unmapped, 2),
+        "writeoff_deducted": round(total_writeoff_ded, 2),
         "elapsed": round(elapsed, 1),
         "month": date_mm_yyyy,
     }
