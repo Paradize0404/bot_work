@@ -174,6 +174,7 @@ async def build_iiko_invoices(
 
     # А. Маппинг типов складов для подразделения пользователя
     from use_cases.product_request import get_all_stores_for_department
+
     store_type_map = await build_store_type_map(department_id)
     if not store_type_map:
         # Получаем список складов для диагностики

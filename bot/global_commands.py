@@ -213,6 +213,7 @@ class PermissionMiddleware(BaseMiddleware):
         # ── Reply-кнопки (Message) ──
         if isinstance(event, Message) and event.text:
             from bot.permission_map import MENU_BUTTON_GROUPS
+
             tg_id = event.from_user.id
             # Кнопки главного меню: достаточно любого права из группы
             if event.text in MENU_BUTTON_GROUPS:

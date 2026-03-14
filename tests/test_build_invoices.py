@@ -370,7 +370,9 @@ async def test_no_date_warns_and_uses_today(
 @patch("use_cases.incoming_invoice._load_supplier_ids_from_db", new_callable=AsyncMock)
 @patch("use_cases.incoming_invoice._load_product_units", new_callable=AsyncMock)
 @patch("use_cases.product_request.build_store_type_map", new_callable=AsyncMock)
-@patch("use_cases.product_request.get_all_stores_for_department", new_callable=AsyncMock)
+@patch(
+    "use_cases.product_request.get_all_stores_for_department", new_callable=AsyncMock
+)
 @patch("use_cases.ocr_mapping.get_base_mapping", new_callable=AsyncMock)
 async def test_unknown_store_type_warns(
     mock_mapping, mock_raw_stores, mock_store_map, mock_units, mock_suppliers
