@@ -212,18 +212,32 @@ class PermissionMiddleware(BaseMiddleware):
 
         # ── Reply-кнопки (Message) ──
         if isinstance(event, Message) and event.text:
-            perm_key = TEXT_PERMISSIONS.get(event.text)
-            if perm_key:
-                tg_id = event.from_user.id
-                if not await perm_uc.has_permission(tg_id, perm_key):
+            from bot.permission_map import MENU_BUTTON_GROUPS
+            tg_id = event.from_user.id
+            # Кнопки главного меню: достаточно любого права из группы
+            if event.text in MENU_BUTTON_GROUPS:
+                group_perms = MENU_BUTTON_GROUPS[event.text]
+                if not await perm_uc.has_any_permission(tg_id, group_perms):
                     await event.answer("⛔ У вас нет доступа к этому разделу")
                     logger.warning(
-                        "[perm-mw] Заблокирован tg:%d text='%s' perm='%s'",
+                        "[perm-mw] Заблокирован tg:%d text='%s' group=%s",
                         tg_id,
                         event.text,
-                        perm_key,
+                        group_perms,
                     )
                     return  # хэндлер НЕ вызывается
+            else:
+                perm_key = TEXT_PERMISSIONS.get(event.text)
+                if perm_key:
+                    if not await perm_uc.has_permission(tg_id, perm_key):
+                        await event.answer("⛔ У вас нет доступа к этому разделу")
+                        logger.warning(
+                            "[perm-mw] Заблокирован tg:%d text='%s' perm='%s'",
+                            tg_id,
+                            event.text,
+                            perm_key,
+                        )
+                        return  # хэндлер НЕ вызывается
 
         # ── Inline-кнопки (CallbackQuery) ──
         if isinstance(event, CallbackQuery) and event.data:

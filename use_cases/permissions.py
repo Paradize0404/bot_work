@@ -196,6 +196,18 @@ async def has_permission(telegram_id: int, perm_key: str) -> bool:
     return user_perms.get(perm_key, False)
 
 
+async def has_any_permission(telegram_id: int, perm_keys: list[str]) -> bool:
+    """
+    Проверить, есть ли у пользователя ХОТЯ БЫ ОДНО из перечисленных прав.
+    Используется для кнопок главного меню, которые требуют any-of-group.
+    """
+    cache = await _ensure_cache()
+    user_perms = cache.get(str(telegram_id))
+    if user_perms is None:
+        return False
+    return any(user_perms.get(pk, False) for pk in perm_keys)
+
+
 async def get_allowed_keys(telegram_id: int) -> set[str]:
     """
     Получить множество разрешённых кнопок главного меню для пользователя.

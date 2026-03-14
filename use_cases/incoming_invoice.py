@@ -173,14 +173,27 @@ async def build_iiko_invoices(
         return [], []
 
     # А. Маппинг типов складов для подразделения пользователя
+    from use_cases.product_request import get_all_stores_for_department
     store_type_map = await build_store_type_map(department_id)
     if not store_type_map:
-        warnings.append(
-            f"Не найдены склады для подразделения {department_id}. "
-            "Проверьте, что склады синхронизированы (iiko ↔ БД)."
-        )
+        # Получаем список складов для диагностики
+        raw_stores = await get_all_stores_for_department(department_id)
+        if raw_stores:
+            found_names = ", ".join(s["name"] for s in raw_stores[:5])
+            warnings.append(
+                f"Не удалось определить тип склада для подразделения {department_id}. "
+                f"Найдены склады: {found_names}. "
+                "Убедитесь, что в названиях складов в iiko присутствуют слова 'бар', 'кухня', 'тмц' или 'хоз'."
+            )
+        else:
+            warnings.append(
+                f"Склады для подразделения {department_id} не найдены в БД. "
+                "Выполните синхронизацию: Настройки → 🏢 Синхр. подразделения."
+            )
         logger.warning(
-            "[incoming_invoice] store_type_map пуст для dept=%s", department_id
+            "[incoming_invoice] store_type_map пуст для dept=%s, raw_stores=%s",
+            department_id,
+            [s["name"] for s in raw_stores] if raw_stores else [],
         )
 
     # Б. Актуальный базовый маппинг (для дообогащения позиций без iiko_id)

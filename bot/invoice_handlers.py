@@ -1057,8 +1057,8 @@ async def confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("⏳ Уже отправляю...", show_alert=False)
         return
     _sending_lock.add(user_id)
-    await callback.answer("⏳ Отправляю...")
     try:
+        await callback.answer("⏳ Отправляю...")
         await _do_confirm_send(callback, state)
     finally:
         _sending_lock.discard(user_id)
@@ -1643,6 +1643,8 @@ async def _finish_invoice_edit_msg(
 @router.callback_query(F.data == "inv_cancel")
 async def cancel_template(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer("Отменено")
+    # Снимаем лок отправки на случай отмены во время ожидания ответа iiko
+    _sending_lock.discard(callback.from_user.id)
     logger.info("[invoice] Отмена tg:%d", callback.from_user.id)
 
     data = await state.get_data()
