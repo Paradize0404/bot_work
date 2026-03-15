@@ -94,7 +94,7 @@ async def _push_progress(
         try:
             await bot.delete_message(chat_id, old_msg_id)
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
     kw: dict = {"text": text}
     if parse_mode:
         kw["parse_mode"] = parse_mode
@@ -124,12 +124,12 @@ async def _repush(
     try:
         return await bot_.edit_message_text(chat_id=chat_id, message_id=msg_id, **kw)
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     # Fallback: удалить + отправить новым
     try:
         await bot_.delete_message(chat_id, msg_id)
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     return await bot_.send_message(chat_id, **kw)
 
 
@@ -153,9 +153,7 @@ async def _disable_all_invoice_buttons(
                 reply_markup=None,
             )
         except Exception:
-            pass
-
-
+            logger.debug("suppressed", exc_info=True)
 async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
     """Установить status='pending_mapping' для документов, ожидающих маппинг."""
     from use_cases.ocr_pipeline import mark_docs_pending_mapping
@@ -417,8 +415,7 @@ async def btn_ocr_start(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     await state.set_state(OcrStates.waiting_photos)
     await set_cancel_kb(message.bot, message.chat.id, state)
 
@@ -477,8 +474,7 @@ async def handle_ocr_photo(message: Message, state: FSMContext) -> None:
                 await state.update_data(prompt_msg_id=new_id)
                 prompt_msg_id = new_id
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
         old_task = _album_tasks.get(group_id)
         if old_task and not old_task.done():
             old_task.cancel()
@@ -507,7 +503,7 @@ async def handle_ocr_non_photo(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     data = await state.get_data()
     prompt_id = data.get("prompt_msg_id")
     err_text = (
@@ -525,7 +521,7 @@ async def handle_ocr_non_photo(message: Message, state: FSMContext) -> None:
             )
             return
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
     await message.answer(err_text, parse_mode="HTML")
 
 
@@ -590,8 +586,7 @@ async def btn_mapping_done(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     placeholder = await message.answer("⏳ Проверяю «Маппинг Импорт»...")
     await _handle_mapping_done(placeholder, tg_id)
 
@@ -602,7 +597,7 @@ async def cb_mapping_done(callback: CallbackQuery) -> None:
     try:
         await callback.answer()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     tg_id = callback.from_user.id
     logger.info("[ocr] Маппинг готов (inline) tg:%d", tg_id)
 
@@ -610,8 +605,7 @@ async def cb_mapping_done(callback: CallbackQuery) -> None:
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     placeholder = await callback.message.answer("⏳ Проверяю «Маппинг Импорт»...")
     await _handle_mapping_done(placeholder, tg_id)
 
@@ -623,8 +617,7 @@ async def cb_refresh_mapping_ref(callback: CallbackQuery) -> None:
     try:
         await callback.answer("⏳ Обновляю список товаров...")
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     from use_cases import ocr_mapping as mapping_uc
 
     count = await mapping_uc.refresh_ref_sheet()
@@ -637,9 +630,7 @@ async def cb_refresh_mapping_ref(callback: CallbackQuery) -> None:
     try:
         await callback.message.answer(text)
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 async def _handle_mapping_done(placeholder, tg_id) -> None:
     """Общая логика проверки и финализации маппинга."""
     from use_cases import ocr_mapping as mapping_uc
@@ -869,7 +860,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
     try:
         await callback.answer()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     logger.info("[ocr] cb_iiko_invoice_send tg:%d", callback.from_user.id)
 
     tg_id = callback.from_user.id
@@ -882,7 +873,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
                 "⚠️ Ошибка данных кнопки.", reply_markup=None
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
     # ── Только отправитель или бухгалтер может нажать ──
@@ -933,8 +924,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
         try:
             await callback.message.answer(result_text, parse_mode="HTML")
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
         # Если нажал бухгалтер — уведомить отправителя тоже
         if tg_id != sender_tg_id:
             try:
@@ -956,8 +946,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
                     sender_tg_id, sender_msg, parse_mode="HTML"
                 )
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
     except Exception:
         logger.exception("[ocr] Ошибка отправки накладных в iiko tg:%d", tg_id)
         err_text = (
@@ -966,9 +955,7 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
         try:
             await callback.message.answer(err_text)
         except Exception:
-            pass
-
-
+            logger.debug("suppressed", exc_info=True)
 # ════════════════════════════════════════════════════════
 #  Callback: «❌ Отменить» (отмена отправки накладных)
 # ════════════════════════════════════════════════════════
@@ -980,7 +967,7 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
     try:
         await callback.answer()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     logger.info("[ocr] cb_iiko_invoice_cancel tg:%d", callback.from_user.id)
 
     tg_id = callback.from_user.id
@@ -1019,9 +1006,7 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
         try:
             await callback.bot.send_message(sender_tg_id, cancel_text)
         except Exception:
-            pass
-
-
+            logger.debug("suppressed", exc_info=True)
 # ════════════════════════════════════════════════════════
 #  JSON-чек: автоматическая приходная накладная
 # ════════════════════════════════════════════════════════

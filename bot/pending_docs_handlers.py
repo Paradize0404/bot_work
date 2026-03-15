@@ -199,8 +199,7 @@ async def _show_requests(
             try:
                 await callback.bot.delete_message(tg_id, old_msg_id)
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
         text = req_uc.format_request_text(req)
         kb = _rh._approve_kb(pk)
         new_msg = await callback.bot.send_message(
@@ -251,8 +250,7 @@ async def _show_invoices(
             try:
                 await callback.bot.delete_message(tg_id, old_msg_id)
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
         author_line = f"👤 {info.author_name or '?'}  🏬 {info.department_name or '?'}"
         preview = format_invoice_preview(invoices)
         text = f"{author_line}\n\n{preview}"

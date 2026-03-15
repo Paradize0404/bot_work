@@ -5,6 +5,26 @@
 
 ---
 
+### 2026-03-15 — [AUDIT] Полный аудит проекта: K1–K5, R1–R7, документация
+
+Аудит по чеклисту из PROJECT_MAP.md § «Аудит проекта».
+
+#### Код (HIGH)
+- **K3 / anti-pattern `except Exception: pass`:** заменены **205 блоков** `pass` → `logger.debug("suppressed", exc_info=True)` в 16 файлах. Затронуты: `bot/writeoff_handlers.py` (63), `bot/request_handlers.py` (42), `bot/invoice_handlers.py` (25), `bot/document_handlers.py` (20), `bot/min_stock_handlers.py` (9), `bot/day_report_handlers.py` (8), `bot/handlers.py` (6), `bot/global_commands.py` (5), `bot/middleware.py` (5), `adapters/google_sheets.py` (5), `utils/qr_detector.py` (7), `main.py` (4), `logging_config.py` (2), `bot/pending_docs_handlers.py` (2), `bot/invoice_edit_handlers.py` (1), `bot/pnl_handlers.py` (1).
+- В `utils/qr_detector.py` добавлен `import logging` + `logger = getLogger(__name__)`.
+
+#### Документация (MEDIUM)
+- **FILE_STRUCTURE.md:** добавлены `bot/pnl_handlers.py` и `use_cases/pnl_sync.py` (оба отсутствовали). Обновлены счётчики моделей: `models.py` 18→31, `ft_models.py` 13→14.
+- **DATABASE.md:** добавлена таблица `pnl_account_mapping` (#49) в компактный индекс и детальное описание. Обновлён заголовок: «Всего таблиц: 46» → 49.
+- **ENV_VARS.md:** `REDIS_URL` перенесён из «Опциональные» в «Обязательные» (реально `_require()`). `GOOGLE_SHEETS_CREDENTIALS` перенесён из «Обязательные» в «Опциональные» (реально `os.getenv()` с дефолтом).
+
+#### Проверки без нарушений (PASS)
+- K1 (тонкие хэндлеры), K2 (идемпотентность), K4 (валидация), K5 (UX)
+- R1 (`now_kgd`), R2 (`X | None`), R3 (UPSERT), R4 (persistent httpx), R5 (миграции), R6 (GSheet права), R7 (OCR GPT-5.2)
+- Нет `datetime.now()`, `asyncio.get_event_loop()`, `print()`, `Optional[X]`, `FLOAT`/`REAL` колонок, `JSON` (вместо `JSONB`), мутабельных дефолтов в Column
+
+---
+
 ### 2026-03-06 — [FEAT] ОПИУ: WRITEOFF-вычет, параллель, контроль целостности
 
 Аудит и доработка пайплайна выгрузки ОЛАП → ОПИУ FinTablo.

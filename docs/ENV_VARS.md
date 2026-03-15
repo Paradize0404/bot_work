@@ -15,13 +15,14 @@
 | `IIKO_SHA1_PASSWORD` | SHA1-хеш пароля iiko |
 | `FINTABLO_TOKEN` | Bearer-токен FinTablo API |
 | `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота |
-| `GOOGLE_SHEETS_CREDENTIALS` | Путь к JSON Service Account **или** inline JSON (Railway). Определяется автоматически по `startswith("{")` |
+| `REDIS_URL` | Redis для FSM storage (обязательна — `_require()`) |
 
 ## Опциональные (с дефолтами)
 
 | Переменная | Дефолт | Описание |
 |------------|--------|----------|
 | `FINTABLO_BASE_URL` | `https://api.fintablo.ru` | Base URL FinTablo |
+| `GOOGLE_SHEETS_CREDENTIALS` | `pizzayolo-ocr-3898e5dddcff.json` | Путь к JSON Service Account **или** inline JSON (Railway) |
 | `WEBHOOK_URL` | — | URL на Railway (`https://xxx.up.railway.app`). Если задан → webhook, иначе polling |
 | `WEBHOOK_PATH` | `/webhook` | Путь вебхука |
 | `PORT` | `8080` | Порт (Railway задаёт автоматически) |
@@ -29,7 +30,6 @@
 | `TIMEZONE` | Хардкод `Europe/Kaliningrad` | Не читается из env |
 | `MIN_STOCK_SHEET_ID` | Хардкод в config.py | Google Таблица (мин. остатки, права, настройки, маппинг) |
 | `INVOICE_PRICE_SHEET_ID` | = `MIN_STOCK_SHEET_ID` | Таблица прайс-листа |
-| `REDIS_URL` | — | Redis для FSM storage (**обязательна** — `_require()`) |
 | `DAY_REPORT_SHEET_ID` | = `MIN_STOCK_SHEET_ID` | Google Таблица (отчёт дня) |
 | `SALARY_SHEET_ID` | = `MIN_STOCK_SHEET_ID` | Google Таблица (зарплатная ведомость) |
 | `OPENAI_API_KEY` | — | API-ключ OpenAI GPT-5.2 Vision (если не задан — OCR недоступен) |

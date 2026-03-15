@@ -30,6 +30,7 @@
 | `day_report_handlers.py` | handler | Отчёт дня: плюсы/минусы → iiko OLAP |
 | `pastry_handlers.py` | handler | Кондитерские операции |
 | `salary_handlers.py` | handler | 👥 Список ФОТ: исключения сотрудников (пагинация) |
+| `pnl_handlers.py` | handler | 📊 ОПИУ (iiko→FT): маппинг счетов, запуск синхронизации |
 | `invoice_edit_handlers.py` | handler | FSM-редактирование pending incoming invoice (11 callback) |
 | `pending_docs_handlers.py` | handler | Список ожидающих документов (pending all) |
 | `global_commands.py` | handler | /cancel, NavResetMiddleware, PermissionMiddleware |
@@ -84,10 +85,11 @@
 | `salary_history.py` | use_case | История ставок: sync, bootstrap, delete, close |
 | `payroll.py` | use_case | Расчёт ФОТ месяца → GSheets (явки + история ставок + мотивация) |
 | `revenue_motivation.py` | use_case | Мотивация «от выручки»: OLAP-отчёт → мотивация по явкам |
+| `pnl_sync.py` | use_case | ОПИУ sync: iiko OLAP TRANSACTIONS → маппинг → FinTablo PnL |
 | **db/** | | |
 | `engine.py` | db | Async engine + session factory (singleton) |
-| `models.py` | db | 18 моделей iiko/bot (SyncMixin) |
-| `ft_models.py` | db | 13 моделей FinTablo (ft_*) |
+| `models.py` | db | 31 моделей iiko/bot (SyncMixin) |
+| `ft_models.py` | db | 14 моделей FinTablo (ft_* + pnl_account_mapping) |
 | `init_db.py` | db | create_all + _MIGRATIONS (IF NOT EXISTS) |
 | **models/** | | |
 | `ocr.py` | model | OcrDocument + OcrItem (OCR pipeline) |
@@ -281,6 +283,10 @@ test/
 │   │                         #   sal_excl_pg: / sal_excl_tog:{id}:{page} / sal_excl_close
 │   │                         #   @permission_required(PERM_SETTINGS)
 │   │                         #   toggle → delete_history_for_employee (DB + GSheet)
+│   ├── pnl_handlers.py      # 📊 ОПИУ (iiko→FT): маппинг счетов, запуск синхронизации
+│   │                         #   Кнопка: «📊 ОПИУ (iiko→FT)»
+│   │                         #   Маппинг из GSheet «Маппинг FinTablo»
+│   │                         #   @permission_required(PERM_SETTINGS)
 │   ├── invoice_edit_handlers.py # FSM-редактирование pending incoming invoice
 │   │                         #   11 callback-хэндлеров: inv_edit_start → inv_ed_done
 │   │                         #   InvEditStates: choose_req → choose_inv → choose_field → enter_value
@@ -318,15 +324,16 @@ test/
 │   │                         #   _MIGRATIONS: telegram_id, department_id в iiko_employee
 │   │                         #   Запуск: python -m db.init_db
 │   │                         #   Импортирует и iiko models, и ft_models
-│   ├── models.py            # 18 моделей iiko/bot (SyncMixin: synced_at + raw_json) + Base
+│   ├── models.py            # 31 моделей iiko/bot (SyncMixin: synced_at + raw_json) + Base
 │   │                         #   Entity, Supplier, Department, Store, GroupDepartment,
 │   │                         #   ProductGroup, Product, Employee, EmployeeRole,
 │   │                         #   SyncLog, BotAdmin, StockBalance, MinStockLevel, GSheetExportGroup,
 │   │                         #   WriteoffHistory
 │   │                         #   ENTITY_ROOT_TYPES — список 16 допустимых rootType
-│   └── ft_models.py         # 13 моделей FinTablo (таблиц) SQLAlchemy (ft_* префикс)
+│   └── ft_models.py         # 14 моделей FinTablo SQLAlchemy (ft_* + pnl_account_mapping)
 │                             #   FTSyncMixin (synced_at + raw_json)
 │                             #   Все PK — BigInteger (ID из FinTablo, autoincrement=False)
+│                             #   PnlAccountMapping — маппинг iiko Account → FT PnL category
 │
 ├── models/
 │   └── ocr.py               # ORM-модели для OCR-документов
@@ -475,6 +482,10 @@ test/
 │   │                         #   _batch_upsert(), _mirror_delete(), _safe_decimal() из sync.py (DRY)
 │   │                         #   13 sync_ft_*() — по одной на каждый справочник
 │   │                         #   sync_all_fintablo() — параллельный asyncio.gather ×13
+│   ├── pnl_sync.py          # ОПИУ sync: iiko OLAP TRANSACTIONS → маппинг → FinTablo PnL
+│   │                         #   sync_pnl_to_fintablo() — главная функция (шаг scheduler)
+│   │                         #   WRITEOFF-вычет, параллель asyncio.gather
+│   │                         #   Маппинг: GSheet → iiko Account → FT PnL category
 │   ├── fintablo_salary_sync.py  # ФОТ → FinTablo salary sync (v2)
 │   │                         #   sync_fot_to_fintablo() — главная функция (шаг 8 scheduler)
 │   │                         #   Маппинг: GSheet «Маппинг FinTablo» → employee names ↔ FT IDs

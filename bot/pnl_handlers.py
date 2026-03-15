@@ -87,8 +87,7 @@ async def pnl_menu(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     mappings = await pnl_sync.get_all_mappings()
     n = len(mappings)
     text = (

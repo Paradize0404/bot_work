@@ -249,9 +249,7 @@ async def _ignore_text_store(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.message(WriteoffStates.account)
 async def _ignore_text_account(message: Message) -> None:
     logger.debug(
@@ -262,9 +260,7 @@ async def _ignore_text_account(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ══════════════════════════════════════════════════════
 #  СОЗДАНИЕ АКТА (сотрудник) — шаги 1–7
 # ══════════════════════════════════════════════════════
@@ -278,7 +274,7 @@ async def start_writeoff(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
@@ -539,8 +535,7 @@ async def set_reason(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not reason:
         await _send_prompt(
             message.bot,
@@ -582,7 +577,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     if not query:
         return
     if len(query) < 2:
@@ -635,7 +630,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
             )
             return
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
     msg = await message.answer(
         f"Найдено {len(products)}. Выберите товар:", reply_markup=kb
     )
@@ -704,8 +699,7 @@ async def select_product(callback: CallbackQuery, state: FSMContext) -> None:
                 chat_id=callback.message.chat.id, message_id=old_prompt_id
             )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     await state.update_data(
         current_item=product,
         current_unit_name=unit_name,
@@ -742,8 +736,7 @@ async def save_quantity(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     try:
         qty = float(raw)
     except ValueError:
@@ -980,9 +973,7 @@ async def _remove_admin_keyboards(
                 parse_mode="HTML",
             )
         except Exception:
-            pass
-
-
+            logger.debug("suppressed", exc_info=True)
 # ── Одобрить ──
 
 
@@ -1029,8 +1020,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
             parse_mode="HTML",
         )
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # Отправляем в iiko через use_case
     try:
         approval = await wo_uc.approve_writeoff(doc)
@@ -1053,7 +1043,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
                 reply_markup=pending.admin_keyboard(doc_id),
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         await pending.unlock(doc_id)
         return
 
@@ -1083,7 +1073,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
                 reply_markup=pending.admin_keyboard(doc_id),
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         # Уведомляем автора об ошибке
         try:
             await bot.send_message(
@@ -1092,7 +1082,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
                 "Администраторы уведомлены, повторят попытку.",
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         await pending.unlock(doc_id)
         return
 
@@ -1128,8 +1118,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
             parse_mode="HTML",
         )
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # Уведомляем автора об успехе
     try:
         await bot.send_message(
@@ -1137,8 +1126,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
             f"{approval.result_text}\n(проверил: {admin_name})",
         )
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     await pending.remove(doc_id)
     logger.info(
         "[writeoff] Документ %s одобрен admin %d (%s)", doc_id, admin_id, admin_name
@@ -1183,8 +1171,7 @@ async def admin_reject(callback: CallbackQuery) -> None:
             parse_mode="HTML",
         )
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     await _remove_admin_keyboards(
         bot, doc, f"❌ Отклонено admin {admin_name}", except_admin=callback.from_user.id
     )
@@ -1194,8 +1181,7 @@ async def admin_reject(callback: CallbackQuery) -> None:
             f"❌ Акт списания отклонён администратором ({admin_name}).",
         )
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     await pending.remove(doc_id)
     logger.info(
         "[writeoff] Документ %s отклонён admin %d", doc_id, callback.from_user.id
@@ -1313,15 +1299,13 @@ async def admin_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
                     )
                     doc.admin_msg_ids[admin_id] = msg.message_id
                 except Exception:
-                    pass
+                    logger.debug("suppressed", exc_info=True)
             await pending.save_admin_msg_ids(doc_id, doc.admin_msg_ids)
 
     try:
         await callback.message.edit_text("❌ Редактирование отменено.")
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── Выбор поля для редактирования ──
 
 
@@ -1357,7 +1341,7 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
                     ),
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
             return
         await state.update_data(_edit_stores=stores)
         kb = InlineKeyboardMarkup(
@@ -1391,7 +1375,7 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
                     ),
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
             return
         await state.update_data(_edit_accounts=accounts)
         kb = _accounts_kb(accounts, page=0)
@@ -1421,7 +1405,7 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
                     ),
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
             return
         buttons = [
             [
@@ -1456,8 +1440,7 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
                 parse_mode="HTML",
             )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     elif field == "reason":
         await state.set_state(AdminEditStates.edit_reason)
         try:
@@ -1467,9 +1450,7 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
                 parse_mode="HTML",
             )
         except Exception:
-            pass
-
-
+            logger.debug("suppressed", exc_info=True)
 # ── Новый склад ──
 
 
@@ -1653,9 +1634,7 @@ async def _ignore_text_admin_edit(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.message(AdminEditStates.new_product_search)
 async def admin_search_new_product(message: Message, state: FSMContext) -> None:
     query = truncate_input((message.text or "").strip(), MAX_TEXT_SEARCH)
@@ -1667,8 +1646,7 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     data = await state.get_data()
     edit_prompt_id = data.get("_edit_prompt_id")
 
@@ -1681,7 +1659,7 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
                     message_id=edit_prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -1697,7 +1675,7 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
                     message_id=edit_prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     cache = {p["id"]: p for p in products}
@@ -1718,7 +1696,7 @@ async def admin_search_new_product(message: Message, state: FSMContext) -> None:
             )
             return
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
     msg = await message.answer("Выберите новый товар:", reply_markup=kb)
     await state.update_data(_edit_prompt_id=msg.message_id)
 
@@ -1780,8 +1758,7 @@ async def admin_set_new_quantity(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     data = await state.get_data()
     edit_prompt_id = data.get("_edit_prompt_id")
 
@@ -1796,7 +1773,7 @@ async def admin_set_new_quantity(message: Message, state: FSMContext) -> None:
                     message_id=edit_prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
     if qty < QTY_MIN or qty > QTY_MAX:
         if edit_prompt_id:
@@ -1807,7 +1784,7 @@ async def admin_set_new_quantity(message: Message, state: FSMContext) -> None:
                     message_id=edit_prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
     doc = await pending.get(data.get("edit_doc_id", ""))
     idx = data.get("edit_item_idx", -1)
@@ -2009,8 +1986,7 @@ async def admin_set_date(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     from datetime import datetime as _dt
 
     date_incoming: str | None = None
@@ -2053,8 +2029,7 @@ async def admin_set_reason(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not raw:
         await message.answer("⚠️ Причина не может быть пустой. Введите причину:")
         return
@@ -2085,9 +2060,7 @@ async def _ignore_text_history_inline(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 HIST_PAGE_SIZE = wo_hist.HISTORY_PAGE_SIZE
 
 
@@ -2237,7 +2210,7 @@ async def start_history(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
@@ -2329,7 +2302,7 @@ async def hist_page(callback: CallbackQuery, state: FSMContext) -> None:
             reply_markup=_history_list_kb(entries, page=page, total=total),
         )
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.update_data(hist_page=page)
 
 
@@ -2358,7 +2331,7 @@ async def hist_view(callback: CallbackQuery, state: FSMContext) -> None:
             reply_markup=_history_detail_kb(pk),
         )
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.update_data(hist_viewing_pk=pk)
     await state.set_state(HistoryStates.viewing)
 
@@ -2394,7 +2367,7 @@ async def hist_back_to_list(callback: CallbackQuery, state: FSMContext) -> None:
             reply_markup=_history_list_kb(entries, page=page, total=total),
         )
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.set_state(HistoryStates.browsing)
 
 
@@ -2409,7 +2382,7 @@ async def hist_close(callback: CallbackQuery, state: FSMContext) -> None:
     try:
         await callback.message.edit_text("📋 История закрыта.")
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await restore_menu_kb(
         callback.bot,
         callback.message.chat.id,
@@ -2526,7 +2499,7 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
                 "✅ Акт из истории отправлен на проверку администраторам. Ожидайте."
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         await state.clear()
 
         # Рассылаем всем админам
@@ -2599,7 +2572,7 @@ async def hist_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
             text, parse_mode="HTML", reply_markup=_hist_edit_kb()
         )
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.set_state(HistoryStates.viewing)
 
 
@@ -2615,7 +2588,7 @@ async def hist_edit_reason_start(callback: CallbackQuery, state: FSMContext) -> 
     try:
         await callback.message.edit_text("📝 Введите новую причину списания:")
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.update_data(hist_edit_prompt_id=callback.message.message_id)
     await state.set_state(HistoryStates.editing_reason)
 
@@ -2629,8 +2602,7 @@ async def hist_edit_reason_input(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not reason:
         return
     if len(reason) > 500:
@@ -2644,7 +2616,7 @@ async def hist_edit_reason_input(message: Message, state: FSMContext) -> None:
                     message_id=prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     await state.update_data(hist_edit_reason=reason)
@@ -2695,9 +2667,7 @@ async def hist_edit_items_list(callback: CallbackQuery, state: FSMContext) -> No
             reply_markup=_hist_items_kb(items),
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── 7b-1. Выбор позиции ──
 
 
@@ -2726,7 +2696,7 @@ async def hist_edit_item_select(callback: CallbackQuery, state: FSMContext) -> N
             reply_markup=_hist_item_action_kb(idx),
         )
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.update_data(hist_edit_item_idx=idx)
 
 
@@ -2755,7 +2725,7 @@ async def hist_edit_qty_start(callback: CallbackQuery, state: FSMContext) -> Non
             f"🔢 Введите новое количество ({ul}) для «{item.get('name', '?')}»:"
         )
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.update_data(
         hist_edit_item_idx=idx, hist_edit_prompt_id=callback.message.message_id
     )
@@ -2769,8 +2739,7 @@ async def hist_edit_qty_input(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     data = await state.get_data()
     prompt_id = data.get("hist_edit_prompt_id")
 
@@ -2783,7 +2752,7 @@ async def hist_edit_qty_input(message: Message, state: FSMContext) -> None:
                     "⚠️ Введите число.", chat_id=message.chat.id, message_id=prompt_id
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
     if qty < QTY_MIN or qty > QTY_MAX:
         if prompt_id:
@@ -2794,7 +2763,7 @@ async def hist_edit_qty_input(message: Message, state: FSMContext) -> None:
                     message_id=prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     idx = data.get("hist_edit_item_idx", -1)
@@ -2895,9 +2864,7 @@ async def hist_edit_item_delete(callback: CallbackQuery, state: FSMContext) -> N
             text, parse_mode="HTML", reply_markup=_hist_edit_kb()
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── 7c. Добавить товар ──
 
 
@@ -2915,7 +2882,7 @@ async def hist_edit_add_item_start(callback: CallbackQuery, state: FSMContext) -
     try:
         await callback.message.edit_text("🔍 Введите часть названия товара:")
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.update_data(hist_edit_prompt_id=callback.message.message_id)
     await state.set_state(HistoryStates.editing_items)
 
@@ -2929,8 +2896,7 @@ async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     data = await state.get_data()
     prompt_id = data.get("hist_edit_prompt_id")
 
@@ -2943,7 +2909,7 @@ async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None
                     message_id=prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -2957,7 +2923,7 @@ async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None
                     message_id=prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     cache = {p["id"]: p for p in products}
@@ -2978,7 +2944,7 @@ async def hist_edit_add_item_search(message: Message, state: FSMContext) -> None
             )
             return
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
     msg = await message.answer(
         f"Найдено {len(products)}. Выберите товар:", reply_markup=kb
     )
@@ -3025,7 +2991,7 @@ async def hist_edit_add_item_pick(callback: CallbackQuery, state: FSMContext) ->
     try:
         await callback.message.edit_text(prompt, parse_mode="HTML")
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.update_data(hist_edit_prompt_id=callback.message.message_id)
     await state.set_state(HistoryStates.editing_quantity)
     # Помечаем что добавляем новую позицию (не изменяем существующую)
@@ -3055,7 +3021,7 @@ async def hist_edit_back(callback: CallbackQuery, state: FSMContext) -> None:
             text, parse_mode="HTML", reply_markup=_hist_edit_kb()
         )
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.set_state(HistoryStates.viewing)
 
 
@@ -3104,7 +3070,7 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
             try:
                 await callback.message.edit_text("⏳ Отправляем акт напрямую...")
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
             await state.clear()
 
             result = await wo_uc.finalize_without_admins(
@@ -3171,7 +3137,7 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
                 "✅ Отредактированный акт отправлен на проверку. Ожидайте."
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         await state.clear()
 
         text = pending.build_summary_text(doc)
@@ -3246,14 +3212,13 @@ async def cancel_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
         try:
             await callback.bot.delete_message(callback.message.chat.id, header_id)
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     await state.clear()
     wo_cache.invalidate()
     try:
         await callback.message.edit_text("❌ Создание акта списания отменено.")
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await restore_menu_kb(
         callback.bot,
         callback.message.chat.id,

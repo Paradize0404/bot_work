@@ -136,8 +136,7 @@ async def _cleanup_state_messages(
             try:
                 await bot.delete_message(chat_id, msg_id)
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
     # Снимаем блокировку заявки, если пользователь был в режиме редактирования
     edit_pk = data.get("_edit_pk")
     if edit_pk:
@@ -282,9 +281,7 @@ async def suppress_pin_notification(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     """
@@ -324,8 +321,7 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
             )
             edited = True
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     # Удаляем остальные бот-сообщения (header, selection и т.д.),
     # кроме того, что уже отредактировали
     skip_ids = {prompt_id} if edited else set()
@@ -335,13 +331,12 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
             try:
                 await message.bot.delete_message(message.chat.id, msg_id)
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
     await state.clear()
 
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not edited:
         await message.answer(cancel_text)

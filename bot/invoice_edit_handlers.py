@@ -529,8 +529,7 @@ async def inv_ed_done(callback: CallbackQuery, state: FSMContext) -> None:
         try:
             await callback.bot.delete_message(tg_id, old_msg_id)
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     # Пересылаем обновлённый превью
     info = await inv_uc.get_info_for_user(owner_tg_id)
     author_line = (

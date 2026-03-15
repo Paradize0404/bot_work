@@ -300,7 +300,7 @@ async def cancel_request_flow(callback: CallbackQuery, state: FSMContext) -> Non
     try:
         await callback.message.edit_text("❌ Заявка отменена.")
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await restore_menu_kb(
         callback.bot, callback.message.chat.id, state, "📋 Заявки:", requests_keyboard()
     )
@@ -368,7 +368,7 @@ async def start_create_request(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
 
@@ -460,8 +460,7 @@ async def search_request_product(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not query:
         await _send_prompt(
             message.bot,
@@ -655,9 +654,7 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
             parse_mode="HTML",
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── 5. Ввод количества для выбранного товара ──
 
 
@@ -668,8 +665,7 @@ async def enter_item_quantity(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not raw:
         await _send_prompt(message.bot, message.chat.id, state, "⚠️ Введите число.")
         return
@@ -840,9 +836,7 @@ async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
             reply_markup=_req_add_more_kb(len(items)) if items else None,
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── 7. Превью заявки перед отправкой ──
 
 
@@ -870,7 +864,7 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
                 reply_markup=_req_add_more_kb(len(items)),
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
     summary = _items_summary(
@@ -888,9 +882,7 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
             reply_markup=_confirm_kb(),
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── 8. Подтверждение → одна заявка + раздельные уведомления ──
 
 
@@ -920,7 +912,7 @@ async def _do_confirm_send_request(callback: CallbackQuery, state: FSMContext) -
                 "⚠️ Сессия истекла. Пожалуйста, авторизуйтесь (/start)."
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
     data = await state.get_data()
@@ -966,7 +958,7 @@ async def _do_confirm_send_request(callback: CallbackQuery, state: FSMContext) -
                 reply_markup=_confirm_kb(),
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
     total_sum = sum(it.get("amount", 0) * it.get("price", 0) for it in items)
@@ -1134,9 +1126,7 @@ async def _ignore_text_request(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ══════════════════════════════════════════════════════
 #  B) ОДОБРЕНИЕ / РЕДАКТИРОВАНИЕ / ОТКЛОНЕНИЕ ЗАЯВКИ
 # ══════════════════════════════════════════════════════
@@ -1169,9 +1159,7 @@ async def _update_other_admin_msgs(
                 parse_mode="HTML",
             )
         except Exception:
-            pass
-
-
+            logger.debug("suppressed", exc_info=True)
 async def _resend_admin_buttons(bot: Bot, pk: int) -> None:
     """Обновить сообщения с заявкой у всех админов (редактирование или отправка новых)."""
     from use_cases import permissions as perm_uc
@@ -1285,8 +1273,7 @@ async def _finish_request_edit(
                 new_msgs[admin_id] = msg_id
                 continue
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
         # Fallback: отправить новое сообщение только если редактирование не удалось
         try:
             msg = await callback.bot.send_message(
@@ -1297,8 +1284,7 @@ async def _finish_request_edit(
             )
             new_msgs[admin_id] = msg.message_id
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     _request_admin_msgs[pk] = new_msgs
 
 
@@ -1348,8 +1334,7 @@ async def _finish_request_edit_msg(
                 new_msgs[admin_id] = msg_id
                 continue
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
         # Fallback: отправить новое сообщение только если редактирование не удалось
         try:
             msg = await message.bot.send_message(
@@ -1360,8 +1345,7 @@ async def _finish_request_edit_msg(
             )
             new_msgs[admin_id] = msg.message_id
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     _request_admin_msgs[pk] = new_msgs
 
 
@@ -1455,8 +1439,7 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
         status_text += f"\n\n⏳ Отправляется в iiko... ({admin_name})"
         await callback.message.edit_text(status_text, parse_mode="HTML")
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # Убрать кнопки у остальных админов
     await _update_other_admin_msgs(
         callback.bot,
@@ -1611,8 +1594,7 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # Обновить остальных админов финальным статусом
     final_status = (
         f"✅ Отправлена в iiko ({admin_name})"
@@ -1739,9 +1721,7 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
             reply_markup=kb,
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── Выбор поля для редактирования ──
 
 
@@ -1779,8 +1759,7 @@ async def req_choose_field(callback: CallbackQuery, state: FSMContext) -> None:
                 reply_markup=kb,
             )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     elif field == "date":
         req_data = await req_uc.get_request_by_pk(pk) if pk else None
         cur_date = ""
@@ -1800,8 +1779,7 @@ async def req_choose_field(callback: CallbackQuery, state: FSMContext) -> None:
                 parse_mode="HTML",
             )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     elif field == "account":
         from use_cases import outgoing_invoice as inv_uc_local
 
@@ -1825,9 +1803,7 @@ async def req_choose_field(callback: CallbackQuery, state: FSMContext) -> None:
                 "📂 Выберите новый счёт реализации:", reply_markup=kb
             )
         except Exception:
-            pass
-
-
+            logger.debug("suppressed", exc_info=True)
 # ── Выбор нового счёта ──
 
 
@@ -1916,9 +1892,7 @@ async def choose_item_to_edit(callback: CallbackQuery, state: FSMContext) -> Non
             reply_markup=kb,
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── Действие с позицией ──
 
 
@@ -1983,7 +1957,7 @@ async def choose_edit_action(callback: CallbackQuery, state: FSMContext) -> None
                 ),
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
     elif action == "qty":
@@ -2012,7 +1986,7 @@ async def choose_edit_action(callback: CallbackQuery, state: FSMContext) -> None
                 ),
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
 
@@ -2030,8 +2004,7 @@ async def edit_search_new_product(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if len(query) < 2:
         await _send_prompt(
             message.bot,
@@ -2183,8 +2156,7 @@ async def edit_enter_new_quantity(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not raw:
         await _send_prompt(message.bot, message.chat.id, state, "⚠️ Введите число.")
         return
@@ -2261,8 +2233,7 @@ async def req_edit_enter_date(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     from datetime import datetime as _dt
 
     date_incoming: str | None = None
@@ -2309,9 +2280,7 @@ async def _ignore_text_edit_inline(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── Отклонить заявку ──
 
 
@@ -2380,16 +2349,14 @@ async def reject_request(callback: CallbackQuery) -> None:
             f"❌ Ваша заявка #{pk} отклонена.\nОтклонил: {admin_name}",
         )
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     updated_req = await req_uc.get_request_by_pk(pk)
     text = req_uc.format_request_text(updated_req or req_data)
     text += f"\n\n👤 Отклонил: {admin_name}"
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # Обновить остальных админов
     await _update_other_admin_msgs(
         callback.bot,
@@ -2411,7 +2378,7 @@ async def view_request_history(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx:
@@ -2472,7 +2439,7 @@ async def back_to_history_list(callback: CallbackQuery, state: FSMContext) -> No
         try:
             await callback.message.edit_text("📋 У вас пока нет заявок.")
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
     await state.update_data(_history_cache=requests)
     try:
@@ -2483,9 +2450,7 @@ async def back_to_history_list(callback: CallbackQuery, state: FSMContext) -> No
             reply_markup=_history_kb(requests, page=0),
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.callback_query(F.data == "req_hist_close")
 async def close_history(callback: CallbackQuery) -> None:
     await callback.answer()
@@ -2493,9 +2458,7 @@ async def close_history(callback: CallbackQuery) -> None:
     try:
         await callback.message.edit_text("📋 История закрыта.")
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ── Дублирование заявки ──
 
 
@@ -2624,9 +2587,7 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
             text, parse_mode="HTML", reply_markup=_cancel_kb
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.message(DuplicateRequestStates.enter_quantities)
 async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").strip()
@@ -2636,8 +2597,7 @@ async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not raw:
         await _send_prompt(
             message.bot,
@@ -2795,9 +2755,7 @@ async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.callback_query(DuplicateRequestStates.confirm, F.data == "dup_confirm_send")
 async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[request_handlers] dup_confirm_send tg:%d", callback.from_user.id)
@@ -2824,7 +2782,7 @@ async def _do_dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> No
                 "⚠️ Сессия истекла. Пожалуйста, авторизуйтесь (/start)."
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
     data = await state.get_data()
@@ -2847,7 +2805,7 @@ async def _do_dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> No
                 parse_mode="HTML",
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         await state.clear()
         await restore_menu_kb(
             callback.bot,
@@ -2894,7 +2852,7 @@ async def _do_dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> No
                 parse_mode="HTML",
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         await state.clear()
         await restore_menu_kb(
             callback.bot,
@@ -3019,7 +2977,7 @@ async def view_pending_requests(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_REQUEST_APPROVE
 

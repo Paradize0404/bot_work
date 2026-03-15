@@ -79,8 +79,7 @@ async def btn_day_report_start(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # Контекст пользователя — имя + подразделение
     ctx = await uctx.get_user_context(tg_id)
     if not ctx or not ctx.department_id:
@@ -124,8 +123,7 @@ async def step_positives(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     text = truncate_input(message.text, MAX_TEXT_GENERAL)
     await state.update_data(positives=text)
 
@@ -154,8 +152,7 @@ async def step_negatives(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     text = truncate_input(message.text, MAX_TEXT_GENERAL)
     await state.update_data(negatives=text, photo_ids=[])
 
@@ -183,8 +180,7 @@ async def step_photos(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # Lock per user — альбом приходит как N параллельных Message,
     # без lock все читают photo_ids=[] и перезаписывают друг друга.
     if tg_id not in _photo_locks:
@@ -332,8 +328,7 @@ async def _finalize_day_report(message: Message, state: FSMContext) -> None:
                 parse_mode="HTML",
             )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     # ── Отправляем отчёт + фото всем получателям ──
     day_report_ids = await perm_uc.get_users_with_permission(PERM_DAY_REPORT_RECEIVE)
     recipients = [uid for uid in day_report_ids if uid != tg_id]
@@ -386,7 +381,7 @@ async def guard_positives(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await send_prompt_msg(
         message.bot,
         message.chat.id,
@@ -403,7 +398,7 @@ async def guard_negatives(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await send_prompt_msg(
         message.bot,
         message.chat.id,
@@ -420,7 +415,7 @@ async def guard_photos(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     data = await state.get_data()
     received = len(data.get("photo_ids", []))
     remaining = REQUIRED_PHOTOS - received

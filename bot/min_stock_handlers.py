@@ -75,7 +75,7 @@ async def btn_edit_min_stock(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     msg = await message.answer(
         "🔍 Введите название товара для поиска\n"
         "(или часть названия, например: «молоко»):",
@@ -97,8 +97,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     data = await state.get_data()
     prompt_id = data.get("_prompt_msg_id")
 
@@ -111,7 +110,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
                     message_id=prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
@@ -126,7 +125,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
                     message_id=prompt_id,
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     # Формируем inline-кнопки
@@ -165,7 +164,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
             )
             return
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
     msg = await message.answer(
         f"📦 Найдено {len(products)} товаров. Выберите:",
         reply_markup=kb,
@@ -241,8 +240,7 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     data = await state.get_data()
     prompt_id = data.get("_prompt_msg_id")
 
@@ -255,7 +253,7 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
                     validated.text, chat_id=message.chat.id, message_id=prompt_id
                 )
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
         return
 
     new_min = validated
@@ -278,8 +276,7 @@ async def enter_min_level(message: Message, state: FSMContext) -> None:
                 parse_mode="Markdown",
             )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     result = await ems_uc.update_min_level(
         product_id=product_id,
         department_id=department_id,
@@ -338,4 +335,4 @@ async def _guard_inline_states(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)

@@ -101,8 +101,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
                 bot, f"Unhandled exception:\n{type(exception).__name__}: {error_msg}"
             )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
         # Пытаемся ответить пользователю
         try:
             if event.update.message:
@@ -114,8 +113,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
                     "⚠️ Техническая ошибка", show_alert=True
                 )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
         return True  # mark handled
 
     return bot, dp
@@ -245,8 +243,7 @@ async def _cleanup() -> None:
                 [(d.doc_id, d.author_name) for d in pending],
             )
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     await cancel_tracked_tasks()
     await close_iiko()
     await close_iiko_cloud()
@@ -260,8 +257,7 @@ async def _cleanup() -> None:
 
         # dp.storage уже может быть закрыт диспатчером, suppress ошибки
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     logger.info("Shutdown complete")
 
 

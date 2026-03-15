@@ -12,6 +12,9 @@ import numpy as np
 from io import BytesIO
 from PIL import Image
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def _detect_qr_sync(image_bytes: bytes) -> bool:
     """Синхронная CPU-bound детекция QR-кода (OpenCV + pyzbar)."""
@@ -41,8 +44,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
                 found_qr = True
                 break
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # 2. Стандартный QR detector
     detector = cv2.QRCodeDetector()
     if not found_qr:
@@ -59,8 +61,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
                     found_qr = True
                     break
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     # 3. Pyzbar на оригинальном изображении
     if not found_qr:
         try:
@@ -74,8 +75,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
         except ImportError:
             pass
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     # 4. Кадрируем нижнюю половину (там обычно QR на чеках)
     if not found_qr:
         try:
@@ -86,8 +86,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
             if data and len(data) > 10:
                 found_qr = True
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     # 5. Pyzbar на нижней половине
     if not found_qr:
         try:
@@ -103,8 +102,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
         except ImportError:
             pass
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     # 6. Бинаризация + WeChat
     if not found_qr:
         try:
@@ -119,8 +117,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
             if res and len(res) > 0:
                 found_qr = True
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     # 7. Pyzbar на бинаризованном
     if not found_qr:
         try:
@@ -138,8 +135,7 @@ def _detect_qr_sync(image_bytes: bytes) -> bool:
         except ImportError:
             pass
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     return found_qr
 
 

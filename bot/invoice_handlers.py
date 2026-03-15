@@ -250,36 +250,28 @@ async def _ignore_text_store(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.message(InvoiceTemplateStates.supplier_choose)
 async def _ignore_text_supplier_choose(message: Message) -> None:
     logger.debug("[invoice] Текст в supplier_choose tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.message(InvoiceFromTemplateStates.choose_template)
 async def _ignore_text_choose_template(message: Message) -> None:
     logger.debug("[invoice] Текст в choose_template tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.message(InvoiceFromTemplateStates.confirm)
 async def _ignore_text_confirm(message: Message) -> None:
     logger.debug("[invoice] Текст в confirm-состоянии tg:%d", message.from_user.id)
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ══════════════════════════════════════════════════════
 #  A) СОЗДАНИЕ ШАБЛОНА — шаги
 # ══════════════════════════════════════════════════════
@@ -293,7 +285,7 @@ async def start_template(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
@@ -471,8 +463,7 @@ async def search_product(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not query:
         await _send_prompt(
             message.bot,
@@ -705,8 +696,7 @@ async def save_template(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not name:
         await _send_prompt(
             message.bot,
@@ -777,7 +767,7 @@ async def start_from_template(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await state.clear()
     ctx = await uctx.get_user_context(message.from_user.id)
     if not ctx or not ctx.department_id:
@@ -925,8 +915,7 @@ async def enter_quantities(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if not raw:
         await _send_prompt(
             message.bot,
@@ -1184,8 +1173,7 @@ async def _do_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
         try:
             await callback.bot.delete_message(callback.message.chat.id, header_id)
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     await state.clear()
     await restore_menu_kb(
         callback.bot,
@@ -1256,9 +1244,7 @@ async def invoice_edit_start(callback: CallbackQuery, state: FSMContext) -> None
     try:
         await callback.message.edit_reply_markup(reply_markup=kb)
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.callback_query(
     InvoiceFromTemplateStates.edit_choose_field, F.data.startswith("inv_edit_field:")
 )
@@ -1291,8 +1277,7 @@ async def invoice_edit_field(callback: CallbackQuery, state: FSMContext) -> None
                 parse_mode="HTML",
             )
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     elif field == "items":
         data = await state.get_data()
         items = data.get("_items_with_qty", [])
@@ -1315,9 +1300,7 @@ async def invoice_edit_field(callback: CallbackQuery, state: FSMContext) -> None
                 "📦 Какую позицию редактировать?", reply_markup=kb
             )
         except Exception:
-            pass
-
-
+            logger.debug("suppressed", exc_info=True)
 @router.callback_query(
     InvoiceFromTemplateStates.edit_item_idx, F.data.startswith("inv_edit_item:")
 )
@@ -1366,9 +1349,7 @@ async def invoice_edit_item_idx(callback: CallbackQuery, state: FSMContext) -> N
             reply_markup=kb,
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.callback_query(
     InvoiceFromTemplateStates.edit_item_action, F.data.startswith("inv_edit_action:")
 )
@@ -1397,7 +1378,7 @@ async def invoice_edit_item_action(callback: CallbackQuery, state: FSMContext) -
         try:
             await callback.message.edit_text("🔍 Введите часть названия нового товара:")
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
     if action == "qty":
@@ -1409,7 +1390,7 @@ async def invoice_edit_item_action(callback: CallbackQuery, state: FSMContext) -
                 f"🔢 Введите новое количество ({unit}) для «{item.get('name', '?')}»:"
             )
         except Exception:
-            pass
+            logger.debug("suppressed", exc_info=True)
         return
 
 
@@ -1419,8 +1400,7 @@ async def invoice_edit_search_product(message: Message, state: FSMContext) -> No
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     if len(query) < 2:
         await message.answer("⚠️ Минимум 2 символа.")
         return
@@ -1482,8 +1462,7 @@ async def invoice_edit_enter_qty(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     try:
         qty = float(raw)
     except ValueError:
@@ -1519,8 +1498,7 @@ async def invoice_edit_enter_date(message: Message, state: FSMContext) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     from datetime import datetime as _dt
 
     date_incoming: str | None = None
@@ -1551,9 +1529,7 @@ async def _ignore_text_invoice_edit(message: Message) -> None:
     try:
         await message.delete()
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 @router.callback_query(F.data == "inv_edit_cancel")
 async def invoice_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
@@ -1563,9 +1539,7 @@ async def invoice_edit_cancel(callback: CallbackQuery, state: FSMContext) -> Non
     try:
         await callback.message.edit_reply_markup(reply_markup=_confirm_kb())
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 async def _invoice_confirm_text(data: dict, editor_name: str = "") -> str:
     """Сформировать текст confirm-сообщения (с пометкой редактора)."""
     items = data.get("_items_with_qty", [])
@@ -1617,9 +1591,7 @@ async def _finish_invoice_edit(
             text, parse_mode="HTML", reply_markup=_confirm_kb()
         )
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 async def _finish_invoice_edit_msg(
     message: Message, state: FSMContext, description: str
 ) -> None:
@@ -1632,9 +1604,7 @@ async def _finish_invoice_edit_msg(
     try:
         await message.answer(text, parse_mode="HTML", reply_markup=_confirm_kb())
     except Exception:
-        pass
-
-
+        logger.debug("suppressed", exc_info=True)
 # ══════════════════════════════════════════════════════
 #  Отмена (общая для обоих потоков)
 # ══════════════════════════════════════════════════════
@@ -1654,13 +1624,12 @@ async def cancel_template(callback: CallbackQuery, state: FSMContext) -> None:
         try:
             await callback.bot.delete_message(callback.message.chat.id, header_id)
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
     await state.clear()
     try:
         await callback.message.edit_text("❌ Действие отменено.")
     except Exception:
-        pass
+        logger.debug("suppressed", exc_info=True)
     await restore_menu_kb(
         callback.bot,
         callback.message.chat.id,

@@ -1590,8 +1590,7 @@ async def sync_request_stores_to_sheet(
             try:
                 ws.batch_clear([f"A{section_start_row + 1}:Z{clear_end}"])
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
         # ── Записать (USER_ENTERED чтобы формулы работали) ──
         ws.update(
             f"A{start_row}",
@@ -2072,8 +2071,7 @@ async def sync_cloud_org_mapping_to_sheet(
             try:
                 ws.batch_clear([f"A{section_start_row + 1}:Z{end_clear}"])
             except Exception:
-                pass
-
+                logger.debug("suppressed", exc_info=True)
         # ── Записать (USER_ENTERED чтобы формулы работали) ──
         ws.update(
             f"A{start_row}",
@@ -2432,8 +2430,7 @@ def _write_ref_column(spreadsheet, col_index: int, values: list[str]) -> None:
             }
         )
     except Exception:
-        pass
-
+        logger.debug("suppressed", exc_info=True)
     # Определяем букву столбца (A, B, C …)
     col_letter = chr(ord("A") + col_index)
 
@@ -3632,7 +3629,7 @@ async def sync_salary_sheet(employees: list[dict]) -> int:
             try:
                 bot_email = spreadsheet.client.auth.service_account_email
             except Exception:
-                pass
+                logger.debug("suppressed", exc_info=True)
             prot_reqs = _get_protection_delete_requests(sheet_id, spreadsheet) + [
                 {
                     "addProtectedRange": {
@@ -4273,8 +4270,7 @@ async def sync_fot_sheet(
         try:
             bot_email = spreadsheet.client.auth.service_account_email
         except Exception:
-            pass
-
+            logger.debug("suppressed", exc_info=True)
         prot_reqs = _get_protection_delete_requests(sheet_id, spreadsheet)
         unprotected = []
         for ds, de in data_row_ranges:
