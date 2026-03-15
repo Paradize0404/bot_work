@@ -154,6 +154,8 @@ async def _disable_all_invoice_buttons(
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
 async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
     """Установить status='pending_mapping' для документов, ожидающих маппинг."""
     from use_cases.ocr_pipeline import mark_docs_pending_mapping
@@ -631,6 +633,8 @@ async def cb_refresh_mapping_ref(callback: CallbackQuery) -> None:
         await callback.message.answer(text)
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 async def _handle_mapping_done(placeholder, tg_id) -> None:
     """Общая логика проверки и финализации маппинга."""
     from use_cases import ocr_mapping as mapping_uc
@@ -956,6 +960,8 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
             await callback.message.answer(err_text)
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
 # ════════════════════════════════════════════════════════
 #  Callback: «❌ Отменить» (отмена отправки накладных)
 # ════════════════════════════════════════════════════════
@@ -1007,6 +1013,8 @@ async def cb_iiko_invoice_cancel(callback: CallbackQuery) -> None:
             await callback.bot.send_message(sender_tg_id, cancel_text)
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
 # ════════════════════════════════════════════════════════
 #  JSON-чек: автоматическая приходная накладная
 # ════════════════════════════════════════════════════════

@@ -251,6 +251,8 @@ async def _ignore_text_store(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(InvoiceTemplateStates.supplier_choose)
 async def _ignore_text_supplier_choose(message: Message) -> None:
     logger.debug("[invoice] Текст в supplier_choose tg:%d", message.from_user.id)
@@ -258,6 +260,8 @@ async def _ignore_text_supplier_choose(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(InvoiceFromTemplateStates.choose_template)
 async def _ignore_text_choose_template(message: Message) -> None:
     logger.debug("[invoice] Текст в choose_template tg:%d", message.from_user.id)
@@ -265,6 +269,8 @@ async def _ignore_text_choose_template(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(InvoiceFromTemplateStates.confirm)
 async def _ignore_text_confirm(message: Message) -> None:
     logger.debug("[invoice] Текст в confirm-состоянии tg:%d", message.from_user.id)
@@ -272,6 +278,8 @@ async def _ignore_text_confirm(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ══════════════════════════════════════════════════════
 #  A) СОЗДАНИЕ ШАБЛОНА — шаги
 # ══════════════════════════════════════════════════════
@@ -1245,6 +1253,8 @@ async def invoice_edit_start(callback: CallbackQuery, state: FSMContext) -> None
         await callback.message.edit_reply_markup(reply_markup=kb)
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.callback_query(
     InvoiceFromTemplateStates.edit_choose_field, F.data.startswith("inv_edit_field:")
 )
@@ -1301,6 +1311,8 @@ async def invoice_edit_field(callback: CallbackQuery, state: FSMContext) -> None
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
 @router.callback_query(
     InvoiceFromTemplateStates.edit_item_idx, F.data.startswith("inv_edit_item:")
 )
@@ -1350,6 +1362,8 @@ async def invoice_edit_item_idx(callback: CallbackQuery, state: FSMContext) -> N
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.callback_query(
     InvoiceFromTemplateStates.edit_item_action, F.data.startswith("inv_edit_action:")
 )
@@ -1530,6 +1544,8 @@ async def _ignore_text_invoice_edit(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.callback_query(F.data == "inv_edit_cancel")
 async def invoice_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
@@ -1540,6 +1556,8 @@ async def invoice_edit_cancel(callback: CallbackQuery, state: FSMContext) -> Non
         await callback.message.edit_reply_markup(reply_markup=_confirm_kb())
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 async def _invoice_confirm_text(data: dict, editor_name: str = "") -> str:
     """Сформировать текст confirm-сообщения (с пометкой редактора)."""
     items = data.get("_items_with_qty", [])
@@ -1592,6 +1610,8 @@ async def _finish_invoice_edit(
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 async def _finish_invoice_edit_msg(
     message: Message, state: FSMContext, description: str
 ) -> None:
@@ -1605,6 +1625,8 @@ async def _finish_invoice_edit_msg(
         await message.answer(text, parse_mode="HTML", reply_markup=_confirm_kb())
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ══════════════════════════════════════════════════════
 #  Отмена (общая для обоих потоков)
 # ══════════════════════════════════════════════════════

@@ -282,6 +282,8 @@ async def suppress_pin_notification(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     """

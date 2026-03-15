@@ -250,6 +250,8 @@ async def _ignore_text_store(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(WriteoffStates.account)
 async def _ignore_text_account(message: Message) -> None:
     logger.debug(
@@ -261,6 +263,8 @@ async def _ignore_text_account(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ══════════════════════════════════════════════════════
 #  СОЗДАНИЕ АКТА (сотрудник) — шаги 1–7
 # ══════════════════════════════════════════════════════
@@ -974,6 +978,8 @@ async def _remove_admin_keyboards(
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
 # ── Одобрить ──
 
 
@@ -1306,6 +1312,8 @@ async def admin_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.edit_text("❌ Редактирование отменено.")
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── Выбор поля для редактирования ──
 
 
@@ -1451,6 +1459,8 @@ async def admin_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
 # ── Новый склад ──
 
 
@@ -1635,6 +1645,8 @@ async def _ignore_text_admin_edit(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(AdminEditStates.new_product_search)
 async def admin_search_new_product(message: Message, state: FSMContext) -> None:
     query = truncate_input((message.text or "").strip(), MAX_TEXT_SEARCH)
@@ -2061,6 +2073,8 @@ async def _ignore_text_history_inline(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 HIST_PAGE_SIZE = wo_hist.HISTORY_PAGE_SIZE
 
 
@@ -2668,6 +2682,8 @@ async def hist_edit_items_list(callback: CallbackQuery, state: FSMContext) -> No
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── 7b-1. Выбор позиции ──
 
 
@@ -2865,6 +2881,8 @@ async def hist_edit_item_delete(callback: CallbackQuery, state: FSMContext) -> N
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── 7c. Добавить товар ──
 
 

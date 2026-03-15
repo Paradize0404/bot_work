@@ -655,6 +655,8 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── 5. Ввод количества для выбранного товара ──
 
 
@@ -837,6 +839,8 @@ async def remove_last_item(callback: CallbackQuery, state: FSMContext) -> None:
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── 7. Превью заявки перед отправкой ──
 
 
@@ -883,6 +887,8 @@ async def preview_request(callback: CallbackQuery, state: FSMContext) -> None:
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── 8. Подтверждение → одна заявка + раздельные уведомления ──
 
 
@@ -1127,6 +1133,8 @@ async def _ignore_text_request(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ══════════════════════════════════════════════════════
 #  B) ОДОБРЕНИЕ / РЕДАКТИРОВАНИЕ / ОТКЛОНЕНИЕ ЗАЯВКИ
 # ══════════════════════════════════════════════════════
@@ -1160,6 +1168,8 @@ async def _update_other_admin_msgs(
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
 async def _resend_admin_buttons(bot: Bot, pk: int) -> None:
     """Обновить сообщения с заявкой у всех админов (редактирование или отправка новых)."""
     from use_cases import permissions as perm_uc
@@ -1722,6 +1732,8 @@ async def start_edit_request(callback: CallbackQuery, state: FSMContext) -> None
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── Выбор поля для редактирования ──
 
 
@@ -1804,6 +1816,8 @@ async def req_choose_field(callback: CallbackQuery, state: FSMContext) -> None:
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
 # ── Выбор нового счёта ──
 
 
@@ -1893,6 +1907,8 @@ async def choose_item_to_edit(callback: CallbackQuery, state: FSMContext) -> Non
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── Действие с позицией ──
 
 
@@ -2281,6 +2297,8 @@ async def _ignore_text_edit_inline(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── Отклонить заявку ──
 
 
@@ -2451,6 +2469,8 @@ async def back_to_history_list(callback: CallbackQuery, state: FSMContext) -> No
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.callback_query(F.data == "req_hist_close")
 async def close_history(callback: CallbackQuery) -> None:
     await callback.answer()
@@ -2459,6 +2479,8 @@ async def close_history(callback: CallbackQuery) -> None:
         await callback.message.edit_text("📋 История закрыта.")
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ── Дублирование заявки ──
 
 
@@ -2588,6 +2610,8 @@ async def start_duplicate_request(callback: CallbackQuery, state: FSMContext) ->
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(DuplicateRequestStates.enter_quantities)
 async def dup_enter_quantities(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").strip()
@@ -2756,6 +2780,8 @@ async def dup_reenter(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.callback_query(DuplicateRequestStates.confirm, F.data == "dup_confirm_send")
 async def dup_confirm_send(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[request_handlers] dup_confirm_send tg:%d", callback.from_user.id)

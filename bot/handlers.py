@@ -446,6 +446,8 @@ async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.callback_query(F.data == "change_dept_cancel")
 async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     logger.info("[auth] change_dept_cancel tg:%d", callback.from_user.id)
@@ -455,6 +457,8 @@ async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None
         await callback.message.edit_text("❌ Смена ресторана отменена.")
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # -----------------------------------------------------
 # Смена ресторана (по кнопке меню)
 # -----------------------------------------------------
@@ -535,6 +539,8 @@ async def _guard_auth_employee(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(AuthStates.choosing_department)
 async def _guard_auth_department(message: Message) -> None:
     logger.info("[auth] _guard_auth_department tg:%d", message.from_user.id)
@@ -542,6 +548,8 @@ async def _guard_auth_department(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 @router.message(ChangeDeptStates.choosing_department)
 async def _guard_change_dept(message: Message) -> None:
     logger.info("[auth] _guard_change_dept tg:%d", message.from_user.id)
@@ -549,6 +557,8 @@ async def _guard_change_dept(message: Message) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # -----------------------------------------------------
 # Навигация: разделы
 # -----------------------------------------------------

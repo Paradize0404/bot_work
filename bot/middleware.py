@@ -236,6 +236,8 @@ async def delete_message_delayed(message: Message, delay: float):
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 # ═══════════════════════════════════════════════════════
 # 4. Хелпер sync с прогрессом (placeholder → edit)
 # ═══════════════════════════════════════════════════════
@@ -335,6 +337,8 @@ async def set_cancel_kb(bot, chat_id: int, state: FSMContext) -> None:
         await bot.delete_message(chat_id, msg.message_id)
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
 async def restore_menu_kb(
     bot, chat_id: int, state: FSMContext, menu_text: str, kb
 ) -> None:
