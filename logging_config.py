@@ -70,9 +70,9 @@ class TelegramAlertHandler(logging.Handler):
                 try:
                     await self._bot.send_message(aid, text, parse_mode="HTML")
                 except Exception:
-                    logger.debug("suppressed", exc_info=True)
+                    pass  # внутри log handler — нельзя логировать (рекурсия)
         except Exception:
-            logger.debug("suppressed", exc_info=True)
+            pass  # внутри log handler — нельзя логировать (рекурсия)
 # Singleton — создаётся 1 раз, bot привязывается позже
 _telegram_handler = TelegramAlertHandler()
 
