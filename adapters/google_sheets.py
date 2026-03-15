@@ -17,6 +17,7 @@
 import asyncio
 import json
 import logging
+import random as _random
 import re
 import time
 from pathlib import Path
@@ -87,7 +88,32 @@ def _get_client() -> gspread.Client:
 
     creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
     _client = gspread.authorize(creds)
-    logger.info("[%s] Клиент инициализирован", LABEL)
+
+    # ── Monkey-patch: retry on 429 (quota exceeded) ──
+    _original_request = _client.http_client.request
+
+    def _request_with_retry(*args, **kwargs):
+        _MAX_RETRIES = 3
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                return _original_request(*args, **kwargs)
+            except gspread.exceptions.APIError as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", 0)
+                if status == 429 and attempt < _MAX_RETRIES:
+                    delay = 30 * (2**attempt) + _random.uniform(1, 5)
+                    logger.warning(
+                        "[%s] 429 Quota exceeded — retry %d/%d after %.0fs",
+                        LABEL,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                        delay,
+                    )
+                    time.sleep(delay)
+                else:
+                    raise
+
+    _client.http_client.request = _request_with_retry
+    logger.info("[%s] Клиент инициализирован (с retry 429)", LABEL)
     return _client
 
 

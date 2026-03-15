@@ -147,10 +147,9 @@ from bot._utils import (
 def _settings_keyboard() -> ReplyKeyboardMarkup:
     """Клавиатура 'Настройки' (кнопки для раздела)."""
     buttons = [
-        [KeyboardButton(text="🔄 Синхронизация")],
-        [KeyboardButton(text="📤 Google Таблицы")],
+        [KeyboardButton(text="⚡ Синхр. iiko + FinTablo")],
+        [KeyboardButton(text="📊 Синхр. Google Таблицы")],
         [KeyboardButton(text="📊 ОПИУ (iiko→FT)")],
-        [KeyboardButton(text="🔑 Права доступа → GSheet")],
         [KeyboardButton(text="☁️ iikoCloud вебхук")],
         [KeyboardButton(text="📋 ID сотрудников FinTablo")],
         [KeyboardButton(text="◀️ Назад")],
@@ -1270,6 +1269,180 @@ async def btn_sync_everything(message: Message) -> None:
     lines = ["-- iiko --"] + iiko_lines + ["\n-- FinTablo --"] + ft_lines
     await placeholder.edit_text(
         "✅ Итоговые результаты синхронизации:\n\n" + "\n".join(lines)
+    )
+
+
+# ─────────────────────────────────────────────────────
+# Единая кнопка: iiko + FinTablo + ОПИУ
+# ─────────────────────────────────────────────────────
+
+
+@router.message(F.text == "⚡ Синхр. iiko + FinTablo")
+@permission_required(PERM_SETTINGS)
+async def btn_unified_iiko_ft(message: Message) -> None:
+    """Единая кнопка: iiko справочники + FinTablo справочники + ОПИУ текущего месяца.
+
+    Последовательность:
+      1. sync_everything_with_report — iiko entities + departments + ... + FT 13 спр.
+      2. ОПИУ (pnl_sync.update_opiu) — iiko OLAP → FinTablo
+    """
+    from use_cases import pnl_sync
+
+    triggered = f"tg:{message.from_user.id}"
+    logger.info("[sync] unified iiko+FT+ОПИУ tg:%d", message.from_user.id)
+
+    lock = get_sync_lock("sync_unified_iiko_ft")
+    if lock.locked():
+        await message.answer(
+            "⏳ Синхронизация iiko + FinTablo уже выполняется. Подождите."
+        )
+        return
+
+    placeholder = await message.answer(
+        "⏳ Запускаем полную синхронизацию iiko + FinTablo + ОПИУ...\n"
+        "Это может занять несколько минут."
+    )
+
+    async with lock:
+        # 1) iiko + FT справочники
+        try:
+            iiko_lines, ft_lines = await sync_uc.sync_everything_with_report(triggered)
+        except Exception as exc:
+            logger.exception("[sync] unified iiko+FT failed")
+            await placeholder.edit_text(f"❌ iiko + FT ошибка: {exc}")
+            return
+
+        # 2) ОПИУ (iiko → FT)
+        opiu_line = ""
+        try:
+            opiu_result = await pnl_sync.update_opiu(triggered_by=triggered)
+            upd = opiu_result.get("updated", 0)
+            skip = opiu_result.get("skipped", 0)
+            errs = len(opiu_result.get("errors", []))
+            opiu_line = f"  ✅ Обновлено: {upd}, пропущено: {skip}"
+            if errs:
+                opiu_line += f", ошибок: {errs}"
+        except Exception as exc:
+            logger.exception("[sync] unified ОПИУ failed")
+            opiu_line = f"  ❌ Ошибка: {exc}"
+
+    lines = (
+        ["-- iiko --"]
+        + iiko_lines
+        + ["\n-- FinTablo --"]
+        + ft_lines
+        + ["\n-- ОПИУ --", opiu_line]
+    )
+    await placeholder.edit_text(
+        "✅ Полная синхронизация iiko + FinTablo:\n\n" + "\n".join(lines)
+    )
+
+
+# ─────────────────────────────────────────────────────
+# Единая кнопка: Google Таблицы (все операции последовательно)
+# ─────────────────────────────────────────────────────
+
+_GSHEET_DELAY = 5  # секунд между операциями (защита от 429)
+
+
+@router.message(F.text == "📊 Синхр. Google Таблицы")
+@permission_required(PERM_SETTINGS)
+async def btn_unified_gsheet(message: Message) -> None:
+    """Единая кнопка: все Google Sheets синхронизации последовательно.
+
+    Порядок (с паузами для защиты от 429 Quota):
+      1. Номенклатура → GSheet
+      2. Мин. остатки GSheet → БД
+      3. Прайс-лист → GSheet
+      4. ФОТ (salary + payroll + fintablo_salary)
+      5. Права доступа → GSheet
+    """
+    from use_cases.sync_min_stock import (
+        sync_nomenclature_to_gsheet,
+        sync_min_stock_from_gsheet,
+    )
+    from use_cases.outgoing_invoice import sync_price_sheet
+    from use_cases.salary import export_salary_sheet
+    from use_cases.payroll import update_fot_sheet
+    from use_cases.fintablo_salary_sync import sync_fot_to_fintablo
+
+    triggered = f"tg:{message.from_user.id}"
+    logger.info("[sync] unified GSheet tg:%d", message.from_user.id)
+
+    lock = get_sync_lock("sync_unified_gsheet")
+    if lock.locked():
+        await message.answer(
+            "⏳ Синхронизация Google Таблиц уже выполняется. Подождите."
+        )
+        return
+
+    placeholder = await message.answer(
+        "⏳ Запускаем синхронизацию всех Google Таблиц...\n"
+        "Операции выполняются последовательно (≈2-5 мин)."
+    )
+
+    results: list[str] = []
+
+    async def _step(label: str, coro) -> None:
+        try:
+            await placeholder.edit_text(
+                f"⏳ Google Таблицы: {label}...\n\n" + "\n".join(results)
+            )
+        except Exception:
+            logger.debug("suppressed", exc_info=True)
+        try:
+            count = await coro
+            results.append(f"✅ {label}: {count}")
+        except Exception as exc:
+            logger.exception("[sync] GSheet %s failed", label)
+            results.append(f"❌ {label}: {exc}")
+        # пауза между операциями — защита от 429
+        await asyncio.sleep(_GSHEET_DELAY)
+
+    async with lock:
+        # 1) Номенклатура → GSheet
+        await _step(
+            "Номенклатура → GSheet",
+            sync_nomenclature_to_gsheet(triggered_by=triggered),
+        )
+        # 2) Мин. остатки ← GSheet
+        await _step(
+            "Мин. остатки GSheet → БД",
+            sync_min_stock_from_gsheet(triggered_by=triggered),
+        )
+        # 3) Прайс-лист → GSheet
+        await _step(
+            "Прайс-лист → GSheet",
+            sync_price_sheet(triggered_by=triggered),
+        )
+        # 4) ФОТ: salary → fot → fintablo
+        try:
+            await placeholder.edit_text(
+                "⏳ Google Таблицы: ФОТ (salary + payroll + FT)...\n\n"
+                + "\n".join(results)
+            )
+        except Exception:
+            logger.debug("suppressed", exc_info=True)
+        try:
+            await export_salary_sheet(triggered_by=triggered)
+            await asyncio.sleep(_GSHEET_DELAY)
+            fot_count = await update_fot_sheet(triggered_by=triggered)
+            await asyncio.sleep(_GSHEET_DELAY)
+            await sync_fot_to_fintablo(triggered_by=triggered)
+            results.append(f"✅ ФОТ (salary + payroll + FT): {fot_count}")
+        except Exception as exc:
+            logger.exception("[sync] GSheet ФОТ failed")
+            results.append(f"❌ ФОТ: {exc}")
+        await asyncio.sleep(_GSHEET_DELAY)
+
+        # 5) Права доступа → GSheet
+        await _step(
+            "Права доступа → GSheet",
+            perm_uc.sync_permissions_to_gsheet(triggered_by=triggered),
+        )
+
+    await placeholder.edit_text(
+        "✅ Google Таблицы — результаты:\n\n" + "\n".join(results)
     )
 
 
