@@ -121,13 +121,17 @@ async def fetch_day_report_data(
     который содержит группировки PayTypes и CookingPlaceType.
 
     Фильтрация данных по подразделению — двухуровневая:
-      1. API-уровень: departmentIds в параметрах запроса (если поддерживается сервером iiko)
-      2. Клиентский уровень: фильтрация строк по полю Department (подстрока department_name)
+      1. API-уровень: departmentIds в параметрах запроса (UUID — авторитетный фильтр)
+      2. Клиентский уровень: если department_id не задан, фильтрация строк
+         по полю Department (подстрока department_name).
+         Когда department_id передан, API-фильтр достаточен — клиентская
+         фильтрация по имени пропускается, т.к. имена в БД и в OLAP
+         могут отличаться (латиница/кириллица, иерархический путь).
 
     Args:
         department_id:   UUID подразделения для API-фильтра.
-        department_name: Имя подразделения для клиентской фильтрации по полю Department.
-                         Должно совпадать с iiko Department ТОЧНО (как в iiko_department.name).
+        department_name: Имя подразделения для клиентской фильтрации (fallback,
+                         используется только когда department_id не задан).
     """
     t0 = time.monotonic()
     logger.info(
@@ -161,14 +165,12 @@ async def fetch_day_report_data(
             error=f"Ошибка iiko: {exc}",
         )
 
-    # ── Клиентская фильтрация по полю Department ──
-    # iiko в поле Department может возвращать:
-    #   - Полный иерархический путь: 'PizzaYolo / Гайдара PizzaYolo'
-    #   - Или просто имя: 'Клиническая PizzaYolo'
-    # department_name из БД (iiko_department.name) может совпадать целиком
-    # или быть частью пути. Используем двустороннее вхождение:
-    #   dept_name ⊂ Department  ИЛИ  Department ⊂ dept_name
-    if department_name:
+    # ── Клиентская фильтрация по полю Department (только fallback) ──
+    # Когда department_id уже передан, iiko фильтрует на сервере по UUID —
+    # клиентская фильтрация по имени не нужна и опасна:
+    # имена в БД (например «Пицца Йоло (Гайдара)») и в OLAP
+    # (например «PizzaYolo / Гайдара PizzaYolo») часто не совпадают.
+    if department_name and not department_id:
         dept_name_clean = department_name.strip().lower()
         original_count = len(rows)
         rows = [
@@ -181,6 +183,12 @@ async def fetch_day_report_data(
             "[day_report] Фильтр по Department (contains) '%s': %d → %d строк",
             department_name,
             original_count,
+            len(rows),
+        )
+    elif department_id:
+        logger.info(
+            "[day_report] API-фильтр по dept_id=%s, строк: %d (клиентский фильтр пропущен)",
+            department_id,
             len(rows),
         )
 

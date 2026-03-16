@@ -186,6 +186,47 @@ async def test_fetch_day_report_gaidara_path_match():
 
 
 @pytest.mark.asyncio
+async def test_fetch_day_report_dept_id_skips_name_filter():
+    """
+    Когда department_id задан, клиентская фильтрация по department_name пропускается.
+    На проде department_name может быть «Пицца Йоло (Гайдара)» (кириллица),
+    а OLAP Department — «PizzaYolo / Гайдара PizzaYolo» (латиница).
+    API-фильтр по UUID достаточен, name-фильтр не нужен.
+    """
+    mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
+
+    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+        # department_name НЕ совпадёт ни с одним Department в SAMPLE_ROWS,
+        # но поскольку department_id передан, name-фильтр пропускается.
+        result = await fetch_day_report_data(
+            department_id=DEPT_ID,
+            department_name="Пицца Йоло (Гайдара)",
+        )
+
+    # Все строки проходят (mock всё равно возвращает все SAMPLE_ROWS,
+    # а фильтр по имени пропущен).
+    assert result.error is None
+    assert result.total_sales == pytest.approx(50801.50)
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_report_name_filter_without_dept_id():
+    """
+    Без department_id клиентская фильтрация по department_name всё ещё работает.
+    """
+    mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
+
+    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+        result = await fetch_day_report_data(
+            department_id=None,
+            department_name="Клиническая PizzaYolo",
+        )
+
+    # Только Клиническая: 5000 + 3000 = 8000
+    assert result.total_sales == pytest.approx(8000.0)
+
+
+@pytest.mark.asyncio
 async def test_fetch_day_report_filters_case_insensitive():
     """Фильтрация по Department не чувствительна к регистру (сравнение через .lower())."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
