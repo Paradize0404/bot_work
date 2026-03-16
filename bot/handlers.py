@@ -348,6 +348,21 @@ async def process_last_name(message: Message, state: FSMContext) -> None:
                 "🏢 Ресторан назначен по умолчанию. Права устанавливаются автоматически.",
                 reply_markup=kb,
             )
+            # Синхронизация прав в фоне (чтобы сотрудник появился в GSheet)
+            _tg = message.from_user.id
+
+            async def _sync_auto():
+                try:
+                    await perm_uc.sync_permissions_to_gsheet(
+                        triggered_by=f"auth_auto:{_tg}",
+                    )
+                except Exception:
+                    logger.warning(
+                        "[auth] не удалось синхронизировать права (auto)",
+                        exc_info=True,
+                    )
+
+            asyncio.create_task(_sync_auto(), name=f"perms_sync_auto_{_tg}")
             return
 
         await state.set_state(AuthStates.choosing_department)
@@ -394,6 +409,21 @@ async def process_choose_employee(callback: CallbackQuery, state: FSMContext) ->
             f"✅ Добро пожаловать, {result.first_name}!\n"
             "🏢 Ресторан назначен по умолчанию. Права устанавливаются автоматически.",
         )
+        # Синхронизация прав в фоне (чтобы сотрудник появился в GSheet)
+        _tg = callback.from_user.id
+
+        async def _sync_emp():
+            try:
+                await perm_uc.sync_permissions_to_gsheet(
+                    triggered_by=f"auth_emp:{_tg}",
+                )
+            except Exception:
+                logger.warning(
+                    "[auth] не удалось синхронизировать права (emp)",
+                    exc_info=True,
+                )
+
+        asyncio.create_task(_sync_emp(), name=f"perms_sync_emp_{_tg}")
         return
 
     await state.set_state(AuthStates.choosing_department)
@@ -1458,12 +1488,24 @@ async def btn_unified_iiko_ft(message: Message) -> None:
             logger.exception("[sync] unified ОПИУ failed")
             opiu_line = f"  ❌ Ошибка: {exc}"
 
+        # 3) Права доступа → GSheet (чтобы новые сотрудники появились)
+        perms_line = ""
+        try:
+            perms_count = await perm_uc.sync_permissions_to_gsheet(
+                triggered_by=triggered,
+            )
+            perms_line = f"  ✅ Сотрудников: {perms_count}"
+        except Exception as exc:
+            logger.exception("[sync] unified permissions failed")
+            perms_line = f"  ❌ Ошибка: {exc}"
+
     lines = (
         ["-- iiko --"]
         + iiko_lines
         + ["\n-- FinTablo --"]
         + ft_lines
         + ["\n-- ОПИУ --", opiu_line]
+        + ["\n-- Права доступа --", perms_line]
     )
     await placeholder.edit_text(
         "✅ Полная синхронизация iiko + FinTablo:\n\n" + "\n".join(lines)
