@@ -393,8 +393,6 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         {"processed": int, "triggered_check": bool, "updated_messages": bool,
          "stoplist_updated": bool}
     """
-    global _last_snapshot_hash, _last_snapshot_items, _last_update_time
-
     result = {
         "processed": 0,
         "triggered_check": False,
