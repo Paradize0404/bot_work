@@ -75,6 +75,48 @@ class DayReportData:
 # Получение данных из iiko
 # ═══════════════════════════════════════════════════════
 
+# Общие / не различающие слова, которые встречаются во всех подразделениях.
+# Не используются при keyword-матчинге, чтобы избежать ложных совпадений.
+_GENERIC_WORDS: frozenset[str] = frozenset(
+    {"пицца", "йоло", "pizzayolo", "/", "пиццайоло"}
+)
+
+# Минимальная длина слова для keyword-матчинга (после strip скобок)
+_MIN_KEYWORD_LEN = 3
+
+
+def _extract_keywords(name: str) -> set[str]:
+    """Извлечь значимые слова из имени подразделения (lower, без скобок, без generic)."""
+    words: set[str] = set()
+    for w in name.lower().split():
+        clean = w.strip("()[].,/")
+        if len(clean) >= _MIN_KEYWORD_LEN and clean not in _GENERIC_WORDS:
+            words.add(clean)
+    return words
+
+
+def _dept_matches(dept_name: str, olap_dept: str) -> bool:
+    """
+    Проверить, соответствует ли department_name из БД значению Department из OLAP.
+
+    Трёхступенчатый матчинг (case-insensitive):
+      1. Подстрока: dept_name ⊂ olap_dept  ИЛИ  olap_dept ⊂ dept_name
+      2. Ключевые слова: пересечение значимых слов (без generic типа «Пицца», «Йоло»).
+         Пример: «Пицца Йоло (Гайдара)» ↔ «PizzaYolo / Гайдара PizzaYolo»
+         → общее слово «гайдара» → совпадение.
+    """
+    a = dept_name.strip().lower()
+    b = olap_dept.strip().lower()
+
+    # 1. Подстрока (быстрая проверка)
+    if a in b or b in a:
+        return True
+
+    # 2. Ключевые слова
+    kw_a = _extract_keywords(a)
+    kw_b = _extract_keywords(b)
+    return bool(kw_a & kw_b)
+
 
 async def get_distinct_cooking_place_types() -> list[str]:
     """
@@ -120,18 +162,20 @@ async def fetch_day_report_data(
     Использует один preset «Выручка себестоимость бот» (96df1c31-...),
     который содержит группировки PayTypes и CookingPlaceType.
 
-    Фильтрация данных по подразделению — двухуровневая:
-      1. API-уровень: departmentIds в параметрах запроса (UUID — авторитетный фильтр)
-      2. Клиентский уровень: если department_id не задан, фильтрация строк
-         по полю Department (подстрока department_name).
-         Когда department_id передан, API-фильтр достаточен — клиентская
-         фильтрация по имени пропускается, т.к. имена в БД и в OLAP
-         могут отличаться (латиница/кириллица, иерархический путь).
+    Фильтрация данных по подразделению:
+      1. API-уровень: departmentIds в параметрах запроса (для некоторых пресетов
+         iiko игнорирует этот параметр, поэтому клиентская фильтрация обязательна).
+      2. Клиентский уровень: фильтрация строк по полю Department.
+         Имена в БД и в OLAP могут отличаться (латиница/кириллица, иерархия),
+         поэтому используется трёхступенчатый матчинг:
+           a) подстрока: «Клиническая PizzaYolo» ⊂ OLAP «Клиническая PizzaYolo»
+           b) содержание: «Московский» ⊂ «PizzaYolo / Пицца Йоло (Московский)»
+           c) ключевые слова: «Пицца Йоло (Гайдара)» ↔ «PizzaYolo / Гайдара PizzaYolo»
+              (общее слово «Гайдара»)
 
     Args:
         department_id:   UUID подразделения для API-фильтра.
-        department_name: Имя подразделения для клиентской фильтрации (fallback,
-                         используется только когда department_id не задан).
+        department_name: Имя подразделения для клиентской фильтрации по полю Department.
     """
     t0 = time.monotonic()
     logger.info(
@@ -165,30 +209,19 @@ async def fetch_day_report_data(
             error=f"Ошибка iiko: {exc}",
         )
 
-    # ── Клиентская фильтрация по полю Department (только fallback) ──
-    # Когда department_id уже передан, iiko фильтрует на сервере по UUID —
-    # клиентская фильтрация по имени не нужна и опасна:
-    # имена в БД (например «Пицца Йоло (Гайдара)») и в OLAP
-    # (например «PizzaYolo / Гайдара PizzaYolo») часто не совпадают.
-    if department_name and not department_id:
-        dept_name_clean = department_name.strip().lower()
+    # ── Клиентская фильтрация по полю Department ──
+    # API-параметр departmentIds не всегда фильтрует данные OLAP-пресета,
+    # поэтому клиентский фильтр обязателен.
+    # Используем _dept_matches(): подстрока + ключевые слова.
+    if department_name:
         original_count = len(rows)
         rows = [
-            r
-            for r in rows
-            if dept_name_clean in r.get("Department", "").strip().lower()
-            or r.get("Department", "").strip().lower() in dept_name_clean
+            r for r in rows if _dept_matches(department_name, r.get("Department", ""))
         ]
         logger.info(
-            "[day_report] Фильтр по Department (contains) '%s': %d → %d строк",
+            "[day_report] Фильтр по Department '%s': %d → %d строк",
             department_name,
             original_count,
-            len(rows),
-        )
-    elif department_id:
-        logger.info(
-            "[day_report] API-фильтр по dept_id=%s, строк: %d (клиентский фильтр пропущен)",
-            department_id,
             len(rows),
         )
 

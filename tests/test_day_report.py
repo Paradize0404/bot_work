@@ -17,6 +17,8 @@ from use_cases.day_report import (
     DayReportData,
     SalesLine,
     CostLine,
+    _dept_matches,
+    _extract_keywords,
 )
 
 
@@ -186,43 +188,41 @@ async def test_fetch_day_report_gaidara_path_match():
 
 
 @pytest.mark.asyncio
-async def test_fetch_day_report_dept_id_skips_name_filter():
+async def test_fetch_day_report_gaidara_keyword_match():
     """
-    Когда department_id задан, клиентская фильтрация по department_name пропускается.
-    На проде department_name может быть «Пицца Йоло (Гайдара)» (кириллица),
-    а OLAP Department — «PizzaYolo / Гайдара PizzaYolo» (латиница).
-    API-фильтр по UUID достаточен, name-фильтр не нужен.
+    На проде department_name = «Пицца Йоло (Гайдара)» (кириллица из БД),
+    а OLAP Department = «PizzaYolo / Гайдара PizzaYolo» (латиница).
+    Ни contains, ни substring не совпадут, но keyword match по слову «Гайдара» сработает.
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
     with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
-        # department_name НЕ совпадёт ни с одним Department в SAMPLE_ROWS,
-        # но поскольку department_id передан, name-фильтр пропускается.
         result = await fetch_day_report_data(
             department_id=DEPT_ID,
             department_name="Пицца Йоло (Гайдара)",
         )
 
-    # Все строки проходят (mock всё равно возвращает все SAMPLE_ROWS,
-    # а фильтр по имени пропущен).
     assert result.error is None
-    assert result.total_sales == pytest.approx(50801.50)
+    # Только Гайдара: 25000 + 5801.50 = 30801.50 (не все 50801.50)
+    assert result.total_sales == pytest.approx(30801.50)
+    assert result.total_cost == pytest.approx(8200.0)
 
 
 @pytest.mark.asyncio
-async def test_fetch_day_report_name_filter_without_dept_id():
+async def test_fetch_day_report_filter_always_applied_with_dept_id():
     """
-    Без department_id клиентская фильтрация по department_name всё ещё работает.
+    Клиентская фильтрация применяется даже когда department_id задан,
+    т.к. API departmentIds может не фильтровать OLAP-пресеты.
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
     with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
         result = await fetch_day_report_data(
-            department_id=None,
+            department_id=DEPT_ID,
             department_name="Клиническая PizzaYolo",
         )
 
-    # Только Клиническая: 5000 + 3000 = 8000
+    # Фильтр по имени работает: 5000 + 3000 = 8000 (не все 50801.50)
     assert result.total_sales == pytest.approx(8000.0)
 
 
@@ -606,3 +606,65 @@ def test_input_media_photo_imported():
     from bot.day_report_handlers import InputMediaPhoto
 
     assert InputMediaPhoto is not None
+
+
+# ═══════════════════════════════════════════════════════
+# 8. _dept_matches — юнит-тесты матчинга имён подразделений
+# ═══════════════════════════════════════════════════════
+
+
+def test_dept_matches_exact():
+    """Точное совпадение."""
+    assert _dept_matches("Клиническая PizzaYolo", "Клиническая PizzaYolo")
+
+
+def test_dept_matches_substring_db_in_olap():
+    """Имя из БД является подстрокой OLAP Department."""
+    assert _dept_matches(
+        "Пицца Йоло (Московский)", "PizzaYolo / Пицца Йоло (Московский)"
+    )
+
+
+def test_dept_matches_substring_olap_in_db():
+    """OLAP Department является подстрокой имени из БД."""
+    assert _dept_matches(
+        "PizzaYolo / Пицца Йоло (Московский)", "Пицца Йоло (Московский)"
+    )
+
+
+def test_dept_matches_keyword_gaidara():
+    """
+    Ключевое слово «Гайдара» — общее в «Пицца Йоло (Гайдара)» и «PizzaYolo / Гайдара PizzaYolo».
+    Ни одно не является подстрокой другого, но keyword match срабатывает.
+    """
+    assert _dept_matches("Пицца Йоло (Гайдара)", "PizzaYolo / Гайдара PizzaYolo")
+
+
+def test_dept_matches_no_match():
+    """Разные точки не совпадают."""
+    assert not _dept_matches("Пицца Йоло (Гайдара)", "Клиническая PizzaYolo")
+
+
+def test_dept_matches_no_match_moskovskiy_vs_gaidara():
+    """Московский ≠ Гайдара — нет общих ключевых слов."""
+    assert not _dept_matches("Пицца Йоло (Московский)", "PizzaYolo / Гайдара PizzaYolo")
+
+
+def test_dept_matches_case_insensitive():
+    """Матчинг не чувствителен к регистру."""
+    assert _dept_matches("КЛИНИЧЕСКАЯ PIZZAYOLO", "клиническая pizzayolo")
+
+
+def test_extract_keywords_strips_generic():
+    """_extract_keywords убирает generic слова (пицца, йоло, pizzayolo)."""
+    kw = _extract_keywords("Пицца Йоло (Гайдара)")
+    assert "гайдара" in kw
+    assert "пицца" not in kw
+    assert "йоло" not in kw
+
+
+def test_extract_keywords_from_olap():
+    """Keywords из OLAP-имени: «PizzaYolo / Гайдара PizzaYolo» → {«гайдара»}."""
+    kw = _extract_keywords("PizzaYolo / Гайдара PizzaYolo")
+    assert "гайдара" in kw
+    assert "pizzayolo" not in kw
