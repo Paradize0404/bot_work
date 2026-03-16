@@ -181,6 +181,8 @@ TEXT_PERMISSIONS: dict[str, str] = {
     "🏢 Синхр. подразделения": PERM_SETTINGS,
     # ── Подписки на отчёты (admin-only) ──
     "📬 Подписки на отчёты": PERM_SETTINGS,
+    # ── Заблокированные пользователи (admin-only) ──
+    "🚫 Заблокированные": PERM_SETTINGS,
     # ── Кнопки главного меню (проверяем через группы) ──
     "📝 Списания": PERM_WRITEOFF_CREATE,
     "📦 Накладные": PERM_INVOICE_CREATE,

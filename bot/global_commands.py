@@ -24,6 +24,7 @@ from bot.permission_map import (
     TEXT_PERMISSIONS,
     CALLBACK_PERMISSIONS,
 )
+from use_cases import blocked_users as block_uc
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,8 @@ NAV_BUTTONS: frozenset[str] = frozenset(
         "🔄 Обновить остатки сейчас",
         # ── Подписки на отчёты ──
         "📬 Подписки на отчёты",
+        # ── Заблокированные пользователи ──
+        "🚫 Заблокированные",
     }
 )
 
@@ -148,6 +151,39 @@ async def _cleanup_state_messages(
         logger.info("[mw:nav] снята блокировка заявки pk=%s", edit_pk)
 
     await state.clear()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Outer-middleware: блокировка пользователей (ПЕРВЫЙ в цепочке)
+# ═══════════════════════════════════════════════════════════════
+
+
+class BlockCheckMiddleware(BaseMiddleware):
+    """
+    Если telegram_id есть в таблице blocked_user — бот полностью
+    игнорирует сообщение / callback.  Ставится ПЕРВЫМ outer-middleware
+    на dp.message и dp.callback_query.
+    """
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        user = getattr(event, "from_user", None)
+        if user and await block_uc.is_blocked(user.id):
+            logger.warning(
+                "[mw:block] Заблокированный пользователь tg:%d — игнор",
+                user.id,
+            )
+            if isinstance(event, CallbackQuery):
+                await event.answer(
+                    "⛔ Ваш доступ к боту заблокирован.", show_alert=True
+                )
+            # Для Message — просто не вызываем handler (полный игнор)
+            return
+        return await handler(event, data)
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -155,6 +155,7 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="☁️ iikoCloud вебхук")],
         [KeyboardButton(text="📋 ID сотрудников FinTablo")],
         [KeyboardButton(text="📬 Подписки на отчёты")],
+        [KeyboardButton(text="🚫 Заблокированные")],
         [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)

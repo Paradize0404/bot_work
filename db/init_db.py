@@ -145,6 +145,15 @@ MIGRATIONS: list[str] = [
     )""",
     "CREATE INDEX IF NOT EXISTS ix_report_sub_tg ON report_subscription (telegram_id)",
     "CREATE INDEX IF NOT EXISTS ix_report_sub_dept ON report_subscription (department_id)",
+    # blocked_user — заблокированные пользователи бота
+    """CREATE TABLE IF NOT EXISTS blocked_user (
+        pk BIGSERIAL PRIMARY KEY,
+        telegram_id BIGINT NOT NULL UNIQUE,
+        user_name VARCHAR(500),
+        blocked_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+        blocked_by BIGINT
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_blocked_user_tg ON blocked_user (telegram_id)",
     # pnl_account_mapping — маппинг iiko Account.Name → FinTablo PnL category (ОПИУ)
     """CREATE TABLE IF NOT EXISTS pnl_account_mapping (
         id SERIAL PRIMARY KEY,

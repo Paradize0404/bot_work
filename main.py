@@ -33,6 +33,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
         router as global_router,
         NavResetMiddleware,
         PermissionMiddleware,
+        BlockCheckMiddleware,
     )
     from bot.handlers import router
     from bot.writeoff_handlers import router as writeoff_router
@@ -47,6 +48,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.salary_handlers import router as salary_router
     from bot.pnl_handlers import router as pnl_router
     from bot.report_sub_handlers import router as report_sub_router
+    from bot.block_handlers import router as block_router
     from bot.retry_session import RetryAiohttpSession
 
     from aiogram.fsm.storage.redis import RedisStorage
@@ -56,6 +58,9 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     bot = Bot(token=TELEGRAM_BOT_TOKEN, session=session)
     storage = RedisStorage.from_url(REDIS_URL)
     dp = Dispatcher(storage=storage)
+    # Outer-middleware: блокировка пользователей (ПЕРВЫЙ — до всех остальных)
+    dp.message.outer_middleware(BlockCheckMiddleware())
+    dp.callback_query.outer_middleware(BlockCheckMiddleware())
     # Outer-middleware: сброс FSM при нажатии Reply-кнопки навигации
     dp.message.outer_middleware(NavResetMiddleware())
     # Outer-middleware: централизованная проверка прав (permission_map.py)
@@ -74,6 +79,7 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp.include_router(salary_router)  # Управление списком ФОТ
     dp.include_router(pnl_router)  # Маппинг ОПИУ iiko→FinTablo
     dp.include_router(report_sub_router)  # Подписки на отчёты дня
+    dp.include_router(block_router)  # Блокировка пользователей
     dp.include_router(router)
 
     # Error handler: ловим оставшиеся сетевые ошибки (после retry)

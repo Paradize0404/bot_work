@@ -1579,3 +1579,38 @@ class ReportSubscription(Base):
         nullable=True,
         comment="Telegram ID админа, создавшего подписку",
     )
+
+
+# ─────────────────────────────────────────────────────
+# Заблокированные пользователи
+# ─────────────────────────────────────────────────────
+
+
+class BlockedUser(Base):
+    """
+    Заблокированный пользователь бота.
+    Если telegram_id есть в этой таблице — бот полностью игнорирует
+    любые сообщения и callback от этого пользователя.
+    """
+
+    __tablename__ = "blocked_user"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_id = Column(
+        BigInteger,
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="Telegram user ID заблокированного",
+    )
+    user_name = Column(
+        String(500),
+        nullable=True,
+        comment="ФИО на момент блокировки (для отображения)",
+    )
+    blocked_at = Column(DateTime, default=_utcnow, nullable=False)
+    blocked_by = Column(
+        BigInteger,
+        nullable=True,
+        comment="Telegram ID админа, заблокировавшего пользователя",
+    )
