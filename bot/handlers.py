@@ -68,6 +68,8 @@ class AuthStates(StatesGroup):
     waiting_last_name = State()
     choosing_employee = State()
     choosing_department = State()
+    guest_full_name = State()  # Ввод ФИО для гостевого пользователя
+    guest_choosing_department = State()  # Выбор ресторана для гостя
 
 
 class ChangeDeptStates(StatesGroup):
@@ -152,6 +154,7 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(text="📊 ОПИУ (iiko→FT)")],
         [KeyboardButton(text="☁️ iikoCloud вебхук")],
         [KeyboardButton(text="📋 ID сотрудников FinTablo")],
+        [KeyboardButton(text="📬 Подписки на отчёты")],
         [KeyboardButton(text="◀️ Назад")],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -296,8 +299,28 @@ async def process_last_name(message: Message, state: FSMContext) -> None:
     result = await auth_uc.process_auth_by_lastname(message.from_user.id, last_name)
 
     if not result.employees:
+        await state.update_data(last_name_attempt=last_name)
         await message.answer(
-            f"❌ Сотрудник с фамилией «{last_name}» не найден.\n" "Попробуйте ещё раз:"
+            f"❌ Сотрудник с фамилией «{last_name}» не найден.\n\n"
+            "Вы можете:\n"
+            "• Попробовать ввести фамилию ещё раз\n"
+            "• Зарегистрироваться как гость (для инвесторов, партнёров и т.д.)",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="👤 Зарегистрироваться как гость",
+                            callback_data="auth_guest_register",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔄 Попробовать ещё раз",
+                            callback_data="auth_retry_lastname",
+                        )
+                    ],
+                ]
+            ),
         )
         return
 
@@ -456,6 +479,186 @@ async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None
         await callback.message.edit_text("❌ Смена ресторана отменена.")
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+
+# -----------------------------------------------------
+# Гостевая авторизация
+# -----------------------------------------------------
+
+
+@router.callback_query(F.data == "auth_guest_register")
+async def auth_guest_start(callback: CallbackQuery, state: FSMContext) -> None:
+    """Начало регистрации гостя — запрос ФИО."""
+    logger.info("[auth] guest_register tg:%d", callback.from_user.id)
+    await callback.answer()
+    await state.set_state(AuthStates.guest_full_name)
+    try:
+        await callback.message.edit_text(
+            "👤 Регистрация гостевого аккаунта.\n\n"
+            "Введите ваше **ФИО** (Фамилия Имя Отчество):",
+            parse_mode="Markdown",
+        )
+    except Exception:
+        await callback.message.answer(
+            "👤 Регистрация гостевого аккаунта.\n\n"
+            "Введите ваше **ФИО** (Фамилия Имя Отчество):",
+            parse_mode="Markdown",
+        )
+
+
+@router.callback_query(F.data == "auth_retry_lastname")
+async def auth_retry_lastname(callback: CallbackQuery, state: FSMContext) -> None:
+    """Повторный ввод фамилии."""
+    logger.info("[auth] retry_lastname tg:%d", callback.from_user.id)
+    await callback.answer()
+    await state.set_state(AuthStates.waiting_last_name)
+    try:
+        await callback.message.edit_text(
+            "Введите свою **Фамилию**:", parse_mode="Markdown"
+        )
+    except Exception:
+        await callback.message.answer(
+            "Введите свою **Фамилию**:", parse_mode="Markdown"
+        )
+
+
+@router.message(AuthStates.guest_full_name, F.text)
+async def process_guest_full_name(message: Message, state: FSMContext) -> None:
+    """Приём ФИО гостя → регистрация → выбор ресторана."""
+    tg_id = message.from_user.id
+    full_name = truncate_input(message.text.strip(), MAX_TEXT_NAME)
+    logger.info("[auth] guest_full_name tg:%d, name=%r", tg_id, full_name)
+
+    try:
+        await message.delete()
+    except Exception:
+        logger.debug("suppressed", exc_info=True)
+
+    if not full_name or len(full_name) < 2:
+        await message.answer("⚠️ Пожалуйста, введите ваше ФИО (минимум 2 символа):")
+        return
+
+    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+
+    # Регистрируем гостя
+    await auth_uc.register_guest(tg_id, full_name)
+
+    # Предлагаем выбрать ресторан (опционально для гостей)
+    restaurants = await auth_uc.get_restaurants()
+    if restaurants:
+        await state.set_state(AuthStates.guest_choosing_department)
+        await message.answer(
+            f"✅ Добро пожаловать, {full_name.split()[0]}!\n\n"
+            "🏢 Выберите ресторан (можно пропустить):",
+            reply_markup=_departments_inline_kb_with_skip(restaurants),
+        )
+    else:
+        # Нет ресторанов — завершаем без выбора
+        await state.clear()
+        kb = await _get_main_kb(tg_id)
+        await message.answer(
+            f"✅ Добро пожаловать, {full_name.split()[0]}!\n\n"
+            "Вы зарегистрированы как гость. Администратор настроит ваши права доступа.",
+            reply_markup=kb,
+        )
+
+
+@router.callback_query(
+    AuthStates.guest_choosing_department, F.data.startswith("auth_dept:")
+)
+async def process_guest_department(callback: CallbackQuery, state: FSMContext) -> None:
+    """Выбор ресторана для гостя."""
+    await callback.answer()
+    department_id = await validate_callback_uuid(callback, callback.data)
+    if not department_id:
+        return
+    tg_id = callback.from_user.id
+    logger.info("[auth] guest dept tg:%d, dept_id=%s", tg_id, department_id)
+
+    dept_name = await auth_uc.save_guest_department(tg_id, department_id)
+    await state.clear()
+    try:
+        await callback.message.edit_text(
+            f"✅ Ресторан: **{dept_name}**\n\nРегистрация завершена!",
+            parse_mode="Markdown",
+        )
+    except Exception:
+        logger.debug("suppressed", exc_info=True)
+
+    kb = await _get_main_kb(tg_id)
+    await callback.message.answer(
+        "Вы зарегистрированы как гость. Администратор настроит ваши права доступа.\n"
+        "Выберите раздел:",
+        reply_markup=kb,
+    )
+
+    # Синхронизация прав в фоне (чтобы гость появился в GSheet)
+    async def _sync_perms():
+        try:
+            await perm_uc.sync_permissions_to_gsheet(
+                triggered_by=f"guest_auth:{tg_id}",
+            )
+        except Exception:
+            logger.warning(
+                "[auth] не удалось синхронизировать права гостя", exc_info=True
+            )
+
+    asyncio.create_task(_sync_perms(), name=f"perms_sync_guest_{tg_id}")
+
+
+@router.callback_query(
+    AuthStates.guest_choosing_department, F.data == "guest_skip_dept"
+)
+async def process_guest_skip_department(
+    callback: CallbackQuery, state: FSMContext
+) -> None:
+    """Гость пропускает выбор ресторана."""
+    await callback.answer()
+    tg_id = callback.from_user.id
+    logger.info("[auth] guest skip dept tg:%d", tg_id)
+    await state.clear()
+
+    try:
+        await callback.message.edit_text("✅ Регистрация завершена!")
+    except Exception:
+        logger.debug("suppressed", exc_info=True)
+
+    kb = await _get_main_kb(tg_id)
+    await callback.message.answer(
+        "Вы зарегистрированы как гость. Администратор настроит ваши права доступа.\n"
+        "Выберите раздел:",
+        reply_markup=kb,
+    )
+
+    # Синхронизация прав в фоне
+    async def _sync_perms():
+        try:
+            await perm_uc.sync_permissions_to_gsheet(
+                triggered_by=f"guest_auth:{tg_id}",
+            )
+        except Exception:
+            logger.warning(
+                "[auth] не удалось синхронизировать права гостя", exc_info=True
+            )
+
+    asyncio.create_task(_sync_perms(), name=f"perms_sync_guest_{tg_id}")
+
+
+def _departments_inline_kb_with_skip(
+    departments: list[dict],
+) -> InlineKeyboardMarkup:
+    """Inline-кнопки выбора ресторана с опцией «Пропустить» для гостей."""
+    buttons = [
+        [InlineKeyboardButton(text=d["name"], callback_data=f"auth_dept:{d['id']}")]
+        for d in departments
+    ]
+    buttons.append(
+        [InlineKeyboardButton(text="⏭ Пропустить", callback_data="guest_skip_dept")]
+    )
+    buttons.append(
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 # -----------------------------------------------------

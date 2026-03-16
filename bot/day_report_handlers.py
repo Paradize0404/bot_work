@@ -28,6 +28,7 @@ from aiogram.types import Message, InputMediaPhoto
 from use_cases import user_context as uctx
 from use_cases import permissions as perm_uc
 from use_cases import day_report as day_report_uc
+from use_cases import report_subscriptions as sub_uc
 from use_cases._helpers import now_kgd
 from adapters import google_sheets as gs_adapter
 from bot.middleware import (
@@ -330,8 +331,18 @@ async def _finalize_day_report(message: Message, state: FSMContext) -> None:
         except Exception:
             logger.debug("suppressed", exc_info=True)
     # ── Отправляем отчёт + фото всем получателям ──
-    day_report_ids = await perm_uc.get_users_with_permission(PERM_DAY_REPORT_RECEIVE)
-    recipients = [uid for uid in day_report_ids if uid != tg_id]
+    # 1. Подписчики на отчёты для конкретного подразделения (новая система)
+    sub_ids: list[int] = []
+    if department_id:
+        sub_ids = await sub_uc.get_subscribers_for_department(department_id)
+
+    # 2. Пользователи с правом PERM_DAY_REPORT_RECEIVE (обратная совместимость)
+    perm_ids = await perm_uc.get_users_with_permission(PERM_DAY_REPORT_RECEIVE)
+
+    # Объединяем, убираем дубли и автора
+    all_recipient_ids = set(sub_ids) | set(perm_ids)
+    all_recipient_ids.discard(tg_id)
+    recipients = list(all_recipient_ids)
 
     sent_count = 0
     for uid in recipients:

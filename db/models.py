@@ -1502,3 +1502,80 @@ class SalaryExclusion(Base):
     employee_id = Column(String(36), primary_key=True, comment="iiko UUID")
     excluded_by = Column(String(500), nullable=True)
     excluded_at = Column(DateTime, default=_utcnow, nullable=False)
+
+
+# ─────────────────────────────────────────────────────
+# Гостевые пользователи (не из iiko)
+# ─────────────────────────────────────────────────────
+
+
+class GuestUser(Base):
+    """
+    Гостевой пользователь — не существует в iiko, но зарегистрирован в боте.
+    Пример: инвестор, внешний партнёр.
+    Права назначаются через Google Таблицу (как и для обычных сотрудников).
+    """
+
+    __tablename__ = "guest_user"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_id = Column(
+        BigInteger,
+        nullable=False,
+        unique=True,
+        index=True,
+        comment="Telegram user ID",
+    )
+    full_name = Column(
+        String(500),
+        nullable=False,
+        comment="ФИО (вводится при регистрации)",
+    )
+    department_id = Column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+        comment="Выбранный ресторан (iiko_department.id)",
+    )
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+
+
+# ─────────────────────────────────────────────────────
+# Подписки на отчёты дня (по подразделениям)
+# ─────────────────────────────────────────────────────
+
+
+class ReportSubscription(Base):
+    """
+    Подписка пользователя на получение отчёта дня по конкретному подразделению.
+    Настраивается админом через бот (раздел «Настройки → 📬 Подписки на отчёты»).
+    """
+
+    __tablename__ = "report_subscription"
+    __table_args__ = (
+        UniqueConstraint(
+            "telegram_id",
+            "department_id",
+            name="uq_report_sub_tg_dept",
+        ),
+    )
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_id = Column(
+        BigInteger,
+        nullable=False,
+        index=True,
+        comment="Telegram user ID получателя",
+    )
+    department_id = Column(
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
+        comment="UUID подразделения (iiko_department.id)",
+    )
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    created_by = Column(
+        BigInteger,
+        nullable=True,
+        comment="Telegram ID админа, создавшего подписку",
+    )

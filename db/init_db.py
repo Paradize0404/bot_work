@@ -125,6 +125,26 @@ MIGRATIONS: list[str] = [
     "ALTER TABLE salary_history ADD COLUMN IF NOT EXISTS mot_base VARCHAR(200)",
     # salary_exclusions — ручное исключение сотрудников из ведомости
     "CREATE TABLE IF NOT EXISTS salary_exclusions (employee_id VARCHAR(36) PRIMARY KEY, excluded_by VARCHAR(500), excluded_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now())",
+    # guest_user — гостевые пользователи (не из iiko)
+    """CREATE TABLE IF NOT EXISTS guest_user (
+        pk BIGSERIAL PRIMARY KEY,
+        telegram_id BIGINT NOT NULL UNIQUE,
+        full_name VARCHAR(500) NOT NULL,
+        department_id UUID,
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now()
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_guest_user_tg ON guest_user (telegram_id)",
+    # report_subscription — подписки на отчёты дня (по подразделениям)
+    """CREATE TABLE IF NOT EXISTS report_subscription (
+        pk BIGSERIAL PRIMARY KEY,
+        telegram_id BIGINT NOT NULL,
+        department_id UUID NOT NULL,
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+        created_by BIGINT,
+        CONSTRAINT uq_report_sub_tg_dept UNIQUE (telegram_id, department_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_report_sub_tg ON report_subscription (telegram_id)",
+    "CREATE INDEX IF NOT EXISTS ix_report_sub_dept ON report_subscription (department_id)",
     # pnl_account_mapping — маппинг iiko Account.Name → FinTablo PnL category (ОПИУ)
     """CREATE TABLE IF NOT EXISTS pnl_account_mapping (
         id SERIAL PRIMARY KEY,

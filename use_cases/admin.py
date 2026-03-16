@@ -15,7 +15,7 @@ import time
 from sqlalchemy import select
 
 from db.engine import async_session_factory
-from db.models import Employee
+from db.models import Employee, GuestUser
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,8 @@ async def alert_admins(bot, message: str) -> None:
 
 async def get_employees_with_telegram() -> list[dict]:
     """
-    Все сотрудники у которых есть telegram_id (авторизованы в боте).
+    Все сотрудники у которых есть telegram_id (авторизованы в боте) +
+    все гостевые пользователи.
     Возвращает: [{id, name, last_name, first_name, telegram_id}, ...]
     """
     t0 = time.monotonic()
@@ -54,6 +55,11 @@ async def get_employees_with_telegram() -> list[dict]:
         result = await session.execute(stmt)
         employees = result.scalars().all()
 
+        # Гостевые пользователи
+        guest_stmt = select(GuestUser).order_by(GuestUser.full_name)
+        guest_result = await session.execute(guest_stmt)
+        guests = guest_result.scalars().all()
+
     items = [
         {
             "id": str(emp.id),
@@ -64,9 +70,23 @@ async def get_employees_with_telegram() -> list[dict]:
         }
         for emp in employees
     ]
+
+    # Добавляем гостей
+    for guest in guests:
+        items.append(
+            {
+                "id": f"guest_{guest.pk}",
+                "name": f"{guest.full_name} (гость)",
+                "last_name": "",
+                "first_name": guest.full_name,
+                "telegram_id": guest.telegram_id,
+            }
+        )
+
     logger.info(
-        "[admin] Сотрудников с telegram_id: %d (%.2f сек)",
-        len(items),
+        "[admin] Сотрудников с telegram_id: %d (+ %d гостей) (%.2f сек)",
+        len(employees),
+        len(guests),
         time.monotonic() - t0,
     )
     return items

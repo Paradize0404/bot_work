@@ -17,7 +17,7 @@ from uuid import UUID
 from sqlalchemy import select, func
 
 from db.engine import async_session_factory
-from db.models import Employee, Department, EmployeeRole
+from db.models import Employee, Department, EmployeeRole, GuestUser
 from use_cases import user_context as uctx
 
 logger = logging.getLogger(__name__)
@@ -250,6 +250,7 @@ async def get_employee_by_telegram_id(telegram_id: int) -> dict | None:
 async def check_auth_status(telegram_id: int) -> AuthResult:
     """
     Проверить статус авторизации при /start.
+    Проверяет и сотрудников iiko, и гостевых пользователей.
     Возвращает AuthResult с enum-статусом.
     """
     ctx = await uctx.get_user_context(telegram_id)
@@ -257,6 +258,26 @@ async def check_auth_status(telegram_id: int) -> AuthResult:
         return AuthResult(status=AuthStatus.AUTHORIZED, first_name=ctx.first_name)
     if ctx:
         return AuthResult(status=AuthStatus.NEEDS_DEPARTMENT, first_name=ctx.first_name)
+
+    # Проверяем гостевого пользователя в БД (если кеш был инвалидирован)
+    guest = await get_guest_user(telegram_id)
+    if guest:
+        first_name = (
+            guest.full_name.split()[0] if guest.full_name.strip() else guest.full_name
+        )
+        await uctx.set_context(
+            telegram_id=telegram_id,
+            employee_id="guest",
+            employee_name=guest.full_name,
+            first_name=first_name,
+            department_id=str(guest.department_id) if guest.department_id else None,
+            department_name=None,
+            role_name="Гость",
+        )
+        if guest.department_id:
+            return AuthResult(status=AuthStatus.AUTHORIZED, first_name=first_name)
+        return AuthResult(status=AuthStatus.NEEDS_DEPARTMENT, first_name=first_name)
+
     return AuthResult(status=AuthStatus.NOT_AUTHORIZED)
 
 
@@ -310,4 +331,83 @@ async def complete_department_selection(
         await uctx.get_user_context(telegram_id)
         await uctx.update_department(telegram_id, department_id, dept_name)
 
+    return dept_name
+
+
+# ═══════════════════════════════════════════════════════
+# Гостевой доступ (пользователи не из iiko)
+# ═══════════════════════════════════════════════════════
+
+
+async def register_guest(telegram_id: int, full_name: str) -> None:
+    """
+    Зарегистрировать гостевого пользователя (создать запись в guest_user).
+    Если уже зарегистрирован — обновить имя.
+    """
+    t0 = time.monotonic()
+    logger.info("[auth] Регистрация гостя tg:%d, name=%r", telegram_id, full_name)
+
+    async with async_session_factory() as session:
+        stmt = select(GuestUser).where(GuestUser.telegram_id == telegram_id)
+        result = await session.execute(stmt)
+        guest = result.scalar_one_or_none()
+
+        if guest:
+            guest.full_name = full_name
+            logger.info("[auth] Гость tg:%d уже существует, имя обновлено", telegram_id)
+        else:
+            guest = GuestUser(telegram_id=telegram_id, full_name=full_name)
+            session.add(guest)
+            logger.info("[auth] Гость tg:%d создан", telegram_id)
+
+        await session.commit()
+
+    # Записываем в кеш — гость без department (назначат позже)
+    await uctx.set_context(
+        telegram_id=telegram_id,
+        employee_id="guest",
+        employee_name=full_name,
+        first_name=full_name.split()[0] if full_name.strip() else full_name,
+        role_name="Гость",
+    )
+    logger.info(
+        "[auth] Гость зарегистрирован tg:%d за %.2f сек",
+        telegram_id,
+        time.monotonic() - t0,
+    )
+
+
+async def get_guest_user(telegram_id: int) -> GuestUser | None:
+    """Получить гостевого пользователя по telegram_id."""
+    async with async_session_factory() as session:
+        stmt = select(GuestUser).where(GuestUser.telegram_id == telegram_id)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+
+async def save_guest_department(telegram_id: int, department_id: str) -> str:
+    """
+    Сохранить выбранный ресторан для гостевого пользователя.
+    Возвращает название ресторана.
+    """
+    from uuid import UUID as _UUID
+
+    async with async_session_factory() as session:
+        stmt = select(GuestUser).where(GuestUser.telegram_id == telegram_id)
+        result = await session.execute(stmt)
+        guest = result.scalar_one_or_none()
+        if not guest:
+            raise ValueError("Гость не найден. Пройдите регистрацию /start")
+
+        guest.department_id = _UUID(department_id)
+
+        dept_stmt = select(Department.name).where(Department.id == _UUID(department_id))
+        dept_result = await session.execute(dept_stmt)
+        dept_name = dept_result.scalar_one_or_none() or department_id
+
+        await session.commit()
+
+    # Обновляем кеш
+    await uctx.update_department(telegram_id, department_id, dept_name)
+    logger.info("[auth] Гость tg:%d → ресторан «%s»", telegram_id, dept_name)
     return dept_name
