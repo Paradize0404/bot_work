@@ -81,13 +81,16 @@ class ChangeDeptStates(StatesGroup):
 
 
 def _main_keyboard(
-    allowed: set[str] | None = None, dept_name: str | None = None
+    allowed: set[str] | None = None,
+    dept_name: str | None = None,
+    is_guest: bool = False,
 ) -> ReplyKeyboardMarkup:
     """
     Главная клавиатура: опционально по ролям + кнопка + настройки.
     Отображаем только кнопки, на которые у пользователя есть роли.
     allowed — допустимые кнопки (ключи из get_allowed_keys).
     allowed = None — отображать всё (для первой авторизации).
+    is_guest — гость без прав: показываем минимальную клавиатуру.
     """
     from bot.permission_map import MENU_BUTTON_GROUPS
 
@@ -109,24 +112,33 @@ def _main_keyboard(
         if allowed is None or text in allowed:
             visible.append(KeyboardButton(text=text))
 
+    # Гость без прав — пустая клавиатура (ждёт настройки от админа)
+    if is_guest and not visible:
+        return ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="🔄 Обновить")]],
+            resize_keyboard=True,
+        )
+
     # Разбить кнопки по 2 в ряд
     rows: list[list[KeyboardButton]] = []
     for i in range(0, len(visible), 2):
         rows.append(visible[i : i + 2])
 
-    # Прайс-лист и зарплата — всегда видны авторизованным
-    rows.append(
-        [
-            KeyboardButton(text="💰 Прайс-лист"),
-            KeyboardButton(text="💰 Моя зарплата"),
-        ]
-    )
+    # Прайс-лист и зарплата — видны только НЕ-гостям
+    if not is_guest:
+        rows.append(
+            [
+                KeyboardButton(text="💰 Прайс-лист"),
+                KeyboardButton(text="💰 Моя зарплата"),
+            ]
+        )
 
-    # Добавляем кнопку смены зала, отображающая текущий ресторан
-    dept_label = (
-        f"🏠 Сменить ресторан ({dept_name})" if dept_name else "🏠 Сменить ресторан"
-    )
-    rows.append([KeyboardButton(text=dept_label)])
+    # Добавляем кнопку смены зала (не для гостей без подразделения)
+    if not is_guest or dept_name:
+        dept_label = (
+            f"🏠 Сменить ресторан ({dept_name})" if dept_name else "🏠 Сменить ресторан"
+        )
+        rows.append([KeyboardButton(text=dept_label)])
 
     # Настройки в главном меню если есть право
     if allowed is None or "⚙️ Настройки" in allowed:
@@ -165,7 +177,8 @@ async def _get_main_kb(tg_id: int) -> ReplyKeyboardMarkup:
     allowed = await perm_uc.get_allowed_keys(tg_id)
     ctx = await uctx.get_user_context(tg_id)
     dept_name = ctx.department_name if ctx else None
-    return _main_keyboard(allowed, dept_name=dept_name)
+    is_guest = bool(ctx and ctx.employee_id == "guest")
+    return _main_keyboard(allowed, dept_name=dept_name, is_guest=is_guest)
 
 
 def _sync_keyboard() -> ReplyKeyboardMarkup:
@@ -903,6 +916,16 @@ async def btn_back_to_settings(message: Message, state: FSMContext) -> None:
 async def btn_back_to_main(message: Message, state: FSMContext) -> None:
     """Вернуть к главному меню."""
     logger.info("[nav] назад (главное меню) tg:%d", message.from_user.id)
+    kb = await _get_main_kb(message.from_user.id)
+    await reply_menu(message, state, "🏠 Главное меню:", kb)
+
+
+@router.message(F.text == "🔄 Обновить")
+async def btn_guest_refresh(message: Message, state: FSMContext) -> None:
+    """Обновить клавиатуру (для гостя, ожидающего права от админа)."""
+    logger.info("[nav] обновить (гость) tg:%d", message.from_user.id)
+    # Инвалидировать кеш прав, чтобы подтянулись свежие данные
+    await perm_uc.invalidate_cache()
     kb = await _get_main_kb(message.from_user.id)
     await reply_menu(message, state, "🏠 Главное меню:", kb)
 
