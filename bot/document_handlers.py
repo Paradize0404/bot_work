@@ -1223,11 +1223,19 @@ async def _build_and_send_json_invoices(
                     text="📤 Отправить в iiko",
                     callback_data=f"iiko_invoice_send:{tg_id}",
                 ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✏️ Редактировать",
+                    callback_data=f"inv_edit:{tg_id}",
+                ),
+            ],
+            [
                 InlineKeyboardButton(
                     text="❌ Отменить",
                     callback_data=f"iiko_invoice_cancel:{tg_id}",
                 ),
-            ]
+            ],
         ]
     )
 
