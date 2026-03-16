@@ -59,6 +59,21 @@ SAMPLE_ROWS = [
         "DishDiscountSumInt": 3000.0,
         "ProductCostBase.ProductCost": 600.0,
     },
+    # Гайдара — iiko возвращает полный путь, а в БД хранится "Гайдара PizzaYolo"
+    {
+        "Department": "PizzaYolo / Гайдара PizzaYolo",
+        "CookingPlaceType": "Кухня",
+        "PayTypes": "Наличные",
+        "DishDiscountSumInt": 25000.0,
+        "ProductCostBase.ProductCost": 7000.0,
+    },
+    {
+        "Department": "PizzaYolo / Гайдара PizzaYolo",
+        "CookingPlaceType": "Бар",
+        "PayTypes": "Карта",
+        "DishDiscountSumInt": 5801.50,
+        "ProductCostBase.ProductCost": 1200.0,
+    },
 ]
 
 
@@ -126,7 +141,7 @@ async def test_fetch_day_report_no_department_name_shows_all():
     with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
         result = await fetch_day_report_data(department_name=None)
 
-    assert result.total_sales == pytest.approx(20000.0)  # все 4 строки
+    assert result.total_sales == pytest.approx(50801.50)  # все 6 строк
 
 
 @pytest.mark.asyncio
@@ -143,15 +158,31 @@ async def test_fetch_day_report_filters_klinicheskaya():
 
 
 @pytest.mark.asyncio
-async def test_fetch_day_report_substring_no_longer_matches():
-    """Подстрока (не полное имя) НЕ совпадает — данных нет (exact match)."""
+async def test_fetch_day_report_substring_matches_via_contains():
+    """Подстрока department_name содержится в Department → строки проходят фильтр."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
     with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
         result = await fetch_day_report_data(department_name="Московский")
 
-    # Подстрока != точное имя → 0 строк
-    assert result.total_sales == pytest.approx(0.0)
+    # "Московский" ⊂ "PizzaYolo / Пицца Йоло (Московский)" → совпадение
+    assert result.total_sales == pytest.approx(12000.0)
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_report_gaidara_path_match():
+    """
+    Гайдара PizzaYolo → фильтрует строки с Department="PizzaYolo / Гайдара PizzaYolo".
+    Ожидаем: 25000 (Кухня) + 5801.50 (Бар) = 30801.50.
+    """
+    mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
+
+    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+        result = await fetch_day_report_data(department_name="Гайдара PizzaYolo")
+
+    assert result.error is None
+    assert result.total_sales == pytest.approx(30801.50)
+    assert result.total_cost == pytest.approx(8200.0)  # 7000 + 1200
 
 
 @pytest.mark.asyncio
@@ -180,8 +211,8 @@ async def test_fetch_day_report_filters_case_insensitive():
 async def test_fetch_day_report_cost_calculation():
     """
     Себестоимость берётся из ProductCostBase.ProductCost напрямую (рубли).
-    Кухня: cost_rub=4500, sales=15000 → 30%.
-    Бар: cost_rub=1000, sales=5000 → 20%.
+    Кухня: cost_rub=11500, sales=40000 → 28.75%.
+    Бар: cost_rub=2200, sales=10801.50 → 20.37%.
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
@@ -190,29 +221,29 @@ async def test_fetch_day_report_cost_calculation():
 
     assert result.error is None
 
-    # продажи: суммируем по PayTypes (4 строки, 2 типа оплаты)
-    assert result.total_sales == pytest.approx(20000.0)
+    # продажи: суммируем по PayTypes (6 строк, 2 типа оплаты)
+    assert result.total_sales == pytest.approx(50801.50)
     pay_names = {sl.pay_type for sl in result.sales_lines}
     assert "Наличные" in pay_names
     assert "Карта" in pay_names
     nalichnie = next(sl for sl in result.sales_lines if sl.pay_type == "Наличные")
-    assert nalichnie.amount == pytest.approx(17000.0)  # 10000+2000+5000
+    assert nalichnie.amount == pytest.approx(42000.0)  # 10000+2000+5000+25000
 
     # себестоимость: суммируем по CookingPlaceType
     assert len(result.cost_lines) == 2
 
     kitchen = next(cl for cl in result.cost_lines if cl.place == "Кухня")
-    assert kitchen.cost_rub == pytest.approx(4500.0)  # 3000 + 1500
-    assert kitchen.sales == pytest.approx(15000.0)  # 10000 + 5000
-    assert kitchen.cost_pct == pytest.approx(30.0)
+    assert kitchen.cost_rub == pytest.approx(11500.0)  # 3000 + 1500 + 7000
+    assert kitchen.sales == pytest.approx(40000.0)  # 10000 + 5000 + 25000
+    assert kitchen.cost_pct == pytest.approx(28.75)
 
     bar = next(cl for cl in result.cost_lines if cl.place == "Бар")
-    assert bar.cost_rub == pytest.approx(1000.0)  # 400 + 600
-    assert bar.sales == pytest.approx(5000.0)  # 2000 + 3000
-    assert bar.cost_pct == pytest.approx(20.0)
+    assert bar.cost_rub == pytest.approx(2200.0)  # 400 + 600 + 1200
+    assert bar.sales == pytest.approx(10801.50)  # 2000 + 3000 + 5801.50
+    assert bar.cost_pct == pytest.approx(20.37, abs=0.01)
 
     # общая себестоимость
-    assert result.total_cost == pytest.approx(5500.0)
+    assert result.total_cost == pytest.approx(13700.0)
 
 
 @pytest.mark.asyncio

@@ -161,20 +161,24 @@ async def fetch_day_report_data(
             error=f"Ошибка iiko: {exc}",
         )
 
-    # ── Клиентская фильтрация по полю Department (точное совпадение) ──
-    # iiko в поле Department возвращает полный путь, например:
-    # 'PizzaYolo / Пицца Йоло (Московский)' или 'Клиническая PizzaYolo'
-    # department_name из БД совпадает с этим значением дословно (case-insensitive).
+    # ── Клиентская фильтрация по полю Department ──
+    # iiko в поле Department может возвращать:
+    #   - Полный иерархический путь: 'PizzaYolo / Гайдара PizzaYolo'
+    #   - Или просто имя: 'Клиническая PizzaYolo'
+    # department_name из БД (iiko_department.name) может совпадать целиком
+    # или быть частью пути. Используем двустороннее вхождение:
+    #   dept_name ⊂ Department  ИЛИ  Department ⊂ dept_name
     if department_name:
         dept_name_clean = department_name.strip().lower()
         original_count = len(rows)
         rows = [
             r
             for r in rows
-            if r.get("Department", "").strip().lower() == dept_name_clean
+            if dept_name_clean in r.get("Department", "").strip().lower()
+            or r.get("Department", "").strip().lower() in dept_name_clean
         ]
         logger.info(
-            "[day_report] Фильтр по Department (exact) '%s': %d → %d строк",
+            "[day_report] Фильтр по Department (contains) '%s': %d → %d строк",
             department_name,
             original_count,
             len(rows),
