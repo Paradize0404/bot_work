@@ -1470,6 +1470,14 @@ async def send_outgoing_invoice_document(document: dict) -> str:
                 elapsed,
                 err,
             )
+            # Человекочитаемое сообщение для частых ошибок
+            if "must not relate to source department" in err:
+                return (
+                    "❌ Склад и контрагент относятся к одному подразделению.\n"
+                    "Нельзя создать расходную накладную «самому себе».\n"
+                    "Выберите контрагента из другого подразделения или "
+                    "измените склад в шаблоне."
+                )
             return f"❌ Ошибка валидации iiko: {err[:300]}"
         resp_info = result.get("response", "")
         logger.info(
