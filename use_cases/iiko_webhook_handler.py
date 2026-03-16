@@ -4,9 +4,8 @@ Use-case: обработка входящих вебхуков от iikoCloud.
 Логика:
   1. iikoCloud шлёт POST на /iiko-webhook при закрытии заказа или изменении стоп-листа
   2. Для закрытых заказов (DeliveryOrderUpdate / TableOrderUpdate):
-     - Синхронизируем остатки из iiko REST API
-     - Сравниваем с последним отправленным снэпшотом
-     - Если изменение ≥ STOCK_CHANGE_THRESHOLD_PCT (5%) → обновляем сообщения
+     - Только логируем. Остатки НЕ отправляются автоматически.
+     - Отправка остатков — только по кнопке «🔄 Обновить остатки сейчас» (force_stock_check).
   3. Для StopListUpdate (debounce = 60 сек):
      - Накапливаем org_id в буфер, сбрасываем таймер при каждом вебхуке
      - Через 60 сек тишины: fetch → diff → если есть изменения → send
@@ -387,7 +386,8 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
     Обработать входящий вебхук от iikoCloud.
 
     - StopListUpdate: debounce 60 сек — накапливаем org_ids, после тишины flush.
-    - Закрытые заказы: синхронизируем остатки, при расхождении ≥ 5% → обновляем.
+    - Закрытые заказы: только логируем. Остатки НЕ синхронизируются автоматически.
+      Отправка остатков — только по кнопке (force_stock_check).
 
     Returns:
         {"processed": int, "triggered_check": bool, "updated_messages": bool,
@@ -412,71 +412,16 @@ async def handle_webhook(body: list[dict], bot: Any) -> dict[str, Any]:
         _schedule_stoplist_flush(event_org_ids, bot)
         result["stoplist_updated"] = True  # запланировано
 
-    # ── Закрытые заказы → проверка остатков на каждый вебхук ──
+    # ── Закрытые заказы → только логируем (остатки отправляются по кнопке) ──
     closed = parse_webhook_events(body)
-    if not closed:
-        return result
-
-    result["processed"] = len(closed)
-
-    logger.info(
-        "[%s] Получено %d закрытых заказов (типы: %s)",
-        LABEL,
-        len(closed),
-        ", ".join(set(e["event_type"] for e in closed)),
-    )
-
-    # Проверяем остатки при каждом вебхуке (без счётчика)
-    logger.info("[%s] Проверяю остатки...", LABEL)
-    t0 = time.monotonic()
-
-    try:
-        # 1. Синхронизируем остатки (через iiko REST API)
-        from use_cases.sync_stock_balances import sync_stock_balances
-
-        await sync_stock_balances(triggered_by="iiko_webhook")
-
-        # 2. Проверяем минимальные остатки
-        from use_cases.check_min_stock import check_min_stock_levels
-
-        stock_result = await check_min_stock_levels()
-
-        items = stock_result.get("items", [])
-        new_hash = _compute_snapshot_hash(items)
-        new_items_dict = _compute_items_dict(items)
-
-        # 3. Покомпонентное сравнение (под локом для защиты от конкурентных вебхуков)
-        async with _snapshot_lock:
-            should = _should_update(new_hash, new_items_dict)
-
-            if should:
-                # 4. Обновляем закреплённые сообщения (per-department для каждого юзера)
-                from use_cases.pinned_stock_message import update_all_stock_alerts
-
-                await update_all_stock_alerts(bot)
-
-                _last_snapshot_hash = new_hash
-                _last_snapshot_items = new_items_dict
-                _last_update_time = time.monotonic()  # запоминаем время отправки
-                logger.info(
-                    "[%s] Остатки обновлены и разосланы за %.1f сек (items=%d)",
-                    LABEL,
-                    time.monotonic() - t0,
-                    len(items),
-                )
-                result["triggered_check"] = True
-                result["updated_messages"] = True
-            else:
-                logger.info(
-                    "[%s] Остатки без значимых изменений, пропускаем обновление (%.1f сек)",
-                    LABEL,
-                    time.monotonic() - t0,
-                )
-                result["triggered_check"] = True
-
-    except Exception:
-        logger.exception("[%s] Ошибка при проверке остатков после вебхука", LABEL)
-        result["triggered_check"] = True
+    if closed:
+        result["processed"] = len(closed)
+        logger.info(
+            "[%s] Получено %d закрытых заказов (типы: %s) — остатки НЕ проверяются (только по кнопке)",
+            LABEL,
+            len(closed),
+            ", ".join(set(e["event_type"] for e in closed)),
+        )
 
     return result
 
