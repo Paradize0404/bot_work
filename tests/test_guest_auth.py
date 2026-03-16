@@ -118,8 +118,8 @@ async def test_check_auth_status_guest_authorized():
 
 
 @pytest.mark.asyncio
-async def test_check_auth_status_guest_needs_department():
-    """check_auth_status возвращает NEEDS_DEPARTMENT для гостя без department_id."""
+async def test_check_auth_status_guest_no_department():
+    """check_auth_status возвращает AUTHORIZED для гостя без department_id (гостю ресторан не нужен)."""
     guest = MagicMock()
     guest.full_name = "Инвестор Петров"
     guest.department_id = None
@@ -141,7 +141,7 @@ async def test_check_auth_status_guest_needs_department():
 
         result = await check_auth_status(telegram_id=999)
 
-    assert result.status == AuthStatus.NEEDS_DEPARTMENT
+    assert result.status == AuthStatus.AUTHORIZED
 
 
 @pytest.mark.asyncio

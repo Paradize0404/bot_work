@@ -256,6 +256,9 @@ async def check_auth_status(telegram_id: int) -> AuthResult:
     ctx = await uctx.get_user_context(telegram_id)
     if ctx and ctx.department_id:
         return AuthResult(status=AuthStatus.AUTHORIZED, first_name=ctx.first_name)
+    if ctx and ctx.employee_id == "guest":
+        # Гость авторизован без ресторана — это нормально
+        return AuthResult(status=AuthStatus.AUTHORIZED, first_name=ctx.first_name)
     if ctx:
         return AuthResult(status=AuthStatus.NEEDS_DEPARTMENT, first_name=ctx.first_name)
 
@@ -274,9 +277,8 @@ async def check_auth_status(telegram_id: int) -> AuthResult:
             department_name=None,
             role_name="Гость",
         )
-        if guest.department_id:
-            return AuthResult(status=AuthStatus.AUTHORIZED, first_name=first_name)
-        return AuthResult(status=AuthStatus.NEEDS_DEPARTMENT, first_name=first_name)
+        # Гость всегда считается авторизованным (ресторан не нужен)
+        return AuthResult(status=AuthStatus.AUTHORIZED, first_name=first_name)
 
     return AuthResult(status=AuthStatus.NOT_AUTHORIZED)
 

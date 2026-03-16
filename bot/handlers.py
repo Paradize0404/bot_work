@@ -69,7 +69,6 @@ class AuthStates(StatesGroup):
     choosing_employee = State()
     choosing_department = State()
     guest_full_name = State()  # Ввод ФИО для гостевого пользователя
-    guest_choosing_department = State()  # Выбор ресторана для гостя
 
 
 class ChangeDeptStates(StatesGroup):
@@ -525,7 +524,7 @@ async def auth_retry_lastname(callback: CallbackQuery, state: FSMContext) -> Non
 
 @router.message(AuthStates.guest_full_name, F.text)
 async def process_guest_full_name(message: Message, state: FSMContext) -> None:
-    """Приём ФИО гостя → регистрация → выбор ресторана."""
+    """Приём ФИО гостя → регистрация → главное меню (без выбора ресторана)."""
     tg_id = message.from_user.id
     full_name = truncate_input(message.text.strip(), MAX_TEXT_NAME)
     logger.info("[auth] guest_full_name tg:%d, name=%r", tg_id, full_name)
@@ -541,55 +540,15 @@ async def process_guest_full_name(message: Message, state: FSMContext) -> None:
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
-    # Регистрируем гостя
+    # Регистрируем гостя (без ресторана — гость ждёт прав от админа)
     await auth_uc.register_guest(tg_id, full_name)
 
-    # Предлагаем выбрать ресторан (опционально для гостей)
-    restaurants = await auth_uc.get_restaurants()
-    if restaurants:
-        await state.set_state(AuthStates.guest_choosing_department)
-        await message.answer(
-            f"✅ Добро пожаловать, {full_name.split()[0]}!\n\n"
-            "🏢 Выберите ресторан (можно пропустить):",
-            reply_markup=_departments_inline_kb_with_skip(restaurants),
-        )
-    else:
-        # Нет ресторанов — завершаем без выбора
-        await state.clear()
-        kb = await _get_main_kb(tg_id)
-        await message.answer(
-            f"✅ Добро пожаловать, {full_name.split()[0]}!\n\n"
-            "Вы зарегистрированы как гость. Администратор настроит ваши права доступа.",
-            reply_markup=kb,
-        )
-
-
-@router.callback_query(
-    AuthStates.guest_choosing_department, F.data.startswith("auth_dept:")
-)
-async def process_guest_department(callback: CallbackQuery, state: FSMContext) -> None:
-    """Выбор ресторана для гостя."""
-    await callback.answer()
-    department_id = await validate_callback_uuid(callback, callback.data)
-    if not department_id:
-        return
-    tg_id = callback.from_user.id
-    logger.info("[auth] guest dept tg:%d, dept_id=%s", tg_id, department_id)
-
-    dept_name = await auth_uc.save_guest_department(tg_id, department_id)
     await state.clear()
-    try:
-        await callback.message.edit_text(
-            f"✅ Ресторан: **{dept_name}**\n\nРегистрация завершена!",
-            parse_mode="Markdown",
-        )
-    except Exception:
-        logger.debug("suppressed", exc_info=True)
-
     kb = await _get_main_kb(tg_id)
-    await callback.message.answer(
-        "Вы зарегистрированы как гость. Администратор настроит ваши права доступа.\n"
-        "Выберите раздел:",
+    await message.answer(
+        f"✅ Добро пожаловать, {full_name.split()[0]}!\n\n"
+        "Вы зарегистрированы как гость.\n"
+        "Администратор настроит ваши права доступа.",
         reply_markup=kb,
     )
 
@@ -601,65 +560,11 @@ async def process_guest_department(callback: CallbackQuery, state: FSMContext) -
             )
         except Exception:
             logger.warning(
-                "[auth] не удалось синхронизировать права гостя", exc_info=True
+                "[auth] не удалось синхронизировать права гостя",
+                exc_info=True,
             )
 
     asyncio.create_task(_sync_perms(), name=f"perms_sync_guest_{tg_id}")
-
-
-@router.callback_query(
-    AuthStates.guest_choosing_department, F.data == "guest_skip_dept"
-)
-async def process_guest_skip_department(
-    callback: CallbackQuery, state: FSMContext
-) -> None:
-    """Гость пропускает выбор ресторана."""
-    await callback.answer()
-    tg_id = callback.from_user.id
-    logger.info("[auth] guest skip dept tg:%d", tg_id)
-    await state.clear()
-
-    try:
-        await callback.message.edit_text("✅ Регистрация завершена!")
-    except Exception:
-        logger.debug("suppressed", exc_info=True)
-
-    kb = await _get_main_kb(tg_id)
-    await callback.message.answer(
-        "Вы зарегистрированы как гость. Администратор настроит ваши права доступа.\n"
-        "Выберите раздел:",
-        reply_markup=kb,
-    )
-
-    # Синхронизация прав в фоне
-    async def _sync_perms():
-        try:
-            await perm_uc.sync_permissions_to_gsheet(
-                triggered_by=f"guest_auth:{tg_id}",
-            )
-        except Exception:
-            logger.warning(
-                "[auth] не удалось синхронизировать права гостя", exc_info=True
-            )
-
-    asyncio.create_task(_sync_perms(), name=f"perms_sync_guest_{tg_id}")
-
-
-def _departments_inline_kb_with_skip(
-    departments: list[dict],
-) -> InlineKeyboardMarkup:
-    """Inline-кнопки выбора ресторана с опцией «Пропустить» для гостей."""
-    buttons = [
-        [InlineKeyboardButton(text=d["name"], callback_data=f"auth_dept:{d['id']}")]
-        for d in departments
-    ]
-    buttons.append(
-        [InlineKeyboardButton(text="⏭ Пропустить", callback_data="guest_skip_dept")]
-    )
-    buttons.append(
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="auth_cancel")]
-    )
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 # -----------------------------------------------------
