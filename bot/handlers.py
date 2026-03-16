@@ -1480,7 +1480,8 @@ async def btn_unified_iiko_ft(message: Message) -> None:
             opiu_result = await pnl_sync.update_opiu(triggered_by=triggered)
             upd = opiu_result.get("updated", 0)
             skip = opiu_result.get("skipped", 0)
-            errs = len(opiu_result.get("errors", []))
+            raw_errs = opiu_result.get("errors", 0)
+            errs = raw_errs if isinstance(raw_errs, int) else len(raw_errs)
             opiu_line = f"  ✅ Обновлено: {upd}, пропущено: {skip}"
             if errs:
                 opiu_line += f", ошибок: {errs}"
