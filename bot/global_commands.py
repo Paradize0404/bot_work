@@ -209,16 +209,20 @@ class NavResetMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        if isinstance(event, Message) and event.text in NAV_BUTTONS:
-            state: FSMContext | None = data.get("state")
-            if state and await state.get_state() is not None:
-                logger.info(
-                    "[mw:nav] кнопка '%s' при state=%s tg:%d — сброс FSM",
-                    event.text,
-                    await state.get_state(),
-                    event.from_user.id,
-                )
-                await _cleanup_state_messages(event.bot, event.chat.id, state)
+        if isinstance(event, Message) and event.text:
+            is_nav = event.text in NAV_BUTTONS
+            is_cmd = event.text.startswith("/")
+            if is_nav or is_cmd:
+                state: FSMContext | None = data.get("state")
+                if state and await state.get_state() is not None:
+                    logger.info(
+                        "[mw:nav] %s '%s' при state=%s tg:%d — сброс FSM",
+                        "команда" if is_cmd else "кнопка",
+                        event.text,
+                        await state.get_state(),
+                        event.from_user.id,
+                    )
+                    await _cleanup_state_messages(event.bot, event.chat.id, state)
         return await handler(event, data)
 
 

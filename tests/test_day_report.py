@@ -80,34 +80,33 @@ SAMPLE_ROWS = [
 
 
 # ═══════════════════════════════════════════════════════
-# 1. fetch_day_report_data — передача department_id в iiko
+# 1. fetch_day_report_data — вызов V1 OLAP API
 # ═══════════════════════════════════════════════════════
 
 
 @pytest.mark.asyncio
-async def test_fetch_day_report_passes_department_id():
-    """fetch_day_report_data должен передавать department_ids=[dept_id] в fetch_olap_by_preset."""
+async def test_fetch_day_report_calls_v1_olap():
+    """fetch_day_report_data должен вызывать fetch_olap_sales_v1 (V1 OLAP без пресета)."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         await fetch_day_report_data(department_id=DEPT_ID)
 
     mock_fetch.assert_awaited_once()
-    _, kwargs = mock_fetch.call_args
-    assert kwargs.get("department_ids") == [DEPT_ID]
 
 
 @pytest.mark.asyncio
-async def test_fetch_day_report_no_department_id():
-    """Без department_id должен передаваться department_ids=None."""
+async def test_fetch_day_report_v1_ignores_department_id():
+    """V1 OLAP не поддерживает department_ids — фильтрация только клиентская."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         await fetch_day_report_data(department_id=None)
 
     mock_fetch.assert_awaited_once()
+    # V1 не принимает department_ids — проверяем, что нет именованных аргументов с ним
     _, kwargs = mock_fetch.call_args
-    assert kwargs.get("department_ids") is None
+    assert "department_ids" not in kwargs
 
 
 # ═══════════════════════════════════════════════════════
@@ -124,7 +123,7 @@ async def test_fetch_day_report_filters_by_department_name():
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data(
             department_name="PizzaYolo / Пицца Йоло (Московский)"
         )
@@ -140,7 +139,7 @@ async def test_fetch_day_report_no_department_name_shows_all():
     """Без department_name — возвращаются данные всех подразделений."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data(department_name=None)
 
     assert result.total_sales == pytest.approx(50801.50)  # все 6 строк
@@ -151,7 +150,7 @@ async def test_fetch_day_report_filters_klinicheskaya():
     """Клиническая PizzaYolo — фильтр по точному имени."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data(department_name="Клиническая PizzaYolo")
 
     assert result.error is None
@@ -164,7 +163,7 @@ async def test_fetch_day_report_substring_matches_via_contains():
     """Подстрока department_name содержится в Department → строки проходят фильтр."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data(department_name="Московский")
 
     # "Московский" ⊂ "PizzaYolo / Пицца Йоло (Московский)" → совпадение
@@ -179,7 +178,7 @@ async def test_fetch_day_report_gaidara_path_match():
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data(department_name="Гайдара PizzaYolo")
 
     assert result.error is None
@@ -196,7 +195,7 @@ async def test_fetch_day_report_gaidara_keyword_match():
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data(
             department_id=DEPT_ID,
             department_name="Пицца Йоло (Гайдара)",
@@ -216,7 +215,7 @@ async def test_fetch_day_report_filter_always_applied_with_dept_id():
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data(
             department_id=DEPT_ID,
             department_name="Клиническая PizzaYolo",
@@ -231,7 +230,7 @@ async def test_fetch_day_report_filters_case_insensitive():
     """Фильтрация по Department не чувствительна к регистру (сравнение через .lower())."""
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result_lower = await fetch_day_report_data(
             department_name="pizzayolo / пицца йоло (московский)"
         )
@@ -257,7 +256,7 @@ async def test_fetch_day_report_cost_calculation():
     """
     mock_fetch = AsyncMock(return_value=SAMPLE_ROWS)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data()
 
     assert result.error is None
@@ -300,7 +299,7 @@ async def test_fetch_day_report_cost_not_zero_when_cost_present():
     ]
     mock_fetch = AsyncMock(return_value=rows)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data()
 
     assert result.total_cost > 0
@@ -319,7 +318,7 @@ async def test_fetch_day_report_cost_zero_when_no_cost_field():
     ]
     mock_fetch = AsyncMock(return_value=rows)
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data()
 
     assert result.total_cost == pytest.approx(0.0)
@@ -337,7 +336,7 @@ async def test_fetch_day_report_iiko_error():
     """При исключении от iiko возвращается DayReportData с полем error."""
     mock_fetch = AsyncMock(side_effect=Exception("iiko недоступен"))
 
-    with patch("use_cases.day_report.fetch_olap_by_preset", mock_fetch):
+    with patch("use_cases.day_report.fetch_olap_sales_v1", mock_fetch):
         result = await fetch_day_report_data()
 
     assert result.error is not None

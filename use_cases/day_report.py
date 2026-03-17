@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 
-from adapters.iiko_api import fetch_olap_by_preset
+from adapters.iiko_api import fetch_olap_by_preset, fetch_olap_sales_v1
 from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
@@ -193,28 +193,30 @@ async def fetch_day_report_data(
     """
     Получить данные продаж и себестоимости за сегодня из iiko OLAP.
 
-    Использует один preset «Выручка себестоимость бот» (96df1c31-...),
-    который содержит группировки PayTypes и CookingPlaceType.
+    Используем V1 OLAP API (GET /resto/api/reports/olap?report=SALES),
+    который явно запрашивает нужные метрики (DishDiscountSumInt,
+    ProductCostBase.ProductCost) и измерения (Department, PayTypes,
+    CookingPlaceType). В отличие от V2 preset API, V1 гарантирует
+    возврат ВСЕХ типов оплаты и подразделений, включая новые —
+    V2 preset может не включать недавно добавленные PayTypes/Department.
 
     Фильтрация данных по подразделению:
-      1. API-уровень: departmentIds в параметрах запроса (для некоторых пресетов
-         iiko игнорирует этот параметр, поэтому клиентская фильтрация обязательна).
-      2. Клиентский уровень: фильтрация строк по полю Department.
-         Имена в БД и в OLAP могут отличаться (латиница/кириллица, иерархия),
-         поэтому используется трёхступенчатый матчинг:
-           a) подстрока: «Клиническая PizzaYolo» ⊂ OLAP «Клиническая PizzaYolo»
-           b) содержание: «Московский» ⊂ «PizzaYolo / Пицца Йоло (Московский)»
-           c) ключевые слова: «Пицца Йоло (Гайдара)» ↔ «PizzaYolo / Гайдара PizzaYolo»
-              (общее слово «Гайдара»)
+      Клиентский уровень: фильтрация строк по полю Department.
+      Имена в БД и в OLAP могут отличаться (латиница/кириллица, иерархия),
+      поэтому используется трёхступенчатый матчинг:
+        a) подстрока: «Клиническая PizzaYolo» ⊂ OLAP «Клиническая PizzaYolo»
+        b) содержание: «Московский» ⊂ «PizzaYolo / Пицца Йоло (Московский)»
+        c) ключевые слова: «Пицца Йоло (Гайдара)» ↔ «PizzaYolo / Гайдара PizzaYolo»
+           (общее слово «Гайдара»)
 
     Args:
-        department_id:   UUID подразделения для API-фильтра.
+        department_id:   UUID подразделения (не используется для V1, сохранён для совместимости).
         department_name: Имя подразделения для клиентской фильтрации по полю Department.
     """
     t0 = time.monotonic()
     logger.info(
-        "[day_report] Запрашиваю данные из iiko, dept=%s...",
-        department_id or "все",
+        "[day_report] Запрашиваю данные из iiko (V1 OLAP), dept=%s...",
+        department_name or department_id or "все",
     )
 
     now = now_kgd()
@@ -224,16 +226,10 @@ async def fetch_day_report_data(
     date_from_str = date_from.strftime("%Y-%m-%dT%H:%M:%S")
     date_to_str = date_to.strftime("%Y-%m-%dT%H:%M:%S")
 
-    dept_ids = [department_id] if department_id else None
     try:
-        rows = await fetch_olap_by_preset(
-            SALES_PRESET,
-            date_from_str,
-            date_to_str,
-            department_ids=dept_ids,
-        )
+        rows = await fetch_olap_sales_v1(date_from_str, date_to_str)
     except Exception as exc:
-        logger.exception("[day_report] Ошибка получения данных из iiko")
+        logger.exception("[day_report] Ошибка получения данных из iiko (V1 OLAP)")
         return DayReportData(
             sales_lines=[],
             total_sales=0,
@@ -244,7 +240,7 @@ async def fetch_day_report_data(
         )
 
     # ── Клиентская фильтрация по полю Department ──
-    # API-параметр departmentIds не всегда фильтрует данные OLAP-пресета,
+    # V1 OLAP возвращает данные ВСЕХ подразделений,
     # поэтому клиентский фильтр обязателен.
     # Используем _dept_matches(): подстрока + ключевые слова.
     if department_name:
