@@ -1632,8 +1632,7 @@ async def btn_iiko_cloud_menu(message: Message, state: FSMContext) -> None:
     """Открыть подменю iikoCloud вебхука."""
     logger.info("[nav] iikoCloud меню tg:%d", message.from_user.id)
     buttons = [
-        [KeyboardButton(text="📋 Получить организации")],
-        [KeyboardButton(text="🔗 Привязать организации")],
+        [KeyboardButton(text="🔗 Синхронизировать Cloud")],
         [KeyboardButton(text="🔗 Зарегистрировать вебхук")],
         [KeyboardButton(text="ℹ️ Статус вебхука")],
         [KeyboardButton(text="🔄 Обновить остатки сейчас")],
@@ -1643,46 +1642,16 @@ async def btn_iiko_cloud_menu(message: Message, state: FSMContext) -> None:
     await reply_menu(message, state, "☁️ iikoCloud вебхук:", kb)
 
 
-@router.message(F.text == "📋 Получить организации")
+@router.message(F.text == "🔗 Синхронизировать Cloud")
 @permission_required(PERM_SETTINGS)
-async def btn_cloud_get_orgs(message: Message) -> None:
-    """Получить список организаций из iikoCloud."""
-    logger.info("[cloud] получение организаций tg:%d", message.from_user.id)
-    await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-
-    try:
-        from adapters.iiko_cloud_api import get_organizations
-
-        orgs = await get_organizations()
-        if not orgs:
-            await message.answer("⚠️ Организации не найдены. Проверьте apiLogin.")
-            return
-        lines = ["🏢 *Организации iikoCloud:*\n"]
-        for org in orgs:
-            name = org.get("name", "—")
-            org_id = org.get("id", "—")
-            lines.append(f"?? *{name}*\n`{org_id}`\n")
-        lines.append(
-            "Чтобы привязать организацию к подразделению, нажмите «🔗 Привязать организации»"
-        )
-        await message.answer("\n".join(lines), parse_mode="Markdown")
-    except Exception as exc:
-        await message.answer(f"❌ Ошибка: {exc}")
-
-
-@router.message(F.text == "🔗 Привязать организации")
-@permission_required(PERM_SETTINGS)
-async def btn_cloud_sync_org_mapping(message: Message) -> None:
-    """Загрузить подразделения + Cloud-организации в GSheet для маппинга."""
-    logger.info("[cloud] привязка организаций tg:%d", message.from_user.id)
+async def btn_cloud_sync_all(message: Message) -> None:
+    """Получить организации из iikoCloud + обновить маппинг в GSheet."""
+    logger.info("[cloud] синхронизация Cloud tg:%d", message.from_user.id)
     placeholder = await message.answer(
-        "⏳ Загружаем подразделения и организации в Google Таблицы..."
+        "⏳ Получаем организации и обновляем маппинг в Google Таблицах..."
     )
 
     try:
-        from sqlalchemy import select
-        from db.engine import async_session_factory
-        from db.models import Department
         from adapters.iiko_cloud_api import get_organizations
         from adapters.google_sheets import sync_cloud_org_mapping_to_sheet
         from use_cases.cloud_org_mapping import (
@@ -1697,19 +1666,26 @@ async def btn_cloud_sync_org_mapping(message: Message) -> None:
         # 2. Организации из iikoCloud
         cloud_orgs = await get_organizations()
 
-        # 3. Загрузка в GSheet
+        if not cloud_orgs:
+            await placeholder.edit_text(
+                "⚠️ Организации не найдены в iikoCloud. Проверьте apiLogin."
+            )
+            return
+
+        # 3. Загрузка маппинга в GSheet
         count = await sync_cloud_org_mapping_to_sheet(dept_list, cloud_orgs)
 
         # 4. Инвалидация кэша
         await invalidate_cache()
 
+        org_lines = "\n".join(
+            f"  • {o.get('name', '—')}" for o in cloud_orgs
+        )
         await placeholder.edit_text(
-            f"✅ Готово!\n\n"
+            f"✅ Cloud синхронизирован!\n\n"
             f"🏢 Подразделения: {count}\n"
-            f"☁️ Cloud-организации: {len(cloud_orgs)}\n\n"
-            f"Теперь заполните «Маппинг» в Google Таблице и "
-            f"выберите нужные пары подразделений "
-            f"по нажатию «Привязать Cloud»."
+            f"☁️ Организации ({len(cloud_orgs)}):\n{org_lines}\n\n"
+            f"Откройте Google Таблицу и привяжите организации к подразделениям."
         )
     except Exception as exc:
         await placeholder.edit_text(f"❌ Ошибка: {exc}")
