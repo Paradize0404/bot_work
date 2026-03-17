@@ -3294,6 +3294,18 @@ def _apply_day_report_style(ws: gspread.Worksheet, headers: list[str]) -> None:
         )
 
 
+def _sanitize_formula(value: str) -> str:
+    """Убрать из начала строки символы, которые GSheets интерпретирует как формулу.
+
+    Google Sheets трактует как формулу текст, начинающийся с  =  +  -  @
+    При ``value_input_option='USER_ENTERED'`` это вызывает ошибку #NAME? / #ERROR!.
+    Убираем ведущие опасные символы, сохраняя остальной текст.
+    """
+    if not value:
+        return value
+    return value.lstrip("=+-@")
+
+
 def append_day_report_row(data: dict) -> None:
     """
     Добавить строку отчёта дня в лист «Отчёт дня» в Google Sheets.
@@ -3334,8 +3346,8 @@ def append_day_report_row(data: dict) -> None:
         "Дата": data.get("date", ""),
         "Сотрудник": data.get("employee_name", ""),
         "Подразделение": data.get("department_name", ""),
-        "Плюсы": data.get("positives", ""),
-        "Минусы": data.get("negatives", ""),
+        "Плюсы": _sanitize_formula(data.get("positives", "")),
+        "Минусы": _sanitize_formula(data.get("negatives", "")),
         _SALES_TOTAL_COL: round(float(data.get("total_sales") or 0), 2),
         _COST_TOTAL_COL: round(float(data.get("total_cost") or 0), 2),
         _COST_AVG_COL: round(float(data.get("avg_cost_pct") or 0), 2),

@@ -493,6 +493,56 @@ def test_build_full_headers_sorted_order():
 # 6. append_day_report_row — запись в Google Sheets
 # ═══════════════════════════════════════════════════════
 
+
+def test_sanitize_formula_strips_leading_equals():
+    """_sanitize_formula убирает ведущий = из текста."""
+    from adapters.google_sheets import _sanitize_formula
+
+    assert _sanitize_formula("=SUM(A1)") == "SUM(A1)"
+
+
+def test_sanitize_formula_strips_leading_plus():
+    """_sanitize_formula убирает ведущий + из текста."""
+    from adapters.google_sheets import _sanitize_formula
+
+    assert _sanitize_formula("+хорошо") == "хорошо"
+
+
+def test_sanitize_formula_strips_leading_minus():
+    """_sanitize_formula убирает ведущий - из текста."""
+    from adapters.google_sheets import _sanitize_formula
+
+    assert _sanitize_formula("-плохо") == "плохо"
+
+
+def test_sanitize_formula_strips_multiple_leading():
+    """_sanitize_formula убирает несколько ведущих символов формул."""
+    from adapters.google_sheets import _sanitize_formula
+
+    assert _sanitize_formula("+-=текст") == "текст"
+
+
+def test_sanitize_formula_preserves_normal_text():
+    """_sanitize_formula не трогает обычный текст."""
+    from adapters.google_sheets import _sanitize_formula
+
+    assert _sanitize_formula("Всё хорошо") == "Всё хорошо"
+
+
+def test_sanitize_formula_preserves_empty():
+    """_sanitize_formula не ломается на пустой строке."""
+    from adapters.google_sheets import _sanitize_formula
+
+    assert _sanitize_formula("") == ""
+
+
+def test_sanitize_formula_strips_at():
+    """_sanitize_formula убирает ведущий @ из текста."""
+    from adapters.google_sheets import _sanitize_formula
+
+    assert _sanitize_formula("@mention") == "mention"
+
+
 _GSHEETS_DATA = {
     "date": "2026-02-22",
     "employee_name": "Сидоров",
@@ -578,8 +628,32 @@ def test_append_day_report_row_creates_sheet_if_missing():
 
         append_day_report_row(_GSHEETS_DATA)
 
-    mock_ss.add_worksheet.assert_called_once()
-    mock_ws.append_row.assert_called_once()
+
+def test_append_day_report_row_sanitizes_formula_chars():
+    """Плюсы/минусы с ведущими =+- должны быть очищены перед записью в GSheet."""
+    data_with_formulas = {
+        **_GSHEETS_DATA,
+        "positives": "+хорошая выручка",
+        "negatives": "=плохое настроение",
+    }
+
+    mock_ws = MagicMock()
+    mock_ws.get_all_values.return_value = []
+
+    mock_ss = MagicMock()
+    mock_ss.worksheet.return_value = mock_ws
+    mock_client = MagicMock()
+    mock_client.open_by_key.return_value = mock_ss
+
+    with patch("adapters.google_sheets._get_client", return_value=mock_client):
+        from adapters.google_sheets import append_day_report_row, _build_full_headers
+
+        append_day_report_row(data_with_formulas)
+
+    row = mock_ws.append_row.call_args[0][0]
+    expected_headers = _build_full_headers([], ["Наличные", "Карта"], ["Кухня", "Бар"])
+    assert row[expected_headers.index("Плюсы")] == "хорошая выручка"
+    assert row[expected_headers.index("Минусы")] == "плохое настроение"
 
 
 # ═══════════════════════════════════════════════════════
