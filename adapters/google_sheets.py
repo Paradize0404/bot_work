@@ -1609,9 +1609,13 @@ async def sync_request_stores_to_sheet(
 
         block.append(["", "", "", ""])  # финальный разделитель
 
-        # ── Очистить старую секцию ──
+        # ── Очистить старую секцию (только до следующего ##) ──
         if section_start_row is not None:
-            clear_end = section_end_row if section_end_row else (section_start_row + 30)
+            if section_end_row is not None:
+                clear_end = section_end_row
+            else:
+                clear_end = section_start_row + len(block) + 10
+            # Гарантируем что очистим достаточно строк для нового блока
             clear_end = max(clear_end, section_start_row + len(block) + 5)
             try:
                 ws.batch_clear([f"A{section_start_row + 1}:Z{clear_end}"])
@@ -2005,6 +2009,7 @@ async def sync_cloud_org_mapping_to_sheet(
         old_binding: dict[str, str] = {}  # dept_uuid → cloud_org_name
         in_section = False
         section_start_row: int | None = None
+        section_end_row: int | None = None
 
         for ri, row in enumerate(all_values):
             cell_a = (row[0] if row else "").strip()
@@ -2013,6 +2018,7 @@ async def sync_cloud_org_mapping_to_sheet(
                 section_start_row = ri
                 continue
             if in_section and cell_a.startswith("##"):
+                section_end_row = ri
                 break
             if not in_section:
                 continue
@@ -2091,9 +2097,14 @@ async def sync_cloud_org_mapping_to_sheet(
         for rr in ref_rows:
             block.append([rr[0], rr[1], "", ""])
 
-        # ── Очистить старую секцию ──
+        # ── Очистить старую секцию (только до следующего ##) ──
         if section_start_row is not None:
-            end_clear = max(len(all_values), section_start_row + len(block) + 10)
+            if section_end_row is not None:
+                end_clear = section_end_row
+            else:
+                end_clear = section_start_row + len(block) + 10
+            # Гарантируем что очистим достаточно строк для нового блока
+            end_clear = max(end_clear, section_start_row + len(block) + 5)
             try:
                 ws.batch_clear([f"A{section_start_row + 1}:Z{end_clear}"])
             except Exception:
