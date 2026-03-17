@@ -1678,9 +1678,7 @@ async def btn_cloud_sync_all(message: Message) -> None:
         # 4. Инвалидация кэша
         await invalidate_cache()
 
-        org_lines = "\n".join(
-            f"  • {o.get('name', '—')}" for o in cloud_orgs
-        )
+        org_lines = "\n".join(f"  • {o.get('name', '—')}" for o in cloud_orgs)
         await placeholder.edit_text(
             f"✅ Cloud синхронизирован!\n\n"
             f"🏢 Подразделения: {count}\n"
