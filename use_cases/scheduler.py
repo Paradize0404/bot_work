@@ -193,6 +193,32 @@ async def _daily_full_sync() -> None:
         logger.exception("[scheduler] Ошибка обновления ОПИУ в FinTablo")
         report_lines.append("📊 ОПИУ: ❌ ошибка")
 
+    # ── 10. Выручка → FinTablo (маппинг PayType / CookingPlaceType → FT PnL) ──
+    try:
+        from use_cases.revenue_sync import update_revenue
+
+        rev_stats = await update_revenue(
+            triggered_by=TRIGGERED_BY,
+            target_date=yesterday_dt,
+        )
+        rev_upd = rev_stats.get("updated", 0)
+        rev_err = rev_stats.get("errors", 0)
+        rev_skip = rev_stats.get("skipped", 0)
+        rev_unmapped = rev_stats.get("unmapped_keys", [])
+        if rev_err:
+            report_lines.append(
+                f"💰 Выручка: ⚠️ {rev_upd} обновлено, {rev_skip} пропущено, {rev_err} ошибок"
+            )
+        else:
+            report_lines.append(
+                f"💰 Выручка: ✅ {rev_upd} обновлено, {rev_skip} пропущено"
+            )
+        if rev_unmapped:
+            report_lines.append(f"   ⚠️ Не разнесено: {', '.join(rev_unmapped[:10])}")
+    except Exception:
+        logger.exception("[scheduler] Ошибка обновления выручки в FinTablo")
+        report_lines.append("💰 Выручка: ❌ ошибка")
+
     elapsed = time.monotonic() - t0
     report_lines.append(f"\n⏱ Время: {elapsed:.1f} сек")
     logger.info(

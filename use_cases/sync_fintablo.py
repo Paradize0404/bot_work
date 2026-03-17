@@ -525,19 +525,19 @@ async def sync_ft_employees(triggered_by: str | None = None) -> int:
 
 # РџРѕСЂСЏРґРѕРє: СЃРЅР°С‡Р°Р»Р° СЃРїСЂР°РІРѕС‡РЅРёРєРё (РѕС‚ РєРѕС‚РѕСЂС‹С… Р·Р°РІРёСЃСЏС‚ РґСЂСѓРіРёРµ), РїРѕС‚РѕРј Р±РёР·РЅРµСЃ-РґР°РЅРЅС‹Рµ
 _FT_SYNC_TASKS = [
-    ("рџ“Љ РЎС‚Р°С‚СЊРё Р”Р”РЎ", sync_ft_categories),
-    ("рџ’° РЎС‡РµС‚Р°", sync_ft_moneybags),
-    ("рџ¤ќ РљРѕРЅС‚СЂР°РіРµРЅС‚С‹", sync_ft_partners),
-    ("рџЋЇ РќР°РїСЂР°РІР»РµРЅРёСЏ", sync_ft_directions),
-    ("рџ“Ѓ Р“СЂСѓРїРїС‹ СЃС‡РµС‚РѕРІ", sync_ft_moneybag_groups),
-    ("рџ“¦ РўРѕРІР°СЂС‹", sync_ft_goods),
-    ("рџ›’ Р—Р°РєСѓРїРєРё", sync_ft_obtainings),
-    ("рџ”§ РЈСЃР»СѓРіРё", sync_ft_jobs),
-    ("рџ“ќ РЎРґРµР»РєРё", sync_ft_deals),
-    ("рџЏ· РЎС‚Р°С‚СѓСЃС‹ РѕР±СЏР·.", sync_ft_obligation_statuses),
-    ("рџ“‹ РћР±СЏР·Р°С‚РµР»СЊСЃС‚РІР°", sync_ft_obligations),
-    ("рџ“€ РЎС‚Р°С‚СЊРё РџРёРЈ", sync_ft_pnl_categories),
-    ("рџ‘¤ РЎРѕС‚СЂСѓРґРЅРёРєРё FT", sync_ft_employees),
+    ("📊 Статьи ДДС", sync_ft_categories),
+    ("💰 Счета", sync_ft_moneybags),
+    ("🤝 Контрагенты", sync_ft_partners),
+    ("🎯 Направления", sync_ft_directions),
+    ("📁 Группы счетов", sync_ft_moneybag_groups),
+    ("📦 Товары", sync_ft_goods),
+    ("🛒 Закупки", sync_ft_obtainings),
+    ("🔧 Услуги", sync_ft_jobs),
+    ("📝 Сделки", sync_ft_deals),
+    ("🏷 Статусы обяз.", sync_ft_obligation_statuses),
+    ("📋 Обязательства", sync_ft_obligations),
+    ("📈 Статьи ПиУ", sync_ft_pnl_categories),
+    ("👤 Сотрудники FT", sync_ft_employees),
 ]
 
 
@@ -597,6 +597,7 @@ async def sync_all_fintablo(
             from sqlalchemy import select as _select
             from use_cases.pnl_sync import get_distinct_iiko_accounts
             from use_cases.day_report import get_distinct_cooking_place_types
+            from use_cases.day_report import get_distinct_pay_types
 
             async with async_session_factory() as _sess:
                 _pnl_rows = (
@@ -611,6 +612,7 @@ async def sync_all_fintablo(
                 ft_pnl_cats = [{"id": r.id, "name": r.name} for r in _pnl_rows]
             iiko_accs = await get_distinct_iiko_accounts()
             cooking_places = await get_distinct_cooking_place_types()
+            iiko_pay_types = await get_distinct_pay_types()
             await sync_fintab_mapping_sheet(
                 fot_tab_name=fot_tab,
                 ft_employees=ft_emps,
@@ -618,8 +620,20 @@ async def sync_all_fintablo(
                 ft_pnl_categories=ft_pnl_cats,
                 iiko_accounts=iiko_accs,
                 cooking_place_types=cooking_places,
+                pay_types=iiko_pay_types,
             )
         except Exception:
             logger.exception("[FT] Ошибка обновления «Маппинг FinTablo»")
 
     return report
+
+
+def format_ft_report(results: list[tuple[str, int | str]]) -> list[str]:
+    """Форматировать результаты sync_all_fintablo в список строк для отображения."""
+    lines = []
+    for label, result in results:
+        if isinstance(result, int):
+            lines.append(f"  {label}: ✅ {result}")
+        else:
+            lines.append(f"  {label}: {result}")
+    return lines
