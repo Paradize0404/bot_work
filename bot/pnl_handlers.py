@@ -25,6 +25,7 @@ from aiogram.fsm.context import FSMContext
 from bot.middleware import permission_required
 from bot.permission_map import PERM_SETTINGS
 from use_cases import pnl_sync
+from use_cases.revenue_sync import update_revenue
 from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
@@ -106,28 +107,57 @@ async def pnl_menu(message: Message, state: FSMContext) -> None:
 
 
 async def _run_opiu(call: CallbackQuery, target_date: datetime | None) -> None:
-    """Общая логика запуска ОПИУ для текущего / прошлого месяца."""
+    """Общая логика запуска ОПИУ + Выручки для текущего / прошлого месяца."""
     label = target_date.strftime("%m.%Y") if target_date else "текущий"
     await call.message.edit_text(
-        f"⏳ Обновляю ОПИУ за <b>{label}</b>...\n" "Это может занять до минуты.",
+        f"⏳ Обновляю ОПИУ + Выручку за <b>{label}</b>...\n"
+        "Это может занять до минуты.",
         parse_mode="HTML",
     )
 
     triggered_by = f"btn:{call.from_user.id}"
+
+    # ── ОПИУ ──
+    opiu_result = None
     try:
-        result = await pnl_sync.update_opiu(
+        opiu_result = await pnl_sync.update_opiu(
             triggered_by=triggered_by, target_date=target_date
         )
     except Exception:
         logger.exception("[pnl] Ошибка update_opiu")
-        await call.message.edit_text(
-            "❌ Ошибка обновления ОПИУ.\nПодробности в логах.",
-            reply_markup=_opiu_kb(show_retry=True),
-        )
-        return
 
-    text = format_opiu_result(result)
-    has_problems = bool(result.get("errors") or result.get("unmapped_keys"))
+    # ── Выручка ──
+    rev_result = None
+    try:
+        rev_result = await update_revenue(
+            triggered_by=triggered_by, target_date=target_date
+        )
+    except Exception:
+        logger.exception("[pnl] Ошибка update_revenue")
+
+    # ── Формируем общее сообщение ──
+    parts: list[str] = []
+    has_problems = False
+
+    if opiu_result:
+        parts.append(format_opiu_result(opiu_result))
+        if opiu_result.get("errors") or opiu_result.get("unmapped_keys"):
+            has_problems = True
+    else:
+        parts.append("📊 <b>ОПИУ</b>: ❌ ошибка")
+        has_problems = True
+
+    parts.append("")  # разделитель
+
+    if rev_result:
+        parts.append(format_revenue_result(rev_result))
+        if rev_result.get("errors") or rev_result.get("unmapped_keys"):
+            has_problems = True
+    else:
+        parts.append("💰 <b>Выручка</b>: ❌ ошибка")
+        has_problems = True
+
+    text = "\n".join(parts)
     await call.message.edit_text(
         text,
         parse_mode="HTML",
@@ -221,5 +251,52 @@ def format_opiu_result(result: dict) -> str:
             lines.append(f"  … и ещё {len(unmapped) - 15}")
         lines.append("")
         lines.append("Настройте соответствие в «Маппинг FinTablo» (колонки F-G)")
+
+    return "\n".join(lines)
+
+
+def format_revenue_result(result: dict) -> str:
+    """Форматировать результат update_revenue для отправки в чат."""
+    upd = result.get("updated", 0)
+    skip = result.get("skipped", 0)
+    err = result.get("errors", 0)
+    elapsed = result.get("elapsed", 0)
+    details = result.get("details", [])
+    unmapped = result.get("unmapped_keys", [])
+    unmapped_sums = result.get("unmapped_sums", {})
+    total_incoming = result.get("total_incoming", 0)
+    total_allocated = result.get("total_allocated", 0)
+    total_unmapped = result.get("total_unmapped", 0)
+
+    month = result.get("month", "")
+    month_label = f" за {month}" if month else ""
+    lines = [
+        f"💰 <b>Обновление Выручки{month_label}</b>",
+        f"Обновлено: {upd}  |  Пропущено: {skip}  |  Ошибок: {err}",
+        f"⏱ {elapsed} сек",
+        "",
+    ]
+
+    if total_incoming:
+        lines.append(f"💰 iiko итого: <b>{total_incoming:,.2f}</b>")
+        lines.append(f"   → в FT: {total_allocated:,.2f}")
+        if total_unmapped:
+            lines.append(f"   → не разнесено: {total_unmapped:,.2f}")
+        lines.append("")
+
+    if details:
+        lines.extend(details[:20])
+
+    if unmapped:
+        lines.append("")
+        lines.append("⚠️ <b>Не удалось разнести:</b>")
+        for key in unmapped[:15]:
+            amount = unmapped_sums.get(key)
+            suffix = f"  ({amount:,.2f})" if amount else ""
+            lines.append(f"  • {key}{suffix}")
+        if len(unmapped) > 15:
+            lines.append(f"  … и ещё {len(unmapped) - 15}")
+        lines.append("")
+        lines.append("Настройте соответствие в «Маппинг FinTablo» (колонки H-K)")
 
     return "\n".join(lines)
