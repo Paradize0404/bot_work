@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 
-from adapters.iiko_api import fetch_olap_by_preset, fetch_olap_sales_v1
+from adapters.iiko_api import fetch_olap_sales_v1
 from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
@@ -136,7 +136,7 @@ async def get_distinct_cooking_place_types() -> list[str]:
     date_to = next_month.strftime("%Y-%m-%dT00:00:00")
 
     try:
-        rows = await fetch_olap_by_preset(SALES_PRESET, date_from, date_to)
+        rows = await fetch_olap_sales_v1(date_from, date_to)
     except Exception:
         logger.exception("[day_report] Ошибка получения CookingPlaceType из iiko")
         return []
@@ -170,7 +170,7 @@ async def get_distinct_pay_types() -> list[str]:
     date_to = next_month.strftime("%Y-%m-%dT00:00:00")
 
     try:
-        rows = await fetch_olap_by_preset(SALES_PRESET, date_from, date_to)
+        rows = await fetch_olap_sales_v1(date_from, date_to)
     except Exception:
         logger.exception("[day_report] Ошибка получения PayTypes из iiko")
         return []

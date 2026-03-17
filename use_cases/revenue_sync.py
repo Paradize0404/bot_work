@@ -2,7 +2,7 @@
 Use-case: синхронизация выручки (OLAP продажи → FinTablo PnL).
 
 Логика:
-  1. Загрузить OLAP-отчёт продаж из iiko (пресет «Выручка себестоимость бот»)
+  1. Загрузить OLAP-отчёт продаж из iiko (V1 API — все подразделения)
   2. Считать маппинг из Google Sheets:
      - Тип оплаты → Статья FinTablo (колонки J-K) — приоритет 1
      - Место приготовления → Статья FinTablo (колонки H-I) — приоритет 2
@@ -25,7 +25,7 @@ from datetime import datetime
 from sqlalchemy import select
 
 from adapters import fintablo_api
-from adapters.iiko_api import fetch_olap_by_preset
+from adapters.iiko_api import fetch_olap_sales_v1
 from adapters.google_sheets import read_fintab_all_mappings
 from db.engine import async_session_factory as async_session
 from db.ft_models import FTDirection
@@ -33,9 +33,6 @@ from use_cases._helpers import now_kgd
 from use_cases.pnl_sync import _resolve_department_direction
 
 logger = logging.getLogger(__name__)
-
-# Пресет «Выручка себестоимость бот» (тот же, что в day_report)
-SALES_PRESET_ID = "96df1c31-a77f-4b7c-94db-55db656aae6a"
 
 # Метка для PnL-записей выручки, созданных ботом
 BOT_COMMENT_REVENUE = "iiko-bot-revenue"
@@ -112,8 +109,8 @@ async def update_revenue(
     date_from = first_day.strftime("%Y-%m-%dT00:00:00")
     date_to = next_month.strftime("%Y-%m-%dT00:00:00")
 
-    # ── 2. Загрузить OLAP данные продаж ──
-    olap_rows = await fetch_olap_by_preset(SALES_PRESET_ID, date_from, date_to)
+    # ── 2. Загрузить OLAP данные продаж (V1 API — гарантирует ВСЕ подразделения) ──
+    olap_rows = await fetch_olap_sales_v1(date_from, date_to)
 
     # Парсинг строк
     parsed: list[dict] = []
