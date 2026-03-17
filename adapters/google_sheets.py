@@ -4596,18 +4596,10 @@ async def sync_fintab_mapping_sheet(
         cooking_place_options = sorted(cooking_place_types or [])
         pay_type_options = sorted(pay_types or [])
 
-        # ── Очищаем некорректные старые значения подразделений ──
-        # Сохраняем только те строки D/E, где оба значения соответствуют
-        # актуальным спискам (или пусты). Это защищает от «мусора» при
-        # смене структуры листа.
-        valid_fot_depts = set(fot_dept_names)
-        valid_ft_dirs = set(ft_dir_options)
-        existing_dept = [
-            (d_val, e_val)
-            for d_val, e_val in existing_dept
-            if (not d_val or d_val in valid_fot_depts)
-            and (not e_val or e_val in valid_ft_dirs)
-        ]
+        # Подразделения D-E: сохраняем ВСЕ пользовательские данные.
+        # Ранее фильтровали по fot_dept_names, но пользователь может
+        # писать произвольные имена подразделений iiko (не из ФОТ),
+        # поэтому фильтрация удалена.
 
         # ── Данные листа ──
         now_str = time.strftime("%d.%m.%Y %H:%M")
@@ -4671,10 +4663,10 @@ async def sync_fintab_mapping_sheet(
             )
             data_rows.append([a, b, c, d, e, f_val, g_val, h_val, i_val, j_val, k_val])
 
-        ws.clear()
-        # Убедимся что лист имеет достаточно колонок (9: A-I)
+        # Убедимся что лист имеет достаточно колонок (11: A-K)
         if ws.col_count < 11:
             ws.resize(cols=11)
+        ws.clear()
         ws.update(
             values=[title_row, section_row, header_row] + data_rows, range_name="A1"
         )
