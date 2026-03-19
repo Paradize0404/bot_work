@@ -261,11 +261,9 @@ async def _show_log_list(
 @router.callback_query(F.data.startswith("log:detail:"), _is_sysadmin_check())
 async def cb_log_detail(callback: CallbackQuery):
     pk = int(callback.data.split(":")[2])
-    from db.engine import async_session_factory
-    from db.models import BotLog
+    from use_cases.log_store import get_log_entry
 
-    async with async_session_factory() as session:
-        log_entry = await session.get(BotLog, pk)
+    log_entry = await get_log_entry(pk)
     if not log_entry:
         await callback.answer("Запись не найдена", show_alert=True)
         return

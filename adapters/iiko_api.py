@@ -790,11 +790,17 @@ async def send_internal_transfer(document: dict[str, Any]) -> dict[str, Any]:
     url = f"{_base()}/resto/api/v2/documents/internalTransfer"
     params = {"key": key}
 
+    from uuid import uuid4
+
+    if "documentNumber" not in document:
+        document["documentNumber"] = uuid4().hex[:8]
+
     logger.info(
-        "[API] POST internalTransfer — from=%s, to=%s, items=%d",
+        "[API] POST internalTransfer — from=%s, to=%s, items=%d, docNum=%s",
         document.get("storeFromId"),
         document.get("storeToId"),
         len(document.get("items", [])),
+        document["documentNumber"],
     )
     t0 = time.monotonic()
     client = await _get_client()
@@ -836,11 +842,17 @@ async def send_writeoff(document: dict[str, Any]) -> dict[str, Any]:
 
     url = f"{_base()}/resto/api/v2/documents/writeoff"
 
+    from uuid import uuid4
+
+    if "documentNumber" not in document:
+        document["documentNumber"] = uuid4().hex[:8]
+
     logger.info(
-        "[API] POST writeoff — store=%s, account=%s, items=%d",
+        "[API] POST writeoff — store=%s, account=%s, items=%d, docNum=%s",
         document.get("storeId"),
         document.get("accountId"),
         len(document.get("items", [])),
+        document["documentNumber"],
     )
 
     client = await _get_client()

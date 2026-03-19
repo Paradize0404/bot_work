@@ -542,8 +542,8 @@ async def invoice_store_page(callback: CallbackQuery, state: FSMContext) -> None
 
 @router.callback_query(F.data.startswith("inv_sup_page:"))
 async def invoice_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[invoice_handlers] invoice_sup_page tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[invoice_handlers] invoice_sup_page tg:%d", callback.from_user.id)
     page = safe_page(callback.data)
     data = await state.get_data()
     suppliers = data.get("_suppliers_cache", [])
@@ -557,8 +557,8 @@ async def invoice_sup_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("inv_prod_page:"))
 async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[invoice_handlers] invoice_prod_page tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[invoice_handlers] invoice_prod_page tg:%d", callback.from_user.id)
     page = safe_page(callback.data)
     data = await state.get_data()
     products = data.get("_products_cache", [])
@@ -572,8 +572,8 @@ async def invoice_prod_page(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("inv_tmpl_page:"))
 async def invoice_tmpl_page(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[invoice_handlers] invoice_tmpl_page tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[invoice_handlers] invoice_tmpl_page tg:%d", callback.from_user.id)
     page = safe_page(callback.data)
     data = await state.get_data()
     templates = data.get("_templates_cache", [])

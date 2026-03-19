@@ -195,6 +195,12 @@ async def count_by_filter(
         return result.scalar() or 0
 
 
+async def get_log_entry(pk: int) -> BotLog | None:
+    """Получить одну запись лога по ID."""
+    async with async_session_factory() as session:
+        return await session.get(BotLog, pk)
+
+
 # ═══════════════════════════════════════════════════════
 # Очистка
 # ═══════════════════════════════════════════════════════

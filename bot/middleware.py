@@ -151,7 +151,6 @@ def auth_required(handler):
                 "[auth] Неавторизованный доступ tg:%d → %s", tg_id, handler.__name__
             )
             return
-        event.user_ctx = ctx
         return await handler(event, *args, **kwargs)
 
     return wrapper

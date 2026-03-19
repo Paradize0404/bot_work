@@ -499,8 +499,8 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
 
 @router.callback_query(F.data == "auth_cancel")
 async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[auth] auth_cancel tg:%d", callback.from_user.id)
     await callback.answer("Отмена")
+    logger.info("[auth] auth_cancel tg:%d", callback.from_user.id)
     await state.clear()
     try:
         await callback.message.edit_text(
@@ -512,8 +512,8 @@ async def auth_cancel(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "change_dept_cancel")
 async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None:
-    logger.info("[auth] change_dept_cancel tg:%d", callback.from_user.id)
     await callback.answer("Отмена")
+    logger.info("[auth] change_dept_cancel tg:%d", callback.from_user.id)
     await state.clear()
     try:
         await callback.message.edit_text("❌ Смена ресторана отменена.")
@@ -529,8 +529,8 @@ async def change_dept_cancel(callback: CallbackQuery, state: FSMContext) -> None
 @router.callback_query(F.data == "auth_guest_register")
 async def auth_guest_start(callback: CallbackQuery, state: FSMContext) -> None:
     """Начало регистрации гостя — запрос ФИО."""
-    logger.info("[auth] guest_register tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[auth] guest_register tg:%d", callback.from_user.id)
     await state.set_state(AuthStates.guest_full_name)
     try:
         await callback.message.edit_text(
@@ -549,8 +549,8 @@ async def auth_guest_start(callback: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "auth_retry_lastname")
 async def auth_retry_lastname(callback: CallbackQuery, state: FSMContext) -> None:
     """Повторный ввод фамилии."""
-    logger.info("[auth] retry_lastname tg:%d", callback.from_user.id)
     await callback.answer()
+    logger.info("[auth] retry_lastname tg:%d", callback.from_user.id)
     await state.set_state(AuthStates.waiting_last_name)
     try:
         await callback.message.edit_text(
