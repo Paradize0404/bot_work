@@ -675,8 +675,14 @@ async def sync_invoice_prices_to_sheet(
         old_stores: dict[str, str] = {}  # product_id → store_name
         name_to_id: dict[str, str] = {s["name"]: s["id"] for s in suppliers}
         id_to_name: dict[str, str] = {s["id"]: s["name"] for s in suppliers}
+        # Case-insensitive lookup для устойчивого матчинга
+        name_to_id_lower: dict[str, str] = {
+            k.strip().lower(): v for k, v in name_to_id.items()
+        }
 
         resolved_supplier_ids: list[str] = []
+        # Параллельный список имён заголовков (для сохранения нераспознанных)
+        resolved_header_names: list[str] = []
         if len(existing_data) >= 2:
             meta_row = existing_data[0]
             header_row = existing_data[1]
@@ -684,18 +690,32 @@ async def sync_invoice_prices_to_sheet(
                 meta_val = meta_row[ci].strip() if ci < len(meta_row) else ""
                 header_val = header_row[ci].strip() if ci < len(header_row) else ""
 
+                resolved_sid = ""
                 if header_val and header_val in name_to_id:
                     resolved_sid = name_to_id[header_val]
                 elif meta_val and meta_val in id_to_name:
                     resolved_sid = meta_val
-                else:
-                    resolved_sid = ""
+                elif header_val:
+                    # Fallback: case-insensitive поиск
+                    found = name_to_id_lower.get(header_val.strip().lower())
+                    if found:
+                        resolved_sid = found
+                    else:
+                        logger.warning(
+                            "[%s] Поставщик '%s' (колонка %d) не найден в БД. "
+                            "Столбец и цены будут сохранены.",
+                            LABEL,
+                            header_val,
+                            ci,
+                        )
                 resolved_supplier_ids.append(resolved_sid)
+                resolved_header_names.append(header_val)
         elif len(existing_data) >= 1:
             meta_row = existing_data[0]
             for ci in range(old_num_fixed, len(meta_row)):
                 sid = meta_row[ci].strip()
                 resolved_supplier_ids.append(sid if sid in id_to_name else "")
+                resolved_header_names.append("")
 
         if len(existing_data) >= 3:
             # Индексы столбцов зависят от old_num_fixed
@@ -722,8 +742,18 @@ async def sync_invoice_prices_to_sheet(
                     price_val = row[ci].strip() if ci < len(row) else ""
                     if not price_val:
                         continue
-                    if si < len(resolved_supplier_ids) and resolved_supplier_ids[si]:
-                        old_prices[(pid, resolved_supplier_ids[si])] = price_val
+                    if si < len(resolved_supplier_ids):
+                        rsid = resolved_supplier_ids[si]
+                        if rsid:
+                            old_prices[(pid, rsid)] = price_val
+                        elif (
+                            si < len(resolved_header_names)
+                            and resolved_header_names[si]
+                        ):
+                            # Нераспознанный поставщик — сохраняем по имени
+                            old_prices[(pid, f"_h_{resolved_header_names[si]}")] = (
+                                price_val
+                            )
 
         logger.info(
             "[%s] Прайс-лист: %d ручных цен, %d складов, %d старых поставщиков",
@@ -735,16 +765,27 @@ async def sync_invoice_prices_to_sheet(
 
         # ── 4. Готовим список supplier_id для 10 столбцов ──
         new_supplier_ids: list[str] = [""] * num_supplier_cols
+        # Имена заголовков для нераспознанных столбцов
+        new_header_override: dict[int, str] = {}
         for i, sid in enumerate(resolved_supplier_ids[:num_supplier_cols]):
-            new_supplier_ids[i] = sid
+            if sid:
+                new_supplier_ids[i] = sid
+            elif i < len(resolved_header_names) and resolved_header_names[i]:
+                # Столбец без UUID но с именем — сохраняем
+                new_header_override[i] = resolved_header_names[i]
 
         # ── 5. Строим мета/заголовки ──
         supplier_names: dict[str, str] = id_to_name
 
-        meta = ["", "product_id", "store_id", "cost"] + new_supplier_ids
+        meta = ["", "product_id", "store_id", "cost"]
+        for i, sid in enumerate(new_supplier_ids):
+            meta.append(sid)  # UUID или "" для нераспознанных
+
         headers = ["Товар", "ID товара", "Склад", "Себестоимость"]
-        for sid in new_supplier_ids:
-            if sid and sid in supplier_names:
+        for i, sid in enumerate(new_supplier_ids):
+            if i in new_header_override:
+                headers.append(new_header_override[i])
+            elif sid and sid in supplier_names:
                 headers.append(supplier_names[sid])
             else:
                 headers.append("")
@@ -776,8 +817,12 @@ async def sync_invoice_prices_to_sheet(
             store_name = old_stores.get(pid, "")
             row = [prod["name"], pid, store_name, cost_str]
 
-            for sid in new_supplier_ids:
-                if sid:
+            for i, sid in enumerate(new_supplier_ids):
+                if i in new_header_override:
+                    # Нераспознанный поставщик — ищем по имени
+                    hname = new_header_override[i]
+                    price_str = old_prices.get((pid, f"_h_{hname}"), "")
+                elif sid:
                     price_str = old_prices.get((pid, sid), "")
                 else:
                     price_str = ""
@@ -1098,9 +1143,26 @@ async def read_invoice_prices(
                 if not val_str or not sid:
                     continue
                 try:
-                    supplier_prices[sid] = float(val_str.replace(",", "."))
+                    # Убираем пробелы-разделители групп, нормализуем запятые
+                    normalized = val_str.replace(" ", "").replace(",", ".")
+                    price = float(normalized)
+                    if price > 0:
+                        supplier_prices[sid] = price
+                    elif price < 0:
+                        logger.warning(
+                            "[%s] Отрицательная цена '%s' для товара %s, поставщик %s — пропущена",
+                            LABEL,
+                            val_str,
+                            pid,
+                            sid,
+                        )
                 except ValueError:
-                    pass
+                    logger.debug(
+                        "[%s] Не удалось прочитать цену '%s' для товара %s",
+                        LABEL,
+                        val_str,
+                        pid,
+                    )
 
             result.append(
                 {
@@ -1115,7 +1177,14 @@ async def read_invoice_prices(
 
         return result
 
-    result = await asyncio.to_thread(_sync_read)
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_sync_read),
+            timeout=60,
+        )
+    except asyncio.TimeoutError:
+        logger.error("[%s] Таймаут чтения прайс-листа (60 сек)", LABEL)
+        return []
     elapsed = time.monotonic() - t0
     logger.info(
         "[%s] Прочитано %d записей из прайс-листа за %.1f сек",

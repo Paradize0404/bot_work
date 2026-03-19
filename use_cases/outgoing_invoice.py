@@ -15,7 +15,7 @@ import logging
 import time
 from uuid import UUID
 
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.engine import async_session_factory
@@ -952,6 +952,12 @@ async def _sync_prices_to_db(
     CHUNK = 500
 
     async with async_session_factory() as session:
+        # Эксклюзивная блокировка таблиц — защита от конкурентного sync
+        await session.execute(
+            text("LOCK TABLE price_supplier_column IN EXCLUSIVE MODE")
+        )
+        await session.execute(text("LOCK TABLE price_supplier_price IN EXCLUSIVE MODE"))
+
         # ── 1. Batch upsert price_product ──
         product_rows: list[dict] = []
         for item in gsheet_data:
@@ -997,8 +1003,7 @@ async def _sync_prices_to_db(
             )
             await session.execute(stmt)
 
-        # ── 2. Replace price_supplier_column ──
-        await session.execute(PriceSupplierColumn.__table__.delete())
+        # ── 2. Upsert price_supplier_column (вместо delete+insert) ──
         if active_supplier_ids:
             sup_rows = [
                 {
@@ -1008,10 +1013,28 @@ async def _sync_prices_to_db(
                 }
                 for idx, sid in enumerate(sorted(active_supplier_ids))
             ]
-            await session.execute(pg_insert(PriceSupplierColumn).values(sup_rows))
+            for sup_row in sup_rows:
+                stmt = pg_insert(PriceSupplierColumn).values(sup_row)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["supplier_id"],
+                    set_={
+                        "supplier_name": stmt.excluded.supplier_name,
+                        "column_index": stmt.excluded.column_index,
+                    },
+                )
+                await session.execute(stmt)
+        # Удаляем неактивных поставщиков (которых больше нет в GSheet)
+        if active_supplier_ids:
+            active_uuids = [UUID(sid) for sid in active_supplier_ids]
+            await session.execute(
+                PriceSupplierColumn.__table__.delete().where(
+                    PriceSupplierColumn.supplier_id.notin_(active_uuids)
+                )
+            )
+        else:
+            await session.execute(PriceSupplierColumn.__table__.delete())
 
-        # ── 3. Replace price_supplier_price ──
-        await session.execute(PriceSupplierPrice.__table__.delete())
+        # ── 3. Replace price_supplier_price (upsert + delete stale) ──
         price_rows: list[dict] = []
         for item in gsheet_data:
             pid = item["product_id"]
@@ -1027,7 +1050,27 @@ async def _sync_prices_to_db(
         price_count = len(price_rows)
         for i in range(0, len(price_rows), CHUNK):
             chunk = price_rows[i : i + CHUNK]
-            await session.execute(pg_insert(PriceSupplierPrice).values(chunk))
+            stmt = pg_insert(PriceSupplierPrice).values(chunk)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["product_id", "supplier_id"],
+                set_={"price": stmt.excluded.price},
+            )
+            await session.execute(stmt)
+
+        # Удаляем цены, которых больше нет в GSheet
+        if price_rows:
+            # Собираем все валидные (product_id, supplier_id) пары
+            valid_pairs = {(r["product_id"], r["supplier_id"]) for r in price_rows}
+            # Удаляем всё что не в активных поставщиках
+            if active_supplier_ids:
+                active_uuids = [UUID(sid) for sid in active_supplier_ids]
+                await session.execute(
+                    PriceSupplierPrice.__table__.delete().where(
+                        PriceSupplierPrice.supplier_id.notin_(active_uuids)
+                    )
+                )
+        else:
+            await session.execute(PriceSupplierPrice.__table__.delete())
 
         await session.commit()
 
@@ -1175,7 +1218,7 @@ async def get_supplier_prices_by_store(target_store_name: str) -> dict[str, floa
                     row = r
                     break
         if not row:
-            logger.debug(
+            logger.warning(
                 "[invoice] Supplier column not found for store '%s'",
                 target_store_name,
             )
@@ -1220,10 +1263,13 @@ async def get_supplier_price_for_product(
 
     async with async_session_factory() as session:
         # Найти supplier_id из PriceSupplierColumn
+        match_type = ""
         stmt = select(PriceSupplierColumn.supplier_id).where(
             func.lower(PriceSupplierColumn.supplier_name) == name_lower
         )
         row = (await session.execute(stmt)).first()
+        if row:
+            match_type = "exact"
         if not row:
             stmt = (
                 select(PriceSupplierColumn.supplier_id)
@@ -1233,6 +1279,8 @@ async def get_supplier_price_for_product(
                 .limit(1)
             )
             row = (await session.execute(stmt)).first()
+            if row:
+                match_type = "partial"
         if not row:
             stmt = select(
                 PriceSupplierColumn.supplier_id,
@@ -1242,9 +1290,22 @@ async def get_supplier_price_for_product(
             for r in rows_all:
                 if r.supplier_name and r.supplier_name.lower() in name_lower:
                     row = r
+                    match_type = "reverse"
                     break
         if not row:
+            logger.debug(
+                "[invoice] Поставщик не найден для склада '%s'. " "Доступные: %s",
+                target_store_name,
+                [r.supplier_name for r in rows_all] if "rows_all" in dir() else "N/A",
+            )
             return None
+
+        logger.debug(
+            "[invoice] Поставщик для '%s' найден (%s): %s",
+            target_store_name,
+            match_type,
+            row.supplier_id,
+        )
 
         # Получить цену для конкретного товара
         stmt = select(PriceSupplierPrice.price).where(

@@ -73,6 +73,7 @@ def _try_lock_request(pk: int, admin_tg: int, admin_name: str) -> bool:
 
 def _unlock_request(pk: int) -> None:
     _request_locks.pop(pk, None)
+    _request_admin_msgs.pop(pk, None)
 
 
 def _get_lock_owner(pk: int) -> tuple[int, str] | None:
@@ -645,7 +646,7 @@ async def choose_request_product(callback: CallbackQuery, state: FSMContext) -> 
     elif cost_price:
         price_str = f"\n💰 себест.: {cost_price:.2f}₽/{unit}"
     else:
-        price_str = ""
+        price_str = "\n⚠️ Цена не найдена (будет 0₽)"
 
     try:
         await callback.message.edit_text(
@@ -1617,8 +1618,7 @@ async def _do_approve_request(callback: CallbackQuery, pk: int) -> None:
         final_status,
         except_admin=callback.from_user.id,
     )
-    # Очистить трекинг сообщений
-    _request_admin_msgs.pop(pk, None)
+    # Очистить трекинг сообщений (в _unlock_request)
 
 
 # ── Редактировать количества (получатель) ──
@@ -2382,7 +2382,6 @@ async def reject_request(callback: CallbackQuery) -> None:
         f"❌ Отклонена ({admin_name})",
         except_admin=callback.from_user.id,
     )
-    _request_admin_msgs.pop(pk, None)
     _unlock_request(pk)
 
 

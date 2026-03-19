@@ -991,7 +991,7 @@ class ProductRequest(Base):
     items = Column(
         JSONB,
         nullable=False,
-        default=list,
+        default=lambda: [],
         comment=(
             "Позиции: [{product_id, name, amount, price, "
             "unit_name, main_unit, sell_price}, ...]"

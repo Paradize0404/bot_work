@@ -129,6 +129,10 @@ def _normalize_store_type(raw: str) -> str:
     # Prefix-match: «хоз. ...» / «хоз ...»
     if raw.startswith("хоз"):
         return "хозы"
+    # Известные каноничные типы
+    if raw in ("бар", "кухня"):
+        return raw
+    logger.debug("[request] Неизвестный тип склада: '%s'", raw)
     return raw
 
 
@@ -710,11 +714,13 @@ async def is_pastry_product(product_id: str) -> bool:
         if not pastry_group_ids:
             return False
 
-        # Поднимаемся по иерархии групп
-        while current_group_id:
+        # Поднимаемся по иерархии групп (с защитой от циклов)
+        visited: set = set()
+        while current_group_id and current_group_id not in visited:
             if current_group_id in pastry_group_ids:
                 return True
 
+            visited.add(current_group_id)
             stmt_parent = select(ProductGroup.parent_id).where(
                 ProductGroup.id == current_group_id
             )
