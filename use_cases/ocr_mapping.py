@@ -363,6 +363,7 @@ async def notify_user_about_mapping(
             )
 
     # ── Уведомление о маппинге ──
+    sent_mapping_msg = None
     if unmapped_count > 0:
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -390,13 +391,15 @@ async def notify_user_about_mapping(
             f"После заполнения нажмите кнопку ниже. 👇"
         )
         try:
-            await bot.send_message(
+            sent_mapping_msg = await bot.send_message(
                 user_id, mapping_text, parse_mode="HTML", reply_markup=mapping_kb
             )
         except Exception:
             logger.warning(
                 "[ocr_mapping] Не удалось уведомить пользователя %d о маппинге", user_id
             )
+
+    return sent_mapping_msg
 
 
 # ═══════════════════════════════════════════════════════

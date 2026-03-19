@@ -65,6 +65,9 @@ _album_tasks: dict[str, asyncio.Task] = {}
 # (in-memory; только для управления кнопками внутри одной сессии;
 #  накладные теперь хранятся в PostgreSQL через pending_incoming_invoice)
 _pending_invoice_messages: dict[int, list[tuple[int, int]]] = {}
+# ── Pending mapping messages: сообщения с кнопкой «✅ Маппинг готов» ──
+# Глобальный список (chat_id, message_id) — убираем у ВСЕХ при нажатии любым бухгалтером
+_pending_mapping_messages: list[tuple[int, int]] = []
 # tg_id → list[doc_id]  — IDs документов из ТЕКУЩЕЙ сессии загрузки
 _pending_doc_ids: dict[int, list[str]] = {}
 # Общий батч: IDs всех документов накопленных С МОМЕНТА последнего finalize_transfer.
@@ -154,6 +157,29 @@ async def _disable_all_invoice_buttons(
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
+
+
+async def _disable_all_mapping_buttons(bot, status_text: str) -> None:
+    """Убрать кнопки «Маппинг готов» у ВСЕХ бухгалтеров (кто-то один уже нажал)."""
+    locations = _pending_mapping_messages.copy()
+    _pending_mapping_messages.clear()
+    for chat_id, msg_id in locations:
+        try:
+            await bot.edit_message_text(
+                status_text,
+                chat_id=chat_id,
+                message_id=msg_id,
+                parse_mode="HTML",
+                reply_markup=None,
+            )
+        except Exception:
+            logger.debug("suppressed", exc_info=True)
+
+
+def _track_mapping_message(msg) -> None:
+    """Зарегистрировать сообщение с кнопкой «Маппинг готов» для дальнейшего отключения."""
+    if msg is not None:
+        _pending_mapping_messages.append((msg.chat.id, msg.message_id))
 
 
 async def _mark_docs_pending_mapping(doc_ids: list[str]) -> None:
@@ -315,10 +341,33 @@ async def _do_process_photos(
             )
             await mapping_uc.write_transfer(unmapped_sup, unmapped_prd)
 
+        async def _notify_and_track(uid: int, svcs: list, cnt: int):
+            msg = await mapping_uc.notify_user_about_mapping(bot, uid, svcs, cnt)
+            _track_mapping_message(msg)
+
+        # Уведомить отправителя + всех бухгалтеров
+        from use_cases.permissions import get_accountant_ids
+
+        accountant_ids = await get_accountant_ids()
+        notified: set[int] = set()
+
+        # Отправителю — услуги + маппинг
         asyncio.create_task(
-            mapping_uc.notify_user_about_mapping(bot, tg_id, services, unmapped_total),
+            _notify_and_track(tg_id, services, unmapped_total),
             name=f"ocr_notify_{tg_id}",
         )
+        notified.add(tg_id)
+
+        # Бухгалтерам — только маппинг (если есть незамапленные)
+        if unmapped_total > 0:
+            for acc_id in accountant_ids:
+                if acc_id in notified:
+                    continue
+                asyncio.create_task(
+                    _notify_and_track(acc_id, [], unmapped_total),
+                    name=f"ocr_notify_acc_{acc_id}",
+                )
+                notified.add(acc_id)
     elif services:
         from use_cases import ocr_mapping as mapping_uc
 
@@ -589,6 +638,12 @@ async def btn_mapping_done(message: Message, state: FSMContext) -> None:
         await message.delete()
     except Exception:
         logger.debug("suppressed", exc_info=True)
+
+    # Убираем кнопки «Маппинг готов» у ВСЕХ бухгалтеров
+    await _disable_all_mapping_buttons(
+        message.bot, "⏳ Маппинг проверяется..."
+    )
+
     placeholder = await message.answer("⏳ Проверяю «Маппинг Импорт»...")
     await _handle_mapping_done(placeholder, tg_id)
 
@@ -603,7 +658,11 @@ async def cb_mapping_done(callback: CallbackQuery) -> None:
     tg_id = callback.from_user.id
     logger.info("[ocr] Маппинг готов (inline) tg:%d", tg_id)
 
-    # Убираем инлайн-кнопку с сообщения-уведомления
+    # Убираем кнопки «Маппинг готов» у ВСЕХ бухгалтеров
+    await _disable_all_mapping_buttons(
+        callback.bot, "⏳ Маппинг проверяется..."
+    )
+    # На случай если текущее сообщение не было в реестре — убираем кнопку
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
@@ -910,12 +969,19 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
         results = await inv_uc.send_invoices_to_iiko(invoices)
 
         ok_doc_ids = list({r["invoice"]["ocr_doc_id"] for r in results if r.get("ok")})
+        already_doc_ids = list(
+            {r["invoice"]["ocr_doc_id"] for r in results
+             if not r.get("ok") and r.get("already_exists")}
+        )
         fail_doc_ids = list(
-            {r["invoice"]["ocr_doc_id"] for r in results if not r.get("ok")}
+            {r["invoice"]["ocr_doc_id"] for r in results
+             if not r.get("ok") and not r.get("already_exists")}
         )
 
-        if ok_doc_ids:
-            await inv_uc.mark_documents_imported(ok_doc_ids)
+        # Помечаем как imported и успешные, и уже загруженные ранее
+        imported_ids = ok_doc_ids + already_doc_ids
+        if imported_ids:
+            await inv_uc.mark_documents_imported(imported_ids)
 
         result_text = inv_uc.format_send_result(results)
         if fail_doc_ids:
@@ -1095,15 +1161,19 @@ async def handle_json_receipt(message: Message, state: FSMContext) -> None:
             _transfer_batch_doc_ids.extend(saved_doc_ids)
             _pending_doc_ids[tg_id] = saved_doc_ids
 
-        # Уведомить БУХГАЛТЕРОВ о маппинге (не отправителя)
+        # Уведомить БУХГАЛТЕРОВ о маппинге (не отправителя) + трекинг кнопок
         from use_cases.permissions import get_accountant_ids
+
+        async def _notify_and_track_json(uid: int):
+            msg = await mapping_uc.notify_user_about_mapping(
+                message.bot, uid, [], unmapped_total
+            )
+            _track_mapping_message(msg)
 
         accountant_ids = await get_accountant_ids()
         for acc_id in accountant_ids:
             asyncio.create_task(
-                mapping_uc.notify_user_about_mapping(
-                    message.bot, acc_id, [], unmapped_total
-                ),
+                _notify_and_track_json(acc_id),
                 name=f"json_notify_acc_{acc_id}",
             )
 

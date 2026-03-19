@@ -119,6 +119,18 @@ def setup_logging() -> None:
     # ── Telegram handler (ERROR+) ──
     _telegram_handler.setFormatter(fmt)
 
+    # ── DB Error handler (ERROR+ → таблица bot_error) ──
+    from use_cases.error_store import get_db_error_handler
+
+    _db_handler = get_db_error_handler()
+    _db_handler.setFormatter(fmt)
+
+    # ── DB Log handler (INFO+ → таблица bot_log, буферизованный) ──
+    from use_cases.log_store import get_db_log_handler
+
+    _db_log = get_db_log_handler()
+    _db_log.setFormatter(fmt)
+
     # ── Root logger ──
     root = logging.getLogger()
     root.setLevel(LOG_LEVEL)
@@ -126,6 +138,8 @@ def setup_logging() -> None:
     root.addHandler(console)
     root.addHandler(file_handler)
     root.addHandler(_telegram_handler)
+    root.addHandler(_db_handler)
+    root.addHandler(_db_log)
 
     # Приглушаем шумные библиотеки (но НЕ наш код bot.*, use_cases.*, adapters.*)
     logging.getLogger("httpx").setLevel(logging.WARNING)

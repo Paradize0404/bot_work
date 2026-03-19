@@ -49,6 +49,8 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from bot.pnl_handlers import router as pnl_router
     from bot.report_sub_handlers import router as report_sub_router
     from bot.block_handlers import router as block_router
+    from bot.error_handlers import router as error_router
+    from bot.log_handlers import router as log_router
     from bot.retry_session import RetryAiohttpSession
 
     from aiogram.fsm.storage.redis import RedisStorage
@@ -80,6 +82,8 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp.include_router(pnl_router)  # Маппинг ОПИУ iiko→FinTablo
     dp.include_router(report_sub_router)  # Подписки на отчёты дня
     dp.include_router(block_router)  # Блокировка пользователей
+    dp.include_router(error_router)  # /errors — хранилище ошибок (сисадмины)
+    dp.include_router(log_router)  # /logs — все логи из БД (сисадмины)
     dp.include_router(router)
 
     # Error handler: ловим оставшиеся сетевые ошибки (после retry)
@@ -87,6 +91,8 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
     from aiogram.types import ErrorEvent
     from use_cases._helpers import mask_secrets
     from use_cases.admin import alert_admins
+    from use_cases.error_store import save_error
+    import traceback as _tb
 
     @dp.errors()
     async def _global_error_handler(event: ErrorEvent):
@@ -102,6 +108,30 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
         # Логируем с маскировкой секретов
         error_msg = mask_secrets(str(exception))
         logger.exception("[error-handler] Unhandled exception: %s", error_msg)
+
+        # Собираем контекст для error_store
+        ctx: dict = {"source": "global_error_handler"}
+        try:
+            upd = event.update
+            if upd.message and upd.message.from_user:
+                ctx["user_id"] = upd.message.from_user.id
+                ctx["username"] = upd.message.from_user.username
+                ctx["text"] = (upd.message.text or "")[:200]
+            elif upd.callback_query and upd.callback_query.from_user:
+                ctx["user_id"] = upd.callback_query.from_user.id
+                ctx["username"] = upd.callback_query.from_user.username
+                ctx["callback_data"] = (upd.callback_query.data or "")[:200]
+        except Exception:
+            pass
+
+        # Сохраняем в БД (fire-and-forget, safe)
+        await save_error(
+            level="ERROR",
+            logger_name="aiogram.errors",
+            message=f"{type(exception).__name__}: {error_msg}"[:4000],
+            traceback="".join(_tb.format_exception(type(exception), exception, exception.__traceback__))[:20_000],
+            context=ctx,
+        )
 
         # Отправляем алерт админам
         try:

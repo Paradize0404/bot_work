@@ -1131,6 +1131,20 @@ async def send_incoming_invoice(document: dict[str, Any]) -> dict[str, Any]:
             err_msg = err_el.text if err_el is not None else "неизвестная ошибка"
             doc_num_el = resp_root.find("documentNumber")
             doc_num = doc_num_el.text if doc_num_el is not None else "?"
+
+            # Накладная уже проведена/загружена — не ошибка, а дубль
+            if "processed or deleted" in (err_msg or "").lower():
+                logger.info(
+                    "[API] incomingInvoice ALREADY EXISTS — doc=%s",
+                    doc_num,
+                )
+                return {
+                    "ok": False,
+                    "already_exists": True,
+                    "error": err_msg,
+                    "documentNumber": doc_num,
+                }
+
             logger.error(
                 "[API] incomingInvoice VALIDATION FAILED — doc=%s, error: %s",
                 doc_num,

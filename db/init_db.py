@@ -154,6 +154,14 @@ MIGRATIONS: list[str] = [
         blocked_by BIGINT
     )""",
     "CREATE INDEX IF NOT EXISTS ix_blocked_user_tg ON blocked_user (telegram_id)",
+    # bot_error — хранилище ошибок бота
+    "CREATE INDEX IF NOT EXISTS ix_bot_error_created ON bot_error (created_at)",
+    "CREATE INDEX IF NOT EXISTS ix_bot_error_level ON bot_error (level)",
+    "CREATE INDEX IF NOT EXISTS ix_bot_error_resolved ON bot_error (resolved)",
+    # bot_log — все логи бота в БД
+    "CREATE INDEX IF NOT EXISTS ix_bot_log_created ON bot_log (created_at)",
+    "CREATE INDEX IF NOT EXISTS ix_bot_log_level ON bot_log (level)",
+    "CREATE INDEX IF NOT EXISTS ix_bot_log_logger ON bot_log (logger_name)",
     # pnl_account_mapping — маппинг iiko Account.Name → FinTablo PnL category (ОПИУ)
     """CREATE TABLE IF NOT EXISTS pnl_account_mapping (
         id SERIAL PRIMARY KEY,

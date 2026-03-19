@@ -429,6 +429,31 @@ async def _notify_admins_about_sync(report_lines: list[str]) -> None:
 _bot_ref = None  # Ссылка на Bot-инстанс для отправки уведомлений
 
 
+async def _daily_error_cleanup() -> None:
+    """Удалить решённые ошибки старше 30 дней (03:00)."""
+    try:
+        from use_cases.error_store import cleanup_old
+
+        deleted = await cleanup_old(days=30)
+        if deleted:
+            logger.info("[scheduler] Очистка ошибок: удалено %d старых записей", deleted)
+    except Exception:
+        logger.exception("[scheduler] Ошибка очистки bot_error")
+
+
+async def _daily_log_cleanup() -> None:
+    """Удалить старые логи по retention-политике (03:10)."""
+    try:
+        from use_cases.log_store import cleanup_logs
+
+        deleted = await cleanup_logs()
+        if deleted:
+            detail = ", ".join(f"{k}: {v}" for k, v in deleted.items())
+            logger.info("[scheduler] Очистка логов: %s", detail)
+    except Exception:
+        logger.exception("[scheduler] Ошибка очистки bot_log")
+
+
 def start_scheduler(bot) -> None:
     """
     Запустить APScheduler:
@@ -468,6 +493,26 @@ def start_scheduler(bot) -> None:
         trigger=CronTrigger(hour=23, minute=0, timezone=KGD_TZ),
         id="daily_negative_transfer",
         name="Авто-перемещение расх.мат. (23:00 Калининград)",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    # ── 03:00 — очистка старых решённых ошибок (30+ дней) ──
+    _scheduler.add_job(
+        _daily_error_cleanup,
+        trigger=CronTrigger(hour=3, minute=0, timezone=KGD_TZ),
+        id="daily_error_cleanup",
+        name="Очистка старых ошибок (03:00 Калининград)",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    # ── 03:10 — очистка логов по retention ──
+    _scheduler.add_job(
+        _daily_log_cleanup,
+        trigger=CronTrigger(hour=3, minute=10, timezone=KGD_TZ),
+        id="daily_log_cleanup",
+        name="Очистка логов по retention (03:10 Калининград)",
         replace_existing=True,
         misfire_grace_time=3600,
     )

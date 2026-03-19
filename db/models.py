@@ -1374,8 +1374,110 @@ class PendingIncomingInvoice(Base):
     )
 
 
+# ═══════════════════════════════════════════════════════
+# BotError — хранилище ошибок / инцидентов бота
+# ═══════════════════════════════════════════════════════
+
+
+class BotError(Base):
+    """
+    Автоматическое хранилище ошибок бота.
+    Все ERROR/CRITICAL попадают сюда через logging handler.
+    Просмотр: /errors в Telegram (только сисадмины).
+    """
+
+    __tablename__ = "bot_error"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=_now_kgd,
+        index=True,
+        comment="Время возникновения (Калининград)",
+    )
+    level = Column(
+        String(20),
+        nullable=False,
+        index=True,
+        comment="Уровень: ERROR, CRITICAL, WARNING",
+    )
+    logger_name = Column(
+        String(300),
+        nullable=False,
+        comment="Имя логгера (модуль/компонент)",
+    )
+    message = Column(
+        Text,
+        nullable=False,
+        comment="Текст ошибки (первые 4000 символов)",
+    )
+    traceback = Column(
+        Text,
+        nullable=True,
+        comment="Полный traceback (если есть)",
+    )
+    context = Column(
+        JSONB,
+        nullable=True,
+        comment="Доп. контекст: user_id, handler, callback_data и т.д.",
+    )
+    resolved = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+        comment="Отмечено как решённое",
+    )
+
+
+# ═══════════════════════════════════════════════════════
+# BotLog — ВСЕ логи бота в БД (INFO/WARNING/ERROR/CRITICAL)
+# ═══════════════════════════════════════════════════════
+
+
+class BotLog(Base):
+    """
+    Все логи бота в одной таблице.
+    Записываются буферизованным logging handler (batch INSERT).
+    Просмотр: /logs в Telegram (только сисадмины).
+    """
+
+    __tablename__ = "bot_log"
+
+    pk = Column(BigInteger, primary_key=True, autoincrement=True)
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=_now_kgd,
+        index=True,
+        comment="Время записи (Калининград)",
+    )
+    level = Column(
+        String(10),
+        nullable=False,
+        index=True,
+        comment="DEBUG, INFO, WARNING, ERROR, CRITICAL",
+    )
+    logger_name = Column(
+        String(300),
+        nullable=False,
+        comment="Имя логгера (модуль/компонент)",
+    )
+    message = Column(
+        Text,
+        nullable=False,
+        comment="Текст лога (до 4000 символов)",
+    )
+    traceback = Column(
+        Text,
+        nullable=True,
+        comment="Traceback (для ERROR/CRITICAL)",
+    )
+
+
 # ─────────────────────────────────────────────────────
-# Итого 28 таблиц:
+# Итого 29 таблиц (+ bot_error, bot_log):
 #   iiko_entity        — все справочники (1 кнопка)
 #   iiko_department    — подразделения
 #   iiko_store         — склады

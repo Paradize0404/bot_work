@@ -435,12 +435,24 @@ def format_invoice_preview(
 def format_send_result(results: list[dict]) -> str:
     """Форматировать итог отправки в iiko."""
     ok_list = [r for r in results if r.get("ok")]
-    fail_list = [r for r in results if not r.get("ok")]
+    already_list = [
+        r for r in results if not r.get("ok") and r.get("already_exists")
+    ]
+    fail_list = [
+        r for r in results if not r.get("ok") and not r.get("already_exists")
+    ]
     lines: list[str] = []
 
     if ok_list:
         lines.append(f"✅ <b>Успешно загружено: {len(ok_list)}</b>")
         for r in ok_list:
+            inv = r["invoice"]
+            lines.append(f"  • №{inv['documentNumber']} → {inv['store_name']}")
+        lines.append("")
+
+    if already_list:
+        lines.append(f"ℹ️ <b>Уже загружено ранее: {len(already_list)}</b>")
+        for r in already_list:
             inv = r["invoice"]
             lines.append(f"  • №{inv['documentNumber']} → {inv['store_name']}")
         lines.append("")
@@ -478,13 +490,14 @@ async def send_invoices_to_iiko(invoices: list[dict]) -> list[dict]:
         )
         try:
             resp = await send_incoming_invoice(inv)
-            results.append(
-                {
-                    "invoice": inv,
-                    "ok": resp.get("ok", False),
-                    "error": resp.get("error", ""),
-                }
-            )
+            entry: dict = {
+                "invoice": inv,
+                "ok": resp.get("ok", False),
+                "error": resp.get("error", ""),
+            }
+            if resp.get("already_exists"):
+                entry["already_exists"] = True
+            results.append(entry)
         except Exception as exc:
             logger.exception(
                 "[incoming_invoice] Ошибка отправки №%s",
