@@ -151,6 +151,7 @@ def auth_required(handler):
                 "[auth] Неавторизованный доступ tg:%d → %s", tg_id, handler.__name__
             )
             return
+        event.user_ctx = ctx
         return await handler(event, *args, **kwargs)
 
     return wrapper
@@ -221,7 +222,7 @@ def with_cooldown(action: str, seconds: float = 1.0):
                     await event.answer(f"⏳ Подождите {seconds} сек...")
                 elif isinstance(event, Message):
                     msg = await event.answer(f"⏳ Подождите {seconds} сек...")
-                    asyncio.create_task(delete_message_delayed(msg, 3.0))
+                    track_task(delete_message_delayed(msg, 3.0))
                 return
             return await handler(event, *args, **kwargs)
 

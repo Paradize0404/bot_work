@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 # Настройки буфера
 # ═══════════════════════════════════════════════════════
 
-FLUSH_INTERVAL = 5.0   # секунд между flush
-FLUSH_SIZE = 50         # макс записей до принудительного flush
+FLUSH_INTERVAL = 5.0  # секунд между flush
+FLUSH_SIZE = 50  # макс записей до принудительного flush
 
 # Retention (дней) по уровням
 RETENTION = {
@@ -252,12 +252,14 @@ class DBLogHandler(logging.Handler):
             if traceback_text:
                 traceback_text = traceback_text[:20_000]
 
-        _enqueue({
-            "level": record.levelname[:10],
-            "logger_name": record.name[:300],
-            "message": self.format(record)[:4000],
-            "traceback": traceback_text,
-        })
+        _enqueue(
+            {
+                "level": record.levelname[:10],
+                "logger_name": record.name[:300],
+                "message": self.format(record)[:4000],
+                "traceback": traceback_text,
+            }
+        )
 
 
 # Singleton

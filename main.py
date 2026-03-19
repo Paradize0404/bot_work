@@ -129,7 +129,11 @@ def _build_bot_and_dp() -> tuple[Bot, Dispatcher]:
             level="ERROR",
             logger_name="aiogram.errors",
             message=f"{type(exception).__name__}: {error_msg}"[:4000],
-            traceback="".join(_tb.format_exception(type(exception), exception, exception.__traceback__))[:20_000],
+            traceback="".join(
+                _tb.format_exception(
+                    type(exception), exception, exception.__traceback__
+                )
+            )[:20_000],
             context=ctx,
         )
 
@@ -474,7 +478,9 @@ def run_webhook() -> None:
 
         # Обрабатываем фоновой задачей чтобы быстро вернуть 200
         # (iikoCloud ожидает быстрый ответ, иначе может отключить вебхук)
-        asyncio.create_task(_process_iiko_webhook(body, bot))
+        from bot.middleware import track_task
+
+        track_task(_process_iiko_webhook(body, bot))
 
         return web.Response(status=200, text="ok")
 

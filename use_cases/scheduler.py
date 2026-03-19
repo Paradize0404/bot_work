@@ -436,7 +436,9 @@ async def _daily_error_cleanup() -> None:
 
         deleted = await cleanup_old(days=30)
         if deleted:
-            logger.info("[scheduler] Очистка ошибок: удалено %d старых записей", deleted)
+            logger.info(
+                "[scheduler] Очистка ошибок: удалено %d старых записей", deleted
+            )
     except Exception:
         logger.exception("[scheduler] Ошибка очистки bot_error")
 

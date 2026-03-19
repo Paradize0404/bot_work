@@ -300,6 +300,12 @@ async def _put(endpoint: str, label: str, body: dict[str, Any]) -> dict[str, Any
                     )
                     await asyncio.sleep(delay)
                 else:
+                    logger.error(
+                        "[FT-API] PUT %s — HTTP %d: %s",
+                        endpoint,
+                        exc.response.status_code,
+                        exc.response.text[:500],
+                    )
                     raise
         else:
             raise httpx.HTTPStatusError(

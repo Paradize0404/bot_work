@@ -52,9 +52,7 @@ def _is_sysadmin_check():
         from use_cases.permissions import has_permission
         from bot.permission_map import ROLE_SYSADMIN
 
-        tg_id = (
-            message_or_cb.from_user.id if message_or_cb.from_user else None
-        )
+        tg_id = message_or_cb.from_user.id if message_or_cb.from_user else None
         if not tg_id:
             return False
         return await has_permission(tg_id, ROLE_SYSADMIN)
@@ -126,24 +124,30 @@ def _list_keyboard(
             emoji = _LEVEL_EMOJI.get(log_entry.level, "⚪")
             label = f"{emoji} #{log_entry.pk} {(log_entry.message or '')[:35]}"
             buttons.append(
-                [InlineKeyboardButton(
-                    text=label,
-                    callback_data=f"log:detail:{log_entry.pk}",
-                )]
+                [
+                    InlineKeyboardButton(
+                        text=label,
+                        callback_data=f"log:detail:{log_entry.pk}",
+                    )
+                ]
             )
 
     # Навигация
     nav = []
     if offset > 0:
-        nav.append(InlineKeyboardButton(
-            text="⬅️",
-            callback_data=f"log:page:{max(0, offset - PAGE_SIZE)}:{level}",
-        ))
+        nav.append(
+            InlineKeyboardButton(
+                text="⬅️",
+                callback_data=f"log:page:{max(0, offset - PAGE_SIZE)}:{level}",
+            )
+        )
     if len(logs) == PAGE_SIZE:
-        nav.append(InlineKeyboardButton(
-            text="➡️",
-            callback_data=f"log:page:{offset + PAGE_SIZE}:{level}",
-        ))
+        nav.append(
+            InlineKeyboardButton(
+                text="➡️",
+                callback_data=f"log:page:{offset + PAGE_SIZE}:{level}",
+            )
+        )
     if nav:
         buttons.append(nav)
 
@@ -152,10 +156,12 @@ def _list_keyboard(
     for lvl in ("INFO", "WARNING", "ERROR", "CRITICAL"):
         e = _LEVEL_EMOJI.get(lvl, "")
         prefix = "✓ " if lvl == level else ""
-        filters.append(InlineKeyboardButton(
-            text=f"{prefix}{e}{lvl[:4]}",
-            callback_data=f"log:lvl:{lvl}",
-        ))
+        filters.append(
+            InlineKeyboardButton(
+                text=f"{prefix}{e}{lvl[:4]}",
+                callback_data=f"log:lvl:{lvl}",
+            )
+        )
     buttons.append(filters)
 
     # Все уровни + статистика + очистка
@@ -170,9 +176,15 @@ def _list_keyboard(
 
 
 def _detail_keyboard(level: str = "") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Назад к списку", callback_data=f"log:page:0:{level}")],
-    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад к списку", callback_data=f"log:page:0:{level}"
+                )
+            ],
+        ]
+    )
 
 
 # ═══════════════════════════════════════════════════════
@@ -300,9 +312,15 @@ async def cb_log_stats(callback: CallbackQuery):
         f"📦 Всего в БД: <b>{stats['total']}</b>\n\n"
         f"<i>Retention: INFO 3д, WARNING 14д, ERROR 90д</i>"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="log:page:0:")],
-    ])
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад к списку", callback_data="log:page:0:"
+                )
+            ],
+        ]
+    )
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception:

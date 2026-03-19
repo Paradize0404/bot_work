@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    pool_size=5,
-    max_overflow=5,
+    pool_size=15,
+    max_overflow=10,
     pool_pre_ping=True,
     pool_recycle=300,  # переподключаться каждые 5 мин (Railway дропает idle)
     connect_args={

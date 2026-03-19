@@ -129,20 +129,9 @@ STOCK_CHANGE_THRESHOLD_PCT: float = float(
 )
 # Минимальный интервал между отправками остатков (минуты)
 STOCK_UPDATE_INTERVAL_MIN: int = int(os.getenv("STOCK_UPDATE_INTERVAL_MIN", "30"))
-# authToken для верификации входящих вебхуков от iikoCloud
-# ⚠️ ОБЯЗАТЕЛЬНО задайте в env! При auto-generation каждый рестарт — новый секрет,
-# и зарегистрированный вебхук перестанет проходить проверку.
-_IIKO_CLOUD_WEBHOOK_SECRET_RAW = os.getenv("IIKO_CLOUD_WEBHOOK_SECRET")
-if not _IIKO_CLOUD_WEBHOOK_SECRET_RAW:
-    import warnings
-
-    warnings.warn(
-        "IIKO_CLOUD_WEBHOOK_SECRET не задан — сгенерирован случайный. "
-        "При рестарте зарегистрированный вебхук перестанет работать! "
-        "Задайте фиксированное значение в переменных окружения.",
-        stacklevel=1,
-    )
-IIKO_CLOUD_WEBHOOK_SECRET: str = _IIKO_CLOUD_WEBHOOK_SECRET_RAW or secrets.token_hex(32)
+# authToken для верификации входящих вебхуков от iikoCloud.
+# Если не задан — верификация вебхуков отключена (пропускает все запросы).
+IIKO_CLOUD_WEBHOOK_SECRET: str | None = os.getenv("IIKO_CLOUD_WEBHOOK_SECRET") or None
 
 # ── Timezone ──
 # Все даты в проекте — по Калининграду (UTC+2, Europe/Kaliningrad)

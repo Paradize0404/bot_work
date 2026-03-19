@@ -62,14 +62,13 @@ async def _run_ft_sync(
     """
     started = now_kgd()
     t0 = time.monotonic()
-    logger.info("[FT:%s] РќР°С‡РёРЅР°СЋ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЋ...", label)
+    logger.info("[FT:%s] Начинаю синхронизацию...", label)
 
     try:
-        items = await fetch_coro
-        t_api = time.monotonic() - t0
-        logger.info(
-            "[FT:%s] API: %d Р·Р°РїРёСЃРµР№ Р·Р° %.1f СЃРµРє", label, len(items), t_api
-        )
+        async with asyncio.timeout(300):  # 5 мин макс на одну синхронизацию
+            items = await fetch_coro
+            t_api = time.monotonic() - t0
+            logger.info("[FT:%s] API: %d записей за %.1f сек", label, len(items), t_api)
 
         now = now_kgd()
         rows = [r for item in items if (r := mapper(item, now)) is not None]

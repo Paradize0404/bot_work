@@ -174,8 +174,10 @@ def _settings_keyboard() -> ReplyKeyboardMarkup:
 
 async def _get_main_kb(tg_id: int) -> ReplyKeyboardMarkup:
     """Получить текущие разрешения в рамках роли пользователя."""
-    allowed = await perm_uc.get_allowed_keys(tg_id)
-    ctx = await uctx.get_user_context(tg_id)
+    allowed, ctx = await asyncio.gather(
+        perm_uc.get_allowed_keys(tg_id),
+        uctx.get_user_context(tg_id),
+    )
     dept_name = ctx.department_name if ctx else None
     is_guest = bool(ctx and ctx.employee_id == "guest")
     return _main_keyboard(allowed, dept_name=dept_name, is_guest=is_guest)
@@ -362,7 +364,7 @@ async def process_last_name(message: Message, state: FSMContext) -> None:
                         exc_info=True,
                     )
 
-            asyncio.create_task(_sync_auto(), name=f"perms_sync_auto_{_tg}")
+            track_task(_sync_auto())
             return
 
         await state.set_state(AuthStates.choosing_department)
@@ -423,7 +425,7 @@ async def process_choose_employee(callback: CallbackQuery, state: FSMContext) ->
                     exc_info=True,
                 )
 
-        asyncio.create_task(_sync_emp(), name=f"perms_sync_emp_{_tg}")
+        track_task(_sync_emp())
         return
 
     await state.set_state(AuthStates.choosing_department)
@@ -478,20 +480,15 @@ async def process_choose_department(callback: CallbackQuery, state: FSMContext) 
                 "[auth] не удалось синхронизировать права доступа", exc_info=True
             )
 
-    asyncio.create_task(
-        _sync_perms(),
-        name=f"perms_sync_auth_{callback.from_user.id}",
-    )
+    track_task(_sync_perms())
 
     # Задача: отправить сообщение о мин. остатках
-    asyncio.create_task(
+    track_task(
         send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
-        name=f"stock_alert_auth_{callback.from_user.id}",
     )
     # Задача: отправить стоп-лист
-    asyncio.create_task(
+    track_task(
         send_stoplist_for_user(callback.bot, callback.from_user.id),
-        name=f"stoplist_auth_{callback.from_user.id}",
     )
 
 
@@ -607,7 +604,7 @@ async def process_guest_full_name(message: Message, state: FSMContext) -> None:
                 exc_info=True,
             )
 
-    asyncio.create_task(_sync_perms(), name=f"perms_sync_guest_{tg_id}")
+    track_task(_sync_perms())
 
 
 # -----------------------------------------------------
@@ -667,14 +664,12 @@ async def process_change_department(callback: CallbackQuery, state: FSMContext) 
     await callback.message.answer("Выберите раздел:", reply_markup=kb)
 
     # Задача: отправить сообщение о мин. остатках
-    asyncio.create_task(
+    track_task(
         send_stock_alert_for_user(callback.bot, callback.from_user.id, department_id),
-        name=f"stock_alert_switch_{callback.from_user.id}",
     )
     # Задача: отправить стоп-лист
-    asyncio.create_task(
+    track_task(
         send_stoplist_for_user(callback.bot, callback.from_user.id),
-        name=f"stoplist_switch_{callback.from_user.id}",
     )
 
 

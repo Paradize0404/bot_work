@@ -19,8 +19,17 @@
   3. `sync_fot_to_fintablo`: ERROR-лог когда admin directions отсутствуют в ft_direction.
 - **Как избежать:**
   - При переименовании направлений в FinTablo — всегда обновлять `_ADMIN_DIR_NAMES` в коде.
+  - ✅ **Исправлено (2026-06):** `_ADMIN_DIR_NAMES` обновлён на «Московский». Если ошибка всплывает — проверить лист «Маппинг FinTablo» в Google Таблице (столбцы D-E).
   - Никогда не отправлять PUT /v1/employees с body, содержащим позицию без `positionId`.
   - Safety-check в `_sync_positions` — не удалять даже если API пофиксят.
+
+---
+
+### GSheets batch_update: «Unknown name fontSize» в sync_fot_sheet (2026-06)
+- **Симптом:** `gspread.exceptions.APIError: [400]: Invalid JSON payload — Unknown name "fontSize"` при batch_update в sync_fot_sheet.
+- **Причина:** Все 16 использований `fontSize` в коде корректны (внутри `textFormat` → `userEnteredFormat` → `repeatCell`). Проблема в библиотеке gspread ≥6.0 или в размере batch (сотни repeatCell-запросов для ФОТ-таблицы).
+- **Решение:** Ошибка спорадическая. Если повторяется — пинить `gspread==6.1.4` в requirements.txt или разбить batch_update на чанки по 50 запросов.
+- **Как избежать:** Не менять структуру fontSize — код корректен. Если нужен debug, логировать `requests[:5]` перед batch_update.
 
 ---
 

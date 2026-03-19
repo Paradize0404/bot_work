@@ -267,7 +267,7 @@ async def calculate_revenue_motivation(
         }
         motivation_total = sum(result[full_name].values())
 
-        logger.info(
+        logger.debug(
             "[revenue_motivation] %s: выручка=%.2f × %.2f%% = %.2f руб. "
             "(%d смен, %d дней совпало, %d подразд.)",
             full_name,
@@ -574,7 +574,7 @@ async def calculate_pastry_invoice_motivation(
         dept_key = my_depts[0] if my_depts else "Без подразделения"
 
         result[full_name] = {dept_key: bonus}
-        logger.info(
+        logger.debug(
             "[pastry_motivation] %s: %.0f ₽ × %d/%d дн. × %.1f%% = %.0f ₽ → %s",
             full_name,
             total_pastry_sum,

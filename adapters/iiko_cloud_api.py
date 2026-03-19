@@ -200,7 +200,10 @@ def verify_webhook_auth(auth_header: str | None) -> bool:
     """
     Проверить Authorization header входящего вебхука от iikoCloud.
     iikoCloud передаёт authToken, который мы указали при регистрации.
+    Если секрет не задан — пропускаем все запросы (верификация отключена).
     """
+    if IIKO_CLOUD_WEBHOOK_SECRET is None:
+        return True  # верификация отключена
     if not auth_header:
         return False
     # iikoCloud может отправить как "Bearer <token>" так и просто "<token>"

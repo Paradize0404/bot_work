@@ -286,11 +286,11 @@ async def sync_fot_to_fintablo(
         by_dept = emp_data.get("by_dept", {})
         total_accrued = emp_data["total"].get("accrued", 0.0)
 
-        desired_pay: dict[str, float] = {
-            "fix": round(total_accrued, 2),
-            "percent": 0.0,
-            "bonus": 0.0,
-            "forfeit": 0.0,
+        desired_pay: dict[str, int] = {
+            "fix": round(total_accrued),
+            "percent": 0,
+            "bonus": 0,
+            "forfeit": 0,
         }
 
         desired_positions = _compute_positions(

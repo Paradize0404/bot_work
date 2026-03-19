@@ -352,9 +352,8 @@ async def _do_process_photos(
         notified: set[int] = set()
 
         # Отправителю — услуги + маппинг
-        asyncio.create_task(
+        track_task(
             _notify_and_track(tg_id, services, unmapped_total),
-            name=f"ocr_notify_{tg_id}",
         )
         notified.add(tg_id)
 
@@ -363,17 +362,15 @@ async def _do_process_photos(
             for acc_id in accountant_ids:
                 if acc_id in notified:
                     continue
-                asyncio.create_task(
+                track_task(
                     _notify_and_track(acc_id, [], unmapped_total),
-                    name=f"ocr_notify_acc_{acc_id}",
                 )
                 notified.add(acc_id)
     elif services:
         from use_cases import ocr_mapping as mapping_uc
 
-        asyncio.create_task(
+        track_task(
             mapping_uc.notify_user_about_mapping(bot, tg_id, services, 0),
-            name=f"ocr_notify_svc_{tg_id}",
         )
 
     # ── Сохранение в БД ──
@@ -640,9 +637,7 @@ async def btn_mapping_done(message: Message, state: FSMContext) -> None:
         logger.debug("suppressed", exc_info=True)
 
     # Убираем кнопки «Маппинг готов» у ВСЕХ бухгалтеров
-    await _disable_all_mapping_buttons(
-        message.bot, "⏳ Маппинг проверяется..."
-    )
+    await _disable_all_mapping_buttons(message.bot, "⏳ Маппинг проверяется...")
 
     placeholder = await message.answer("⏳ Проверяю «Маппинг Импорт»...")
     await _handle_mapping_done(placeholder, tg_id)
@@ -659,9 +654,7 @@ async def cb_mapping_done(callback: CallbackQuery) -> None:
     logger.info("[ocr] Маппинг готов (inline) tg:%d", tg_id)
 
     # Убираем кнопки «Маппинг готов» у ВСЕХ бухгалтеров
-    await _disable_all_mapping_buttons(
-        callback.bot, "⏳ Маппинг проверяется..."
-    )
+    await _disable_all_mapping_buttons(callback.bot, "⏳ Маппинг проверяется...")
     # На случай если текущее сообщение не было в реестре — убираем кнопку
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -970,12 +963,18 @@ async def cb_iiko_invoice_send(callback: CallbackQuery) -> None:
 
         ok_doc_ids = list({r["invoice"]["ocr_doc_id"] for r in results if r.get("ok")})
         already_doc_ids = list(
-            {r["invoice"]["ocr_doc_id"] for r in results
-             if not r.get("ok") and r.get("already_exists")}
+            {
+                r["invoice"]["ocr_doc_id"]
+                for r in results
+                if not r.get("ok") and r.get("already_exists")
+            }
         )
         fail_doc_ids = list(
-            {r["invoice"]["ocr_doc_id"] for r in results
-             if not r.get("ok") and not r.get("already_exists")}
+            {
+                r["invoice"]["ocr_doc_id"]
+                for r in results
+                if not r.get("ok") and not r.get("already_exists")
+            }
         )
 
         # Помечаем как imported и успешные, и уже загруженные ранее
@@ -1172,9 +1171,8 @@ async def handle_json_receipt(message: Message, state: FSMContext) -> None:
 
         accountant_ids = await get_accountant_ids()
         for acc_id in accountant_ids:
-            asyncio.create_task(
+            track_task(
                 _notify_and_track_json(acc_id),
-                name=f"json_notify_acc_{acc_id}",
             )
 
         # Отправителю — только подтверждение

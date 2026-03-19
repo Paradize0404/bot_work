@@ -40,9 +40,7 @@ def _is_sysadmin_check():
         from use_cases.permissions import has_permission
         from bot.permission_map import ROLE_SYSADMIN
 
-        tg_id = (
-            message_or_cb.from_user.id if message_or_cb.from_user else None
-        )
+        tg_id = message_or_cb.from_user.id if message_or_cb.from_user else None
         if not tg_id:
             return False
         return await has_permission(tg_id, ROLE_SYSADMIN)
@@ -93,31 +91,48 @@ def _fmt_error_detail(err) -> str:
     return "\n".join(lines)
 
 
-def _list_keyboard(errors: list, offset: int = 0, total_unresolved: int = 0) -> InlineKeyboardMarkup:
+def _list_keyboard(
+    errors: list, offset: int = 0, total_unresolved: int = 0
+) -> InlineKeyboardMarkup:
     """Клавиатура списка ошибок."""
     buttons = []
 
     for err in errors:
         buttons.append(
-            [InlineKeyboardButton(
-                text=f"{'🔴' if err.level == 'CRITICAL' else '🟠'} #{err.pk} — {(err.message or '')[:40]}",
-                callback_data=f"err:detail:{err.pk}",
-            )]
+            [
+                InlineKeyboardButton(
+                    text=f"{'🔴' if err.level == 'CRITICAL' else '🟠'} #{err.pk} — {(err.message or '')[:40]}",
+                    callback_data=f"err:detail:{err.pk}",
+                )
+            ]
         )
 
     # Навигация
     nav = []
     if offset > 0:
-        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"err:page:{max(0, offset - PAGE_SIZE)}"))
+        nav.append(
+            InlineKeyboardButton(
+                text="⬅️", callback_data=f"err:page:{max(0, offset - PAGE_SIZE)}"
+            )
+        )
     if len(errors) == PAGE_SIZE:
-        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"err:page:{offset + PAGE_SIZE}"))
+        nav.append(
+            InlineKeyboardButton(
+                text="➡️", callback_data=f"err:page:{offset + PAGE_SIZE}"
+            )
+        )
     if nav:
         buttons.append(nav)
 
     # Управление
     mgmt = []
     if total_unresolved > 0:
-        mgmt.append(InlineKeyboardButton(text=f"✅ Решить все ({total_unresolved})", callback_data="err:resolveall"))
+        mgmt.append(
+            InlineKeyboardButton(
+                text=f"✅ Решить все ({total_unresolved})",
+                callback_data="err:resolveall",
+            )
+        )
     mgmt.append(InlineKeyboardButton(text="📊 Статистика", callback_data="err:stats"))
     mgmt.append(InlineKeyboardButton(text="🗑 Очистка 30д", callback_data="err:cleanup"))
     buttons.append(mgmt)
@@ -128,8 +143,16 @@ def _list_keyboard(errors: list, offset: int = 0, total_unresolved: int = 0) -> 
 def _detail_keyboard(pk: int, resolved: bool) -> InlineKeyboardMarkup:
     buttons = []
     if not resolved:
-        buttons.append([InlineKeyboardButton(text="✅ Отметить решённой", callback_data=f"err:resolve:{pk}")])
-    buttons.append([InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="err:page:0")])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Отметить решённой", callback_data=f"err:resolve:{pk}"
+                )
+            ]
+        )
+    buttons.append(
+        [InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="err:page:0")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -152,10 +175,16 @@ async def _show_error_list(target, offset: int = 0):
 
     if not errors:
         text = "✅ <b>Нет нерешённых ошибок!</b>"
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📊 Статистика", callback_data="err:stats")],
-            [InlineKeyboardButton(text="🗑 Очистка 30д", callback_data="err:cleanup")],
-        ])
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="📊 Статистика", callback_data="err:stats")],
+                [
+                    InlineKeyboardButton(
+                        text="🗑 Очистка 30д", callback_data="err:cleanup"
+                    )
+                ],
+            ]
+        )
     else:
         lines = [f"🚨 <b>Ошибки бота</b> ({stats['unresolved']} нерешённых)\n"]
         for err in errors:
@@ -201,7 +230,9 @@ async def cb_resolve_error(callback: CallbackQuery):
             text = _fmt_error_detail(err)
             kb = _detail_keyboard(err.pk, err.resolved)
             try:
-                await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+                await callback.message.edit_text(
+                    text, parse_mode="HTML", reply_markup=kb
+                )
             except Exception:
                 pass
     else:
@@ -235,9 +266,11 @@ async def cb_error_stats(callback: CallbackQuery):
         f"📅 За 24 часа: <b>{day_detail}</b>\n"
         f"📆 За 7 дней: <b>{stats['last_7d']}</b>"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="err:page:0")],
-    ])
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="err:page:0")],
+        ]
+    )
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception:

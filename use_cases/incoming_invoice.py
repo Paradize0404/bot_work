@@ -435,12 +435,8 @@ def format_invoice_preview(
 def format_send_result(results: list[dict]) -> str:
     """Форматировать итог отправки в iiko."""
     ok_list = [r for r in results if r.get("ok")]
-    already_list = [
-        r for r in results if not r.get("ok") and r.get("already_exists")
-    ]
-    fail_list = [
-        r for r in results if not r.get("ok") and not r.get("already_exists")
-    ]
+    already_list = [r for r in results if not r.get("ok") and r.get("already_exists")]
+    fail_list = [r for r in results if not r.get("ok") and not r.get("already_exists")]
     lines: list[str] = []
 
     if ok_list:
