@@ -94,8 +94,9 @@ async def _fetch_list(endpoint: str, label: str, **params) -> list[dict[str, Any
                 resp.raise_for_status()
                 last_exc = None
                 break
-            except httpx.TimeoutException as exc:
-                # ReadTimeout/ConnectTimeout: keep-alive соединение могло протухнуть.
+            except (httpx.TimeoutException, httpx.ConnectError) as exc:
+                # ReadTimeout/ConnectTimeout/ConnectError: keep-alive
+                # соединение могло протухнуть или TLS handshake упал.
                 # Пересоздаём клиент и повторяем с backoff.
                 last_exc = exc
                 if attempt < _MAX_RETRIES:
@@ -266,7 +267,7 @@ async def _put(endpoint: str, label: str, body: dict[str, Any]) -> dict[str, Any
                 )
                 resp.raise_for_status()
                 break
-            except httpx.TimeoutException as exc:
+            except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 if attempt < _MAX_RETRIES:
                     delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
                     logger.warning(
@@ -345,7 +346,7 @@ async def _post(endpoint: str, label: str, body: dict[str, Any]) -> dict[str, An
                 )
                 resp.raise_for_status()
                 break
-            except httpx.TimeoutException as exc:
+            except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 if attempt < _MAX_RETRIES:
                     delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
                     logger.warning(
@@ -415,7 +416,7 @@ async def _delete(endpoint: str, label: str) -> dict[str, Any]:
                 resp = await client.delete(f"/v1/{endpoint}")
                 resp.raise_for_status()
                 break
-            except httpx.TimeoutException as exc:
+            except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 if attempt < _MAX_RETRIES:
                     delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
                     logger.warning(
