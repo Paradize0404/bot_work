@@ -3934,6 +3934,7 @@ async def sync_fot_sheet(
         #   Храним по ключу (sect_name, name) + fallback по name-only.
         saved: dict[tuple[str, str], list[float]] = {}
         saved_by_name: dict[str, list[float]] = {}
+        saved_by_iiko_id: dict[str, list[float]] = {}
         if not is_new:
             try:
                 existing = ws.get_all_values(
@@ -3972,6 +3973,10 @@ async def sync_fot_sheet(
                     if any(v != 0 for v in vals):
                         saved[(cur_section, cell_a)] = vals
                         saved_by_name[cell_a] = vals
+                        # iiko_id (колонка L, index 11) — самый надёжный ключ
+                        iiko_id_cell = str(row[11]).strip() if len(row) > 11 else ""
+                        if iiko_id_cell:
+                            saved_by_iiko_id[iiko_id_cell] = vals
             except Exception:
                 logger.warning(
                     "[%s] Не удалось прочитать существующие данные ФОТ — "
@@ -4076,7 +4081,10 @@ async def sync_fot_sheet(
                 rate_total = emp.get("rate_total", 0)
                 bonus = emp.get("bonus", 0)
 
-                sv = saved.get((sect_name, name))
+                emp_iiko_id = emp.get("iiko_id", "")
+                sv = saved_by_iiko_id.get(emp_iiko_id) if emp_iiko_id else None
+                if sv is None:
+                    sv = saved.get((sect_name, name))
                 if sv is None:
                     sv = saved_by_name.get(name)
                     if sv is not None:

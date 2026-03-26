@@ -815,6 +815,24 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
     _sending_lock.add(user_id)
     try:
         data = await state.get_data()
+
+        if not data.get("store_id") or not data.get("account_id"):
+            logger.warning(
+                "[writeoff] finalize без store_id/account_id tg:%d, keys=%s",
+                user_id,
+                list(data.keys()),
+            )
+            await state.clear()
+            await restore_menu_kb(
+                callback.bot,
+                callback.message.chat.id,
+                state,
+                "⚠️ Сессия списания устарела — склад или счёт не выбраны.\n"
+                "Нажмите «📝 Создать списание» заново.",
+                writeoffs_keyboard(),
+            )
+            return
+
         items = data.get("items", [])
         if not items:
             await _send_prompt(

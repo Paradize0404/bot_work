@@ -147,6 +147,9 @@ def extract_store_type(store_name: str) -> str:
         'PizzaYolo: ТМЦ (Гайдара)'       → 'тмц'
         'Хоз. товары (Московский)'       → 'хозы'
         'ТМЦ Сельма'                     → 'тмц'
+        'Кухня Гайдара'                  → 'кухня'
+        'Бар Гайдара'                    → 'бар'
+        'Хоз. товары Гайдара'            → 'хозы'
     """
     name = store_name.strip()
     # Убираем бренд-префикс до ':'
@@ -154,7 +157,21 @@ def extract_store_type(store_name: str) -> str:
         name = name.split(":", 1)[1].strip()
     # Убираем суффикс (подразделение) в скобках
     name = re.sub(r"\s*\([^)]+\)\s*$", "", name).strip()
-    return _normalize_store_type(name)
+
+    normalized = _normalize_store_type(name)
+    # Если уже каноничный тип — готово
+    if normalized in ("бар", "кухня", "тмц", "хозы"):
+        return normalized
+
+    # Без скобок: «Кухня Гайдара», «Бар Гайдара» — отрезаем последнее слово
+    # (название подразделения) и пробуем снова
+    parts = name.rsplit(maxsplit=1)
+    if len(parts) == 2:
+        candidate = _normalize_store_type(parts[0])
+        if candidate in ("бар", "кухня", "тмц", "хозы"):
+            return candidate
+
+    return normalized
 
 
 async def get_all_stores_for_department(department_id: str) -> list[dict[str, str]]:
