@@ -3932,9 +3932,13 @@ async def sync_fot_sheet(
         #   Используем UNFORMATTED_VALUE чтобы получить сырые числа (float/int)
         #   и не терять точность при парсинге форматированных строк.
         #   Храним по ключу (sect_name, name) + fallback по name-only.
-        saved: dict[tuple[str, str], list[float]] = {}
-        saved_by_name: dict[str, list[float]] = {}
-        saved_by_iiko_id: dict[str, list[float]] = {}
+        # Ключи: (section, iiko_id), (section, name), name — от самого точного к фоллбэку.
+        # Не храним по голому iiko_id — один сотрудник может быть
+        # в нескольких секциях с разными авансами/выплатами.
+        saved_sect_iiko: dict[tuple[str, str], list] = {}   # (section, iiko_id)
+        saved_sect_name: dict[tuple[str, str], list] = {}   # (section, name)
+        saved_by_name: dict[str, list] = {}                 # name only (fallback)
+        known_iiko_ids: set[str] = set()                    # iiko_id встречающиеся в saved
         if not is_new:
             try:
                 existing = ws.get_all_values(
@@ -3969,14 +3973,16 @@ async def sync_fot_sheet(
                             return float(v)
                         return _parse_fot_num(str(v))
 
+                    iiko_id_cell = str(row[11]).strip() if len(row) > 11 else ""
+                    if iiko_id_cell:
+                        known_iiko_ids.add(iiko_id_cell)
+
                     vals = [_raw_fj(i) for i in range(5, 10)]
                     if any(v != 0 for v in vals):
-                        saved[(cur_section, cell_a)] = vals
+                        saved_sect_name[(cur_section, cell_a)] = vals
                         saved_by_name[cell_a] = vals
-                        # iiko_id (колонка L, index 11) — самый надёжный ключ
-                        iiko_id_cell = str(row[11]).strip() if len(row) > 11 else ""
                         if iiko_id_cell:
-                            saved_by_iiko_id[iiko_id_cell] = vals
+                            saved_sect_iiko[(cur_section, iiko_id_cell)] = vals
             except Exception:
                 logger.warning(
                     "[%s] Не удалось прочитать существующие данные ФОТ — "
@@ -4082,22 +4088,28 @@ async def sync_fot_sheet(
                 bonus = emp.get("bonus", 0)
 
                 emp_iiko_id = emp.get("iiko_id", "")
-                sv = saved_by_iiko_id.get(emp_iiko_id) if emp_iiko_id else None
+                # Приоритет: (секция, iiko_id) → (секция, имя) → имя (только если id неизвестен)
+                sv = (
+                    saved_sect_iiko.get((sect_name, emp_iiko_id))
+                    if emp_iiko_id
+                    else None
+                )
                 if sv is None:
-                    sv = saved.get((sect_name, name))
+                    sv = saved_sect_name.get((sect_name, name))
                 if sv is None:
-                    sv = saved_by_name.get(name)
-                    if sv is not None:
-                        logger.info(
-                            "[%s] F-J восстановлены по имени (без секции) для «%s» "
-                            "(секция «%s»)",
-                            LABEL,
-                            name,
-                            sect_name,
-                        )
+                    # Фоллбэк по имени: НЕ используем, если сотрудник
+                    # уже есть в другой секции с привязанными данными —
+                    # иначе авансы/выплаты «размажутся» по всем секциям.
+                    if emp_iiko_id not in known_iiko_ids:
+                        sv = saved_by_name.get(name)
                 if sv is None:
-                    sv = [0, 0, 0, 0, 0]
-                nach, uderz, avans, v25, v10 = sv
+                    sv = ["", "", "", "", ""]
+                # 0 в ячейке → пусто (user-friendly)
+                nach = sv[0] if sv[0] else ""
+                uderz = sv[1] if sv[1] else ""
+                avans = sv[2] if sv[2] else ""
+                v25 = sv[3] if sv[3] else ""
+                v10 = sv[4] if sv[4] else ""
 
                 all_values.append(
                     [
