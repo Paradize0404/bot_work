@@ -290,6 +290,40 @@ async def get_distinct_iiko_accounts() -> list[str]:
     return sorted(result)
 
 
+async def get_distinct_product_groups_2nd_level() -> list[str]:
+    """
+    Получить список уникальных номенклатурных групп 2-го уровня от корня.
+
+    Используется для дропдауна в колонке L маппинга FinTablo:
+    «Ном. группа (закуп ТМЦ/Хозы)» → «Статья FinTablo (Закуп)».
+
+    Иерархия: корень → уровень 1 (SecondParent) → уровень 2 → ... → товар.
+    Возвращает названия групп на уровне 1 (первый ребёнок корня).
+    """
+    async with async_session() as session:
+        stmt = select(ProductGroup.id, ProductGroup.name, ProductGroup.parent_id).where(
+            ProductGroup.deleted.is_(False),
+            ProductGroup.name.isnot(None),
+        )
+        rows = (await session.execute(stmt)).all()
+
+    pg_map = {str(r[0]): {"name": r[1], "parent_id": str(r[2]) if r[2] else ""} for r in rows}
+
+    # Найти корни (без parent или parent не в карте)
+    roots = set()
+    for gid, info in pg_map.items():
+        if not info["parent_id"] or info["parent_id"] not in pg_map:
+            roots.add(gid)
+
+    # Уровень 1 = дети корней
+    level1_names: set[str] = set()
+    for gid, info in pg_map.items():
+        if info["parent_id"] in roots and gid not in roots:
+            level1_names.add(info["name"])
+
+    return sorted(level1_names)
+
+
 # ═══════════════════════════════════════════════════════
 # Основная логика: обновление ОПИУ в FinTablo
 # ═══════════════════════════════════════════════════════
