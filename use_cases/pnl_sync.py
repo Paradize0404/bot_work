@@ -292,36 +292,102 @@ async def get_distinct_iiko_accounts() -> list[str]:
 
 async def get_distinct_product_groups_2nd_level() -> list[str]:
     """
-    Получить список уникальных номенклатурных групп 2-го уровня от корня.
+    Получить список уникальных номенклатурных групп 2-го уровня,
+    реально встречающихся в приходных накладных ТМЦ/хозы складов за текущий месяц.
 
-    Используется для дропдауна в колонке L маппинга FinTablo:
-    «Ном. группа (закуп ТМЦ/Хозы)» → «Статья FinTablo (Закуп)».
-
-    Иерархия: корень → уровень 1 (SecondParent) → уровень 2 → ... → товар.
-    Возвращает названия групп на уровне 1 (первый ребёнок корня).
+    Алгоритм:
+      1. Загрузить incoming invoices (PROCESSED) за текущий месяц
+      2. Загрузить справочники products / stores / departments
+      3. Отфильтровать items, попадающие на ТМЦ/хозы склады
+      4. Для каждого product определить 2nd-level группу через
+         product.parent → ProductGroup.parent_id chain в БД
+      5. Вернуть отсортированный список уникальных названий
     """
+    now = now_kgd()
+    first_day = now.replace(day=1).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+
+    # ── 1. Загрузить данные параллельно ──
+    products, stores_raw, depts_raw, inc_docs = await asyncio.gather(
+        iiko_api.fetch_products(),
+        iiko_api.fetch_stores(),
+        iiko_api.fetch_departments(),
+        iiko_api.fetch_incoming_invoices(first_day, today),
+    )
+
+    # ── 2. Справочники ──
+    prod_parent: dict[str, str] = {}  # product_id → parent group UUID
+    for p in products:
+        prod_parent[p["id"]] = p.get("parent", "")
+
+    store_map: dict[str, dict] = {}
+    for s in stores_raw:
+        store_map[s["id"]] = {
+            "name": s.get("name", ""),
+            "dept_id": s.get("parentId", ""),
+        }
+    dept_map = {d["id"]: d.get("name", "?") for d in depts_raw}
+
+    # ── 3. Иерархия групп из БД ──
     async with async_session() as session:
-        stmt = select(ProductGroup.id, ProductGroup.name, ProductGroup.parent_id).where(
-            ProductGroup.deleted.is_(False),
-            ProductGroup.name.isnot(None),
-        )
+        stmt = select(ProductGroup.id, ProductGroup.name, ProductGroup.parent_id)
         rows = (await session.execute(stmt)).all()
+    pg_map = {
+        str(r[0]): {"name": r[1], "parent_id": str(r[2]) if r[2] else ""}
+        for r in rows
+    }
 
-    pg_map = {str(r[0]): {"name": r[1], "parent_id": str(r[2]) if r[2] else ""} for r in rows}
+    def _second_level(parent_id: str) -> str:
+        """Найти 2-й уровень от корня (SecondParent) по цепочке parent_id."""
+        chain = []
+        cur = parent_id
+        visited: set[str] = set()
+        while cur and cur not in visited:
+            visited.add(cur)
+            ginfo = pg_map.get(cur)
+            if not ginfo:
+                break
+            chain.append(ginfo["name"])
+            cur = ginfo["parent_id"]
+        # chain = [direct_parent, grandparent, ..., root] → reverse
+        chain.reverse()
+        if len(chain) >= 2:
+            return chain[1]  # level1 (2-й уровень от корня)
+        if chain:
+            return chain[0]
+        return ""
 
-    # Найти корни (без parent или parent не в карте)
-    roots = set()
-    for gid, info in pg_map.items():
-        if not info["parent_id"] or info["parent_id"] not in pg_map:
-            roots.add(gid)
+    def _is_tmc_or_hozy(store_name: str) -> bool:
+        low = store_name.lower()
+        return "тмц" in low or "хоз" in low
 
-    # Уровень 1 = дети корней
-    level1_names: set[str] = set()
-    for gid, info in pg_map.items():
-        if info["parent_id"] in roots and gid not in roots:
-            level1_names.add(info["name"])
+    # ── 4. Собрать группы из PROCESSED-накладных ──
+    groups: set[str] = set()
+    for doc in inc_docs:
+        if doc.get("status") != "PROCESSED":
+            continue
+        doc_store_id = doc.get("defaultStore", "")
+        for item in doc.get("items", []):
+            item_store = item.get("storeId", "") or doc_store_id
+            si = store_map.get(item_store)
+            if not si or not _is_tmc_or_hozy(si["name"]):
+                continue
+            pid = item.get("productId", "")
+            parent_gid = prod_parent.get(pid, "")
+            if not parent_gid:
+                continue
+            name = _second_level(parent_gid)
+            if name:
+                groups.add(name)
 
-    return sorted(level1_names)
+    logger.info(
+        "[pnl_sync] product_groups_2nd: %d групп из %d накладных (%s — %s)",
+        len(groups),
+        len(inc_docs),
+        first_day,
+        today,
+    )
+    return sorted(groups)
 
 
 # ═══════════════════════════════════════════════════════
