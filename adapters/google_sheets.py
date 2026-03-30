@@ -3935,10 +3935,10 @@ async def sync_fot_sheet(
         # Ключи: (section, iiko_id), (section, name), name — от самого точного к фоллбэку.
         # Не храним по голому iiko_id — один сотрудник может быть
         # в нескольких секциях с разными авансами/выплатами.
-        saved_sect_iiko: dict[tuple[str, str], list] = {}   # (section, iiko_id)
-        saved_sect_name: dict[tuple[str, str], list] = {}   # (section, name)
-        saved_by_name: dict[str, list] = {}                 # name only (fallback)
-        known_iiko_ids: set[str] = set()                    # iiko_id встречающиеся в saved
+        saved_sect_iiko: dict[tuple[str, str], list] = {}  # (section, iiko_id)
+        saved_sect_name: dict[tuple[str, str], list] = {}  # (section, name)
+        saved_by_name: dict[str, list] = {}  # name only (fallback)
+        known_iiko_ids: set[str] = set()  # iiko_id встречающиеся в saved
         if not is_new:
             try:
                 existing = ws.get_all_values(
@@ -4583,6 +4583,7 @@ async def sync_fintab_mapping_sheet(
       H-I    — Место приготовления (iiko) <-> Статья FinTablo (Выручка)
       J-K    — Тип оплаты (iiko) <-> Статья FinTablo (Выручка)
       L-M    — Ном. группа (закуп ТМЦ/Хозы) <-> Статья FinTablo (Закуп)
+      N-O    — Тип склада (Бар/Кухня/Конд) <-> Статья FinTablo (Закуп)
 
     Читает текущий ФОТ-лист для формирования выпадающих списков.
     Сохраняет существующие пользовательские данные (A-C, D-E, F-G, H-I).
@@ -4644,7 +4645,12 @@ async def sync_fintab_mapping_sheet(
             []
         )  # (cooking_place_type, ft_pnl_category)
         existing_pay_type_rev: list[tuple[str, str]] = []  # (pay_type, ft_pnl_category)
-        existing_purchase_group: list[tuple[str, str]] = []  # (product_group, ft_pnl_category)
+        existing_purchase_group: list[tuple[str, str]] = (
+            []
+        )  # (product_group, ft_pnl_category)
+        existing_purchase_store_type: list[tuple[str, str]] = (
+            []
+        )  # (store_type, ft_pnl_category)
         if not is_new:
             all_rows = ws.get_all_values()
             for row in all_rows[3:]:
@@ -4661,6 +4667,8 @@ async def sync_fintab_mapping_sheet(
                 k_val = str(row[10]).strip() if len(row) > 10 else ""
                 l_val = str(row[11]).strip() if len(row) > 11 else ""
                 m_val = str(row[12]).strip() if len(row) > 12 else ""
+                n_val = str(row[13]).strip() if len(row) > 13 else ""
+                o_val = str(row[14]).strip() if len(row) > 14 else ""
                 if a or b:
                     existing_emp.append((a, b, c))
                 if d or e:
@@ -4673,6 +4681,8 @@ async def sync_fintab_mapping_sheet(
                     existing_pay_type_rev.append((j_val, k_val))
                 if l_val or m_val:
                     existing_purchase_group.append((l_val, m_val))
+                if n_val or o_val:
+                    existing_purchase_store_type.append((n_val, o_val))
 
         # ── Опции для дропдаунов ──
         # Кол. A: "Имя (иико_uuid)" — уникальный идентификатор сотрудника
@@ -4714,6 +4724,8 @@ async def sync_fintab_mapping_sheet(
             "",
             "",
             "",
+            "",
+            "",
         ]
         section_row = [
             "👤 СОТРУДНИКИ",
@@ -4728,6 +4740,8 @@ async def sync_fintab_mapping_sheet(
             "",
             "",
             "📦 ЗАКУП ТМЦ/ХОЗЫ",
+            "",
+            "🏪 ЗАКУП Бар/Кухня/Конд",
             "",
         ]
         header_row = [
@@ -4744,6 +4758,8 @@ async def sync_fintab_mapping_sheet(
             "Статья FinTablo (Выручка)",
             "Ном. группа (закуп ТМЦ/Хозы)",
             "Статья FinTablo (Закуп)",
+            "Тип склада (Закуп)",
+            "Статья FinTablo (Закуп)",
         ]
         n_rows = max(
             len(existing_emp),
@@ -4752,6 +4768,7 @@ async def sync_fintab_mapping_sheet(
             len(existing_revenue),
             len(existing_pay_type_rev),
             len(existing_purchase_group),
+            len(existing_purchase_store_type),
             1,
         )
         data_rows: list[list[str]] = []
@@ -4766,13 +4783,38 @@ async def sync_fintab_mapping_sheet(
                 existing_pay_type_rev[i] if i < len(existing_pay_type_rev) else ("", "")
             )
             l_val, m_val = (
-                existing_purchase_group[i] if i < len(existing_purchase_group) else ("", "")
+                existing_purchase_group[i]
+                if i < len(existing_purchase_group)
+                else ("", "")
             )
-            data_rows.append([a, b, c, d, e, f_val, g_val, h_val, i_val, j_val, k_val, l_val, m_val])
+            n_val, o_val = (
+                existing_purchase_store_type[i]
+                if i < len(existing_purchase_store_type)
+                else ("", "")
+            )
+            data_rows.append(
+                [
+                    a,
+                    b,
+                    c,
+                    d,
+                    e,
+                    f_val,
+                    g_val,
+                    h_val,
+                    i_val,
+                    j_val,
+                    k_val,
+                    l_val,
+                    m_val,
+                    n_val,
+                    o_val,
+                ]
+            )
 
-        # Убедимся что лист имеет достаточно колонок (13: A-M)
-        if ws.col_count < 13:
-            ws.resize(cols=13)
+        # Убедимся что лист имеет достаточно колонок (15: A-O)
+        if ws.col_count < 15:
+            ws.resize(cols=15)
         ws.clear()
         ws.update(
             values=[title_row, section_row, header_row] + data_rows, range_name="A1"
@@ -4781,17 +4823,17 @@ async def sync_fintab_mapping_sheet(
         # ── batchUpdate: форматирование + дропдауны ──
         requests: list[dict] = []
 
-        # Объединение строки 1 (заголовок) — одна ячейка A-M
+        # Объединение строки 1 (заголовок) — одна ячейка A-O
         requests.append(
             {
                 "mergeCells": {
-                    "range": _sr(sheet_id, 0, 1, 0, 13),
+                    "range": _sr(sheet_id, 0, 1, 0, 15),
                     "mergeType": "MERGE_ALL",
                 }
             }
         )
-        # Объединение строки 2 (секции): A-C, D-E, F-G, H-K, L-M
-        for c0, c1 in [(0, 3), (3, 5), (5, 7), (7, 11), (11, 13)]:
+        # Объединение строки 2 (секции): A-C, D-E, F-G, H-K, L-M, N-O
+        for c0, c1 in [(0, 3), (3, 5), (5, 7), (7, 11), (11, 13), (13, 15)]:
             requests.append(
                 {
                     "mergeCells": {
@@ -4805,7 +4847,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 0, 1, 0, 13),
+                    "range": _sr(sheet_id, 0, 1, 0, 15),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.20, 0.40, 0.78),
@@ -4826,7 +4868,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 1, 2, 0, 13),
+                    "range": _sr(sheet_id, 1, 2, 0, 15),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.85, 0.91, 0.98),
@@ -4842,7 +4884,7 @@ async def sync_fintab_mapping_sheet(
         requests.append(
             {
                 "repeatCell": {
-                    "range": _sr(sheet_id, 2, 3, 0, 13),
+                    "range": _sr(sheet_id, 2, 3, 0, 15),
                     "cell": {
                         "userEnteredFormat": {
                             "backgroundColor": _rgb(0.90, 0.90, 0.90),
@@ -4870,7 +4912,7 @@ async def sync_fintab_mapping_sheet(
 
         # Ширины колонок: A=200, B=220, C=180, D=200, E=200, F=220, G=220, H=220, I=220, J=220, K=220, L=240, M=220
         for ci, px in enumerate(
-            [200, 220, 180, 200, 200, 220, 220, 220, 220, 220, 220, 240, 220]
+            [200, 220, 180, 200, 200, 220, 220, 220, 220, 220, 220, 240, 220, 220, 220]
         ):
             requests.append(
                 {
@@ -5013,6 +5055,26 @@ async def sync_fintab_mapping_sheet(
                 {
                     "setDataValidation": {
                         "range": _sr(sheet_id, data_start, data_end, 12, 13),
+                        "rule": _dv_list(ft_pnl_options),
+                    }
+                }
+            )
+        # Col N — тип склада (Закуп Бар/Кухня/Конд) — хардкод
+        _store_type_options = ["Бар", "Кухня", "Кондитерка"]
+        requests.append(
+            {
+                "setDataValidation": {
+                    "range": _sr(sheet_id, data_start, data_end, 13, 14),
+                    "rule": _dv_list(_store_type_options),
+                }
+            }
+        )
+        # Col O — статья FinTablo (Закуп Бар/Кухня/Конд) — ПиУ-категории
+        if ft_pnl_options:
+            requests.append(
+                {
+                    "setDataValidation": {
+                        "range": _sr(sheet_id, data_start, data_end, 14, 15),
                         "rule": _dv_list(ft_pnl_options),
                     }
                 }
@@ -5248,6 +5310,7 @@ async def read_fintab_all_mappings() -> dict[str, list[dict]]:
             "revenue": [{"cooking_place_type": str, "ft_pnl_category_id": int, "ft_pnl_category_name": str}],
             "pay_type": [{"pay_type_name": str, "ft_pnl_category_id": int, "ft_pnl_category_name": str}],
             "purchase_group": [{"group_name": str, "ft_pnl_category_id": int, "ft_pnl_category_name": str}],
+            "purchase_store_type": [{"store_type": str, "ft_pnl_category_id": int, "ft_pnl_category_name": str}],
         }
 
     Один запрос к Google Sheets вместо нескольких.
@@ -5260,7 +5323,14 @@ async def read_fintab_all_mappings() -> dict[str, list[dict]]:
             ws = spreadsheet.worksheet(_FINTAB_MAPPING_TAB)
         except gspread.exceptions.WorksheetNotFound:
             logger.warning("[%s] read_fintab_all_mappings: вкладка не найдена", LABEL)
-            return {"opiu": [], "dept_direction": [], "revenue": [], "pay_type": [], "purchase_group": []}
+            return {
+                "opiu": [],
+                "dept_direction": [],
+                "revenue": [],
+                "pay_type": [],
+                "purchase_group": [],
+                "purchase_store_type": [],
+            }
 
         all_rows = ws.get_all_values()
 
@@ -5384,15 +5454,41 @@ async def read_fintab_all_mappings() -> dict[str, list[dict]]:
                 }
             )
 
+        # ── Маппинг закупа Бар/Кухня/Конд (N-O): Тип склада → Статья FinTablo ──
+        purchase_store_type_results: list[dict] = []
+        for row in all_rows[3:]:
+            n_val = str(row[13]).strip() if len(row) > 13 else ""
+            o_val = str(row[14]).strip() if len(row) > 14 else ""
+            if not n_val or not o_val:
+                continue
+            m = re.search(r"\((\d+)\)\s*$", o_val)
+            if not m:
+                logger.warning(
+                    "[%s] read_fintab_all_mappings: не удалось распарсить FT ID закупа-склада из «%s»",
+                    LABEL,
+                    o_val,
+                )
+                continue
+            ft_id = int(m.group(1))
+            ft_name = o_val[: m.start()].strip()
+            purchase_store_type_results.append(
+                {
+                    "store_type": n_val,
+                    "ft_pnl_category_id": ft_id,
+                    "ft_pnl_category_name": ft_name,
+                }
+            )
+
         logger.info(
             "[%s] read_fintab_all_mappings: %d ОПИУ + %d подразделение→направление"
-            " + %d выручка + %d тип оплаты + %d закуп-группы",
+            " + %d выручка + %d тип оплаты + %d закуп-группы + %d закуп-склады",
             LABEL,
             len(opiu_results),
             len(dept_results),
             len(revenue_results),
             len(pay_type_results),
             len(purchase_group_results),
+            len(purchase_store_type_results),
         )
         return {
             "opiu": opiu_results,
@@ -5400,6 +5496,7 @@ async def read_fintab_all_mappings() -> dict[str, list[dict]]:
             "revenue": revenue_results,
             "pay_type": pay_type_results,
             "purchase_group": purchase_group_results,
+            "purchase_store_type": purchase_store_type_results,
         }
 
     return await asyncio.to_thread(_sync)

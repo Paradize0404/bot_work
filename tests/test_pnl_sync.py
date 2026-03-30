@@ -411,7 +411,7 @@ async def test_update_opiu_writeoff_e2e():
     mock_mappings = {
         "opiu": [
             {
-                "iiko_account_name": "[Группа] Молоко/Яйца",
+                "iiko_account_name": "Кухня (Клиническая)",
                 "ft_pnl_category_id": 100,
                 "ft_pnl_category_name": "Сырьевая себестоимость",
             },

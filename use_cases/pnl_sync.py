@@ -5,7 +5,7 @@ Use-case: синхронизация ОПИУ (Отчёт о прибылях и
   1. Загрузить отчёт по проводкам из iiko (OLAP TRANSACTIONS по пресету)
   2. Считать маппинг iiko Account.Name → FT PnL category из Google Sheets
   3. Агрегировать суммы по FT PnL-категориям:
-     - Приоритет: Product.SecondParent (группа) > Account.Name (счёт)
+     - Account.Name → FT PnL-категория (маппинг F-G)
      - WRITEOFF → «Списания продуктов» + вычет из исходной категории
   4. Для каждой FT-категории — параллельная синхронизация через asyncio.gather
   5. Ежедневный запуск в 07:00 по расписанию
@@ -34,7 +34,7 @@ from adapters import iiko_api
 from adapters.google_sheets import read_fintab_all_mappings
 from db.engine import async_session_factory as async_session
 from db.ft_models import FTDirection, FTPnlCategory
-from db.models import Entity, ProductGroup
+from db.models import Entity, ProductGroup, PastryNomenclatureGroup
 from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,9 @@ OPIU_PRESET_ID = "4120ac6e-b8b3-4e97-bd75-dda8c864b4c3"
 
 # Метка для PnL-записей, созданных ботом (чтобы отличать от ручных)
 BOT_COMMENT = "iiko-bot-auto"
+
+# Метка для PnL-записей закупа
+BOT_COMMENT_PURCHASE = "iiko-bot-purchase"
 
 # Название FT PnL-категории, куда попадают списания (WRITEOFF)
 WRITEOFF_FT_CATEGORY_NAME = "Списания продуктов"
@@ -226,12 +229,10 @@ async def fetch_iiko_accounts_from_preset(
         elif value <= 0:
             continue
 
-        pg = (row.get("Product.SecondParent") or "").strip() or None
         dept = (row.get("Department") or "").strip() or None
         result.append(
             {
                 "account_name": account_name,
-                "product_group": pg,
                 "department": dept,
                 "transaction_type": tt,
                 "sum": value,
@@ -243,17 +244,12 @@ async def fetch_iiko_accounts_from_preset(
 
 async def get_distinct_iiko_accounts() -> list[str]:
     """
-    Получить список вариантов для колонки F (Счет iiko / Группа).
+    Получить список вариантов для колонки F (Счет iiko ОПИУ).
 
-    Возвращает объединённый отсортированный список:
-    - Счета из iiko_entity (root_type='Account') → «Название (uuid)»
-    - Товарные группы из iiko_product_group → «[Группа] Название»
-
-    Записи вида «[Группа] Алкоголь» используются в маппинге ОПИУ для
-    сопоставления с полем Product.SecondParent из OLAP-отчёта.
+    Возвращает отсортированный список счетов из iiko_entity
+    (root_type='Account') в формате «Название (uuid)».
     """
     async with async_session() as session:
-        # Счета
         stmt_acc = (
             select(Entity.name, Entity.id)
             .where(Entity.root_type == "Account")
@@ -263,26 +259,11 @@ async def get_distinct_iiko_accounts() -> list[str]:
         )
         rows_acc = (await session.execute(stmt_acc)).all()
 
-        # Товарные группы (Product.SecondParent в OLAP)
-        stmt_grp = (
-            select(ProductGroup.name)
-            .where(ProductGroup.deleted.is_(False))
-            .where(ProductGroup.name.isnot(None))
-            .order_by(ProductGroup.name)
-        )
-        rows_grp = (await session.execute(stmt_grp)).scalars().all()
-
     seen: set[str] = set()
     result: list[str] = []
 
     for name, uid in rows_acc:
         label = f"{name} ({uid})"
-        if label not in seen:
-            seen.add(label)
-            result.append(label)
-
-    for grp_name in rows_grp:
-        label = f"[Группа] {grp_name}"
         if label not in seen:
             seen.add(label)
             result.append(label)
@@ -333,8 +314,7 @@ async def get_distinct_product_groups_2nd_level() -> list[str]:
         stmt = select(ProductGroup.id, ProductGroup.name, ProductGroup.parent_id)
         rows = (await session.execute(stmt)).all()
     pg_map = {
-        str(r[0]): {"name": r[1], "parent_id": str(r[2]) if r[2] else ""}
-        for r in rows
+        str(r[0]): {"name": r[1], "parent_id": str(r[2]) if r[2] else ""} for r in rows
     }
 
     def _second_level(parent_id: str) -> str:
@@ -479,7 +459,7 @@ async def update_opiu(
     # ── 4. Агрегация ──
     #   ВСЕ транзакции разбиваются по department → direction (из D-E)
     #   WRITEOFF → «Списания продуктов» + вычет из исходной категории
-    #   Остальные → приоритет: [Группа] > Account.Name (маппинг F-G)
+    #   Остальные → Account.Name (маппинг F-G)
     #   Ключ: (cat_id, direction_id | None)
     ft_totals: dict[tuple[int, int | None], float] = defaultdict(float)
     ft_names: dict[int, str] = {}
@@ -492,7 +472,6 @@ async def update_opiu(
     for row in iiko_rows:
         value = row["sum"]
         account_name = row["account_name"]
-        product_group = row["product_group"]
         department = row["department"]
         tx_type = (row["transaction_type"] or "").upper()
 
@@ -507,14 +486,10 @@ async def update_opiu(
             ukey = f"dept={department} (нет направления)"
             unmapped_keys.add(ukey)
 
-        # ── Определяем FT-категорию по стандартному маппингу ──
+        # ── Определяем FT-категорию по маппингу (F-G) ──
         mapped_cat_id: int | None = None
         mapped_cat_name: str = ""
-        if product_group:
-            group_key = f"[Группа] {product_group}"
-            if group_key in mapping_index:
-                mapped_cat_id, mapped_cat_name = mapping_index[group_key]
-        if mapped_cat_id is None and account_name in mapping_index:
+        if account_name in mapping_index:
             mapped_cat_id, mapped_cat_name = mapping_index[account_name]
 
         # ── WRITEOFF → «Списания продуктов» + вычет из исходной категории ──
@@ -533,10 +508,9 @@ async def update_opiu(
                 ft_names[mapped_cat_id] = mapped_cat_name
             else:
                 logger.warning(
-                    "[pnl_sync] WRITEOFF без маппинга: account=%s group=%s sum=%.2f"
+                    "[pnl_sync] WRITEOFF без маппинга: account=%s sum=%.2f"
                     " — не вычтено из категории",
                     account_name,
-                    product_group,
                     value,
                 )
             continue
@@ -806,6 +780,394 @@ async def _sync_one_category(
             desired_bot_value,
             date_mm_yyyy,
             direction_id,
+        )
+
+    return "updated"
+
+
+# ═══════════════════════════════════════════════════════
+# Источник 2: Закуп (Incoming Invoices → FinTablo PnL)
+# ═══════════════════════════════════════════════════════
+
+
+def _classify_store(store_name: str, product_is_pastry: bool) -> str:
+    """Классифицировать склад по имени и признаку кондитерского товара.
+
+    Возвращает: 'тмц' | 'хозы' | 'бар' | 'кондитерка' | 'кухня' | ''
+    """
+    low = store_name.lower()
+    if "тмц" in low:
+        return "тмц"
+    if "хоз" in low:
+        return "хозы"
+    if "бар" in low:
+        return "бар"
+    if "кухн" in low or "кухня" in low:
+        return "кондитерка" if product_is_pastry else "кухня"
+    return ""
+
+
+async def update_purchases(
+    *,
+    triggered_by: str | None = None,
+    target_date: datetime | None = None,
+) -> dict:
+    """
+    Обновить Закуп в FinTablo по данным приходных накладных iiko.
+
+    Источники маппинга:
+      - L-M (purchase_group): для ТМЦ/Хозы складов → 2nd-level группа → FT PnL
+      - N-O (purchase_store_type): для Бар/Кухня/Кондитерка → тип склада → FT PnL
+
+    Возвращает dict с итогами.
+    """
+    t0 = time.monotonic()
+    now = target_date or now_kgd()
+    date_mm_yyyy = now.strftime("%m.%Y")
+    trigger_label = triggered_by or "manual"
+
+    logger.info(
+        "[pnl_sync] Старт Закуп за %s (triggered_by=%s)", date_mm_yyyy, trigger_label
+    )
+
+    # ── 1. Период: весь месяц ──
+    first_day = now.replace(day=1)
+    if now.month == 12:
+        next_month = now.replace(year=now.year + 1, month=1, day=1)
+    else:
+        next_month = now.replace(month=now.month + 1, day=1)
+    date_from = first_day.strftime("%Y-%m-%d")
+    date_to = next_month.strftime("%Y-%m-%d")
+
+    # ── 2. Загрузить данные параллельно ──
+    products, stores_raw, depts_raw, inc_docs = await asyncio.gather(
+        iiko_api.fetch_products(),
+        iiko_api.fetch_stores(),
+        iiko_api.fetch_departments(),
+        iiko_api.fetch_incoming_invoices(date_from, date_to),
+    )
+
+    # ── 3. Справочники ──
+    prod_parent: dict[str, str] = {}
+    for p in products:
+        prod_parent[p["id"]] = p.get("parent", "")
+
+    store_map: dict[str, dict] = {}
+    for s in stores_raw:
+        store_map[s["id"]] = {
+            "name": s.get("name", ""),
+            "dept_id": s.get("parentId", ""),
+        }
+    dept_map = {d["id"]: d.get("name", "?") for d in depts_raw}
+
+    # ── 4. Иерархия групп из БД + pastry-группы ──
+    async with async_session() as session:
+        stmt_pg = select(ProductGroup.id, ProductGroup.name, ProductGroup.parent_id)
+        rows_pg = (await session.execute(stmt_pg)).all()
+
+        stmt_pastry = select(PastryNomenclatureGroup.group_id)
+        pastry_ids = set(
+            str(r) for r in (await session.execute(stmt_pastry)).scalars().all()
+        )
+
+    pg_map: dict[str, dict] = {
+        str(r[0]): {"name": r[1], "parent_id": str(r[2]) if r[2] else ""}
+        for r in rows_pg
+    }
+
+    def _second_level(parent_id: str) -> str:
+        chain: list[str] = []
+        cur = parent_id
+        visited: set[str] = set()
+        while cur and cur not in visited:
+            visited.add(cur)
+            ginfo = pg_map.get(cur)
+            if not ginfo:
+                break
+            chain.append(ginfo["name"])
+            cur = ginfo["parent_id"]
+        chain.reverse()
+        if len(chain) >= 2:
+            return chain[1]
+        if chain:
+            return chain[0]
+        return ""
+
+    def _is_pastry_product(product_id: str) -> bool:
+        """Продукт является кондитерским (его группа в pastry_nomenclature_group)."""
+        cur = prod_parent.get(product_id, "")
+        visited: set[str] = set()
+        while cur and cur not in visited:
+            visited.add(cur)
+            if cur in pastry_ids:
+                return True
+            ginfo = pg_map.get(cur)
+            if not ginfo:
+                break
+            cur = ginfo["parent_id"]
+        return False
+
+    # ── 5. Маппинг из Google Sheets ──
+    all_maps = await read_fintab_all_mappings()
+    purchase_group_map = all_maps["purchase_group"]  # L-M
+    purchase_store_type_map = all_maps["purchase_store_type"]  # N-O
+    dept_dir_map = all_maps["dept_direction"]  # D-E
+
+    direction_map = await _get_direction_map()
+
+    # Индексы маппинга
+    group_index: dict[str, tuple[int, str]] = {
+        m["group_name"]: (m["ft_pnl_category_id"], m["ft_pnl_category_name"])
+        for m in purchase_group_map
+    }
+    store_type_index: dict[str, tuple[int, str]] = {
+        m["store_type"]: (m["ft_pnl_category_id"], m["ft_pnl_category_name"])
+        for m in purchase_store_type_map
+    }
+
+    # ── 6. Агрегация из PROCESSED-накладных ──
+    ft_totals: dict[tuple[int, int | None], float] = defaultdict(float)
+    ft_names: dict[int, str] = {}
+    unmapped_keys: set[str] = set()
+    unmapped_sums: dict[str, float] = defaultdict(float)
+    detail_by_store_type: dict[str, float] = defaultdict(float)
+
+    for doc in inc_docs:
+        if doc.get("status") != "PROCESSED":
+            continue
+        doc_store_id = doc.get("defaultStore", "")
+
+        for item in doc.get("items", []):
+            try:
+                item_sum = float(item.get("sum", 0) or 0)
+            except (ValueError, TypeError):
+                item_sum = 0.0
+            if item_sum <= 0:
+                continue
+
+            item_store_id = item.get("storeId", "") or doc_store_id
+            si = store_map.get(item_store_id)
+            if not si:
+                unmapped_keys.add(f"store={item_store_id} (unknown)")
+                unmapped_sums[f"store={item_store_id}"] += item_sum
+                continue
+
+            store_name = si["name"]
+            dept_id = si["dept_id"]
+            dept_name = dept_map.get(dept_id, "")
+
+            pid = item.get("productId", "")
+            parent_gid = prod_parent.get(pid, "")
+            is_pastry = _is_pastry_product(pid)
+            stype = _classify_store(store_name, is_pastry)
+
+            if not stype:
+                continue  # склад не относится к закупу
+
+            detail_by_store_type[stype] += item_sum
+
+            # Определяем direction
+            dir_name = (
+                _resolve_department_direction(dept_name, dept_dir_map)
+                if dept_name
+                else None
+            )
+            dir_id = direction_map.get(dir_name) if dir_name else None
+
+            # Маппинг в FT PnL-категорию
+            mapped_cat_id: int | None = None
+            mapped_cat_name: str = ""
+
+            if stype in ("тмц", "хозы"):
+                # L-M маппинг по 2nd-level группе
+                group_name = _second_level(parent_gid) if parent_gid else ""
+                if group_name and group_name in group_index:
+                    mapped_cat_id, mapped_cat_name = group_index[group_name]
+                elif group_name:
+                    ukey = f"группа={group_name} (ТМЦ/Хозы)"
+                    unmapped_keys.add(ukey)
+                    unmapped_sums[ukey] += item_sum
+                    continue
+                else:
+                    ukey = f"product={pid} (нет группы)"
+                    unmapped_keys.add(ukey)
+                    unmapped_sums[ukey] += item_sum
+                    continue
+            else:
+                # N-O маппинг по типу склада (Бар/Кухня/Кондитерка)
+                display_type = stype.capitalize()
+                if stype == "кондитерка":
+                    display_type = "Кондитерка"
+                elif stype == "бар":
+                    display_type = "Бар"
+                elif stype == "кухня":
+                    display_type = "Кухня"
+
+                if display_type in store_type_index:
+                    mapped_cat_id, mapped_cat_name = store_type_index[display_type]
+                else:
+                    ukey = f"склад-тип={display_type}"
+                    unmapped_keys.add(ukey)
+                    unmapped_sums[ukey] += item_sum
+                    continue
+
+            ft_totals[(mapped_cat_id, dir_id)] += item_sum
+            ft_names[mapped_cat_id] = mapped_cat_name
+
+    # Округлить
+    for key in ft_totals:
+        ft_totals[key] = round(ft_totals[key], 2)
+    ft_totals = {k: v for k, v in ft_totals.items() if v > 0.005}
+
+    total_allocated = sum(ft_totals.values())
+    total_unmapped = sum(unmapped_sums.values())
+
+    logger.info(
+        "[pnl_sync] Закуп агрегация: %d записей FT, allocated=%.2f, unmapped=%.2f (%d keys)",
+        len(ft_totals),
+        total_allocated,
+        total_unmapped,
+        len(unmapped_keys),
+    )
+
+    # ── 7. Записываем в FinTablo ──
+    updated = 0
+    skipped = 0
+    errors = 0
+    details: list[str] = []
+
+    tasks: list[tuple[int, int | None, float, str]] = []
+    for (cat_id, direction_id), iiko_total in ft_totals.items():
+        cat_name = ft_names.get(cat_id, f"ID:{cat_id}")
+        dir_label = ""
+        if direction_id:
+            dir_label = next(
+                (n for n, d in direction_map.items() if d == direction_id), ""
+            )
+        display_name = f"{cat_name} / {dir_label}" if dir_label else cat_name
+        tasks.append((cat_id, direction_id, iiko_total, display_name))
+
+    async def _do_sync(
+        cat_id: int, direction_id: int | None, iiko_total: float, display_name: str
+    ) -> tuple[str, str]:
+        try:
+            result = await _sync_one_purchase_category(
+                cat_id,
+                display_name,
+                iiko_total,
+                date_mm_yyyy,
+                direction_id=direction_id,
+            )
+            return (result, display_name if result != "skipped" else "")
+        except Exception:
+            logger.exception(
+                "[pnl_sync] Закуп ошибка для %s (id=%d, dir=%s)",
+                display_name,
+                cat_id,
+                direction_id,
+            )
+            return ("error", display_name)
+
+    results = await asyncio.gather(
+        *[_do_sync(cid, did, total, dn) for cid, did, total, dn in tasks]
+    )
+
+    for (cid, did, total, dn), (status, _) in zip(tasks, results):
+        if status == "updated":
+            updated += 1
+            details.append(f"✅ {dn}: {total:.2f}")
+        elif status == "skipped":
+            skipped += 1
+        elif status == "error":
+            errors += 1
+            details.append(f"❌ {dn}: ошибка")
+        else:
+            details.append(f"ℹ️ {dn}: {status}")
+
+    elapsed = time.monotonic() - t0
+
+    logger.info(
+        "[pnl_sync] Закуп за %s завершён: upd=%d, skip=%d, err=%d, %.1f сек",
+        date_mm_yyyy,
+        updated,
+        skipped,
+        errors,
+        elapsed,
+    )
+
+    return {
+        "updated": updated,
+        "skipped": skipped,
+        "errors": errors,
+        "details": details,
+        "unmapped_keys": sorted(unmapped_keys),
+        "unmapped_sums": dict(unmapped_sums),
+        "total_allocated": round(total_allocated, 2),
+        "total_unmapped": round(total_unmapped, 2),
+        "detail_by_store_type": dict(detail_by_store_type),
+        "elapsed": round(elapsed, 1),
+        "month": date_mm_yyyy,
+    }
+
+
+async def _sync_one_purchase_category(
+    cat_id: int,
+    cat_name: str,
+    iiko_total: float,
+    date_mm_yyyy: str,
+    *,
+    direction_id: int | None = None,
+) -> str:
+    """Синхронизировать одну FT PnL-категорию закупа (аналог _sync_one_category)."""
+    existing_items = await fintablo_api.fetch_pnl_items(
+        category_id=cat_id,
+        date_mm_yyyy=date_mm_yyyy,
+        direction_id=direction_id,
+    )
+
+    bot_items = [
+        it
+        for it in existing_items
+        if (it.get("comment") or "").startswith(BOT_COMMENT_PURCHASE)
+    ]
+    other_items = [
+        it
+        for it in existing_items
+        if not (it.get("comment") or "").startswith(BOT_COMMENT_PURCHASE)
+    ]
+
+    ft_bot_total = sum(float(it.get("value", 0)) for it in bot_items)
+    ft_other_total = sum(float(it.get("value", 0)) for it in other_items)
+
+    desired_bot_value = round(iiko_total - ft_other_total, 2)
+
+    if desired_bot_value <= 0 and not bot_items:
+        return "skipped"
+
+    if abs(round(ft_bot_total, 2) - desired_bot_value) < 0.01:
+        return "skipped"
+
+    logger.info(
+        "[pnl_sync] Закуп %s: iiko=%.2f, ft_other=%.2f, ft_bot=%.2f → desired=%.2f",
+        cat_name,
+        iiko_total,
+        ft_other_total,
+        ft_bot_total,
+        desired_bot_value,
+    )
+
+    for item in bot_items:
+        item_id = item.get("id")
+        if item_id:
+            await fintablo_api.delete_pnl_item(int(item_id))
+
+    if desired_bot_value > 0:
+        await fintablo_api.create_pnl_item(
+            category_id=cat_id,
+            value=desired_bot_value,
+            date_mm_yyyy=date_mm_yyyy,
+            comment=BOT_COMMENT_PURCHASE,
+            direction_id=direction_id,
         )
 
     return "updated"

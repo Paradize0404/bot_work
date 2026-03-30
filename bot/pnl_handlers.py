@@ -108,10 +108,10 @@ async def pnl_menu(message: Message, state: FSMContext) -> None:
 
 
 async def _run_opiu(call: CallbackQuery, target_date: datetime | None) -> None:
-    """Общая логика запуска ОПИУ + Выручки для текущего / прошлого месяца."""
+    """Общая логика запуска ОПИУ + Выручки + Закупа для текущего / прошлого месяца."""
     label = target_date.strftime("%m.%Y") if target_date else "текущий"
     await call.message.edit_text(
-        f"⏳ Обновляю ОПИУ + Выручку за <b>{label}</b>...\n"
+        f"⏳ Обновляю ОПИУ + Выручку + Закуп за <b>{label}</b>...\n"
         "Это может занять до минуты.",
         parse_mode="HTML",
     )
@@ -136,6 +136,15 @@ async def _run_opiu(call: CallbackQuery, target_date: datetime | None) -> None:
     except Exception:
         logger.exception("[pnl] Ошибка update_revenue")
 
+    # ── Закуп ──
+    purchase_result = None
+    try:
+        purchase_result = await pnl_sync.update_purchases(
+            triggered_by=triggered_by, target_date=target_date
+        )
+    except Exception:
+        logger.exception("[pnl] Ошибка update_purchases")
+
     # ── Обновляем дропдауны маппинга ──
     await refresh_mapping_dropdowns()
 
@@ -159,6 +168,16 @@ async def _run_opiu(call: CallbackQuery, target_date: datetime | None) -> None:
             has_problems = True
     else:
         parts.append("💰 <b>Выручка</b>: ❌ ошибка")
+        has_problems = True
+
+    parts.append("")  # разделитель
+
+    if purchase_result:
+        parts.append(format_purchase_result(purchase_result))
+        if purchase_result.get("errors") or purchase_result.get("unmapped_keys"):
+            has_problems = True
+    else:
+        parts.append("📦 <b>Закуп</b>: ❌ ошибка")
         has_problems = True
 
     text = "\n".join(parts)
@@ -302,5 +321,57 @@ def format_revenue_result(result: dict) -> str:
             lines.append(f"  … и ещё {len(unmapped) - 15}")
         lines.append("")
         lines.append("Настройте соответствие в «Маппинг FinTablo» (колонки H-K)")
+
+    return "\n".join(lines)
+
+
+def format_purchase_result(result: dict) -> str:
+    """Форматировать результат update_purchases для отправки в чат."""
+    upd = result.get("updated", 0)
+    skip = result.get("skipped", 0)
+    err = result.get("errors", 0)
+    elapsed = result.get("elapsed", 0)
+    details = result.get("details", [])
+    unmapped = result.get("unmapped_keys", [])
+    unmapped_sums = result.get("unmapped_sums", {})
+    total_allocated = result.get("total_allocated", 0)
+    total_unmapped = result.get("total_unmapped", 0)
+    detail_by_store_type = result.get("detail_by_store_type", {})
+
+    month = result.get("month", "")
+    month_label = f" за {month}" if month else ""
+    lines = [
+        f"📦 <b>Обновление Закупа{month_label}</b>",
+        f"Обновлено: {upd}  |  Пропущено: {skip}  |  Ошибок: {err}",
+        f"⏱ {elapsed} сек",
+        "",
+    ]
+
+    if detail_by_store_type:
+        lines.append("📊 По типам складов:")
+        for stype, amount in sorted(detail_by_store_type.items()):
+            lines.append(f"   {stype}: {amount:,.2f}")
+        lines.append(f"   → в FT: {total_allocated:,.2f}")
+        if total_unmapped:
+            lines.append(f"   → не разнесено: {total_unmapped:,.2f}")
+        lines.append("")
+
+    if details:
+        lines.extend(details[:20])
+
+    if unmapped:
+        lines.append("")
+        lines.append("⚠️ <b>Не удалось разнести:</b>")
+        for key in unmapped[:15]:
+            amount = unmapped_sums.get(key)
+            suffix = f"  ({amount:,.2f})" if amount else ""
+            lines.append(f"  • {key}{suffix}")
+        if len(unmapped) > 15:
+            lines.append(f"  … и ещё {len(unmapped) - 15}")
+        lines.append("")
+        lines.append(
+            "Настройте соответствие в «Маппинг FinTablo»"
+            " (L-M для ТМЦ/Хозы, N-O для Бар/Кухня/Конд)"
+        )
 
     return "\n".join(lines)
