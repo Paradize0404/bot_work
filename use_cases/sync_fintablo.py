@@ -573,61 +573,66 @@ async def sync_all_fintablo(
 
     # ── Обновляем дропдауны в «Маппинг FinTablo» — только при ручном запуске ──
     if triggered_by and triggered_by != "scheduler":
-        try:
-            today = now_kgd().date()
-            _month_names = {
-                1: "январь",
-                2: "февраль",
-                3: "март",
-                4: "апрель",
-                5: "май",
-                6: "июнь",
-                7: "июль",
-                8: "август",
-                9: "сентябрь",
-                10: "октябрь",
-                11: "ноябрь",
-                12: "декабрь",
-            }
-            fot_tab = f"ФОТ {_month_names[today.month]} {today.year}"
-            ft_emps = await fintablo_api.fetch_employees()
-            ft_dirs = await fintablo_api.fetch_directions()
-            # Получаем статьи ПиУ и счета iiko из БД для дропдаунов G и F
-            from sqlalchemy import select as _select
-            from use_cases.pnl_sync import get_distinct_iiko_accounts
-            from use_cases.pnl_sync import get_distinct_product_groups_2nd_level
-            from use_cases.day_report import get_distinct_cooking_place_types
-            from use_cases.day_report import get_distinct_pay_types
-
-            async with async_session_factory() as _sess:
-                _pnl_rows = (
-                    (
-                        await _sess.execute(
-                            _select(FTPnlCategory).order_by(FTPnlCategory.name)
-                        )
-                    )
-                    .scalars()
-                    .all()
-                )
-                ft_pnl_cats = [{"id": r.id, "name": r.name} for r in _pnl_rows]
-            iiko_accs = await get_distinct_iiko_accounts()
-            cooking_places = await get_distinct_cooking_place_types()
-            iiko_pay_types = await get_distinct_pay_types()
-            product_groups_2nd = await get_distinct_product_groups_2nd_level()
-            await sync_fintab_mapping_sheet(
-                fot_tab_name=fot_tab,
-                ft_employees=ft_emps,
-                ft_directions=ft_dirs,
-                ft_pnl_categories=ft_pnl_cats,
-                iiko_accounts=iiko_accs,
-                cooking_place_types=cooking_places,
-                pay_types=iiko_pay_types,
-                product_groups_2nd=product_groups_2nd,
-            )
-        except Exception:
-            logger.exception("[FT] Ошибка обновления «Маппинг FinTablo»")
+        await refresh_mapping_dropdowns()
 
     return report
+
+
+async def refresh_mapping_dropdowns() -> None:
+    """Обновить дропдауны в «Маппинг FinTablo» (вкладка ФОТ + все справочники)."""
+    try:
+        today = now_kgd().date()
+        _month_names = {
+            1: "январь",
+            2: "февраль",
+            3: "март",
+            4: "апрель",
+            5: "май",
+            6: "июнь",
+            7: "июль",
+            8: "август",
+            9: "сентябрь",
+            10: "октябрь",
+            11: "ноябрь",
+            12: "декабрь",
+        }
+        fot_tab = f"ФОТ {_month_names[today.month]} {today.year}"
+        ft_emps = await fintablo_api.fetch_employees()
+        ft_dirs = await fintablo_api.fetch_directions()
+        # Получаем статьи ПиУ и счета iiko из БД для дропдаунов G и F
+        from sqlalchemy import select as _select
+        from use_cases.pnl_sync import get_distinct_iiko_accounts
+        from use_cases.pnl_sync import get_distinct_product_groups_2nd_level
+        from use_cases.day_report import get_distinct_cooking_place_types
+        from use_cases.day_report import get_distinct_pay_types
+
+        async with async_session_factory() as _sess:
+            _pnl_rows = (
+                (
+                    await _sess.execute(
+                        _select(FTPnlCategory).order_by(FTPnlCategory.name)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            ft_pnl_cats = [{"id": r.id, "name": r.name} for r in _pnl_rows]
+        iiko_accs = await get_distinct_iiko_accounts()
+        cooking_places = await get_distinct_cooking_place_types()
+        iiko_pay_types = await get_distinct_pay_types()
+        product_groups_2nd = await get_distinct_product_groups_2nd_level()
+        await sync_fintab_mapping_sheet(
+            fot_tab_name=fot_tab,
+            ft_employees=ft_emps,
+            ft_directions=ft_dirs,
+            ft_pnl_categories=ft_pnl_cats,
+            iiko_accounts=iiko_accs,
+            cooking_place_types=cooking_places,
+            pay_types=iiko_pay_types,
+            product_groups_2nd=product_groups_2nd,
+        )
+    except Exception:
+        logger.exception("[FT] Ошибка обновления «Маппинг FinTablo»")
 
 
 def format_ft_report(results: list[tuple[str, int | str]]) -> list[str]:

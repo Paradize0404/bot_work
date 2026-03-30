@@ -26,6 +26,7 @@ from bot.middleware import permission_required
 from bot.permission_map import PERM_SETTINGS
 from use_cases import pnl_sync
 from use_cases.revenue_sync import update_revenue
+from use_cases.sync_fintablo import refresh_mapping_dropdowns
 from use_cases._helpers import now_kgd
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,9 @@ async def _run_opiu(call: CallbackQuery, target_date: datetime | None) -> None:
         )
     except Exception:
         logger.exception("[pnl] Ошибка update_revenue")
+
+    # ── Обновляем дропдауны маппинга ──
+    await refresh_mapping_dropdowns()
 
     # ── Формируем общее сообщение ──
     parts: list[str] = []
