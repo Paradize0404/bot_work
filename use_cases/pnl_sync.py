@@ -271,29 +271,37 @@ async def get_distinct_iiko_accounts() -> list[str]:
     return sorted(result)
 
 
-async def get_distinct_product_groups_2nd_level() -> list[str]:
+async def get_distinct_product_groups_2nd_level(
+    target_date: datetime | None = None,
+) -> list[str]:
     """
     Получить список уникальных номенклатурных групп 2-го уровня,
-    реально встречающихся в приходных накладных ТМЦ/хозы складов за текущий месяц.
+    реально встречающихся в приходных накладных ТМЦ/хозы складов за выбранный месяц.
 
     Алгоритм:
-      1. Загрузить incoming invoices (PROCESSED) за текущий месяц
+      1. Загрузить incoming invoices (PROCESSED) за выбранный месяц
       2. Загрузить справочники products / stores / departments
       3. Отфильтровать items, попадающие на ТМЦ/хозы склады
       4. Для каждого product определить 2nd-level группу через
          product.parent → ProductGroup.parent_id chain в БД
       5. Вернуть отсортированный список уникальных названий
     """
-    now = now_kgd()
-    first_day = now.replace(day=1).strftime("%Y-%m-%d")
-    today = now.strftime("%Y-%m-%d")
+    now = target_date or now_kgd()
+    first_day = now.replace(day=1)
+    if target_date is None:
+        date_to = now.strftime("%Y-%m-%d")
+    elif now.month == 12:
+        date_to = now.replace(year=now.year + 1, month=1, day=1).strftime("%Y-%m-%d")
+    else:
+        date_to = now.replace(month=now.month + 1, day=1).strftime("%Y-%m-%d")
+    first_day_str = first_day.strftime("%Y-%m-%d")
 
     # ── 1. Загрузить данные параллельно ──
     products, stores_raw, depts_raw, inc_docs = await asyncio.gather(
         iiko_api.fetch_products(),
         iiko_api.fetch_stores(),
         iiko_api.fetch_departments(),
-        iiko_api.fetch_incoming_invoices(first_day, today),
+        iiko_api.fetch_incoming_invoices(first_day_str, date_to),
     )
 
     # ── 2. Справочники ──
@@ -364,8 +372,8 @@ async def get_distinct_product_groups_2nd_level() -> list[str]:
         "[pnl_sync] product_groups_2nd: %d групп из %d накладных (%s — %s)",
         len(groups),
         len(inc_docs),
-        first_day,
-        today,
+        first_day_str,
+        date_to,
     )
     return sorted(groups)
 

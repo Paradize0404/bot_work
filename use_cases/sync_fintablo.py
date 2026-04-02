@@ -578,8 +578,14 @@ async def sync_all_fintablo(
     return report
 
 
-async def refresh_mapping_dropdowns() -> None:
-    """Обновить дропдауны в «Маппинг FinTablo» (вкладка ФОТ + все справочники)."""
+async def refresh_mapping_dropdowns(
+    product_groups_ref_date: datetime | None = None,
+) -> None:
+    """Обновить дропдауны в «Маппинг FinTablo» (вкладка ФОТ + все справочники).
+
+    product_groups_ref_date используется только для списка групп закупа ТМЦ/хозы,
+    чтобы dropdown в колонке L соответствовал периоду выгрузки.
+    """
     try:
         today = now_kgd().date()
         _month_names = {
@@ -620,7 +626,9 @@ async def refresh_mapping_dropdowns() -> None:
         iiko_accs = await get_distinct_iiko_accounts()
         cooking_places = await get_distinct_cooking_place_types()
         iiko_pay_types = await get_distinct_pay_types()
-        product_groups_2nd = await get_distinct_product_groups_2nd_level()
+        product_groups_2nd = await get_distinct_product_groups_2nd_level(
+            product_groups_ref_date
+        )
         await sync_fintab_mapping_sheet(
             fot_tab_name=fot_tab,
             ft_employees=ft_emps,

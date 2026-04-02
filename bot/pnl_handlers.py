@@ -146,7 +146,7 @@ async def _run_opiu(call: CallbackQuery, target_date: datetime | None) -> None:
         logger.exception("[pnl] Ошибка update_purchases")
 
     # ── Обновляем дропдауны маппинга ──
-    await refresh_mapping_dropdowns()
+    await refresh_mapping_dropdowns(product_groups_ref_date=target_date)
 
     # ── Формируем общее сообщение ──
     parts: list[str] = []
