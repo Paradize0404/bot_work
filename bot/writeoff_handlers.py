@@ -1,11 +1,11 @@
 ﻿"""
-Telegram-хэндлеры: акт списания (writeoff) + проверка админами.
+Telegram-хэндлеры: акт списания (writeoff) + проверка пользователями с правом одобрения.
 
 Флоу:
   1. Сотрудник создаёт акт (склад → счёт → причина → товары → количество)
-  2. Нажимает «Отправить» → документ уходит ВСЕМ админам на проверку
-  3. Админ видит акт с кнопками: ✅ Отправить | ✏️ Редактировать | ❌ Отклонить
-  4. Если один админ нажал — у остальных кнопки убираются (нет задвоений)
+  2. Нажимает «Отправить» → документ отправляется проверяющим (право «Одобрение списаний»)
+  3. Проверяющий видит акт с кнопками: ✅ Отправить | ✏️ Редактировать | ❌ Отклонить
+  4. Если один проверяющий нажал — у остальных кнопки убираются (нет задвоений)
   5. Редактирование: склад / счёт / позиции → номер → наименование или количество
 
 Оптимизации (из предыдущей версии):
@@ -58,6 +58,14 @@ router = Router(name="writeoff_handlers")
 # Защита от повторной отправки
 _sending_lock: set[int] = set()
 
+
+async def _wo_keyboard(tg_id: int) -> "ReplyKeyboardMarkup":
+    """Подменю списаний с учётом прав пользователя."""
+    from use_cases import permissions as perm_uc
+
+    allowed = await perm_uc.get_allowed_keys(tg_id)
+    return writeoffs_keyboard(allowed)
+
 MAX_ITEMS = 50
 QTY_MIN = 0.001
 QTY_MAX = 99999
@@ -77,7 +85,7 @@ class WriteoffStates(StatesGroup):
 
 
 # ══════════════════════════════════════════════════════
-#  FSM States — редактирование акта (админ)
+#  FSM States — редактирование акта (проверяющий)
 # ══════════════════════════════════════════════════════
 
 
@@ -799,13 +807,13 @@ async def save_quantity(message: Message, state: FSMContext) -> None:
 
 
 # ══════════════════════════════════════════════════════
-#  7. ОТПРАВКА НА ПРОВЕРКУ АДМИНАМ
+#  7. ОТПРАВКА НА ПРОВЕРКУ
 # ══════════════════════════════════════════════════════
 
 
 @router.callback_query(WriteoffStates.add_items, F.data == "wo_send")
 async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
-    """Вместо прямой отправки — отправляем документ на проверку админам."""
+    """Отправляем документ на проверку."""
     await callback.answer()
     user_id = callback.from_user.id
     logger.info("[writeoff] Отправка на проверку tg:%d", user_id)
@@ -829,7 +837,7 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
                 state,
                 "⚠️ Сессия списания устарела — склад или счёт не выбраны.\n"
                 "Нажмите «📝 Создать списание» заново.",
-                writeoffs_keyboard(),
+                await _wo_keyboard(user_id),
             )
             return
 
@@ -860,7 +868,7 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
         admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
 
         if not admin_ids:
-            # Нет админов — отправляем напрямую (fallback)
+            # Нет пользователей с правом одобрения — отправляем напрямую (fallback)
             await _send_prompt(
                 callback.bot,
                 callback.message.chat.id,
@@ -873,11 +881,11 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
             _data_snapshot = dict(data)
             await state.clear()
             await restore_menu_kb(
-                bot, chat_id, state, "📝 Списания:", writeoffs_keyboard()
+                bot, chat_id, state, "📝 Списания:", await _wo_keyboard(tg_id)
             )
 
             async def _bg():
-                result = await wo_uc.finalize_without_admins(
+                result = await wo_uc.finalize_direct(
                     store_id=_data_snapshot["store_id"],
                     account_id=_data_snapshot["account_id"],
                     reason=_data_snapshot.get("reason", ""),
@@ -889,13 +897,13 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
                 else:
                     await bot.send_message(
                         chat_id,
-                        "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены.",
+                        "❌ Произошла техническая ошибка при отправке.",
                     )
                     from use_cases.admin import alert_admins
 
                     await alert_admins(
                         bot,
-                        f"Ошибка отправки списания (без-админ режим)\n"
+                        f"Ошибка отправки списания (fallback)\n"
                         f"chat_id={chat_id}\n"
                         f"Ошибка: {result}",
                     )
@@ -915,7 +923,7 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
                         )
                     except Exception:
                         logger.warning(
-                            "[writeoff] Ошибка сохранения в историю (no-admin)"
+                            "[writeoff] Ошибка сохранения в историю (fallback)"
                         )
 
             asyncio.create_task(_bg())
@@ -938,7 +946,7 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
             callback.bot,
             callback.message.chat.id,
             state,
-            "✅ Акт отправлен на проверку администраторам. Ожидайте.",
+            "✅ Акт отправлен на проверку. Ожидайте.",
         )
         await state.clear()
         await restore_menu_kb(
@@ -946,28 +954,28 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message.chat.id,
             state,
             "📝 Списания:",
-            writeoffs_keyboard(),
+            await _wo_keyboard(callback.from_user.id),
         )
 
-        # Рассылаем всем админам
+        # Рассылаем проверяющим
         bot = callback.bot
         text = pending.build_summary_text(doc)
         kb = pending.admin_keyboard(doc.doc_id)
 
-        for admin_id in admin_ids:
+        for approver_id in approver_ids:
             try:
                 msg = await bot.send_message(
-                    admin_id, text, parse_mode="HTML", reply_markup=kb
+                    approver_id, text, parse_mode="HTML", reply_markup=kb
                 )
-                doc.admin_msg_ids[admin_id] = msg.message_id
+                doc.admin_msg_ids[approver_id] = msg.message_id
             except Exception as exc:
                 logger.warning(
-                    "[writeoff] Не удалось отправить админу %d: %s", admin_id, exc
+                    "[writeoff] Не удалось отправить проверяющему %d: %s", approver_id, exc
                 )
 
         await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
         logger.info(
-            "[writeoff] Документ %s отправлен %d админам",
+            "[writeoff] Документ %s отправлен %d проверяющим",
             doc.doc_id,
             len(doc.admin_msg_ids),
         )
@@ -976,14 +984,14 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 # ══════════════════════════════════════════════════════
-#  ОБРАБОТКА АДМИНАМИ
+#  ОБРАБОТКА ПРОВЕРЯЮЩИМИ
 # ══════════════════════════════════════════════════════
 
 
 async def _remove_admin_keyboards(
     bot: Bot, doc: pending.PendingWriteoff, status_text: str, except_admin: int = 0
 ) -> None:
-    """Убрать кнопки у всех админов (один из них уже обработал)."""
+    """Убрать кнопки у всех проверяющих (один из них уже обработал)."""
     for admin_id, msg_id in doc.admin_msg_ids.items():
         if admin_id == except_admin:
             continue
@@ -1028,7 +1036,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
 
     if not await pending.try_lock(doc_id):
         await callback.answer(
-            "⏳ Другой админ уже обрабатывает этот документ.", show_alert=True
+            "⏳ Документ уже обрабатывается.", show_alert=True
         )
         return
 
@@ -1036,7 +1044,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
     admin_id = callback.from_user.id
     admin_name = callback.from_user.full_name
 
-    # Обновляем сообщение текущего админа
+    # Обновляем сообщение проверяющего
     try:
         await callback.message.edit_text(
             pending.build_summary_text(doc)
@@ -1087,7 +1095,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
             f"Одобрил: {admin_name}\n"
             f"Ошибка: {approval.result_text}",
         )
-        # Возвращаем кнопки текущему админу — можно попробовать снова
+        # Возвращаем кнопки проверяющему — можно попробовать снова
         try:
             await callback.message.edit_text(
                 pending.build_summary_text(doc)
@@ -1103,16 +1111,16 @@ async def admin_approve(callback: CallbackQuery) -> None:
             await bot.send_message(
                 doc.author_chat_id,
                 "❌ Произошла техническая ошибка при отправке. "
-                "Администраторы уведомлены, повторят попытку.",
+                "Попробуйте ещё раз.",
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
         await pending.unlock(doc_id)
         return
 
-    # ── Успех — убираем кнопки у остальных админов ──
+    # ── Успех — убираем кнопки у остальных проверяющих ──
     await _remove_admin_keyboards(
-        bot, doc, f"✅ Одобрено admin {admin_name}", except_admin=admin_id
+        bot, doc, f"✅ Одобрено ({admin_name})", except_admin=admin_id
     )
 
     # Сохраняем в историю
@@ -1134,7 +1142,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
             "[writeoff] Ошибка сохранения в историю doc=%s", doc_id, exc_info=True
         )
 
-    # Обновляем сообщение админа
+    # Обновляем сообщение проверяющего
     try:
         await callback.message.edit_text(
             pending.build_summary_text(doc)
@@ -1183,7 +1191,7 @@ async def admin_reject(callback: CallbackQuery) -> None:
         await callback.answer("⚠️ Документ уже обработан.", show_alert=True)
         return
     if not await pending.try_lock(doc_id):
-        await callback.answer("⏳ Другой админ уже обрабатывает.", show_alert=True)
+        await callback.answer("⏳ Документ уже обрабатывается.", show_alert=True)
         return
 
     bot = callback.bot
@@ -1197,12 +1205,12 @@ async def admin_reject(callback: CallbackQuery) -> None:
     except Exception:
         logger.debug("suppressed", exc_info=True)
     await _remove_admin_keyboards(
-        bot, doc, f"❌ Отклонено admin {admin_name}", except_admin=callback.from_user.id
+        bot, doc, f"❌ Отклонено ({admin_name})", except_admin=callback.from_user.id
     )
     try:
         await bot.send_message(
             doc.author_chat_id,
-            f"❌ Акт списания отклонён администратором ({admin_name}).",
+            f"❌ Акт списания отклонён ({admin_name}).",
         )
     except Exception:
         logger.debug("suppressed", exc_info=True)
@@ -1213,13 +1221,13 @@ async def admin_reject(callback: CallbackQuery) -> None:
 
 
 # ══════════════════════════════════════════════════════
-#  РЕДАКТИРОВАНИЕ АДМИНОМ
+#  РЕДАКТИРОВАНИЕ ПРОВЕРЯЮЩИМ
 # ══════════════════════════════════════════════════════
 
 
 @router.callback_query(F.data.startswith("woa_edit:"))
 async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
-    """Админ решил отредактировать документ."""
+    """Проверяющий решил отредактировать документ."""
     await callback.answer()
     logger.info("[writeoff_handlers] admin_edit_start tg:%d", callback.from_user.id)
     from use_cases import permissions as perm_uc
@@ -1245,12 +1253,12 @@ async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("⚠️ Документ не найден.", show_alert=True)
         return
     if not await pending.try_lock(doc_id):
-        await callback.answer("⏳ Другой админ уже редактирует.", show_alert=True)
+        await callback.answer("⏳ Другой проверяющий уже редактирует.", show_alert=True)
         return
 
     admin_name = callback.from_user.full_name
 
-    # Убираем кнопки у остальных админов
+    # Убираем кнопки у остальных проверяющих
     await _remove_admin_keyboards(
         callback.bot,
         doc,
@@ -1258,7 +1266,7 @@ async def admin_edit_start(callback: CallbackQuery, state: FSMContext) -> None:
         except_admin=callback.from_user.id,
     )
 
-    # Сохраняем doc_id в FSM для этого админа
+    # Сохраняем doc_id в FSM для этого проверяющего
     await state.update_data(edit_doc_id=doc_id)
 
     kb = InlineKeyboardMarkup(
@@ -1844,7 +1852,7 @@ async def _finish_edit(
     doc: pending.PendingWriteoff,
     editor_name: str = "",
 ) -> None:
-    """Завершить редактирование: разблокировать, обновить сообщения у всех админов."""
+    """Завершить редактирование: разблокировать, обновить сообщения у проверяющих."""
     doc_id = doc.doc_id
     logger.info(
         "[writeoff-edit] Завершение редактирования tg:%d, doc=%s",
@@ -1862,7 +1870,7 @@ async def _finish_edit(
     text = pending.build_summary_text(doc)
     kb = pending.admin_keyboard(doc_id)
 
-    # Получаем список всех админов
+    # Получаем список проверяющих
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_WRITEOFF_APPROVE
 
@@ -1946,7 +1954,7 @@ async def _finish_edit_msg(
     text = pending.build_summary_text(doc)
     kb = pending.admin_keyboard(doc_id)
 
-    # Получаем список всех админов
+    # Получаем список проверяющих
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_WRITEOFF_APPROVE
 
@@ -2264,7 +2272,7 @@ async def start_history(message: Message, state: FSMContext) -> None:
     is_bot_admin = await perm_uc.has_permission(
         message.from_user.id, PERM_WRITEOFF_APPROVE
     )
-    role_type = "admin" if is_bot_admin else wo_uc.classify_role(ctx.role_name)
+    role_type = "approver" if is_bot_admin else wo_uc.classify_role(ctx.role_name)
 
     await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
     entries, total = await wo_hist.get_history(
@@ -2278,7 +2286,7 @@ async def start_history(message: Message, state: FSMContext) -> None:
         await message.answer("📋 История списаний пуста.")
         return
 
-    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "admin": "👑 Все"}.get(
+    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "approver": "👑 Все"}.get(
         role_type, "📋 Все"
     )
     msg = await message.answer(
@@ -2322,7 +2330,7 @@ async def hist_page(callback: CallbackQuery, state: FSMContext) -> None:
         page=page,
     )
 
-    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "admin": "👑 Все"}.get(
+    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "approver": "👑 Все"}.get(
         role_type, "📋 Все"
     )
     try:
@@ -2387,7 +2395,7 @@ async def hist_back_to_list(callback: CallbackQuery, state: FSMContext) -> None:
         page=page,
     )
 
-    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "admin": "👑 Все"}.get(
+    role_label = {"bar": "🍸 Бар", "kitchen": "🍳 Кухня", "approver": "👑 Все"}.get(
         role_type, "📋 Все"
     )
     try:
@@ -2420,7 +2428,7 @@ async def hist_close(callback: CallbackQuery, state: FSMContext) -> None:
         callback.message.chat.id,
         state,
         "📝 Списания:",
-        writeoffs_keyboard(),
+        await _wo_keyboard(callback.from_user.id),
     )
 
 
@@ -2429,7 +2437,7 @@ async def hist_close(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(HistoryStates.viewing, F.data.startswith("woh_reuse:"))
 async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
-    """Повторить списание из истории как есть → на проверку админам."""
+    """Повторить списание из истории как есть → на проверку."""
     logger.info("[writeoff_handlers] hist_reuse tg:%d", callback.from_user.id)
     user_id = callback.from_user.id
     if user_id in _sending_lock:
@@ -2461,14 +2469,14 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
         admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
 
         if not admin_ids:
-            # Нет админов — отправляем напрямую
+            # Нет проверяющих — отправляем напрямую
             try:
                 await callback.message.edit_text("⏳ Отправляем акт напрямую...")
             except Exception:
                 logger.debug("[wo_history] edit_text fail (reuse no-admin placeholder)")
             await state.clear()
 
-            result = await wo_uc.finalize_without_admins(
+            result = await wo_uc.finalize_direct(
                 store_id=entry.store_id,
                 account_id=entry.account_id,
                 reason=entry.reason,
@@ -2496,10 +2504,10 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
 
                 await alert_admins(
                     callback.bot,
-                    f"Ошибка отправки списания из истории (без-админ)\n"
+                    f"Ошибка отправки списания из истории (fallback)\n"
                     f"user={user_id}\nОшибка: {result}",
                 )
-                result = "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены."
+                result = "❌ Произошла техническая ошибка при отправке."
             try:
                 await callback.message.edit_text(result)
             except Exception:
@@ -2509,7 +2517,7 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
                 callback.message.chat.id,
                 state,
                 "📝 Списания:",
-                writeoffs_keyboard(),
+                await _wo_keyboard(user_id),
             )
             return
 
@@ -2528,13 +2536,13 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
 
         try:
             await callback.message.edit_text(
-                "✅ Акт из истории отправлен на проверку администраторам. Ожидайте."
+                "✅ Акт из истории отправлен на проверку. Ожидайте."
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
         await state.clear()
 
-        # Рассылаем всем админам
+        # Рассылаем проверяющим
         text = pending.build_summary_text(doc)
         kb = pending.admin_keyboard(doc.doc_id)
         for admin_id in admin_ids:
@@ -2560,7 +2568,7 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message.chat.id,
             state,
             "📝 Списания:",
-            writeoffs_keyboard(),
+            await _wo_keyboard(user_id),
         )
     finally:
         _sending_lock.discard(user_id)
@@ -3109,7 +3117,7 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
                 logger.debug("suppressed", exc_info=True)
             await state.clear()
 
-            result = await wo_uc.finalize_without_admins(
+            result = await wo_uc.finalize_direct(
                 store_id=store_id,
                 account_id=account_id,
                 reason=reason,
@@ -3139,10 +3147,10 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
 
                 await alert_admins(
                     callback.bot,
-                    f"Ошибка отправки списания (редактирование без-админ)\n"
+                    f"Ошибка отправки списания (редактирование, fallback)\n"
                     f"user={user_id}\nОшибка: {result}",
                 )
-                result = "❌ Произошла техническая ошибка при отправке. Администраторы уведомлены."
+                result = "❌ Произошла техническая ошибка при отправке."
             try:
                 await callback.message.edit_text(result)
             except Exception:
@@ -3152,7 +3160,7 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
                 callback.message.chat.id,
                 state,
                 "📝 Списания:",
-                writeoffs_keyboard(),
+                await _wo_keyboard(user_id),
             )
             return
 
@@ -3200,7 +3208,7 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
             callback.message.chat.id,
             state,
             "📝 Списания:",
-            writeoffs_keyboard(),
+            await _wo_keyboard(user_id),
         )
     finally:
         _sending_lock.discard(user_id)
@@ -3260,5 +3268,5 @@ async def cancel_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
         callback.message.chat.id,
         state,
         "📝 Списания:",
-        writeoffs_keyboard(),
+        await _wo_keyboard(callback.from_user.id),
     )

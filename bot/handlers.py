@@ -715,9 +715,10 @@ async def _guard_change_dept(message: Message) -> None:
 async def btn_writeoffs_menu(message: Message, state: FSMContext) -> None:
     """Кнопка 'Списания' + открыть главное меню."""
     logger.info("[nav] меню списаний tg:%d", message.from_user.id)
-    await reply_menu(message, state, "📝 Списания:", _writeoffs_keyboard())
-
     tg_id = message.from_user.id
+    allowed = await perm_uc.get_allowed_keys(tg_id)
+    await reply_menu(message, state, "📝 Списания:", _writeoffs_keyboard(allowed))
+
     track_task(sync_uc.bg_sync_for_documents(f"bg:writeoffs:{tg_id}"))
     ctx = await uctx.get_user_context(tg_id)
     if ctx and ctx.department_id:

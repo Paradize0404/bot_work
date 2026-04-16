@@ -44,16 +44,21 @@ def escape_md(s: str) -> str:
 # ═══════════════════════════════════════════════════════
 
 
-def writeoffs_keyboard() -> ReplyKeyboardMarkup:
-    """Подменю 'Списания'."""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📝 Создать списание")],
-            [KeyboardButton(text="🗂 История списаний")],
-            [KeyboardButton(text="◀️ Назад")],
-        ],
-        resize_keyboard=True,
-    )
+def writeoffs_keyboard(allowed: set[str] | None = None) -> ReplyKeyboardMarkup:
+    """Подменю 'Списания'. Показывает только кнопки, на которые есть права."""
+    from bot.permission_map import PERM_WRITEOFF_CREATE, PERM_WRITEOFF_HISTORY
+
+    buttons_map: list[tuple[str, str]] = [
+        ("📝 Создать списание", PERM_WRITEOFF_CREATE),
+        ("🗂 История списаний", PERM_WRITEOFF_HISTORY),
+    ]
+    rows = [
+        [KeyboardButton(text=text)]
+        for text, perm in buttons_map
+        if allowed is None or perm in allowed
+    ]
+    rows.append([KeyboardButton(text="◀️ Назад")])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
 def invoices_keyboard() -> ReplyKeyboardMarkup:

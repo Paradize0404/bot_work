@@ -89,8 +89,9 @@ def _get_client() -> gspread.Client:
     creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
     _client = gspread.authorize(creds)
 
-    # ── Monkey-patch: retry on 429 (quota exceeded) ──
+    # ── Monkey-patch: retry on transient errors (429 / 500 / 502 / 503 / 504) ──
     _original_request = _client.http_client.request
+    _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
     def _request_with_retry(*args, **kwargs):
         _MAX_RETRIES = 3
@@ -99,11 +100,16 @@ def _get_client() -> gspread.Client:
                 return _original_request(*args, **kwargs)
             except gspread.exceptions.APIError as exc:
                 status = getattr(getattr(exc, "response", None), "status_code", 0)
-                if status == 429 and attempt < _MAX_RETRIES:
-                    delay = 30 * (2**attempt) + _random.uniform(1, 5)
+                if status in _RETRYABLE_STATUSES and attempt < _MAX_RETRIES:
+                    if status == 429:
+                        delay = 30 * (2**attempt) + _random.uniform(1, 5)
+                    else:
+                        # 500/502/503/504 — короткий backoff (2/4/8 сек)
+                        delay = (2**attempt) + _random.uniform(0.5, 2)
                     logger.warning(
-                        "[%s] 429 Quota exceeded — retry %d/%d after %.0fs",
+                        "[%s] %d — retry %d/%d after %.0fs",
                         LABEL,
+                        status,
                         attempt + 1,
                         _MAX_RETRIES,
                         delay,
@@ -113,7 +119,7 @@ def _get_client() -> gspread.Client:
                     raise
 
     _client.http_client.request = _request_with_retry
-    logger.info("[%s] Клиент инициализирован (с retry 429)", LABEL)
+    logger.info("[%s] Клиент инициализирован (с retry 429/5xx)", LABEL)
     return _client
 
 

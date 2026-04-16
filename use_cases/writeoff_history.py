@@ -9,7 +9,7 @@ Use-case: история списаний.
 Фильтрация по ролям:
   - bar      → только записи с store_type='bar'
   - kitchen  → только записи с store_type='kitchen'
-  - admin    → все записи по подразделению
+  - approver → все записи по подразделению
   - unknown  → все записи по подразделению (ручной выбор)
 """
 
@@ -146,7 +146,7 @@ async def get_history(
     Фильтрация:
       - role_type='bar'     → только store_type='bar'
       - role_type='kitchen' → только store_type='kitchen'
-      - role_type='admin'   → все записи по department_id
+      - role_type='approver' → все записи по department_id
       - role_type='unknown' → все записи по department_id
 
     Возвращает: (список записей, общее количество).
@@ -163,7 +163,7 @@ async def get_history(
         elif role_type == "kitchen":
             role_filter = WriteoffHistory.store_type == "kitchen"
         else:
-            # admin или unknown — показываем всё по подразделению
+            # approver или unknown — показываем всё по подразделению
             role_filter = None
 
         # Подсчёт

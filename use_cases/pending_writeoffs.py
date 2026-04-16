@@ -1,11 +1,11 @@
 """
-Хранилище документов, ожидающих проверки админом — PostgreSQL.
+Хранилище документов, ожидающих проверки — PostgreSQL.
 
-Документ создаётся сотрудником → отправляется всем админам → один админ
+Документ создаётся сотрудником → отправляется проверяющим (право «Одобрение списаний») →
 одобряет/редактирует/отклоняет → остальные видят «обработано».
 
 Конкурентность: is_locked (UPDATE ... WHERE is_locked = false)
-гарантирует, что два админа не обрабатывают один документ одновременно.
+гарантирует, что два проверяющих не обрабатывают один документ одновременно.
 
 Все данные хранятся в таблице pending_writeoff → переживают рестарт бота.
 """
@@ -47,7 +47,7 @@ class PendingWriteoff:
         dict
     ]  # [{id, name, quantity, user_quantity, unit_label, main_unit}, ...]
     admin_msg_ids: dict[int, int] = field(default_factory=dict)
-    # {admin_chat_id: message_id} — для удаления/обновления кнопок у всех
+    # {approver_chat_id: message_id} — для удаления/обновления кнопок у всех
     date_incoming: str | None = None  # переопределённая дата (YYYY-MM-DDTHH:MM:SS)
     edited_by: str | None = None  # ФИО последнего редактора
 
@@ -291,7 +291,7 @@ async def all_pending() -> list[PendingWriteoff]:
 
 
 def build_summary_text(doc: PendingWriteoff) -> str:
-    """Текст summary для админского сообщения."""
+    """Текст summary для сообщения проверяющему."""
     date_str = ""
     if doc.date_incoming:
         # Перевести «YYYY-MM-DDTHH:MM:SS» -> «ДД.ММ.ГГГГ ЧЧ:ММ» для отображения
@@ -322,7 +322,7 @@ def build_summary_text(doc: PendingWriteoff) -> str:
 
 
 def admin_keyboard(doc_id: str) -> InlineKeyboardMarkup:
-    """Клавиатура для админа: одобрить / редактировать / отклонить."""
+    """Клавиатура проверяющего: одобрить / редактировать / отклонить."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [

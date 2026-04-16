@@ -3,7 +3,7 @@
 > Читай этот файл при: миграция, новая таблица, sync-задача, работа с данными, запросы.
 
 **Подключение:** `postgresql+asyncpg://...@ballast.proxy.rlwy.net:17027/railway`
-**Всего таблиц:** 49 (31 iiko/bot + 14 FinTablo + 2 служебных + 1 внешняя + 1 pending)
+**Всего таблиц:** 54 (36 iiko/bot + 14 FinTablo + 2 служебных + 1 внешняя + 1 pending)
 
 ---
 
@@ -23,7 +23,7 @@
 | 8 | `iiko_employee` | iiko кадры | id (UUID PK), name, role_id | UPSERT+mirror |
 | 9 | `iiko_employee_role` | iiko кадры | id (UUID PK), name, code | UPSERT+mirror |
 | 10 | `iiko_sync_log` | аудит | entity, status, started_at, count | INSERT only |
-| 11 | `bot_admin` | бот (legacy) | telegram_id (PK), name | ручной (deprecated→GSheet) |
+| 11 | `bot_admin` | бот (legacy) | telegram_id (PK), name | ручной (⚠ нет ORM-модели) |
 | 12 | `iiko_stock_balance` | остатки | product_id, store_id, amount | full-replace |
 | 13 | `min_stock_level` | остатки | product_id, department_id, min/max_qty | GSheet sync |
 | 14 | `gsheet_export_group` | настройки | group_id (UUID PK), group_name | GSheet sync |
@@ -42,7 +42,7 @@
 | 27 | `ft_employee` | FinTablo | ext_id (PK), name | UPSERT+mirror |
 | 28 | `writeoff_history` | списания | doc_id (UUID PK), dept, items (JSONB) | INSERT |
 | 29 | `invoice_template` | накладные | id (PK), name, dept_id, items (JSONB) | INSERT |
-| 30 | `request_receiver` | заявки (legacy) | telegram_id (PK), name | ручной (deprecated→GSheet) |
+| 30 | `request_receiver` | заявки (legacy) | telegram_id (PK), name | ручной (⚠ нет ORM-модели) |
 | 31 | `product_request` | заявки | id (PK), dept_id, status, items (JSONB) | INSERT |
 | 32 | `active_stoplist` | стоп-лист | product_id+dept_id (PK), name | full-replace |
 | 33 | `stoplist_message` | стоп-лист | chat_id+dept_id (PK), message_id | UPDATE |
@@ -51,6 +51,9 @@
 | 36 | `price_supplier_column` | прайс-лист | id (PK), supplier_name, col_index | GSheet sync |
 | 37 | `price_supplier_price` | прайс-лист | product_id+supplier_id (PK), price | GSheet sync |
 | 38 | `stock_alert_message` | остатки | chat_id+dept_id (PK), message_id | UPDATE |
+| 39 | `writeoff_excluded_prepared_group` | списания | group_id (UUID PK), group_name | INSERT/DELETE |
+| 40 | `writeoff_excluded_prepared_request_group` | списания | group_id (UUID PK), group_name | INSERT/DELETE |
+| 41 | `bot_error` | логи/аудит | pk (PK), level, logger_name, message, resolved | INSERT (logging handler) |
 | 42 | `iiko_access_tokens` | внешний | org_id (PK), token, expires_at | INSERT/UPDATE |
 | 43 | `pending_writeoff` | списания | id (UUID PK), dept, items, is_locked, TTL 24h | INSERT/UPDATE |
 | 44 | `pastry_nomenclature_group` | кондитерка | id (UUID PK), name | INSERT/DELETE |
@@ -59,10 +62,14 @@
 | 47 | `salary_exclusions` | ФОТ | employee_id (PK), excluded_by, excluded_at | INSERT/DELETE |
 | 48 | `pending_incoming_invoice` | накладные | id (PK), owner_tg_id, invoices (JSONB), created_at | INSERT/UPDATE |
 | 49 | `pnl_account_mapping` | ОПИУ | id (PK), iiko_account_name, ft_pnl_category_id, is_active | INSERT/UPDATE |
+| 50 | `bot_log` | логи/аудит | pk (PK), level, logger_name, message | INSERT (буферизованный) |
+| 51 | `blocked_user` | бот | telegram_id (unique), user_name, blocked_at | INSERT/DELETE |
+| 52 | `guest_user` | бот | telegram_id (unique), full_name, department_id | INSERT |
+| 53 | `report_subscription` | бот | telegram_id+department_id (unique), created_by | INSERT/DELETE |
 
 ---
 
-## Таблицы iiko / бота (25)
+## Таблицы iiko / бота (30)
 
 ### 1. `iiko_entity` — Справочники (все 16 типов в одной таблице)
 
@@ -270,6 +277,8 @@ PaymentType, ProductCategory, ProductScale, ProductSize, ScheduleType, TaxCatego
 ---
 
 ### 11. `bot_admin` — Администраторы бота
+
+> ⚠ **ORM-модель `BotAdmin` отсутствует в `db/models.py`** — таблица существует в БД, но модель была удалена/перенесена.
 
 Хранит список администраторов бота (CRUD через «👑 Управление админами»).
 
@@ -693,6 +702,8 @@ ORM: `PnlAccountMapping` в `db/ft_models.py`
 
 ### 30. `request_receiver` — Получатели заявок на товары
 
+> ⚠ **ORM-модель `RequestReceiver` отсутствует в `db/models.py`** — таблица существует в БД, но модель была удалена/перенесена.
+
 Источник: бот (назначается админом из авторизованных сотрудников)
 
 | Колонка          | Тип           | Описание                                                |
@@ -964,3 +975,104 @@ GSheet-лист: **"История ставок"** (8 колонок)
 **Логика:** сотрудник в таблице → не попадает в лист "Зарплаты". При добавлении → история **удаляется**. При снятии → история не восстанавливается.
 
 **Использование:** `use_cases/salary.py`, `bot/salary_handlers.py`
+
+---
+
+## Таблицы логов и аудита (2)
+
+### 41. `bot_error` — Хранилище ошибок бота (ERROR/CRITICAL)
+
+ORM: `BotError` (`db/models.py`)
+Источник: logging handler `DBErrorHandler` (`use_cases/error_store.py`)
+Просмотр: `/errors` в Telegram (только сисадмины)
+
+| Колонка       | Тип           | Описание                                          |
+|---------------|---------------|---------------------------------------------------|
+| `pk`          | BigInteger PK | Автоинкремент                                     |
+| `created_at`  | DateTime      | Время возникновения (Калининград), index           |
+| `level`       | String(20)    | Уровень: ERROR, CRITICAL, WARNING (index)         |
+| `logger_name` | String(300)   | Имя логгера (модуль/компонент)                    |
+| `message`     | Text          | Текст ошибки (первые 4000 символов)               |
+| `traceback`   | Text          | Полный traceback (если есть)                      |
+| `context`     | JSONB         | Доп. контекст: user_id, handler, callback_data    |
+| `resolved`    | Boolean       | Отмечено как решённое (index), default=False       |
+
+**Дедупликация:** одинаковые ошибки не чаще раза в 30 сек (по ключу `logger_name:message[:200]`).
+**Управление:** `mark_resolved()`, `mark_all_resolved()`, `cleanup_old(days=30)` — удаляет решённые старше 30 дней.
+
+---
+
+### 50. `bot_log` — Все логи бота (INFO+)
+
+ORM: `BotLog` (`db/models.py`)
+Источник: буферизованный logging handler `DBLogHandler` (`use_cases/log_store.py`)
+Просмотр: `/logs` в Telegram (только сисадмины)
+
+| Колонка       | Тип           | Описание                                          |
+|---------------|---------------|---------------------------------------------------|
+| `pk`          | BigInteger PK | Автоинкремент                                     |
+| `created_at`  | DateTime      | Время записи (Калининград), index                  |
+| `level`       | String(10)    | DEBUG, INFO, WARNING, ERROR, CRITICAL (index)     |
+| `logger_name` | String(300)   | Имя логгера (модуль/компонент)                    |
+| `message`     | Text          | Текст лога (до 4000 символов)                     |
+| `traceback`   | Text          | Traceback (для ERROR/CRITICAL)                    |
+
+**Буферизация:** batch INSERT каждые 5 сек или при накоплении 50 записей (`deque(maxlen=2000)`).
+**Retention:** DEBUG — 1д, INFO — 3д, WARNING — 14д, ERROR/CRITICAL — 90д. Очистка: `/logs` → «🗑 Очистка».
+**Фильтрация:** по уровню, логгеру, текстовый поиск, за N часов.
+
+---
+
+## Таблицы управления пользователями (2)
+
+### 51. `blocked_user` — Заблокированные пользователи
+
+ORM: `BlockedUser` (`db/models.py`)
+Источник: бот (блокировка через «🚫 Заблокировать»)
+
+| Колонка       | Тип           | Описание                                          |
+|---------------|---------------|---------------------------------------------------|
+| `pk`          | BigInteger PK | Автоинкремент                                     |
+| `telegram_id` | BigInteger    | Telegram user ID (unique, index)                  |
+| `user_name`   | String(500)   | ФИО на момент блокировки (для отображения)        |
+| `blocked_at`  | DateTime      | Время блокировки (Калининград)                    |
+| `blocked_by`  | BigInteger    | Telegram ID админа, заблокировавшего пользователя |
+
+**Логика:** если `telegram_id` есть в этой таблице — бот полностью игнорирует любые сообщения и callback от этого пользователя.
+
+---
+
+### 52. `guest_user` — Гостевые пользователи (не из iiko)
+
+ORM: `GuestUser` (`db/models.py`)
+Источник: бот (регистрация через специальную команду)
+
+| Колонка         | Тип           | Описание                                          |
+|-----------------|---------------|---------------------------------------------------|
+| `pk`            | BigInteger PK | Автоинкремент                                     |
+| `telegram_id`   | BigInteger    | Telegram user ID (unique, index)                  |
+| `full_name`     | String(500)   | ФИО (вводится при регистрации)                    |
+| `department_id` | UUID          | Выбранный ресторан (→ iiko_department.id, index)  |
+| `created_at`    | DateTime      | Время создания (Калининград)                      |
+
+**Логика:** гостевой пользователь — не существует в iiko, но зарегистрирован в боте. Пример: инвестор, внешний партнёр. Права назначаются через Google Таблицу.
+
+---
+
+## Таблицы подписок (1)
+
+### 53. `report_subscription` — Подписки на отчёты дня
+
+ORM: `ReportSubscription` (`db/models.py`)
+Источник: бот (настраивается админом через «Настройки → 📬 Подписки на отчёты»)
+
+| Колонка         | Тип           | Описание                                          |
+|-----------------|---------------|---------------------------------------------------|
+| `pk`            | BigInteger PK | Автоинкремент                                     |
+| `telegram_id`   | BigInteger    | Telegram user ID получателя (index)               |
+| `department_id` | UUID          | UUID подразделения (→ iiko_department.id, index)  |
+| `created_at`    | DateTime      | Время создания (Калининград)                      |
+| `created_by`    | BigInteger    | Telegram ID админа, создавшего подписку           |
+
+**Unique constraint:** `uq_report_sub_tg_dept` на `(telegram_id, department_id)`
+**Логика:** подписка пользователя на получение ежедневного отчёта по конкретному подразделению.

@@ -7,7 +7,7 @@ Use-case: создание и отправка акта списания (writeo
   3. Поиск номенклатуры (GOODS / DISH / PREPARED)
   4. Получение единицы измерения по UUID
   5. Формирование и отправка документа через адаптер
-  6. Подготовка writeoff, одобрение/отклонение (use-case для admin)
+  6. Подготовка writeoff, одобрение/отклонение (use-case для проверяющего)
 """
 
 import asyncio
@@ -69,8 +69,8 @@ def classify_role(role_name: str | None) -> str:
       'kitchen' — должность связана с кухней (склад кухни)
       'unknown' — не распознана (выбор склада вручную)
 
-    Примечание: проверка на бот-админа (выбор склада вручную) делается
-    отдельно в writeoff_handlers.py через admin_uc.is_admin().
+    Примечание: проверка на право approve (выбор склада вручную) делается
+    отдельно в writeoff_handlers.py через perm_uc.
     """
     if not role_name:
         return "unknown"
@@ -604,11 +604,11 @@ async def preload_for_user(department_id: str) -> None:
     """
     Прогрев кеша при клике на "Документы".
     Запускается фоново — пользователь не ждёт.
-    Загружает склады + счета + admin_ids.
+    Загружает склады + счета + approver_ids.
     """
     t0 = time.monotonic()
     try:
-        # Прогрев admin_ids + складов + номенклатуры параллельно
+        # Прогрев approver_ids + складов + номенклатуры параллельно
         from use_cases import permissions as perm_uc
         from bot.permission_map import PERM_WRITEOFF_APPROVE
 
@@ -623,7 +623,7 @@ async def preload_for_user(department_id: str) -> None:
             return_exceptions=True,
         )
         logger.info(
-            "[writeoff] Прогрев кеша: %d складов + счета + admin_ids за %.2f сек",
+            "[writeoff] Прогрев кеша: %d складов + счета + approver_ids за %.2f сек",
             len(stores),
             time.monotonic() - t0,
         )
@@ -641,8 +641,8 @@ class WriteoffStart:
     """Результат prepare_writeoff."""
 
     stores: list[dict]
-    is_admin: bool
-    role_type: str  # 'bar', 'kitchen', 'admin', 'unknown'
+    can_approve: bool
+    role_type: str  # 'bar', 'kitchen', 'approver', 'unknown'
     auto_store: dict | None  # авто-выбранный склад или None
     accounts: list[dict] | None  # если авто-склад — счета для него
 
@@ -667,7 +667,7 @@ async def prepare_writeoff(
     stores = await get_stores_for_department(department_id)
 
     if is_bot_admin:
-        role_type = "admin"
+        role_type = "approver"
         store_keyword = None
     else:
         role_type = classify_role(role_name)
@@ -686,7 +686,7 @@ async def prepare_writeoff(
 
     return WriteoffStart(
         stores=stores,
-        is_admin=is_bot_admin,
+        can_approve=is_bot_admin,
         role_type=role_type,
         auto_store=auto_store,
         accounts=accounts,
@@ -711,7 +711,7 @@ async def approve_writeoff(doc) -> ApprovalResult:
     return ApprovalResult(success=success, result_text=result_text)
 
 
-async def finalize_without_admins(
+async def finalize_direct(
     store_id: str,
     account_id: str,
     reason: str,
@@ -719,7 +719,7 @@ async def finalize_without_admins(
     author_name: str,
 ) -> str:
     """
-    Отправить акт напрямую (fallback если нет админов).
+    Отправить акт напрямую (fallback если нет проверяющих).
     Возвращает текст результата.
     """
     document = build_writeoff_document(

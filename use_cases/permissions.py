@@ -23,7 +23,7 @@ import time
 from typing import Any
 
 from adapters import google_sheets as gsheet
-from use_cases.redis_cache import get_cached_or_fetch, invalidate_key
+from use_cases.redis_cache import get_cached_or_fetch, invalidate_key, get_cache, set_cache
 
 # Единственный источник истины: роли и perm_key
 from bot.permission_map import (
@@ -50,32 +50,67 @@ LABEL = "Permissions"
 
 _CACHE_TTL: int = 15 * 60  # 15 минут
 _CACHE_KEY = "permissions_cache"
+_STALE_KEY = "permissions_cache:stale"
+_STALE_TTL: int = 24 * 60 * 60  # 24 часа — страховочный кеш
+
+# Retry при чтении GSheet (async, не блокирует event loop)
+_FETCH_MAX_RETRIES = 2
+_FETCH_RETRY_DELAYS = (1.5, 3.0)  # секунды между попытками
 
 
 async def invalidate_cache() -> None:
-    """Принудительно сбросить кеш прав (вызывается после sync)."""
+    """Принудительно сбросить основной кеш прав (stale остаётся)."""
     await invalidate_key(_CACHE_KEY)
     logger.info("[%s] Кеш прав инвалидирован", LABEL)
 
 
-async def _ensure_cache() -> dict[str, dict[str, bool]]:
-    """Загрузить матрицу прав из GSheet если кеш устарел."""
-
-    async def _fetch() -> dict[str, dict[str, bool]] | None:
+async def _fetch_from_gsheet() -> dict[str, dict[str, bool]] | None:
+    """
+    Прочитать матрицу прав из Google Таблицы с retry (2 попытки, async backoff).
+    Возвращает None если все попытки провалились.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(_FETCH_MAX_RETRIES + 1):
         try:
             raw = await gsheet.read_permissions_sheet()
-            # raw = [{telegram_id: int, perms: {key: bool, ...}}, ...]
             new_cache: dict[str, dict[str, bool]] = {}
             for entry in raw:
                 tg_id = entry.get("telegram_id")
                 if tg_id:
                     new_cache[str(tg_id)] = entry.get("perms", {})
-
             logger.info("[%s] Кеш обновлён: %d пользователей", LABEL, len(new_cache))
             return new_cache
-        except Exception:
-            logger.exception("[%s] Ошибка чтения прав из GSheet", LABEL)
-            return None
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _FETCH_MAX_RETRIES:
+                delay = _FETCH_RETRY_DELAYS[attempt]
+                logger.warning(
+                    "[%s] GSheet retry %d/%d через %.1f сек: %s",
+                    LABEL,
+                    attempt + 1,
+                    _FETCH_MAX_RETRIES,
+                    delay,
+                    exc,
+                )
+                await asyncio.sleep(delay)
+    logger.exception(
+        "[%s] Ошибка чтения прав из GSheet (все %d попыток)",
+        LABEL,
+        _FETCH_MAX_RETRIES + 1,
+        exc_info=last_exc,
+    )
+    return None
+
+
+async def _ensure_cache() -> dict[str, dict[str, bool]]:
+    """Загрузить матрицу прав из GSheet если кеш устарел. Stale-while-revalidate."""
+
+    async def _fetch() -> dict[str, dict[str, bool]] | None:
+        data = await _fetch_from_gsheet()
+        if data is not None:
+            # Успех — обновляем stale-копию (живёт 24 часа)
+            await set_cache(_STALE_KEY, data, ttl_seconds=_STALE_TTL, serializer=json.dumps)
+        return data
 
     data = await get_cached_or_fetch(
         _CACHE_KEY,
@@ -84,7 +119,18 @@ async def _ensure_cache() -> dict[str, dict[str, bool]]:
         serializer=json.dumps,
         deserializer=json.loads,
     )
-    return data or {}
+    if data:
+        return data
+    # Основной кеш пуст (GSheet недоступен) — пробуем stale-копию
+    stale = await get_cache(_STALE_KEY, deserializer=json.loads)
+    if stale:
+        logger.warning(
+            "[%s] Используем stale-кеш (%d пользователей) — GSheet недоступен",
+            LABEL,
+            len(stale),
+        )
+        return stale
+    return {}
 
 
 # ═══════════════════════════════════════════════════════
