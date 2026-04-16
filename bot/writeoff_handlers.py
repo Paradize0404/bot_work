@@ -1,4 +1,4 @@
-﻿"""
+"""
 Telegram-хэндлеры: акт списания (writeoff) + проверка пользователями с правом одобрения.
 
 Флоу:
@@ -59,7 +59,7 @@ router = Router(name="writeoff_handlers")
 _sending_lock: set[int] = set()
 
 
-async def _wo_keyboard(tg_id: int) -> "ReplyKeyboardMarkup":
+async def _wo_keyboard(tg_id: int):
     """Подменю списаний с учётом прав пользователя."""
     from use_cases import permissions as perm_uc
 
@@ -865,9 +865,9 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
         from use_cases import permissions as perm_uc
         from bot.permission_map import PERM_WRITEOFF_APPROVE
 
-        admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
+        approver_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
 
-        if not admin_ids:
+        if not approver_ids:
             # Нет пользователей с правом одобрения — отправляем напрямую (fallback)
             await _send_prompt(
                 callback.bot,
@@ -992,12 +992,12 @@ async def _remove_admin_keyboards(
     bot: Bot, doc: pending.PendingWriteoff, status_text: str, except_admin: int = 0
 ) -> None:
     """Убрать кнопки у всех проверяющих (один из них уже обработал)."""
-    for admin_id, msg_id in doc.admin_msg_ids.items():
-        if admin_id == except_admin:
+    for approver_id, msg_id in doc.admin_msg_ids.items():
+        if approver_id == except_admin:
             continue
         try:
             await bot.edit_message_text(
-                chat_id=admin_id,
+                chat_id=approver_id,
                 message_id=msg_id,
                 text=pending.build_summary_text(doc) + f"\n\n{status_text}",
                 parse_mode="HTML",
@@ -1041,7 +1041,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
         return
 
     bot = callback.bot
-    admin_id = callback.from_user.id
+    approver_id = callback.from_user.id
     admin_name = callback.from_user.full_name
 
     # Обновляем сообщение проверяющего
@@ -1120,7 +1120,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
 
     # ── Успех — убираем кнопки у остальных проверяющих ──
     await _remove_admin_keyboards(
-        bot, doc, f"✅ Одобрено ({admin_name})", except_admin=admin_id
+        bot, doc, f"✅ Одобрено ({admin_name})", except_admin=approver_id
     )
 
     # Сохраняем в историю
@@ -1161,7 +1161,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
         logger.debug("suppressed", exc_info=True)
     await pending.remove(doc_id)
     logger.info(
-        "[writeoff] Документ %s одобрен admin %d (%s)", doc_id, admin_id, admin_name
+        "[writeoff] Документ %s одобрен admin %d (%s)", doc_id, approver_id, admin_name
     )
 
 
@@ -1324,12 +1324,12 @@ async def admin_edit_cancel(callback: CallbackQuery, state: FSMContext) -> None:
             from bot.permission_map import PERM_WRITEOFF_APPROVE
 
             _ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
-            for admin_id in _ids:
+            for approver_id in _ids:
                 try:
                     msg = await callback.bot.send_message(
-                        admin_id, text, parse_mode="HTML", reply_markup=kb
+                        approver_id, text, parse_mode="HTML", reply_markup=kb
                     )
-                    doc.admin_msg_ids[admin_id] = msg.message_id
+                    doc.admin_msg_ids[approver_id] = msg.message_id
                 except Exception:
                     logger.debug("suppressed", exc_info=True)
             await pending.save_admin_msg_ids(doc_id, doc.admin_msg_ids)
@@ -1874,28 +1874,28 @@ async def _finish_edit(
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_WRITEOFF_APPROVE
 
-    admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
+    approver_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
     existing_msgs = doc.admin_msg_ids.copy()
     new_msg_ids: dict[int, int] = {}
 
-    for admin_id in admin_ids:
-        msg_id = existing_msgs.get(admin_id)
+    for approver_id in approver_ids:
+        msg_id = existing_msgs.get(approver_id)
 
         # Если есть существующее сообщение, пробуем отредактировать
         if msg_id:
             try:
                 await callback.bot.edit_message_text(
-                    chat_id=admin_id,
+                    chat_id=approver_id,
                     message_id=msg_id,
                     text=text,
                     parse_mode="HTML",
                     reply_markup=kb,
                 )
-                new_msg_ids[admin_id] = msg_id
+                new_msg_ids[approver_id] = msg_id
                 logger.debug(
-                    "[writeoff-edit] Отредактировано сообщение #%d для админа tg:%d в документе %s",
+                    "[writeoff-edit] Отредактировано сообщение #%d для проверяющего tg:%d в документе %s",
                     msg_id,
-                    admin_id,
+                    approver_id,
                     doc_id,
                 )
                 continue
@@ -1903,26 +1903,26 @@ async def _finish_edit(
                 logger.warning(
                     "[writeoff-edit] Не удалось отредактировать сообщение #%d для tg:%d: %s. Отправляю новое.",
                     msg_id,
-                    admin_id,
+                    approver_id,
                     exc,
                 )
 
         # Если нет существующего сообщения или редактирование не удалось, отправляем новое
         try:
             msg = await callback.bot.send_message(
-                admin_id, text, parse_mode="HTML", reply_markup=kb
+                approver_id, text, parse_mode="HTML", reply_markup=kb
             )
-            new_msg_ids[admin_id] = msg.message_id
+            new_msg_ids[approver_id] = msg.message_id
             logger.debug(
-                "[writeoff-edit] Отправлено новое сообщение #%d админу tg:%d для документа %s",
+                "[writeoff-edit] Отправлено новое сообщение #%d проверяющему tg:%d для документа %s",
                 msg.message_id,
-                admin_id,
+                approver_id,
                 doc_id,
             )
         except Exception as exc:
             logger.warning(
-                "[writeoff-edit] Не удалось отправить сообщение админу tg:%d: %s",
-                admin_id,
+                "[writeoff-edit] Не удалось отправить сообщение проверяющему tg:%d: %s",
+                approver_id,
                 exc,
             )
 
@@ -1958,28 +1958,28 @@ async def _finish_edit_msg(
     from use_cases import permissions as perm_uc
     from bot.permission_map import PERM_WRITEOFF_APPROVE
 
-    admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
+    approver_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
     existing_msgs = doc.admin_msg_ids.copy()
     new_msg_ids: dict[int, int] = {}
 
-    for admin_id in admin_ids:
-        msg_id = existing_msgs.get(admin_id)
+    for approver_id in approver_ids:
+        msg_id = existing_msgs.get(approver_id)
 
         # Если есть существующее сообщение, пробуем отредактировать
         if msg_id:
             try:
                 await message.bot.edit_message_text(
-                    chat_id=admin_id,
+                    chat_id=approver_id,
                     message_id=msg_id,
                     text=text,
                     parse_mode="HTML",
                     reply_markup=kb,
                 )
-                new_msg_ids[admin_id] = msg_id
+                new_msg_ids[approver_id] = msg_id
                 logger.debug(
-                    "[writeoff-edit] Отредактировано сообщение #%d для админа tg:%d в документе %s",
+                    "[writeoff-edit] Отредактировано сообщение #%d для проверяющего tg:%d в документе %s",
                     msg_id,
-                    admin_id,
+                    approver_id,
                     doc_id,
                 )
                 continue
@@ -1987,26 +1987,26 @@ async def _finish_edit_msg(
                 logger.warning(
                     "[writeoff-edit] Не удалось отредактировать сообщение #%d для tg:%d: %s. Отправляю новое.",
                     msg_id,
-                    admin_id,
+                    approver_id,
                     exc,
                 )
 
         # Если нет существующего сообщения или редактирование не удалось, отправляем новое
         try:
             msg = await message.bot.send_message(
-                admin_id, text, parse_mode="HTML", reply_markup=kb
+                approver_id, text, parse_mode="HTML", reply_markup=kb
             )
-            new_msg_ids[admin_id] = msg.message_id
+            new_msg_ids[approver_id] = msg.message_id
             logger.debug(
-                "[writeoff-edit] Отправлено новое сообщение #%d админу tg:%d для документа %s",
+                "[writeoff-edit] Отправлено новое сообщение #%d проверяющему tg:%d для документа %s",
                 msg.message_id,
-                admin_id,
+                approver_id,
                 doc_id,
             )
         except Exception as exc:
             logger.warning(
-                "[writeoff-edit] Не удалось отправить сообщение админу tg:%d: %s",
-                admin_id,
+                "[writeoff-edit] Не удалось отправить сообщение проверяющему tg:%d: %s",
+                approver_id,
                 exc,
             )
 
@@ -2466,9 +2466,9 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
         from use_cases import permissions as perm_uc
         from bot.permission_map import PERM_WRITEOFF_APPROVE
 
-        admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
+        approver_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
 
-        if not admin_ids:
+        if not approver_ids:
             # Нет проверяющих — отправляем напрямую
             try:
                 await callback.message.edit_text("⏳ Отправляем акт напрямую...")
@@ -2545,20 +2545,20 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
         # Рассылаем проверяющим
         text = pending.build_summary_text(doc)
         kb = pending.admin_keyboard(doc.doc_id)
-        for admin_id in admin_ids:
+        for approver_id in approver_ids:
             try:
                 msg = await callback.bot.send_message(
-                    admin_id, text, parse_mode="HTML", reply_markup=kb
+                    approver_id, text, parse_mode="HTML", reply_markup=kb
                 )
-                doc.admin_msg_ids[admin_id] = msg.message_id
+                doc.admin_msg_ids[approver_id] = msg.message_id
             except Exception as exc:
                 logger.warning(
-                    "[wo_history] Не удалось отправить админу %d: %s", admin_id, exc
+                    "[wo_history] Не удалось отправить проверяющему %d: %s", approver_id, exc
                 )
 
         await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
         logger.info(
-            "[wo_history] Повтор из истории pk=%d → doc %s, %d админов",
+            "[wo_history] Повтор из истории pk=%d → doc %s, %d проверяющих",
             pk,
             doc.doc_id,
             len(doc.admin_msg_ids),
@@ -3108,9 +3108,9 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
         from use_cases import permissions as perm_uc
         from bot.permission_map import PERM_WRITEOFF_APPROVE
 
-        admin_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
+        approver_ids = await perm_uc.get_users_with_permission(PERM_WRITEOFF_APPROVE)
 
-        if not admin_ids:
+        if not approver_ids:
             try:
                 await callback.message.edit_text("⏳ Отправляем акт напрямую...")
             except Exception:
@@ -3186,20 +3186,20 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
 
         text = pending.build_summary_text(doc)
         kb = pending.admin_keyboard(doc.doc_id)
-        for admin_id in admin_ids:
+        for approver_id in approver_ids:
             try:
                 msg = await callback.bot.send_message(
-                    admin_id, text, parse_mode="HTML", reply_markup=kb
+                    approver_id, text, parse_mode="HTML", reply_markup=kb
                 )
-                doc.admin_msg_ids[admin_id] = msg.message_id
+                doc.admin_msg_ids[approver_id] = msg.message_id
             except Exception as exc:
                 logger.warning(
-                    "[wo_history] Не удалось отправить админу %d: %s", admin_id, exc
+                    "[wo_history] Не удалось отправить проверяющему %d: %s", approver_id, exc
                 )
 
         await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
         logger.info(
-            "[wo_history] Отредакт. повтор → doc %s, %d админов",
+            "[wo_history] Отредакт. повтор → doc %s, %d проверяющих",
             doc.doc_id,
             len(doc.admin_msg_ids),
         )
