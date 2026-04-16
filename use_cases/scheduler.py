@@ -248,6 +248,9 @@ async def _daily_stoplist_report() -> None:
     Ежедневный отчёт по стоп-листу: отправляется всем авторизованным пользователям.
     Вызывается APScheduler в 22:00 по Калининграду.
     """
+    # ОТКЛЮЧЕНО: отчёт по стоп-листу временно не отправляется
+    return
+
     bot = _bot_ref
     if not bot:
         logger.warning("[scheduler] Bot reference not set, cannot send stoplist report")
