@@ -66,6 +66,7 @@ async def _wo_keyboard(tg_id: int):
     allowed = await perm_uc.get_allowed_keys(tg_id)
     return writeoffs_keyboard(allowed)
 
+
 MAX_ITEMS = 50
 QTY_MIN = 0.001
 QTY_MAX = 99999
@@ -970,7 +971,9 @@ async def finalize_writeoff(callback: CallbackQuery, state: FSMContext) -> None:
                 doc.admin_msg_ids[approver_id] = msg.message_id
             except Exception as exc:
                 logger.warning(
-                    "[writeoff] Не удалось отправить проверяющему %d: %s", approver_id, exc
+                    "[writeoff] Не удалось отправить проверяющему %d: %s",
+                    approver_id,
+                    exc,
                 )
 
         await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
@@ -1035,9 +1038,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
         return
 
     if not await pending.try_lock(doc_id):
-        await callback.answer(
-            "⏳ Документ уже обрабатывается.", show_alert=True
-        )
+        await callback.answer("⏳ Документ уже обрабатывается.", show_alert=True)
         return
 
     bot = callback.bot
@@ -1110,8 +1111,7 @@ async def admin_approve(callback: CallbackQuery) -> None:
         try:
             await bot.send_message(
                 doc.author_chat_id,
-                "❌ Произошла техническая ошибка при отправке. "
-                "Попробуйте ещё раз.",
+                "❌ Произошла техническая ошибка при отправке. " "Попробуйте ещё раз.",
             )
         except Exception:
             logger.debug("suppressed", exc_info=True)
@@ -2553,7 +2553,9 @@ async def hist_reuse(callback: CallbackQuery, state: FSMContext) -> None:
                 doc.admin_msg_ids[approver_id] = msg.message_id
             except Exception as exc:
                 logger.warning(
-                    "[wo_history] Не удалось отправить проверяющему %d: %s", approver_id, exc
+                    "[wo_history] Не удалось отправить проверяющему %d: %s",
+                    approver_id,
+                    exc,
                 )
 
         await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)
@@ -3194,7 +3196,9 @@ async def hist_edit_send(callback: CallbackQuery, state: FSMContext) -> None:
                 doc.admin_msg_ids[approver_id] = msg.message_id
             except Exception as exc:
                 logger.warning(
-                    "[wo_history] Не удалось отправить проверяющему %d: %s", approver_id, exc
+                    "[wo_history] Не удалось отправить проверяющему %d: %s",
+                    approver_id,
+                    exc,
                 )
 
         await pending.save_admin_msg_ids(doc.doc_id, doc.admin_msg_ids)

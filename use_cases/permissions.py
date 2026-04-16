@@ -23,7 +23,12 @@ import time
 from typing import Any
 
 from adapters import google_sheets as gsheet
-from use_cases.redis_cache import get_cached_or_fetch, invalidate_key, get_cache, set_cache
+from use_cases.redis_cache import (
+    get_cached_or_fetch,
+    invalidate_key,
+    get_cache,
+    set_cache,
+)
 
 # Единственный источник истины: роли и perm_key
 from bot.permission_map import (
@@ -109,7 +114,9 @@ async def _ensure_cache() -> dict[str, dict[str, bool]]:
         data = await _fetch_from_gsheet()
         if data is not None:
             # Успех — обновляем stale-копию (живёт 24 часа)
-            await set_cache(_STALE_KEY, data, ttl_seconds=_STALE_TTL, serializer=json.dumps)
+            await set_cache(
+                _STALE_KEY, data, ttl_seconds=_STALE_TTL, serializer=json.dumps
+            )
         return data
 
     data = await get_cached_or_fetch(
