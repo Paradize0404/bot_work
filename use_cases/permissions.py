@@ -283,6 +283,21 @@ async def get_allowed_keys(telegram_id: int) -> set[str]:
     return allowed
 
 
+async def get_user_perm_keys(telegram_id: int) -> set[str]:
+    """
+    Получить множество гранулярных perm_key, которые есть у пользователя.
+
+    Возвращает perm_key (например «📝 Создать списание», «📝 История списаний»),
+    а НЕ названия кнопок главного меню.
+    Используется для фильтрации кнопок подменю.
+    """
+    cache = await _ensure_cache()
+    user_perms = cache.get(str(telegram_id))
+    if user_perms is None:
+        return set()
+    return {key for key, val in user_perms.items() if val}
+
+
 # ═══════════════════════════════════════════════════════
 # Синхронизация: сотрудники + кнопки → GSheet
 # (защита от «дурака» — не стирает права, не удаляет строки)

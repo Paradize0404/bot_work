@@ -63,7 +63,7 @@ async def _wo_keyboard(tg_id: int):
     """Подменю списаний с учётом прав пользователя."""
     from use_cases import permissions as perm_uc
 
-    allowed = await perm_uc.get_allowed_keys(tg_id)
+    allowed = await perm_uc.get_user_perm_keys(tg_id)
     return writeoffs_keyboard(allowed)
 
 
